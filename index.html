@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CommAssess — Communication Assessment Tool</title>
+  <link rel="stylesheet" href="css/style.css">
+  <!-- Supabase JS SDK (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+</head>
+<body>
+
+<!-- App Header (shown after trainee logs in) -->
+<header id="app-header" class="hidden">
+  <div class="header-logo">CommAssess</div>
+  <div class="header-trainee">
+    <span id="header-trainee-name"></span>
+    <button class="btn-change" id="btn-change-trainee">Change</button>
+  </div>
+</header>
+
+<!-- ============================================================
+     SCREEN: Welcome / Auth
+     ============================================================ -->
+<section id="screen-welcome" class="screen active">
+  <div class="auth-page">
+    <div class="auth-logo-block">
+      <div class="logo-icon">CA</div>
+      <h1>CommAssess</h1>
+      <p>Corporate Communication Assessment Platform</p>
+    </div>
+
+    <!-- Sign In Form -->
+    <div class="auth-card" id="auth-signin-form">
+      <h2>Sign In</h2>
+
+      <div class="auth-field">
+        <label for="auth-email">Work Email</label>
+        <input type="email" id="auth-email" placeholder="you@company.com" autocomplete="email" />
+      </div>
+      <div class="auth-field">
+        <label for="auth-password">Password</label>
+        <input type="password" id="auth-password" placeholder="••••••••" autocomplete="current-password" />
+      </div>
+
+      <p id="auth-error" class="auth-msg error hidden"></p>
+      <button id="btn-signin" class="btn-primary full-width">Sign In →</button>
+
+      <p class="auth-toggle">
+        New here? <a href="#" id="link-show-signup">Create an account</a>
+      </p>
+      <p class="auth-toggle" style="margin-top:0.25rem">
+        <a href="admin.html" style="color:var(--text-muted);font-size:0.8rem">Admin Portal ↗</a>
+      </p>
+    </div>
+
+    <!-- Sign Up Form -->
+    <div class="auth-card hidden" id="auth-signup-form">
+      <h2>Create Account</h2>
+
+      <div class="auth-field">
+        <label for="auth-name">Full Name</label>
+        <input type="text" id="auth-name" placeholder="Your full name" autocomplete="name" />
+      </div>
+      <div class="auth-field">
+        <label for="auth-email-signup">Work Email</label>
+        <input type="email" id="auth-email-signup" placeholder="you@company.com" autocomplete="email" />
+      </div>
+      <div class="auth-field">
+        <label for="auth-password-signup">Password <span style="font-weight:400;color:var(--text-muted)">(min. 6 chars)</span></label>
+        <input type="password" id="auth-password-signup" placeholder="••••••••" autocomplete="new-password" />
+      </div>
+
+      <p id="auth-signup-error" class="auth-msg error hidden"></p>
+      <button id="btn-signup" class="btn-primary full-width">Create Account →</button>
+
+      <p class="auth-toggle">
+        Already have an account? <a href="#" id="link-show-signin">Sign in</a>
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SCREEN: Module Hub
+     ============================================================ -->
+<section id="screen-modules" class="screen">
+  <div class="modules-header">
+    <h2>Select an Assessment Module</h2>
+    <p>Choose a module to practice and get evaluated on</p>
+  </div>
+  <div class="modules-grid">
+    <div class="module-card ps" data-module="pick-speak">
+      <div class="module-icon" style="background:#eff6ff">🎤</div>
+      <h3>Pick &amp; Speak</h3>
+      <p>Pick a random topic and speak for 2 minutes. Get instant AI feedback on fluency and vocabulary.</p>
+      <span class="module-tag">AI + Admin</span>
+    </div>
+    <div class="module-card mc" data-module="mock-call">
+      <div class="module-icon" style="background:#f5f3ff">📞</div>
+      <h3>Mock Call</h3>
+      <p>Handle a simulated customer or client call. Demonstrate professional call-handling skills.</p>
+      <span class="module-tag">Admin Evaluated</span>
+    </div>
+    <div class="module-card rp" data-module="role-play">
+      <div class="module-icon" style="background:#fff7ed">🎭</div>
+      <h3>Role Play</h3>
+      <p>Act out a workplace scenario — handle a team conflict, client objection, or tricky situation.</p>
+      <span class="module-tag">Admin Evaluated</span>
+    </div>
+    <div class="module-card gd" data-module="group-discussion">
+      <div class="module-icon" style="background:#f0fdf4">💬</div>
+      <h3>Group Discussion</h3>
+      <p>Record your individual contribution to a group discussion. Demonstrate argumentation skills.</p>
+      <span class="module-tag">Admin Evaluated</span>
+    </div>
+    <div class="module-card wc" data-module="written-comm">
+      <div class="module-icon" style="background:#f0f9ff">✍️</div>
+      <h3>Written Communication</h3>
+      <p>Complete a professional writing task — email, memo, or report. AI checks tone and structure.</p>
+      <span class="module-tag">AI + Admin</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SCREEN: Pick & Speak
+     ============================================================ -->
+<section id="screen-pick-speak" class="screen">
+  <div class="module-header ps-header">
+    <button class="btn-back" data-back="modules">← Back</button>
+    <h2>🎤 Pick &amp; Speak</h2>
+  </div>
+
+  <!-- Step 1: Topic Reveal -->
+  <div class="step-container" id="ps-step-topic">
+    <div class="step-card">
+      <div class="step-label">Step 1 of 3 — Your Topic</div>
+      <div class="topic-reveal" id="ps-topic-reveal">
+        <div class="topic-icon">🎲</div>
+        <h2 id="ps-topic-title">Click to reveal your topic</h2>
+        <p id="ps-topic-desc">You will have 30 seconds to prepare, then 2 minutes to speak.</p>
+      </div>
+      <div style="display:flex;gap:0.75rem;flex-direction:column;margin-top:1.5rem">
+        <button id="btn-ps-reveal" class="btn-primary">Reveal My Topic</button>
+        <button id="btn-ps-ready" class="btn-secondary hidden">I'm Ready → Start Prep Time</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: Prep Timer -->
+  <div class="step-container hidden" id="ps-step-prep">
+    <div class="step-card">
+      <div class="step-label">Step 2 of 3 — Preparation Time</div>
+      <div class="topic-mini">
+        <strong id="ps-prep-title"></strong>
+        <p id="ps-prep-desc"></p>
+      </div>
+      <div class="timer-display">
+        <div class="timer-ring">
+          <svg viewBox="0 0 120 120">
+            <circle cx="60" cy="60" r="54" fill="none" stroke="#e2e8f0" stroke-width="8"/>
+            <circle id="ps-prep-ring" cx="60" cy="60" r="54" fill="none"
+              stroke="var(--ps-color)" stroke-width="8"
+              stroke-dasharray="339.3" stroke-dashoffset="0"
+              stroke-linecap="round" transform="rotate(-90 60 60)"/>
+          </svg>
+          <div class="timer-text">
+            <span id="ps-prep-time">30</span>
+            <small>seconds</small>
+          </div>
+        </div>
+        <p class="timer-hint">Organize your thoughts. You'll speak for 2 minutes without stopping.</p>
+      </div>
+      <div style="text-align:center">
+        <button id="btn-ps-skip-prep" class="btn-ghost">Skip → Start Recording Now</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3: Recording -->
+  <div class="step-container hidden" id="ps-step-record">
+    <div class="step-card">
+      <div class="step-label">Step 3 of 3 — Speak Now!</div>
+      <div class="topic-mini" style="border-left-color:var(--ps-color)">
+        <strong id="ps-rec-title"></strong>
+      </div>
+      <div class="recording-ui">
+        <div class="rec-timer">
+          <div class="rec-dot"></div>
+          <span id="ps-rec-time">2:00</span>
+          <small>remaining</small>
+        </div>
+        <canvas id="ps-waveform" class="waveform-canvas" width="600" height="70"></canvas>
+        <div id="ps-live-transcript" class="live-transcript">
+          <span class="transcript-placeholder" id="ps-transcript-placeholder">Your speech will appear here in real time...</span>
+        </div>
+        <p id="ps-no-speech-note" class="no-speech-note hidden">
+          ⚠️ Live transcription requires Chrome. Recording is still active.
+        </p>
+      </div>
+      <div class="rec-controls">
+        <button id="btn-ps-stop" class="btn-danger">⏹ Stop &amp; Submit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 4: Results -->
+  <div class="step-container hidden" id="ps-step-results">
+    <div class="results-card">
+      <div class="results-header">
+        <div class="results-icon">✅</div>
+        <h2>Assessment Submitted!</h2>
+        <p>Here's your instant AI analysis</p>
+      </div>
+
+      <!-- Performance band — most prominent result -->
+      <div id="ps-band-display"></div>
+
+      <!-- Per-criterion scores -->
+      <div class="ai-scores" id="ps-ai-scores"></div>
+      <div class="analysis-pills" id="ps-analysis-pills"></div>
+
+      <div class="transcript-section">
+        <h3>Your Transcript</h3>
+        <div id="ps-final-transcript" class="transcript-box">No transcript available.</div>
+      </div>
+      <div class="admin-note">
+        <span>📋</span>
+        <span>Your admin will review this recording and may add a final score and written feedback.</span>
+      </div>
+      <div class="results-actions">
+        <button class="btn-secondary" data-back="modules">← Back to Modules</button>
+        <button id="btn-ps-again" class="btn-primary">Try Another Topic</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SCREEN: Mock Call
+     ============================================================ -->
+<section id="screen-mock-call" class="screen">
+  <div class="module-header mc-header">
+    <button class="btn-back" data-back="modules">← Back</button>
+    <h2>📞 Mock Call</h2>
+  </div>
+
+  <!-- Step 1: Scenario -->
+  <div class="step-container" id="mc-step-scenario">
+    <div class="step-card">
+      <div class="step-label">Step 1 of 2 — Read the Scenario Carefully</div>
+      <div class="scenario-card mc-scenario">
+        <h3 id="mc-title"></h3>
+        <p id="mc-desc"></p>
+        <div class="scenario-call-box">
+          <div class="caller-icon">📞</div>
+          <div>
+            <div class="caller-label">Incoming call — the caller says:</div>
+            <p id="mc-scenario-text" style="font-size:0.9rem;margin-top:0.3rem"></p>
+          </div>
+        </div>
+        <div id="mc-caller-audio-section" class="hidden" style="margin:0.875rem 0">
+          <div class="caller-label">Listen to the caller's audio:</div>
+          <audio id="mc-caller-audio" controls class="caller-audio-player"></audio>
+        </div>
+        <div class="checklist-section">
+          <h4>You will be evaluated on:</h4>
+          <ul id="mc-checklist" class="evaluation-checklist"></ul>
+        </div>
+      </div>
+      <button id="btn-mc-ready" class="btn-primary" style="background:var(--mc-color)">
+        I'm Ready → Start Recording
+      </button>
+    </div>
+  </div>
+
+  <!-- Step 2: Recording -->
+  <div class="step-container hidden" id="mc-step-record">
+    <div class="step-card">
+      <div class="step-label">Step 2 of 2 — Handle the Call</div>
+      <div class="scenario-mini" style="border-left-color:var(--mc-color)" id="mc-rec-mini"></div>
+      <div class="recording-ui">
+        <div class="rec-timer">
+          <div class="rec-dot"></div>
+          <span id="mc-rec-time">0:00</span>
+          <small>recording...</small>
+        </div>
+        <canvas id="mc-waveform" class="waveform-canvas" width="600" height="70"></canvas>
+      </div>
+      <!-- Live transcript (shown only on Chrome) -->
+      <div id="mc-live-transcript-box" class="live-transcript-box hidden">
+        <div class="live-transcript-label">📝 Live Transcript</div>
+        <div id="mc-live-transcript" class="live-transcript-text">Listening...</div>
+      </div>
+      <div class="rec-controls">
+        <button id="btn-mc-stop" class="btn-danger" style="background:var(--mc-color)">
+          ⏹ End Call &amp; Submit
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3: Results -->
+  <div class="step-container hidden" id="mc-step-done">
+    <div class="results-card">
+      <div class="results-header">
+        <div class="results-icon">📞</div>
+        <h2>Call Submitted!</h2>
+        <p>Here's your instant AI analysis</p>
+      </div>
+
+      <!-- Scoring status (while processing) -->
+      <div id="mc-ai-scoring-status" class="scoring-status hidden">⏳ Analyzing...</div>
+
+      <!-- Performance band — most prominent -->
+      <div id="mc-band-display"></div>
+
+      <!-- Scoring method tag -->
+      <div id="mc-result-method" style="text-align:center;margin:0.5rem 0"></div>
+
+      <!-- Per-criterion scores -->
+      <div id="mc-result-scores" class="hidden" style="margin:1rem 0"></div>
+
+      <!-- Transcript -->
+      <div id="mc-result-transcript-box" class="hidden" style="margin-top:1rem">
+        <div style="font-size:0.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:0.4rem">Call Transcript</div>
+        <div id="mc-result-transcript" class="transcript-box" style="max-height:160px;overflow-y:auto"></div>
+      </div>
+
+      <div class="admin-note" style="margin-top:1.25rem">
+        <span>📋</span>
+        <span>Your admin will also listen to your recording and may add a final score and written feedback.</span>
+      </div>
+      <div class="results-actions">
+        <button class="btn-secondary" data-back="modules">← Back to Modules</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SCREEN: Role Play
+     ============================================================ -->
+<section id="screen-role-play" class="screen">
+  <div class="module-header rp-header">
+    <button class="btn-back" data-back="modules">← Back</button>
+    <h2>🎭 Role Play</h2>
+  </div>
+
+  <div class="step-container" id="rp-step-scenario">
+    <div class="step-card">
+      <div class="step-label">Step 1 of 2 — Your Scenario</div>
+      <div class="scenario-card rp-scenario">
+        <h3 id="rp-title"></h3>
+        <p id="rp-desc"></p>
+        <div class="scenario-box rp-box">
+          <div class="scenario-label">Your Role &amp; Situation:</div>
+          <p id="rp-scenario-text" style="font-size:0.875rem;margin-top:0.3rem;line-height:1.7"></p>
+        </div>
+        <div class="checklist-section">
+          <h4>You will be evaluated on:</h4>
+          <ul id="rp-checklist" class="evaluation-checklist"></ul>
+        </div>
+      </div>
+      <button id="btn-rp-ready" class="btn-primary" style="background:var(--rp-color)">
+        I'm Ready → Start Recording
+      </button>
+    </div>
+  </div>
+
+  <div class="step-container hidden" id="rp-step-record">
+    <div class="step-card">
+      <div class="step-label">Step 2 of 2 — Record Your Role</div>
+      <div class="recording-ui">
+        <div class="rec-timer">
+          <div class="rec-dot"></div>
+          <span id="rp-rec-time">0:00</span>
+          <small>recording...</small>
+        </div>
+        <canvas id="rp-waveform" class="waveform-canvas" width="600" height="70"></canvas>
+      </div>
+      <div class="rec-controls">
+        <button id="btn-rp-stop" class="btn-danger" style="background:var(--rp-color)">⏹ Stop &amp; Submit</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="step-container hidden" id="rp-step-done">
+    <div class="results-card">
+      <div class="results-header">
+        <div class="results-icon">🎭</div>
+        <h2>Role Play Submitted!</h2>
+        <p>Your recording has been sent for admin review.</p>
+      </div>
+      <div class="admin-note">
+        <span>📋</span>
+        <span>Your admin will evaluate your empathy, assertiveness, resolution skills, and professionalism.</span>
+      </div>
+      <div class="results-actions">
+        <button class="btn-secondary" data-back="modules">← Back to Modules</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SCREEN: Group Discussion
+     ============================================================ -->
+<section id="screen-group-discussion" class="screen">
+  <div class="module-header gd-header">
+    <button class="btn-back" data-back="modules">← Back</button>
+    <h2>💬 Group Discussion</h2>
+  </div>
+
+  <div class="step-container" id="gd-step-topic">
+    <div class="step-card">
+      <div class="step-label">Step 1 of 2 — Discussion Topic</div>
+      <div class="scenario-card gd-scenario">
+        <h3 id="gd-title"></h3>
+        <p id="gd-desc"></p>
+        <div class="scenario-box gd-box">
+          <div class="scenario-label">Discussion Format &amp; Instructions:</div>
+          <p id="gd-scenario-text" style="font-size:0.875rem;margin-top:0.3rem;line-height:1.7"></p>
+        </div>
+        <div class="checklist-section">
+          <h4>You will be evaluated on:</h4>
+          <ul id="gd-checklist" class="evaluation-checklist"></ul>
+        </div>
+      </div>
+      <button id="btn-gd-ready" class="btn-primary" style="background:var(--gd-color)">
+        I'm Ready → Record My Contribution
+      </button>
+    </div>
+  </div>
+
+  <div class="step-container hidden" id="gd-step-record">
+    <div class="step-card">
+      <div class="step-label">Step 2 of 2 — Record Your Contribution</div>
+      <div class="recording-ui">
+        <div class="rec-timer">
+          <div class="rec-dot"></div>
+          <span id="gd-rec-time">0:00</span>
+          <small>recording...</small>
+        </div>
+        <canvas id="gd-waveform" class="waveform-canvas" width="600" height="70"></canvas>
+      </div>
+      <div class="rec-controls">
+        <button id="btn-gd-stop" class="btn-danger" style="background:var(--gd-color)">⏹ Finish &amp; Submit</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="step-container hidden" id="gd-step-done">
+    <div class="results-card">
+      <div class="results-header">
+        <div class="results-icon">💬</div>
+        <h2>Contribution Submitted!</h2>
+        <p>Your group discussion response has been recorded.</p>
+      </div>
+      <div class="admin-note">
+        <span>📋</span>
+        <span>Your admin will evaluate your participation quality, argumentation, and communication clarity.</span>
+      </div>
+      <div class="results-actions">
+        <button class="btn-secondary" data-back="modules">← Back to Modules</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SCREEN: Written Communication
+     ============================================================ -->
+<section id="screen-written-comm" class="screen">
+  <div class="module-header wc-header">
+    <button class="btn-back" data-back="modules">← Back</button>
+    <h2>✍️ Written Communication</h2>
+  </div>
+
+  <!-- Step 1: Task -->
+  <div class="step-container" id="wc-step-task">
+    <div class="step-card wc-card">
+      <div class="step-label">Step 1 of 2 — Your Writing Task</div>
+      <div class="scenario-card wc-scenario">
+        <h3 id="wc-title"></h3>
+        <p id="wc-desc"></p>
+        <div class="scenario-box wc-box">
+          <div class="scenario-label">Context &amp; Template:</div>
+          <pre id="wc-scenario-text" class="scenario-pre"></pre>
+        </div>
+        <div class="checklist-section">
+          <h4>You will be evaluated on:</h4>
+          <ul id="wc-checklist" class="evaluation-checklist"></ul>
+        </div>
+      </div>
+      <button id="btn-wc-start" class="btn-primary" style="background:var(--wc-color)">Start Writing</button>
+    </div>
+  </div>
+
+  <!-- Step 2: Writing Editor -->
+  <div class="hidden" id="wc-step-write" style="min-height:100vh">
+    <div class="wc-editor-layout">
+      <div class="wc-editor-left">
+        <div class="wc-task-mini">
+          <strong id="wc-write-title"></strong>
+          <pre id="wc-write-scenario" class="scenario-pre small" style="margin-top:0.5rem"></pre>
+        </div>
+        <div style="margin-top:1rem;background:#fff;border-radius:10px;padding:1rem;box-shadow:var(--shadow)">
+          <div style="font-size:0.75rem;font-weight:700;color:var(--text-muted);margin-bottom:0.5rem">CHECKLIST</div>
+          <ul id="wc-write-checklist" class="evaluation-checklist"></ul>
+        </div>
+      </div>
+      <div class="wc-editor-right">
+        <div class="wc-editor-header">
+          <div class="wc-stats">
+            <span>Words: <strong id="wc-word-count">0</strong></span>
+            <span>Time: <strong id="wc-time-elapsed">0:00</strong></span>
+          </div>
+        </div>
+        <textarea id="wc-editor" placeholder="Start writing here...&#10;&#10;Use the context on the left to guide your writing."></textarea>
+        <div style="padding:1rem;text-align:right;border-top:1px solid var(--border)">
+          <button id="btn-wc-submit" class="btn-primary" style="background:var(--wc-color)">Submit Writing ✓</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3: Results -->
+  <div class="step-container hidden" id="wc-step-results">
+    <div class="results-card">
+      <div class="results-header">
+        <div class="results-icon">✍️</div>
+        <h2>Writing Submitted!</h2>
+        <p>Here's your AI writing analysis</p>
+      </div>
+      <div class="ai-scores" id="wc-ai-scores"></div>
+      <div class="analysis-pills" id="wc-analysis-pills"></div>
+      <div class="transcript-section">
+        <h3>Your Writing</h3>
+        <div id="wc-submitted-text" class="transcript-box writing-box"></div>
+      </div>
+      <div class="admin-note">
+        <span>📋</span>
+        <span>Your admin will review and provide final scores on clarity, structure, grammar, tone, and professionalism.</span>
+      </div>
+      <div class="results-actions">
+        <button class="btn-secondary" data-back="modules">← Back to Modules</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Toast Notifications -->
+<div id="toast-container"></div>
+
+<script src="config.js"></script>
+<script src="js/db.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/recorder.js"></script>
+<script src="js/speech.js"></script>
+<script src="js/claude.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

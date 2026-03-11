@@ -1,0 +1,1101 @@
+'use strict';
+
+window.Admin = (() => {
+  // ---- State ----
+  let _editTopicId = null; // null = new, number = edit existing
+  let _callerAudioBlob = null;
+  let _callerRecording = false;
+  let _scoringSessionId = null;
+  let _topicsFilter = 'all';
+  let _assessmentsFilter = { module: 'all', status: 'all' };
+
+  // ---- Module metadata ----
+  const MODULE_LABELS = {
+    'pick-speak': 'Pick & Speak',
+    'mock-call': 'Mock Call',
+    'role-play': 'Role Play',
+    'group-discussion': 'Group Discussion',
+    'written-comm': 'Written Comm.'
+  };
+
+  const MODULE_COLORS = {
+    'pick-speak': '#3b82f6',
+    'mock-call': '#8b5cf6',
+    'role-play': '#f97316',
+    'group-discussion': '#10b981',
+    'written-comm': '#0ea5e9'
+  };
+
+  const MODULE_BADGE_CLASS = {
+    'pick-speak': 'badge-ps',
+    'mock-call': 'badge-mc',
+    'role-play': 'badge-rp',
+    'group-discussion': 'badge-gd',
+    'written-comm': 'badge-wc'
+  };
+
+  // ---- Score Bands (mirrors app.js — used for admin display) ----
+  const SCORE_BANDS = {
+    'pick-speak': [
+      { maxPct: 40, label: 'Needs Significant Improvement', cls: 'band-poor', icon: '⚠️',
+        feedback: 'Significant gaps in fluency, vocabulary, or content coverage. Focus on maintaining a steady speaking pace, using varied word choices, and fully covering the topic within the time given.' },
+      { maxPct: 60, label: 'Acceptable / Meets Expectations', cls: 'band-fair', icon: '📋',
+        feedback: 'Meets basic expectations. Aim to reduce filler words (um, uh, like), improve speaking pace, and develop ideas more thoroughly with examples.' },
+      { maxPct: 80, label: 'Good / Above Average', cls: 'band-good', icon: '👍',
+        feedback: 'Above average performance with good command of language. Refine by increasing vocabulary variety and deepening content coverage to reach the next level.' },
+      { maxPct: Infinity, label: 'Excellent / Consistently Strong', cls: 'band-excellent', icon: '⭐',
+        feedback: 'Consistently strong delivery! Excellent fluency, rich vocabulary, and thorough content coverage. Keep practising to maintain this standard.' }
+    ],
+    'mock-call': [
+      { maxPct: 50, label: 'Needs Significant Improvement', cls: 'band-poor', icon: '⚠️',
+        feedback: 'Key call-handling elements are missing or insufficient. Prioritise training on greeting structure, acknowledging the customer with empathy, probing questions, and proper call closings.' },
+      { maxPct: 60, label: 'Acceptable / Meets Expectations', cls: 'band-fair', icon: '📋',
+        feedback: 'Basic call-handling demonstrated. Work on consistent empathy phrases, clearer communication without fillers, and following hold and closing procedures every time.' },
+      { maxPct: 70, label: 'Good / Above Average', cls: 'band-good', icon: '👍',
+        feedback: 'Good customer service skills shown. Minor refinements needed — ensure the extra mile is offered and all hold/closing steps are followed precisely.' },
+      { maxPct: Infinity, label: 'Excellent / Consistently Strong', cls: 'band-excellent', icon: '⭐',
+        feedback: 'Consistently strong call quality! Excellent adherence to protocol, genuine empathy throughout, and professional communication from opening to closing.' }
+    ]
+  };
+
+  function getBand(module, overallScore) {
+    const bands = SCORE_BANDS[module];
+    if (!bands || overallScore === null || overallScore === undefined) return null;
+    const pct = (overallScore / 5) * 100;
+    return bands.find(b => pct < b.maxPct) || bands[bands.length - 1];
+  }
+
+  // Each criterion: { label, key, desc?, scale135? }
+  // scale135: true = radio buttons 1/3/5 (Not Met / Partial / Fully Met)
+  // default: 1-5 slider
+  const SCORING_CRITERIA = {
+    'pick-speak': [
+      { label: 'Fluency', key: 'criterion_0' },
+      { label: 'Vocabulary', key: 'criterion_1' },
+      { label: 'Confidence', key: 'criterion_2' },
+      { label: 'Content Coverage', key: 'criterion_3' }
+    ],
+    'mock-call': [
+      { label: 'Call Opening',              key: 'callOpening',          desc: 'Greeting + self-intro + company intro + offer to assist (all 4 elements = 5)' },
+      { label: 'Acknowledgment',            key: 'acknowledgment',       desc: 'Acknowledged issue promptly with genuine empathy' },
+      { label: 'Active Listening & Probing',key: 'activeListening',      desc: 'No repetitions/interruptions, logical probing, no assumptions' },
+      { label: 'Communication Clarity',     key: 'communicationClarity', desc: 'Speech rate, grammar, tone, no fillers, no dead air' },
+      { label: 'Call Essence',              key: 'callEssence',          desc: 'Politeness, empathy, rapport building throughout' },
+      { label: 'Hold Procedure',            key: 'holdProcedure',        scale135: true, desc: 'Asked permission + reason + time expectation' },
+      { label: 'Extra Mile',                key: 'extraMile',            scale135: true, desc: 'Offered proactive help beyond the asked query' },
+      { label: 'Call Closing',              key: 'callClosing',          scale135: true, desc: 'Confirmed resolution + asked for anything else + branded close' }
+    ],
+    'role-play': [
+      { label: 'Empathy', key: 'criterion_0' },
+      { label: 'Assertiveness', key: 'criterion_1' },
+      { label: 'Resolution Approach', key: 'criterion_2' },
+      { label: 'Professionalism', key: 'criterion_3' }
+    ],
+    'group-discussion': [
+      { label: 'Participation Quality', key: 'criterion_0' },
+      { label: 'Argumentation', key: 'criterion_1' },
+      { label: 'Responsiveness', key: 'criterion_2' },
+      { label: 'Communication Clarity', key: 'criterion_3' }
+    ],
+    'written-comm': [
+      { label: 'Clarity', key: 'criterion_0' },
+      { label: 'Structure', key: 'criterion_1' },
+      { label: 'Grammar', key: 'criterion_2' },
+      { label: 'Tone', key: 'criterion_3' },
+      { label: 'Professionalism', key: 'criterion_4' }
+    ]
+  };
+
+  // ---- Helpers ----
+  function $(id) { return document.getElementById(id); }
+
+  function toast(msg, type = '') {
+    const el = document.createElement('div');
+    el.className = `toast ${type}`;
+    el.textContent = msg;
+    $('toast-container').appendChild(el);
+    setTimeout(() => {
+      el.style.animation = 'slide-out 0.25s ease forwards';
+      setTimeout(() => el.remove(), 300);
+    }, 3000);
+  }
+
+  function showSection(name) {
+    document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    const sec = $(`admin-${name}`);
+    if (sec) sec.classList.add('active');
+    document.querySelectorAll(`.nav-item[data-section="${name}"]`).forEach(n => n.classList.add('active'));
+  }
+
+  function formatDate(isoStr) {
+    if (!isoStr) return '—';
+    const d = new Date(isoStr);
+    return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) +
+      ' ' + d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function formatScore(score) {
+    if (score === null || score === undefined) return '—';
+    return typeof score === 'object' ? (score.overall ?? '—') : score;
+  }
+
+  function calcAdminAvg(adminScores) {
+    if (!adminScores) return null;
+    const vals = Object.entries(adminScores)
+      .filter(([k, v]) => k !== 'overall' && typeof v === 'number')
+      .map(([, v]) => v);
+    if (!vals.length) return null;
+    return parseFloat((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1));
+  }
+
+  function statusBadge(status) {
+    const map = {
+      'pending': '<span class="badge badge-pending">Pending</span>',
+      'ai-evaluated': '<span class="badge badge-ai">AI Scored</span>',
+      'scored': '<span class="badge badge-scored">Scored</span>'
+    };
+    return map[status] || `<span class="badge">${status}</span>`;
+  }
+
+  function moduleBadge(module) {
+    return `<span class="module-badge ${MODULE_BADGE_CLASS[module] || ''}">${MODULE_LABELS[module] || module}</span>`;
+  }
+
+  // ---- Auth ----
+  function initAuth() {
+    const savedAuth = sessionStorage.getItem('adminAuth');
+    if (savedAuth === 'true') {
+      $('admin-auth-modal').classList.add('hidden');
+      $('admin-app').classList.remove('hidden');
+      initApp();
+      return;
+    }
+
+    const input = $('admin-pwd-input');
+    const btn = $('btn-admin-login');
+    const errEl = $('admin-pwd-error');
+
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') btn.click(); });
+    btn.addEventListener('click', async () => {
+      const pwd = input.value;
+      const stored = await DB.get('settings', 'adminPassword');
+      if (stored && pwd === stored.value) {
+        sessionStorage.setItem('adminAuth', 'true');
+        $('admin-auth-modal').classList.add('hidden');
+        $('admin-app').classList.remove('hidden');
+        errEl.classList.add('hidden');
+        initApp();
+      } else {
+        errEl.classList.remove('hidden');
+        input.value = '';
+        input.focus();
+      }
+    });
+  }
+
+  // ---- App Init ----
+  async function initApp() {
+    bindSidebarNav();
+    await loadDashboard();
+    await updatePendingBadge();
+  }
+
+  function bindSidebarNav() {
+    document.querySelectorAll('.nav-item[data-section]').forEach(link => {
+      link.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const sec = link.dataset.section;
+        showSection(sec);
+        if (sec === 'dashboard') await loadDashboard();
+        else if (sec === 'trainees') await loadTrainees();
+        else if (sec === 'topics') await loadTopics();
+        else if (sec === 'assessments') await loadAssessments();
+        else if (sec === 'reports') await loadReportsDropdown();
+        else if (sec === 'settings') initSettings();
+      });
+    });
+  }
+
+  // ---- Dashboard ----
+  async function loadDashboard() {
+    const [trainees, sessions] = await Promise.all([DB.getAll('trainees'), DB.getAll('sessions')]);
+
+    $('stat-trainees').textContent = trainees.length;
+    $('stat-sessions').textContent = sessions.length;
+
+    const pending = sessions.filter(s => s.status === 'pending' || s.status === 'ai-evaluated').length;
+    $('stat-pending').textContent = pending;
+    await updatePendingBadge();
+
+    const scored = sessions.filter(s => s.adminScores);
+    const avgScore = scored.length
+      ? (scored.map(s => calcAdminAvg(s.adminScores)).filter(x => x !== null)
+          .reduce((a, b) => a + b, 0) / scored.length).toFixed(1)
+      : '—';
+    $('stat-avg-score').textContent = avgScore;
+
+    // Module breakdown
+    const breakdown = $('module-breakdown');
+    const counts = {};
+    sessions.forEach(s => { counts[s.module] = (counts[s.module] || 0) + 1; });
+    const maxCount = Math.max(...Object.values(counts), 1);
+
+    if (Object.keys(counts).length === 0) {
+      breakdown.innerHTML = '<div class="empty-state" style="padding:1rem">No sessions yet.</div>';
+    } else {
+      breakdown.innerHTML = Object.entries(counts).map(([mod, cnt]) => `
+        <div class="module-bar-row">
+          <span class="module-bar-label">${MODULE_LABELS[mod] || mod}</span>
+          <div class="module-bar-track">
+            <div class="module-bar-fill" style="width:${(cnt/maxCount*100).toFixed(0)}%;background:${MODULE_COLORS[mod]}"></div>
+          </div>
+          <span class="module-bar-count">${cnt}</span>
+        </div>`).join('');
+    }
+
+    // Recent activity
+    const recent = [...sessions].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt)).slice(0, 8);
+    const activityEl = $('recent-activity');
+    if (recent.length === 0) {
+      activityEl.innerHTML = '<div class="empty-state" style="padding:1rem">No recent activity.</div>';
+    } else {
+      activityEl.innerHTML = recent.map(s => `
+        <div class="activity-item">
+          <div class="activity-dot" style="background:${MODULE_COLORS[s.module]}"></div>
+          <div class="activity-text">
+            <strong>${s.traineeName}</strong> completed <em>${MODULE_LABELS[s.module]}</em>
+            ${s.adminScores ? `— scored ${calcAdminAvg(s.adminScores)}/5` : ''}
+          </div>
+          <span class="activity-time">${formatDate(s.submittedAt).split(' ')[0]}</span>
+        </div>`).join('');
+    }
+  }
+
+  async function updatePendingBadge() {
+    const sessions = await DB.getAll('sessions');
+    const pending = sessions.filter(s => s.status === 'pending' || s.status === 'ai-evaluated').length;
+    const badge = $('pending-badge');
+    badge.textContent = pending > 0 ? pending : '';
+  }
+
+  // ---- Trainees ----
+  async function loadTrainees() {
+    const [trainees, sessions] = await Promise.all([DB.getAll('trainees'), DB.getAll('sessions')]);
+    renderTraineesTable(trainees, sessions, '');
+
+    $('trainee-search').oninput = (e) => renderTraineesTable(trainees, sessions, e.target.value);
+  }
+
+  function renderTraineesTable(trainees, sessions, filter) {
+    const tbody = $('trainees-tbody');
+    const filtered = trainees.filter(t => t.name.toLowerCase().includes(filter.toLowerCase()));
+
+    if (filtered.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" class="empty-state">No trainees found.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = filtered.map(t => {
+      const ts = sessions.filter(s => s.traineeId === t.id);
+      const scored = ts.filter(s => s.adminScores);
+      const avg = scored.length
+        ? (scored.map(s => calcAdminAvg(s.adminScores)).filter(x => x !== null)
+            .reduce((a, b) => a + b, 0) / scored.length).toFixed(1)
+        : '—';
+      const lastActive = ts.length
+        ? formatDate([...ts].sort((a,b) => new Date(b.submittedAt)-new Date(a.submittedAt))[0].submittedAt).split(' ')[0]
+        : '—';
+
+      return `
+        <tr>
+          <td><strong>${t.name}</strong></td>
+          <td>${ts.length}</td>
+          <td>${lastActive}</td>
+          <td>${avg !== '—' ? avg + ' / 5' : '—'}</td>
+          <td>
+            <button class="btn-small" onclick="Admin.viewTraineeSessions(${t.id})">View Sessions</button>
+          </td>
+        </tr>`;
+    }).join('');
+  }
+
+  async function viewTraineeSessions(traineeId) {
+    showSection('assessments');
+    // Switch to assessments tab and filter by trainee
+    await loadAssessments(traineeId);
+  }
+
+  // ---- Topics ----
+  async function loadTopics() {
+    initTopicModal();
+    renderTopicsList();
+
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.onclick = () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        _topicsFilter = btn.dataset.module;
+        renderTopicsList();
+      };
+    });
+
+    $('btn-new-topic').onclick = () => openTopicModal(null);
+  }
+
+  async function renderTopicsList() {
+    const topics = await DB.getAll('topics');
+    const filtered = _topicsFilter === 'all' ? topics : topics.filter(t => t.module === _topicsFilter);
+    const container = $('topics-list');
+
+    if (filtered.length === 0) {
+      container.innerHTML = '<div class="empty-state" style="grid-column:1/-1;padding:2rem">No topics found. Create one with + New Topic.</div>';
+      return;
+    }
+
+    container.innerHTML = filtered.map(t => `
+      <div class="topic-card ${getModuleShort(t.module)}">
+        <div class="topic-card-header">
+          <h4>${t.title}</h4>
+          ${moduleBadge(t.module)}
+        </div>
+        <p>${t.description || ''}</p>
+        ${t.checklist && t.checklist.length ? `<div style="font-size:0.75rem;color:var(--text-muted)">${t.checklist.length} evaluation criteria</div>` : ''}
+        <div class="topic-card-actions" style="margin-top:0.875rem">
+          <button class="btn-small primary" onclick="Admin.openTopicModal(${t.id})">Edit</button>
+          <button class="btn-small danger" onclick="Admin.deleteTopic(${t.id})">Delete</button>
+        </div>
+      </div>`).join('');
+  }
+
+  function getModuleShort(module) {
+    const map = { 'pick-speak': 'ps', 'mock-call': 'mc', 'role-play': 'rp', 'group-discussion': 'gd', 'written-comm': 'wc' };
+    return map[module] || '';
+  }
+
+  async function openTopicModal(topicId) {
+    _editTopicId = topicId;
+    _callerAudioBlob = null;
+    const modal = $('topic-modal');
+    modal.classList.remove('hidden');
+
+    if (topicId) {
+      const topic = await DB.get('topics', topicId);
+      $('topic-modal-title').textContent = 'Edit Topic';
+      $('topic-module').value = topic.module;
+      $('topic-title').value = topic.title || '';
+      $('topic-description').value = topic.description || '';
+      $('topic-scenario').value = topic.scenario || '';
+      _callerAudioBlob = topic.callerAudioBlob || null;
+
+      renderChecklistItems(topic.checklist || []);
+
+      // Support both Storage URL (new) and legacy Blob
+      const callerUrl = topic.callerAudioUrl
+        || (_callerAudioBlob ? URL.createObjectURL(_callerAudioBlob) : null);
+      if (callerUrl) {
+        $('caller-preview-audio').src = callerUrl;
+        $('caller-preview-audio').classList.remove('hidden');
+        $('btn-clear-caller-audio').classList.remove('hidden');
+      }
+    } else {
+      $('topic-modal-title').textContent = 'New Topic';
+      $('topic-module').value = 'pick-speak';
+      $('topic-title').value = '';
+      $('topic-description').value = '';
+      $('topic-scenario').value = '';
+      $('caller-preview-audio').classList.add('hidden');
+      $('btn-clear-caller-audio').classList.add('hidden');
+      renderChecklistItems([]);
+    }
+
+    toggleCallerAudioSection($('topic-module').value);
+    $('topic-module').onchange = (e) => toggleCallerAudioSection(e.target.value);
+  }
+
+  function toggleCallerAudioSection(module) {
+    $('topic-caller-audio-group').style.display = module === 'mock-call' ? '' : 'none';
+  }
+
+  function renderChecklistItems(items) {
+    const container = $('checklist-items');
+    container.innerHTML = '';
+    items.forEach(item => addChecklistItem(item));
+  }
+
+  function addChecklistItem(value = '') {
+    const container = $('checklist-items');
+    const row = document.createElement('div');
+    row.className = 'checklist-item-row';
+    row.innerHTML = `
+      <input type="text" placeholder="e.g. Greet professionally" value="${value.replace(/"/g, '&quot;')}">
+      <button class="btn-remove-item" title="Remove">✕</button>`;
+    row.querySelector('.btn-remove-item').onclick = () => row.remove();
+    container.appendChild(row);
+  }
+
+  function initTopicModal() {
+    $('btn-add-checklist').onclick = () => addChecklistItem();
+    $('btn-close-topic-modal').onclick = closeTopicModal;
+    $('btn-cancel-topic').onclick = closeTopicModal;
+    $('btn-save-topic').onclick = saveTopic;
+
+    // Caller audio recording in modal
+    initCallerRecorder();
+    $('btn-clear-caller-audio').onclick = () => {
+      _callerAudioBlob = null;
+      $('caller-preview-audio').src = '';
+      $('caller-preview-audio').classList.add('hidden');
+      $('btn-clear-caller-audio').classList.add('hidden');
+    };
+  }
+
+  function initCallerRecorder() {
+    let recPromise = null;
+    const btn = $('btn-record-caller');
+    const status = $('caller-rec-status');
+
+    btn.onclick = async () => {
+      if (!_callerRecording) {
+        _callerRecording = true;
+        btn.textContent = '⏹ Stop Recording';
+        btn.style.background = '#fef2f2';
+        status.textContent = '● Recording...';
+        status.className = 'recording';
+        recPromise = Recorder.start();
+        Recorder.startTimer(null, 0, null, null, true);
+      } else {
+        _callerRecording = false;
+        Recorder.stop();
+        let blob = null;
+        try { blob = await recPromise; } catch (e) {}
+        _callerAudioBlob = blob;
+        btn.textContent = '🎙 Re-record';
+        btn.style.background = '';
+        status.textContent = '✓ Recorded';
+        status.className = '';
+        if (blob) {
+          const url = URL.createObjectURL(blob);
+          $('caller-preview-audio').src = url;
+          $('caller-preview-audio').classList.remove('hidden');
+          $('btn-clear-caller-audio').classList.remove('hidden');
+        }
+      }
+    };
+  }
+
+  function closeTopicModal() {
+    $('topic-modal').classList.add('hidden');
+    _editTopicId = null;
+    _callerAudioBlob = null;
+    if (_callerRecording) { Recorder.stop(); _callerRecording = false; }
+  }
+
+  async function saveTopic() {
+    const title = $('topic-title').value.trim();
+    if (!title) { toast('Please enter a title.', 'error'); return; }
+
+    const checklist = Array.from(document.querySelectorAll('#checklist-items input'))
+      .map(i => i.value.trim()).filter(v => v);
+
+    const data = {
+      module: $('topic-module').value,
+      title,
+      description: $('topic-description').value.trim(),
+      scenario: $('topic-scenario').value.trim(),
+      checklist,
+      callerAudioBlob: _callerAudioBlob || null,
+      createdAt: new Date().toISOString()
+    };
+
+    if (_editTopicId) {
+      data.id = _editTopicId;
+      await DB.put('topics', data);
+      toast('Topic updated!', 'success');
+    } else {
+      await DB.put('topics', data);
+      toast('Topic created!', 'success');
+    }
+
+    closeTopicModal();
+    renderTopicsList();
+  }
+
+  async function deleteTopic(id) {
+    if (!confirm('Delete this topic? Sessions using it will still show, but new sessions can\'t use it.')) return;
+    await DB.del('topics', id);
+    toast('Topic deleted.', '');
+    renderTopicsList();
+  }
+
+  // ---- Assessments ----
+  async function loadAssessments(filterTraineeId = null) {
+    const [sessions, topics] = await Promise.all([DB.getAll('sessions'), DB.getAll('topics')]);
+    const topicMap = {};
+    topics.forEach(t => { topicMap[t.id] = t; });
+
+    let filtered = sessions;
+    if (filterTraineeId) {
+      filtered = sessions.filter(s => s.traineeId === filterTraineeId);
+    }
+
+    renderAssessmentsTable(filtered, topicMap);
+
+    $('filter-module').onchange = () => {
+      _assessmentsFilter.module = $('filter-module').value;
+      applyAssessmentFilters(sessions, topicMap);
+    };
+    $('filter-status').onchange = () => {
+      _assessmentsFilter.status = $('filter-status').value;
+      applyAssessmentFilters(sessions, topicMap);
+    };
+    $('btn-refresh-assessments').onclick = () => loadAssessments();
+
+    initScoringModal();
+  }
+
+  function applyAssessmentFilters(sessions, topicMap) {
+    let filtered = sessions;
+    if (_assessmentsFilter.module !== 'all') filtered = filtered.filter(s => s.module === _assessmentsFilter.module);
+    if (_assessmentsFilter.status !== 'all') filtered = filtered.filter(s => s.status === _assessmentsFilter.status);
+    renderAssessmentsTable(filtered, topicMap);
+  }
+
+  function renderAssessmentsTable(sessions, topicMap) {
+    const tbody = $('assessments-tbody');
+    const sorted = [...sessions].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+
+    if (sorted.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="8" class="empty-state">No assessments found.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = sorted.map(s => {
+      const aiScore = s.aiScores ? (s.aiScores.overall ?? '—') : '—';
+      const adminScore = s.adminScores ? (calcAdminAvg(s.adminScores) ?? '—') : '—';
+      const isScored = !!s.adminScores;
+
+      return `
+        <tr>
+          <td><strong>${s.traineeName || '—'}</strong></td>
+          <td>${moduleBadge(s.module)}</td>
+          <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.topicTitle || '—'}</td>
+          <td style="white-space:nowrap">${formatDate(s.submittedAt).split(' ')[0]}</td>
+          <td>${statusBadge(isScored ? 'scored' : s.status)}</td>
+          <td>${aiScore !== '—' ? aiScore + '/5' : '—'}</td>
+          <td>${adminScore !== '—' ? adminScore + '/5' : '—'}</td>
+          <td>
+            <button class="btn-small primary" onclick="Admin.openScoring(${s.id})">
+              ${isScored ? 'Review' : 'Score'}
+            </button>
+          </td>
+        </tr>`;
+    }).join('');
+  }
+
+  // ---- Scoring Modal ----
+  function initScoringModal() {
+    $('btn-close-scoring').onclick = closeScoringModal;
+    $('btn-save-score').onclick = saveScore;
+  }
+
+  async function openScoring(sessionId) {
+    _scoringSessionId = sessionId;
+    const session = await DB.get('sessions', sessionId);
+    if (!session) return;
+
+    const modal = $('scoring-modal');
+    modal.classList.remove('hidden');
+
+    $('scoring-trainee').textContent = session.traineeName;
+    $('scoring-module-badge').textContent = MODULE_LABELS[session.module] || session.module;
+    $('scoring-module-badge').className = `module-badge ${MODULE_BADGE_CLASS[session.module] || ''}`;
+    $('scoring-topic').textContent = session.topicTitle || '—';
+    $('scoring-date').textContent = formatDate(session.submittedAt);
+
+    const isWritten = session.module === 'written-comm';
+
+    // Audio or written text
+    if (isWritten) {
+      $('scoring-audio-section').classList.add('hidden');
+      $('scoring-transcript-section').classList.add('hidden');
+      $('scoring-written-section').classList.remove('hidden');
+      $('scoring-written-text').textContent = session.writtenText || session.transcript || '';
+    } else {
+      $('scoring-written-section').classList.add('hidden');
+      $('scoring-audio-section').classList.remove('hidden');
+      $('scoring-transcript-section').classList.remove('hidden');
+
+      const audioEl = $('scoring-audio');
+      // Support both Storage URL (new) and legacy Blob
+      const recUrl = session.recordingUrl
+        || (session.recordingBlob ? URL.createObjectURL(session.recordingBlob) : null);
+      if (recUrl) {
+        audioEl.src = recUrl;
+      } else {
+        audioEl.src = '';
+        $('scoring-audio-section').innerHTML = '<h4>Recording</h4><p style="color:var(--text-muted);font-size:0.85rem">No recording available.</p>';
+      }
+      $('scoring-transcript').textContent = session.transcript || 'No transcript available.';
+    }
+
+    // AI scores display
+    const aiDisplay = $('scoring-ai-scores-display');
+    aiDisplay.innerHTML = '';
+    if (session.aiScores) {
+      // Build label map from SCORING_CRITERIA for this module
+      const moduleCriteria = SCORING_CRITERIA[session.module] || [];
+      const labelMap = {};
+      moduleCriteria.forEach(c => { labelMap[c.key.replace('criterion_', '')] = c.label; });
+      // Also include common JS score keys
+      const jsKeys = {
+        fluency: 'Fluency', vocabulary: 'Vocabulary', contentCoverage: 'Content Coverage',
+        clarity: 'Clarity', structure: 'Structure', tone: 'Tone',
+        callOpening: 'Call Opening', acknowledgment: 'Acknowledgment',
+        activeListening: 'Active Listening & Probing', communicationClarity: 'Communication Clarity',
+        callEssence: 'Call Essence', holdProcedure: 'Hold Procedure',
+        extraMile: 'Extra Mile', callClosing: 'Call Closing'
+      };
+      const reasons = session.aiScores._reasons || {};
+      const aiMethod = session.aiScores._method;
+      if (aiMethod) {
+        aiDisplay.innerHTML += `<div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.5rem">
+          ${aiMethod === 'claude' ? '🤖 Claude AI scored' : '📊 Phrase-analysis scored'}</div>`;
+      }
+      Object.entries(session.aiScores).forEach(([k, v]) => {
+        if (k === 'overall' || k.startsWith('_') || typeof v !== 'number') return;
+        const label = jsKeys[k] || k;
+        const reason = reasons[k] ? `<div class="score-reason">${reasons[k]}</div>` : '';
+        aiDisplay.innerHTML += `
+          <div class="ai-score-row">
+            <span class="score-label">AI: ${label}</span>
+            <div class="score-bar"><div class="score-bar-fill" style="width:${((v/5)*100).toFixed(0)}%"></div></div>
+            <span class="score-val">${v}/5</span>
+          </div>${reason}`;
+      });
+      if (session.aiScores.overall !== undefined) {
+        aiDisplay.innerHTML += `
+          <div class="ai-score-row" style="background:#eff6ff;border:1px solid #dbeafe;margin-top:0.25rem">
+            <span class="score-label" style="font-weight:800">AI Overall</span>
+            <div class="score-bar"><div class="score-bar-fill" style="width:${((session.aiScores.overall/5)*100).toFixed(0)}%;background:#3b82f6"></div></div>
+            <span class="score-val" style="color:#3b82f6">${session.aiScores.overall}/5</span>
+          </div>`;
+      }
+    }
+
+    // Scoring criteria
+    const criteria = SCORING_CRITERIA[session.module] || [];
+    const criteriaContainer = $('scoring-criteria');
+    criteriaContainer.innerHTML = '';
+
+    criteria.forEach((criterion, idx) => {
+      const key = criterion.key;
+      const existingVal = session.adminScores ? (session.adminScores[key] ?? (criterion.scale135 ? 3 : 3)) : (criterion.scale135 ? 3 : 3);
+
+      if (criterion.scale135) {
+        // 1/3/5 radio buttons
+        const optionDefs = [
+          { val: 1, label: '✗ Not Met' },
+          { val: 3, label: '~ Partial' },
+          { val: 5, label: '✓ Fully Met' }
+        ];
+        const optionsHTML = optionDefs.map(opt => {
+          const selected = existingVal === opt.val ? `selected-${opt.val}` : '';
+          return `<label class="scale-135-option ${selected}" id="opt-label-${idx}-${opt.val}" onclick="Admin.selectScale135(${idx}, ${opt.val})">
+            <input type="radio" name="scale135-${idx}" value="${opt.val}" ${existingVal === opt.val ? 'checked' : ''}>
+            <span>${opt.label}</span>
+          </label>`;
+        }).join('');
+        criteriaContainer.innerHTML += `
+          <div class="criterion-row" id="criterion-row-${idx}">
+            <div class="criterion-label">
+              <span>${criterion.label}</span>
+              <span class="criterion-val" id="cval-${idx}">${existingVal}/5</span>
+            </div>
+            ${criterion.desc ? `<div class="criterion-desc">${criterion.desc}</div>` : ''}
+            <div class="scale-135-group" id="scale135-${idx}">${optionsHTML}</div>
+          </div>`;
+      } else {
+        // Standard 1-5 slider
+        const stars = '★'.repeat(existingVal) + '☆'.repeat(5 - existingVal);
+        criteriaContainer.innerHTML += `
+          <div class="criterion-row" id="criterion-row-${idx}">
+            <div class="criterion-label">
+              <span>${criterion.label}</span>
+              <span class="criterion-val" id="cval-${idx}">${existingVal}/5</span>
+            </div>
+            ${criterion.desc ? `<div class="criterion-desc">${criterion.desc}</div>` : ''}
+            <input type="range" min="1" max="5" value="${existingVal}" class="criterion-slider"
+              id="slider-${idx}" oninput="Admin.updateCriterionDisplay(${idx}, this.value)" />
+            <div class="criterion-stars" id="cstars-${idx}">${stars}</div>
+          </div>`;
+      }
+    });
+
+    $('scoring-comment').value = session.adminComment || '';
+    updateScoringTotal(session.module, session.adminScores);
+
+    // AI band classification in left panel
+    const aiBandEl = $('scoring-ai-band');
+    if (aiBandEl) {
+      if (session.aiScores && session.aiScores.overall !== undefined) {
+        const band = getBand(session.module, session.aiScores.overall);
+        const pct = Math.round((session.aiScores.overall / 5) * 100);
+        if (band) {
+          aiBandEl.innerHTML = `
+            <div class="band-card ${band.cls}" style="margin-bottom:0">
+              <div class="band-header">
+                <span class="band-icon">${band.icon}</span>
+                <div class="band-info">
+                  <div class="band-label" style="font-size:0.78rem">${band.label}</div>
+                  <div class="band-score" style="font-size:0.72rem">AI: ${session.aiScores.overall}/5 &nbsp;·&nbsp; ${pct}%</div>
+                </div>
+              </div>
+              <div class="band-feedback" style="font-size:0.72rem">${band.feedback}</div>
+            </div>`;
+          // Store band feedback for "Use AI feedback" button
+          aiBandEl.dataset.bandFeedback = `[AI Assessment: ${band.label} — ${pct}%]\n${band.feedback}`;
+        } else {
+          aiBandEl.innerHTML = '';
+        }
+      } else {
+        aiBandEl.innerHTML = '';
+      }
+    }
+
+    // "Use AI feedback" button — populates comment with AI band feedback
+    const useAiFeedbackBtn = $('btn-use-ai-feedback');
+    if (useAiFeedbackBtn) {
+      useAiFeedbackBtn.onclick = () => {
+        const bandFeedback = aiBandEl ? aiBandEl.dataset.bandFeedback : '';
+        if (bandFeedback) {
+          const existing = $('scoring-comment').value.trim();
+          $('scoring-comment').value = existing
+            ? existing + '\n\n' + bandFeedback
+            : bandFeedback;
+        } else {
+          toast('No AI feedback available for this session.', '');
+        }
+      };
+    }
+  }
+
+  function updateCriterionDisplay(idx, val) {
+    val = parseInt(val);
+    $(`cval-${idx}`).textContent = `${val}/5`;
+    $(`cstars-${idx}`).textContent = '★'.repeat(val) + '☆'.repeat(5 - val);
+    collectAndUpdateTotal();
+  }
+
+  function selectScale135(idx, val) {
+    val = parseInt(val);
+    // Update visual state
+    [1, 3, 5].forEach(v => {
+      const lbl = $(`opt-label-${idx}-${v}`);
+      if (lbl) {
+        lbl.classList.remove('selected-1', 'selected-3', 'selected-5');
+        if (v === val) lbl.classList.add(`selected-${val}`);
+      }
+    });
+    // Check the radio
+    const radio = document.querySelector(`input[name="scale135-${idx}"][value="${val}"]`);
+    if (radio) radio.checked = true;
+    $(`cval-${idx}`).textContent = `${val}/5`;
+    collectAndUpdateTotal();
+  }
+
+  function collectAndUpdateTotal() {
+    const criteria = document.querySelectorAll('[id^="criterion-row-"]');
+    const vals = [];
+    criteria.forEach((row, idx) => {
+      const slider = $(`slider-${idx}`);
+      if (slider) {
+        vals.push(parseInt(slider.value));
+        return;
+      }
+      const radio = document.querySelector(`input[name="scale135-${idx}"]:checked`);
+      if (radio) vals.push(parseInt(radio.value));
+    });
+    if (!vals.length) return;
+    const avg = (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1);
+    $('scoring-total-display').textContent = avg;
+
+    // Update live admin band inline
+    const inlineEl = $('admin-band-inline');
+    if (inlineEl && _scoringSessionId) {
+      // Get current session module from the modal badge
+      const badge = $('scoring-module-badge');
+      const moduleKey = badge ? [...Object.entries({ 'pick-speak': 'Pick & Speak', 'mock-call': 'Mock Call', 'role-play': 'Role Play', 'group-discussion': 'Group Discussion', 'written-comm': 'Written Comm.' })].find(([, v]) => v === badge.textContent)?.[0] : null;
+      if (moduleKey && SCORE_BANDS[moduleKey]) {
+        const band = getBand(moduleKey, parseFloat(avg));
+        if (band) {
+          inlineEl.textContent = `— ${band.icon} ${band.label}`;
+          inlineEl.style.color = band.cls === 'band-poor' ? '#dc2626' : band.cls === 'band-fair' ? '#a16207' : band.cls === 'band-good' ? '#16a34a' : '#7c3aed';
+        }
+      }
+    }
+  }
+
+  function updateScoringTotal(module, existing) {
+    const criteria = SCORING_CRITERIA[module] || [];
+    let avg;
+    if (existing) {
+      const vals = criteria.map(c => existing[c.key] ?? (c.scale135 ? 3 : 3));
+      avg = (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1);
+    } else {
+      avg = '3.0';
+    }
+    $('scoring-total-display').textContent = avg;
+
+    // Show band label next to admin score
+    const inlineEl = $('admin-band-inline');
+    if (inlineEl && SCORE_BANDS[module]) {
+      const band = getBand(module, parseFloat(avg));
+      if (band) {
+        inlineEl.textContent = `— ${band.icon} ${band.label}`;
+        inlineEl.style.color = band.cls === 'band-poor' ? '#dc2626' : band.cls === 'band-fair' ? '#a16207' : band.cls === 'band-good' ? '#16a34a' : '#7c3aed';
+      }
+    }
+  }
+
+  async function saveScore() {
+    const session = await DB.get('sessions', _scoringSessionId);
+    if (!session) return;
+
+    const criteria = SCORING_CRITERIA[session.module] || [];
+    const adminScores = {};
+    criteria.forEach((criterion, i) => {
+      const key = criterion.key;
+      if (criterion.scale135) {
+        const radio = document.querySelector(`input[name="scale135-${i}"]:checked`);
+        if (radio) adminScores[key] = parseInt(radio.value);
+      } else {
+        const slider = $(`slider-${i}`);
+        if (slider) adminScores[key] = parseInt(slider.value);
+      }
+    });
+
+    const avg = calcAdminAvg(adminScores);
+    adminScores.overall = avg;
+
+    session.adminScores = adminScores;
+    session.adminComment = $('scoring-comment').value.trim();
+    session.status = 'scored';
+
+    await DB.put('sessions', session);
+    closeScoringModal();
+    toast('Scores saved!', 'success');
+    await updatePendingBadge();
+    loadAssessments();
+  }
+
+  function closeScoringModal() {
+    $('scoring-modal').classList.add('hidden');
+    _scoringSessionId = null;
+  }
+
+  // ---- Reports ----
+  async function loadReportsDropdown() {
+    const trainees = await DB.getAll('trainees');
+    const select = $('report-trainee-select');
+    select.innerHTML = '<option value="">— Choose a trainee —</option>';
+    trainees.forEach(t => {
+      select.innerHTML += `<option value="${t.id}">${t.name}</option>`;
+    });
+
+    select.onchange = async () => {
+      const id = parseInt(select.value);
+      if (!id) { $('report-content').classList.add('hidden'); return; }
+      await loadTraineeReport(id);
+    };
+  }
+
+  async function loadTraineeReport(traineeId) {
+    const [trainee, sessions] = await Promise.all([
+      DB.get('trainees', traineeId),
+      DB.getByIndex('sessions', 'traineeId', traineeId)
+    ]);
+
+    if (!trainee) return;
+    $('report-content').classList.remove('hidden');
+    $('report-trainee-name').textContent = trainee.name;
+    $('report-total-sessions').textContent = sessions.length;
+
+    const scored = sessions.filter(s => s.adminScores);
+    const avg = scored.length
+      ? (scored.map(s => calcAdminAvg(s.adminScores)).filter(x => x !== null)
+          .reduce((a, b) => a + b, 0) / scored.length).toFixed(1)
+      : '—';
+    $('report-avg-score').textContent = avg !== '—' ? avg + '/5' : '—';
+
+    // Best module
+    const modScores = {};
+    scored.forEach(s => {
+      const val = calcAdminAvg(s.adminScores);
+      if (val !== null) {
+        if (!modScores[s.module]) modScores[s.module] = [];
+        modScores[s.module].push(val);
+      }
+    });
+    const modAvgs = Object.entries(modScores).map(([m, vals]) => ({
+      module: m, avg: vals.reduce((a,b)=>a+b,0)/vals.length
+    }));
+    const best = modAvgs.length ? modAvgs.sort((a,b)=>b.avg-a.avg)[0] : null;
+    $('report-best-module').textContent = best ? MODULE_LABELS[best.module] : '—';
+
+    // Session history
+    const tbody = $('report-sessions-tbody');
+    tbody.innerHTML = sessions.length === 0
+      ? `<tr><td colspan="5" class="empty-state">No sessions yet.</td></tr>`
+      : sessions.sort((a,b) => new Date(b.submittedAt)-new Date(a.submittedAt)).map(s => `
+          <tr>
+            <td>${moduleBadge(s.module)}</td>
+            <td>${s.topicTitle || '—'}</td>
+            <td>${formatDate(s.submittedAt).split(' ')[0]}</td>
+            <td>${s.aiScores ? (s.aiScores.overall ?? '—') + '/5' : '—'}</td>
+            <td>${s.adminScores ? calcAdminAvg(s.adminScores) + '/5' : '—'}</td>
+          </tr>`).join('');
+
+    // Radar chart
+    drawRadarChart(trainee, scored, modAvgs);
+  }
+
+  function drawRadarChart(trainee, sessions, modAvgs) {
+    const canvas = $('report-radar');
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    const cx = W / 2, cy = H / 2, r = Math.min(W, H) / 2 - 30;
+
+    ctx.clearRect(0, 0, W, H);
+
+    const modules = Object.keys(MODULE_LABELS);
+    const angles = modules.map((_, i) => (i / modules.length) * Math.PI * 2 - Math.PI / 2);
+    const avgMap = {};
+    modAvgs.forEach(m => { avgMap[m.module] = m.avg; });
+
+    // Draw grid
+    [1, 2, 3, 4, 5].forEach(level => {
+      ctx.beginPath();
+      modules.forEach((_, i) => {
+        const ratio = level / 5;
+        const x = cx + r * ratio * Math.cos(angles[i]);
+        const y = cy + r * ratio * Math.sin(angles[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      });
+      ctx.closePath();
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    });
+
+    // Draw axes
+    modules.forEach((_, i) => {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + r * Math.cos(angles[i]), cy + r * Math.sin(angles[i]));
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.stroke();
+    });
+
+    // Draw data
+    if (modAvgs.length > 0) {
+      ctx.beginPath();
+      modules.forEach((mod, i) => {
+        const val = avgMap[mod] || 0;
+        const ratio = val / 5;
+        const x = cx + r * ratio * Math.cos(angles[i]);
+        const y = cy + r * ratio * Math.sin(angles[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      });
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(59,130,246,0.15)';
+      ctx.fill();
+      ctx.strokeStyle = '#3b82f6';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Dots
+      modules.forEach((mod, i) => {
+        const val = avgMap[mod] || 0;
+        const ratio = val / 5;
+        const x = cx + r * ratio * Math.cos(angles[i]);
+        const y = cy + r * ratio * Math.sin(angles[i]);
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = '#3b82f6';
+        ctx.fill();
+      });
+    }
+
+    // Labels
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.fillStyle = '#64748b';
+    ctx.textAlign = 'center';
+    modules.forEach((mod, i) => {
+      const lx = cx + (r + 22) * Math.cos(angles[i]);
+      const ly = cy + (r + 22) * Math.sin(angles[i]);
+      const short = { 'pick-speak': 'P&S', 'mock-call': 'Call', 'role-play': 'Role', 'group-discussion': 'GD', 'written-comm': 'Written' };
+      ctx.fillText(short[mod] || mod, lx, ly + 4);
+    });
+  }
+
+  // ---- Settings ----
+  function initSettings() {
+    $('btn-save-pwd').onclick = async () => {
+      const np = $('new-pwd').value;
+      const cp = $('confirm-pwd').value;
+      const msg = $('pwd-msg');
+      if (!np) { msg.textContent = 'Please enter a new password.'; msg.style.color = 'red'; return; }
+      if (np !== cp) { msg.textContent = 'Passwords do not match.'; msg.style.color = 'red'; return; }
+      await DB.put('settings', { key: 'adminPassword', value: np });
+      $('new-pwd').value = '';
+      $('confirm-pwd').value = '';
+      msg.textContent = 'Password updated successfully!';
+      msg.style.color = 'green';
+      toast('Password saved!', 'success');
+    };
+
+    // Claude AI Scoring — now proxied via Cloudflare Worker (key is server-side)
+    const apiStatus = $('api-key-status');
+    if (apiStatus) {
+      const proxyUrl = CONFIG.CLAUDE_PROXY_URL || '';
+      if (proxyUrl && !proxyUrl.includes('YOUR_WORKER')) {
+        apiStatus.textContent = '✓ Cloudflare Worker proxy configured — AI scoring is active.';
+        apiStatus.style.color = 'green';
+      } else {
+        apiStatus.textContent = '⚠ Cloudflare Worker URL not set in config.js — using JS phrase analysis fallback.';
+        apiStatus.style.color = '#b45309';
+      }
+    }
+
+    $('btn-clear-data').onclick = async () => {
+      if (!confirm('This will delete ALL trainee sessions and assessment data. Topics will be re-seeded. Continue?')) return;
+      const sessions = await DB.getAll('sessions');
+      for (const s of sessions) await DB.del('sessions', s.id);
+      const trainees = await DB.getAll('trainees');
+      for (const t of trainees) await DB.del('trainees', t.id);
+      sessionStorage.removeItem('adminAuth');
+      toast('All data cleared. Reloading...', '');
+      setTimeout(() => location.reload(), 1200);
+    };
+  }
+
+  // ---- Init ----
+  async function init() {
+    await DB.init();
+    initAuth();
+  }
+
+  // ---- Public API (called from inline onclick) ----
+  return {
+    init,
+    openTopicModal,
+    deleteTopic,
+    openScoring,
+    updateCriterionDisplay,
+    selectScale135,
+    viewTraineeSessions
+  };
+})();
+
+document.addEventListener('DOMContentLoaded', () => Admin.init());

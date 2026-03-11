@@ -1,0 +1,914 @@
+'use strict';
+
+const App = (() => {
+  // ---- State ----
+  let _trainee = null; // { id, name }
+  let _currentTopic = null;
+  let _recordingPromise = null;
+  let _psRecordingStartTime = null; // for duration tracking
+  let _wcStartTime = null;
+  let _wcTimerInterval = null;
+
+  // ---- Score Bands (thresholds are percentages of max score 5) ----
+  // Percentage = (overallScore / 5) * 100
+  const SCORE_BANDS = {
+    'pick-speak': [
+      {
+        maxPct: 40,
+        label: 'Needs Significant Improvement',
+        cls: 'band-poor',
+        icon: '⚠️',
+        feedback: 'Significant gaps in fluency, vocabulary, or content coverage. Focus on maintaining a steady speaking pace, using varied word choices, and fully covering your topic within the time given.'
+      },
+      {
+        maxPct: 60,
+        label: 'Acceptable / Meets Expectations',
+        cls: 'band-fair',
+        icon: '📋',
+        feedback: 'Meets basic expectations. Aim to reduce filler words (um, uh, like), improve your speaking pace, and develop your ideas more thoroughly with examples.'
+      },
+      {
+        maxPct: 80,
+        label: 'Good / Above Average',
+        cls: 'band-good',
+        icon: '👍',
+        feedback: 'Above average performance with good command of language. Refine by increasing vocabulary variety and deepening content coverage to reach the next level.'
+      },
+      {
+        maxPct: Infinity,
+        label: 'Excellent / Consistently Strong',
+        cls: 'band-excellent',
+        icon: '⭐',
+        feedback: 'Consistently strong delivery! Excellent fluency, rich vocabulary, and thorough content coverage. Keep practising to maintain this standard.'
+      }
+    ],
+    'mock-call': [
+      {
+        maxPct: 50,
+        label: 'Needs Significant Improvement',
+        cls: 'band-poor',
+        icon: '⚠️',
+        feedback: 'Key call-handling elements are missing or insufficient. Prioritise training on greeting structure, acknowledging the customer with empathy, probing questions, and proper call closings.'
+      },
+      {
+        maxPct: 60,
+        label: 'Acceptable / Meets Expectations',
+        cls: 'band-fair',
+        icon: '📋',
+        feedback: 'Basic call-handling demonstrated. Work on consistent empathy phrases, clearer communication without fillers, and following hold and closing procedures every time.'
+      },
+      {
+        maxPct: 70,
+        label: 'Good / Above Average',
+        cls: 'band-good',
+        icon: '👍',
+        feedback: 'Good customer service skills shown. Minor refinements needed — ensure you go the extra mile for the customer and follow all hold procedure and closing steps precisely.'
+      },
+      {
+        maxPct: Infinity,
+        label: 'Excellent / Consistently Strong',
+        cls: 'band-excellent',
+        icon: '⭐',
+        feedback: 'Consistently strong call quality! Excellent adherence to protocol, genuine empathy throughout, and professional communication from opening to closing.'
+      }
+    ]
+  };
+
+  function getBand(module, overallScore) {
+    const bands = SCORE_BANDS[module];
+    if (!bands || overallScore === null || overallScore === undefined) return null;
+    const pct = (overallScore / 5) * 100;
+    return bands.find(b => pct < b.maxPct) || bands[bands.length - 1];
+  }
+
+  function renderBandCard(containerId, module, overallScore) {
+    const el = $(containerId);
+    if (!el) return;
+    const band = getBand(module, overallScore);
+    if (!band) { el.innerHTML = ''; return; }
+    const pct = Math.round((overallScore / 5) * 100);
+    el.innerHTML = `
+      <div class="band-card ${band.cls}">
+        <div class="band-header">
+          <span class="band-icon">${band.icon}</span>
+          <div class="band-info">
+            <div class="band-label">${band.label}</div>
+            <div class="band-score">${overallScore}/5 &nbsp;·&nbsp; ${pct}%</div>
+          </div>
+        </div>
+        <div class="band-feedback">${band.feedback}</div>
+      </div>`;
+  }
+
+  // ---- Helpers ----
+  function $(id) { return document.getElementById(id); }
+
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    const el = $(`screen-${id}`);
+    if (el) { el.classList.add('active'); window.scrollTo(0, 0); }
+  }
+
+  function showStep(modulePrefix, stepId) {
+    // Hide all direct step children of the module screen
+    const screen = $(`screen-${modulePrefix}`);
+    if (screen) {
+      Array.from(screen.children).forEach(child => {
+        if (child.id && child.id.startsWith(modulePrefix.replace('-', '-'))) {
+          child.classList.add('hidden');
+        } else if (child.classList.contains('step-container') || child.classList.contains('module-header')) {
+          if (child.id) child.classList.add('hidden');
+        }
+      });
+      // Hide all elements with step-like IDs within the screen
+      screen.querySelectorAll('[id^="ps-step"],[id^="mc-step"],[id^="rp-step"],[id^="gd-step"],[id^="wc-step"]')
+        .forEach(el => el.classList.add('hidden'));
+    }
+    const el = $(stepId);
+    if (el) { el.classList.remove('hidden'); window.scrollTo(0, 0); }
+  }
+
+  function toast(msg, type = '') {
+    const el = document.createElement('div');
+    el.className = `toast ${type}`;
+    el.textContent = msg;
+    $('toast-container').appendChild(el);
+    setTimeout(() => {
+      el.style.animation = 'slide-out 0.25s ease forwards';
+      setTimeout(() => el.remove(), 300);
+    }, 3000);
+  }
+
+  function renderAIScores(containerId, scores, labels) {
+    const el = $(containerId);
+    if (!el) return;
+    el.innerHTML = '';
+    Object.entries(scores).forEach(([key, val]) => {
+      if (key === 'overall') return;
+      const label = labels[key] || key;
+      const pct = ((val / 5) * 100).toFixed(0);
+      const stars = '★'.repeat(Math.round(val)) + '☆'.repeat(5 - Math.round(val));
+      el.innerHTML += `
+        <div class="ai-score-row">
+          <span class="score-label">${label}</span>
+          <div class="score-bar"><div class="score-bar-fill" style="width:${pct}%"></div></div>
+          <span class="score-stars">${stars}</span>
+          <span class="score-val">${val}/5</span>
+        </div>`;
+    });
+    if (scores.overall !== undefined) {
+      el.innerHTML += `
+        <div class="ai-score-row" style="background:#eff6ff;border:1px solid #dbeafe">
+          <span class="score-label" style="font-weight:800">Overall AI Score</span>
+          <div class="score-bar"><div class="score-bar-fill" style="width:${((scores.overall/5)*100).toFixed(0)}%;background:#3b82f6"></div></div>
+          <span class="score-stars" style="color:#3b82f6">${'★'.repeat(Math.round(scores.overall))}${'☆'.repeat(5-Math.round(scores.overall))}</span>
+          <span class="score-val" style="color:#3b82f6">${scores.overall}/5</span>
+        </div>`;
+    }
+  }
+
+  function renderAnalysisPills(containerId, analysis, durationSeconds) {
+    const el = $(containerId);
+    if (!el || !analysis) return;
+    const pills = [
+      { label: `${analysis.wordCount} words`, cls: 'info' },
+      { label: `~${analysis.wpm} WPM`, cls: analysis.wpm >= 100 && analysis.wpm <= 170 ? 'good' : 'warn' },
+      { label: `${analysis.sentenceCount} sentences`, cls: 'info' },
+      { label: `${Math.round(analysis.uniqueWordRatio * 100)}% unique vocab`, cls: analysis.uniqueWordRatio > 0.6 ? 'good' : 'warn' },
+    ];
+    if (analysis.fillerCount > 0) {
+      pills.push({ label: `${analysis.fillerCount} filler words`, cls: analysis.fillerCount > 5 ? 'warn' : 'info' });
+    }
+    el.innerHTML = pills.map(p => `<span class="pill ${p.cls}">${p.label}</span>`).join('');
+  }
+
+  function getModuleLabel(module) {
+    const map = {
+      'pick-speak': 'Pick & Speak',
+      'mock-call': 'Mock Call',
+      'role-play': 'Role Play',
+      'group-discussion': 'Group Discussion',
+      'written-comm': 'Written Communication'
+    };
+    return map[module] || module;
+  }
+
+  // ---- Navigation (back buttons, module cards) ----
+  function bindNavigation() {
+    document.addEventListener('click', (e) => {
+      const back = e.target.closest('[data-back]');
+      if (back) {
+        Recorder.stopTimer();
+        Recorder.stopWaveform();
+        showScreen(back.dataset.back);
+        return;
+      }
+
+      const card = e.target.closest('.module-card');
+      if (card) {
+        const module = card.dataset.module;
+        openModule(module);
+      }
+    });
+  }
+
+  // ---- Auth Screen ----
+  function initAuth() {
+    // If already logged in (Supabase session restored), go straight to modules
+    if (Auth.isLoggedIn()) {
+      _trainee = { id: Auth.getId(), name: Auth.getName(), email: Auth.getEmail() };
+      activateTrainee();
+      return;
+    }
+
+    const signinForm  = $('auth-signin-form');
+    const signupForm  = $('auth-signup-form');
+    const signinError = $('auth-error');
+    const signupError = $('auth-signup-error');
+
+    // Toggle between Sign In ↔ Sign Up
+    $('link-show-signup').onclick = (e) => {
+      e.preventDefault();
+      signinForm.classList.add('hidden');
+      signupForm.classList.remove('hidden');
+      signinError.classList.add('hidden');
+    };
+    $('link-show-signin').onclick = (e) => {
+      e.preventDefault();
+      signupForm.classList.add('hidden');
+      signinForm.classList.remove('hidden');
+      signupError.classList.add('hidden');
+    };
+
+    // ---- Sign In ----
+    const doSignIn = async () => {
+      const email    = $('auth-email').value.trim();
+      const password = $('auth-password').value;
+      if (!email || !password) {
+        signinError.textContent = 'Please enter your email and password.';
+        signinError.classList.remove('hidden'); return;
+      }
+      $('btn-signin').disabled    = true;
+      $('btn-signin').textContent = 'Signing in…';
+      signinError.classList.add('hidden');
+      try {
+        await Auth.signIn(email, password);
+        _trainee = { id: Auth.getId(), name: Auth.getName(), email: Auth.getEmail() };
+        activateTrainee();
+      } catch (e) {
+        signinError.textContent = e.message || 'Sign in failed. Check your credentials.';
+        signinError.classList.remove('hidden');
+      } finally {
+        $('btn-signin').disabled    = false;
+        $('btn-signin').textContent = 'Sign In →';
+      }
+    };
+    $('btn-signin').addEventListener('click', doSignIn);
+    $('auth-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') doSignIn(); });
+
+    // ---- Sign Up ----
+    const doSignUp = async () => {
+      const name     = $('auth-name').value.trim();
+      const email    = $('auth-email-signup').value.trim();
+      const password = $('auth-password-signup').value;
+      if (!name || !email || !password) {
+        signupError.textContent = 'Please fill in all fields.';
+        signupError.classList.remove('hidden'); return;
+      }
+      if (password.length < 6) {
+        signupError.textContent = 'Password must be at least 6 characters.';
+        signupError.classList.remove('hidden'); return;
+      }
+      $('btn-signup').disabled    = true;
+      $('btn-signup').textContent = 'Creating account…';
+      signupError.classList.add('hidden');
+      try {
+        const result = await Auth.signUp(email, password, name);
+        if (result?.needsConfirmation) {
+          signupError.style.color = '#16a34a';
+          signupError.textContent = 'Account created! Check your email to confirm, then sign in here.';
+          signupError.classList.remove('hidden');
+          signupForm.classList.add('hidden');
+          signinForm.classList.remove('hidden');
+        } else {
+          _trainee = { id: Auth.getId(), name: Auth.getName(), email: Auth.getEmail() };
+          activateTrainee();
+        }
+      } catch (e) {
+        signupError.style.color = '';
+        signupError.textContent = e.message || 'Sign up failed. Try again.';
+        signupError.classList.remove('hidden');
+      } finally {
+        $('btn-signup').disabled    = false;
+        $('btn-signup').textContent = 'Create Account →';
+      }
+    };
+    $('btn-signup').addEventListener('click', doSignUp);
+    $('auth-password-signup').addEventListener('keydown', (e) => { if (e.key === 'Enter') doSignUp(); });
+  }
+
+  function activateTrainee() {
+    $('header-trainee-name').textContent = _trainee.name;
+    $('app-header').classList.remove('hidden');
+    // Use onclick (not addEventListener) to avoid stacking multiple listeners
+    $('btn-change-trainee').onclick = async () => {
+      await Auth.signOut();
+      _trainee = null;
+      $('app-header').classList.add('hidden');
+      // Reset sign-in form
+      if ($('auth-email'))    $('auth-email').value    = '';
+      if ($('auth-password')) $('auth-password').value = '';
+      if ($('auth-error'))    $('auth-error').classList.add('hidden');
+      // Show sign-in, hide sign-up
+      const sf = $('auth-signin-form'), su = $('auth-signup-form');
+      if (sf) sf.classList.remove('hidden');
+      if (su) su.classList.add('hidden');
+      showScreen('welcome');
+    };
+    showScreen('modules');
+  }
+
+  // ---- Module Dispatch ----
+  async function openModule(module) {
+    const topics = await DB.getByIndex('topics', 'module', module);
+    if (!topics.length) {
+      toast('No topics available for this module. Ask your admin to add some.', 'error');
+      return;
+    }
+    _currentTopic = topics[Math.floor(Math.random() * topics.length)];
+    showScreen(module);
+
+    if (module === 'pick-speak') initPickSpeak();
+    else if (module === 'mock-call') initMockCall();
+    else if (module === 'role-play') initRolePlay();
+    else if (module === 'group-discussion') initGroupDiscussion();
+    else if (module === 'written-comm') initWrittenComm();
+  }
+
+  // ================================================================
+  //  PICK & SPEAK
+  // ================================================================
+  function initPickSpeak() {
+    showStep('pick-speak', 'ps-step-topic');
+
+    // Reset
+    const revealEl = $('ps-topic-reveal');
+    revealEl.classList.remove('revealed');
+    $('ps-topic-title').textContent = 'Click to reveal your topic';
+    $('ps-topic-desc').textContent = 'You will have 30 seconds to prepare, then 2 minutes to speak.';
+    $('btn-ps-ready').classList.add('hidden');
+
+    $('btn-ps-reveal').onclick = () => {
+      revealEl.classList.add('revealed');
+      $('ps-topic-title').textContent = _currentTopic.title;
+      $('ps-topic-desc').textContent = _currentTopic.description || '';
+      $('btn-ps-ready').classList.remove('hidden');
+      $('btn-ps-reveal').style.display = 'none';
+    };
+
+    $('btn-ps-ready').onclick = () => startPickSpeakPrep();
+    $('btn-ps-again').onclick = () => {
+      DB.getByIndex('topics', 'module', 'pick-speak').then(topics => {
+        if (topics.length) {
+          _currentTopic = topics[Math.floor(Math.random() * topics.length)];
+          initPickSpeak();
+        }
+      });
+    };
+
+    // Reset reveal button visibility
+    $('btn-ps-reveal').style.display = '';
+  }
+
+  function startPickSpeakPrep() {
+    showStep('pick-speak', 'ps-step-prep');
+    $('ps-prep-title').textContent = _currentTopic.title;
+    $('ps-prep-desc').textContent = _currentTopic.description || '';
+
+    const PREP = 30;
+    const ring = $('ps-prep-ring');
+    const circumference = 339.3;
+
+    Recorder.startTimer($('ps-prep-time'), PREP, (secs) => {
+      const progress = secs / PREP;
+      ring.style.strokeDashoffset = circumference * (1 - progress);
+    }, () => {
+      startPickSpeakRecording();
+    });
+
+    $('btn-ps-skip-prep').onclick = () => {
+      Recorder.stopTimer();
+      startPickSpeakRecording();
+    };
+  }
+
+  async function startPickSpeakRecording() {
+    showStep('pick-speak', 'ps-step-record');
+    $('ps-rec-title').textContent = _currentTopic.title;
+    $('ps-final-transcript').textContent = '';
+
+    const speechSupported = SpeechEngine.isSupported();
+    if (!speechSupported) {
+      $('ps-no-speech-note').classList.remove('hidden');
+    }
+
+    let transcriptText = '';
+    SpeechEngine.startTranscription((text) => {
+      transcriptText = text;
+      const el = $('ps-live-transcript');
+      el.innerHTML = text || '<span class="transcript-placeholder">Listening...</span>';
+    });
+
+    const blobPromise = Recorder.start();
+    const waveCanvas = $('ps-waveform');
+    Recorder.startWaveform(waveCanvas);
+    _psRecordingStartTime = Date.now();
+
+    const REC_DURATION = 120;
+
+    Recorder.startTimer($('ps-rec-time'), REC_DURATION, null, () => {
+      stopPickSpeakRecording(blobPromise, transcriptText);
+    });
+
+    $('btn-ps-stop').onclick = () => {
+      Recorder.stopTimer();
+      stopPickSpeakRecording(blobPromise, transcriptText);
+    };
+  }
+
+  async function stopPickSpeakRecording(blobPromise, transcriptText) {
+    $('btn-ps-stop').disabled = true;
+    const finalTranscript = SpeechEngine.stopTranscription() || transcriptText;
+    Recorder.stop();
+
+    let blob = null;
+    try { blob = await blobPromise; } catch (e) { console.warn('Recording error:', e); }
+
+    // Compute actual recording duration
+    const duration = _psRecordingStartTime
+      ? Math.floor((Date.now() - _psRecordingStartTime) / 1000)
+      : 120;
+    const analysis = SpeechEngine.analyze(finalTranscript, Math.max(duration, 10));
+    const aiScores = SpeechEngine.scoreSpeech(analysis, Math.max(duration, 10));
+
+    const sessionData = {
+      traineeId: _trainee.id,
+      traineeName: _trainee.name,
+      module: 'pick-speak',
+      topicId: _currentTopic.id,
+      topicTitle: _currentTopic.title,
+      recordingBlob: blob,
+      transcript: finalTranscript,
+      aiScores,
+      adminScores: null,
+      adminComment: '',
+      status: finalTranscript ? 'ai-evaluated' : 'pending',
+      submittedAt: new Date().toISOString(),
+      timeTaken: Math.max(duration, 10),
+      analysis
+    };
+
+    await DB.put('sessions', sessionData);
+    showPickSpeakResults(aiScores, finalTranscript, analysis, duration);
+  }
+
+  function showPickSpeakResults(scores, transcript, analysis, duration) {
+    showStep('pick-speak', 'ps-step-results');
+
+    // Band card (overall performance classification)
+    if (scores && scores.overall !== undefined) {
+      renderBandCard('ps-band-display', 'pick-speak', scores.overall);
+    }
+
+    const labels = { fluency: 'Fluency', vocabulary: 'Vocabulary', contentCoverage: 'Content Coverage' };
+    renderAIScores('ps-ai-scores', scores, labels);
+    renderAnalysisPills('ps-analysis-pills', analysis, duration);
+
+    $('ps-final-transcript').textContent = transcript || 'No transcript captured. Your recording has been saved for admin review.';
+    $('btn-ps-stop').disabled = false;
+    toast('Assessment submitted!', 'success');
+  }
+
+  // ================================================================
+  //  MOCK CALL
+  // ================================================================
+  function initMockCall() {
+    showStep('mock-call', 'mc-step-scenario');
+    $('mc-title').textContent = _currentTopic.title;
+    $('mc-desc').textContent = _currentTopic.description || '';
+    $('mc-scenario-text').textContent = _currentTopic.scenario || '';
+
+    // Checklist
+    const ul = $('mc-checklist');
+    ul.innerHTML = '';
+    (_currentTopic.checklist || []).forEach(item => {
+      ul.innerHTML += `<li>${item}</li>`;
+    });
+
+    // Caller audio — support both Storage URL (new) and legacy Blob (old)
+    const audioSection = $('mc-caller-audio-section');
+    const callerUrl = _currentTopic.callerAudioUrl
+      || (_currentTopic.callerAudioBlob ? URL.createObjectURL(_currentTopic.callerAudioBlob) : null);
+    if (callerUrl) {
+      $('mc-caller-audio').src = callerUrl;
+      audioSection.classList.remove('hidden');
+    } else {
+      audioSection.classList.add('hidden');
+    }
+
+    $('btn-mc-ready').onclick = () => startMockCallRecording();
+  }
+
+  async function startMockCallRecording() {
+    showStep('mock-call', 'mc-step-record');
+    $('mc-rec-mini').textContent = _currentTopic.title;
+
+    const blobPromise = Recorder.start();
+    Recorder.startWaveform($('mc-waveform'));
+    Recorder.startTimer($('mc-rec-time'), 0, null, null, true); // count up
+
+    // Start live transcription if browser supports it
+    const transcriptBox = $('mc-live-transcript-box');
+    const transcriptEl = $('mc-live-transcript');
+    if (SpeechEngine.isSupported()) {
+      if (transcriptBox) transcriptBox.classList.remove('hidden');
+      SpeechEngine.startTranscription((text) => {
+        if (transcriptEl) transcriptEl.textContent = text || 'Listening...';
+      });
+    }
+
+    $('btn-mc-stop').onclick = async () => {
+      $('btn-mc-stop').disabled = true;
+      Recorder.stopTimer();
+      Recorder.stopWaveform();
+      Recorder.stop();
+      const elapsed = Recorder.getElapsed();
+
+      // Stop transcription
+      const finalTranscript = SpeechEngine.isSupported() ? SpeechEngine.stopTranscription() : '';
+      if (transcriptBox) transcriptBox.classList.add('hidden');
+
+      let blob = null;
+      try { blob = await blobPromise; } catch (e) {}
+
+      // Show processing state in done step
+      showStep('mock-call', 'mc-step-done');
+      const scoringStatusEl = $('mc-ai-scoring-status');
+      if (scoringStatusEl) {
+        scoringStatusEl.textContent = '⏳ Analyzing your call...';
+        scoringStatusEl.classList.remove('hidden');
+      }
+
+      // Score: Claude API → JS fallback
+      let aiScores = null;
+      let scoringMethod = 'none';
+
+      if (finalTranscript) {
+        if (typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
+          try {
+            if (scoringStatusEl) scoringStatusEl.textContent = '🤖 Claude AI is scoring your call...';
+            const claudeResult = await ClaudeEvaluator.evaluate(
+              'mock-call', finalTranscript, _currentTopic.title, _currentTopic.scenario || ''
+            );
+            if (claudeResult && claudeResult.overall !== null) {
+              aiScores = { ...claudeResult.scores, overall: claudeResult.overall, _reasons: claudeResult.reasons, _method: 'claude' };
+              scoringMethod = 'claude';
+            }
+          } catch (e) {
+            console.warn('Claude scoring failed, falling back to JS:', e.message);
+          }
+        }
+        if (!aiScores) {
+          aiScores = SpeechEngine.scoreMockCall(finalTranscript);
+          aiScores._method = 'js';
+          scoringMethod = 'js';
+        }
+      }
+
+      if (scoringStatusEl) scoringStatusEl.classList.add('hidden');
+
+      // Persist session
+      await DB.put('sessions', {
+        traineeId: _trainee.id,
+        traineeName: _trainee.name,
+        module: 'mock-call',
+        topicId: _currentTopic.id,
+        topicTitle: _currentTopic.title,
+        recordingBlob: blob,
+        transcript: finalTranscript,
+        aiScores,
+        adminScores: null,
+        adminComment: '',
+        status: finalTranscript ? 'ai-evaluated' : 'pending',
+        submittedAt: new Date().toISOString(),
+        timeTaken: elapsed
+      });
+
+      showMockCallResults(aiScores, finalTranscript, scoringMethod);
+      toast('Mock call submitted!', 'success');
+      $('btn-mc-stop').disabled = false;
+    };
+  }
+
+  function showMockCallResults(aiScores, transcript, method) {
+    // Labels in display order matching Excel criteria
+    const MC_LABELS = [
+      { key: 'callOpening',          label: 'Call Opening' },
+      { key: 'acknowledgment',       label: 'Acknowledgment' },
+      { key: 'activeListening',      label: 'Active Listening & Probing' },
+      { key: 'communicationClarity', label: 'Communication Clarity' },
+      { key: 'callEssence',          label: 'Call Essence' },
+      { key: 'holdProcedure',        label: 'Hold Procedure' },
+      { key: 'extraMile',            label: 'Extra Mile' },
+      { key: 'callClosing',          label: 'Call Closing' }
+    ];
+
+    const bandEl = $('mc-band-display');
+    const scoresEl = $('mc-result-scores');
+    const transcriptResultEl = $('mc-result-transcript');
+    const transcriptBox = $('mc-result-transcript-box');
+    const methodEl = $('mc-result-method');
+
+    // Band card — shown first, most prominent
+    if (aiScores && typeof aiScores.overall === 'number') {
+      renderBandCard('mc-band-display', 'mock-call', aiScores.overall);
+    }
+
+    if (scoresEl) {
+      if (aiScores && typeof aiScores.overall === 'number') {
+        const reasons = aiScores._reasons || {};
+        let html = `<div class="ai-scores-list">`;
+
+        MC_LABELS.forEach(({ key, label }) => {
+          const val = aiScores[key];
+          if (val === undefined) return;
+          const barPct = ((val / 5) * 100).toFixed(0);
+          const stars = '★'.repeat(Math.round(val)) + '☆'.repeat(5 - Math.round(val));
+          const reason = reasons[key] ? `<div class="score-reason">${reasons[key]}</div>` : '';
+          html += `
+            <div class="ai-score-row">
+              <span class="score-label">${label}</span>
+              <div class="score-bar"><div class="score-bar-fill" style="width:${barPct}%;background:var(--mc-color)"></div></div>
+              <span class="score-stars" style="color:var(--mc-color)">${stars}</span>
+              <span class="score-val">${val}/5</span>
+            </div>${reason}`;
+        });
+        html += `</div>`;
+        scoresEl.innerHTML = html;
+        scoresEl.classList.remove('hidden');
+      } else {
+        scoresEl.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:1rem">
+          No transcript captured — your recording has been saved for admin review.</p>`;
+        scoresEl.classList.remove('hidden');
+      }
+    }
+
+    if (methodEl) {
+      if (method === 'claude') {
+        methodEl.innerHTML = '<span class="pill good">🤖 Scored by Claude AI</span>';
+      } else if (method === 'js') {
+        methodEl.innerHTML = '<span class="pill info">📊 Scored by phrase analysis (add API key for Claude scoring)</span>';
+      }
+    }
+
+    if (transcript && transcriptResultEl) {
+      transcriptResultEl.textContent = transcript;
+      if (transcriptBox) transcriptBox.classList.remove('hidden');
+    }
+  }
+
+  // ================================================================
+  //  ROLE PLAY
+  // ================================================================
+  function initRolePlay() {
+    showStep('role-play', 'rp-step-scenario');
+    $('rp-title').textContent = _currentTopic.title;
+    $('rp-desc').textContent = _currentTopic.description || '';
+    $('rp-scenario-text').textContent = _currentTopic.scenario || '';
+
+    const ul = $('rp-checklist');
+    ul.innerHTML = '';
+    (_currentTopic.checklist || []).forEach(item => {
+      ul.innerHTML += `<li>${item}</li>`;
+    });
+
+    $('btn-rp-ready').onclick = () => startRolePlayRecording();
+  }
+
+  async function startRolePlayRecording() {
+    showStep('role-play', 'rp-step-record');
+
+    const blobPromise = Recorder.start();
+    Recorder.startWaveform($('rp-waveform'));
+    Recorder.startTimer($('rp-rec-time'), 0, null, null, true);
+
+    $('btn-rp-stop').onclick = async () => {
+      $('btn-rp-stop').disabled = true;
+      Recorder.stop();
+      const elapsed = Recorder.getElapsed();
+      let blob = null;
+      try { blob = await blobPromise; } catch (e) {}
+
+      await DB.put('sessions', {
+        traineeId: _trainee.id,
+        traineeName: _trainee.name,
+        module: 'role-play',
+        topicId: _currentTopic.id,
+        topicTitle: _currentTopic.title,
+        recordingBlob: blob,
+        transcript: '',
+        aiScores: null,
+        adminScores: null,
+        adminComment: '',
+        status: 'pending',
+        submittedAt: new Date().toISOString(),
+        timeTaken: elapsed
+      });
+
+      showStep('role-play', 'rp-step-done');
+      toast('Role play submitted!', 'success');
+      $('btn-rp-stop').disabled = false;
+    };
+  }
+
+  // ================================================================
+  //  GROUP DISCUSSION
+  // ================================================================
+  function initGroupDiscussion() {
+    showStep('group-discussion', 'gd-step-topic');
+    $('gd-title').textContent = _currentTopic.title;
+    $('gd-desc').textContent = _currentTopic.description || '';
+    $('gd-scenario-text').textContent = _currentTopic.scenario || '';
+
+    const ul = $('gd-checklist');
+    ul.innerHTML = '';
+    (_currentTopic.checklist || []).forEach(item => {
+      ul.innerHTML += `<li>${item}</li>`;
+    });
+
+    $('btn-gd-ready').onclick = () => startGroupDiscussionRecording();
+  }
+
+  async function startGroupDiscussionRecording() {
+    showStep('group-discussion', 'gd-step-record');
+
+    const blobPromise = Recorder.start();
+    Recorder.startWaveform($('gd-waveform'));
+    Recorder.startTimer($('gd-rec-time'), 0, null, null, true);
+
+    $('btn-gd-stop').onclick = async () => {
+      $('btn-gd-stop').disabled = true;
+      Recorder.stop();
+      const elapsed = Recorder.getElapsed();
+      let blob = null;
+      try { blob = await blobPromise; } catch (e) {}
+
+      await DB.put('sessions', {
+        traineeId: _trainee.id,
+        traineeName: _trainee.name,
+        module: 'group-discussion',
+        topicId: _currentTopic.id,
+        topicTitle: _currentTopic.title,
+        recordingBlob: blob,
+        transcript: '',
+        aiScores: null,
+        adminScores: null,
+        adminComment: '',
+        status: 'pending',
+        submittedAt: new Date().toISOString(),
+        timeTaken: elapsed
+      });
+
+      showStep('group-discussion', 'gd-step-done');
+      toast('Contribution submitted!', 'success');
+      $('btn-gd-stop').disabled = false;
+    };
+  }
+
+  // ================================================================
+  //  WRITTEN COMMUNICATION
+  // ================================================================
+  function initWrittenComm() {
+    showStep('written-comm', 'wc-step-task');
+    $('wc-title').textContent = _currentTopic.title;
+    $('wc-desc').textContent = _currentTopic.description || '';
+    $('wc-scenario-text').textContent = _currentTopic.scenario || '';
+
+    const ul = $('wc-checklist');
+    ul.innerHTML = '';
+    (_currentTopic.checklist || []).forEach(item => {
+      ul.innerHTML += `<li>${item}</li>`;
+    });
+
+    $('btn-wc-start').onclick = () => startWrittenCommEditor();
+  }
+
+  function startWrittenCommEditor() {
+    showStep('written-comm', 'wc-step-write');
+    $('wc-write-title').textContent = _currentTopic.title;
+    $('wc-write-scenario').textContent = _currentTopic.scenario || '';
+
+    const checklistUl = $('wc-write-checklist');
+    if (checklistUl) {
+      checklistUl.innerHTML = '';
+      (_currentTopic.checklist || []).forEach(item => {
+        checklistUl.innerHTML += `<li>${item}</li>`;
+      });
+    }
+
+    const editor = $('wc-editor');
+    editor.value = '';
+    $('wc-word-count').textContent = '0';
+    $('wc-time-elapsed').textContent = '0:00';
+
+    _wcStartTime = Date.now();
+    if (_wcTimerInterval) clearInterval(_wcTimerInterval);
+    _wcTimerInterval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - _wcStartTime) / 1000);
+      const m = Math.floor(elapsed / 60);
+      const s = elapsed % 60;
+      $('wc-time-elapsed').textContent = `${m}:${s.toString().padStart(2, '0')}`;
+    }, 1000);
+
+    editor.oninput = () => {
+      const words = editor.value.trim().split(/\s+/).filter(w => w);
+      $('wc-word-count').textContent = editor.value.trim() ? words.length : 0;
+    };
+
+    $('btn-wc-submit').onclick = () => submitWrittenComm();
+  }
+
+  async function submitWrittenComm() {
+    const text = $('wc-editor').value.trim();
+    if (!text) {
+      toast('Please write something before submitting.', 'error');
+      return;
+    }
+
+    clearInterval(_wcTimerInterval);
+    const duration = Math.floor((Date.now() - _wcStartTime) / 1000);
+    const analysis = SpeechEngine.analyze(text, duration);
+    const aiScores = SpeechEngine.scoreWriting(text, duration);
+
+    await DB.put('sessions', {
+      traineeId: _trainee.id,
+      traineeName: _trainee.name,
+      module: 'written-comm',
+      topicId: _currentTopic.id,
+      topicTitle: _currentTopic.title,
+      recordingBlob: null,
+      writtenText: text,
+      transcript: text,
+      aiScores,
+      adminScores: null,
+      adminComment: '',
+      status: 'ai-evaluated',
+      submittedAt: new Date().toISOString(),
+      timeTaken: duration,
+      analysis
+    });
+
+    showWrittenCommResults(aiScores, text, analysis, duration);
+  }
+
+  function showWrittenCommResults(scores, text, analysis, duration) {
+    showStep('written-comm', 'wc-step-results');
+
+    const labels = { clarity: 'Clarity', structure: 'Structure', tone: 'Tone' };
+    renderAIScores('wc-ai-scores', scores, labels);
+
+    // Pills for writing
+    const el = $('wc-analysis-pills');
+    if (el && analysis) {
+      const words = text.trim().split(/\s+/).filter(w => w).length;
+      const m = Math.floor(duration / 60), s = duration % 60;
+      el.innerHTML = [
+        `<span class="pill info">${words} words</span>`,
+        `<span class="pill ${words >= 80 ? 'good' : 'warn'}">${words >= 80 ? 'Good length' : 'Could be longer'}</span>`,
+        `<span class="pill info">Time: ${m}:${s.toString().padStart(2, '0')}</span>`,
+        `<span class="pill ${analysis.sentenceCount >= 4 ? 'good' : 'warn'}">${analysis.sentenceCount} sentences</span>`
+      ].join('');
+    }
+
+    $('wc-submitted-text').textContent = text;
+    toast('Writing submitted!', 'success');
+  }
+
+  // ---- Init ----
+  async function init() {
+    await DB.init();
+    await Auth.init();  // restore Supabase session if any
+    initAuth();         // show auth screen or skip straight to modules
+    bindNavigation();
+
+    // Draw idle waveforms on load
+    ['ps', 'mc', 'rp', 'gd'].forEach(prefix => {
+      const canvas = $(`${prefix}-waveform`);
+      if (canvas) Recorder.drawIdleWaveform(canvas);
+    });
+  }
+
+  return { init };
+})();
+
+document.addEventListener('DOMContentLoaded', () => App.init());
