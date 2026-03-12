@@ -314,7 +314,7 @@ window.Admin = (() => {
           <td>${lastActive}</td>
           <td>${avg !== '—' ? avg + ' / 5' : '—'}</td>
           <td>
-            <button class="btn-small" onclick="Admin.viewTraineeSessions(${t.id})">View Sessions</button>
+            <button class="btn-small" onclick="Admin.viewTraineeSessions('${t.id}')">View Sessions</button>
           </td>
         </tr>`;
     }).join('');
@@ -362,8 +362,8 @@ window.Admin = (() => {
         <p>${t.description || ''}</p>
         ${t.checklist && t.checklist.length ? `<div style="font-size:0.75rem;color:var(--text-muted)">${t.checklist.length} evaluation criteria</div>` : ''}
         <div class="topic-card-actions" style="margin-top:0.875rem">
-          <button class="btn-small primary" onclick="Admin.openTopicModal(${t.id})">Edit</button>
-          <button class="btn-small danger" onclick="Admin.deleteTopic(${t.id})">Delete</button>
+          <button class="btn-small primary" onclick="Admin.openTopicModal('${t.id}')">Edit</button>
+          <button class="btn-small danger" onclick="Admin.deleteTopic('${t.id}')">Delete</button>
         </div>
       </div>`).join('');
   }
@@ -585,7 +585,7 @@ window.Admin = (() => {
           <td>${aiScore !== '—' ? aiScore + '/5' : '—'}</td>
           <td>${adminScore !== '—' ? adminScore + '/5' : '—'}</td>
           <td>
-            <button class="btn-small primary" onclick="Admin.openScoring(${s.id})">
+            <button class="btn-small primary" onclick="Admin.openScoring('${s.id}')">
               ${isScored ? 'Review' : 'Score'}
             </button>
           </td>
