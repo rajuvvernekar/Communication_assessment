@@ -11,5 +11,5 @@ const CONFIG = {
 
   // 2. Cloudflare Worker — URL of your deployed worker (Step 3 in setup guide)
   //    Leave empty string '' to disable AI scoring (JS phrase analysis fallback is used)
-  CLAUDE_PROXY_URL: 'https://YOUR_WORKER_NAME.YOUR_SUBDOMAIN.workers.dev',
+  CLAUDE_PROXY_URL: 'https://commassess-claude.rajuvvernekar.workers.dev',
 };

@@ -222,5 +222,5 @@ Return ONLY a JSON: {"score": <1 or 3 or 5>, "reason": "<one sentence>"}`
     return SPOKEN_CRITERIA[module] || [];
   }
 
-  return { isAvailable, getApiKey, evaluate, getCriteria, MOCK_CALL_CRITERIA };
+  return { isAvailable, evaluate, getCriteria, MOCK_CALL_CRITERIA };
 })();
