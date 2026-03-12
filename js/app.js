@@ -264,6 +264,7 @@ const App = (() => {
       }
     };
     $('btn-signin').addEventListener('click', doSignIn);
+    $('auth-email').addEventListener('keydown',    (e) => { if (e.key === 'Enter') doSignIn(); });
     $('auth-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') doSignIn(); });
 
     // ---- Sign Up ----
@@ -304,7 +305,9 @@ const App = (() => {
       }
     };
     $('btn-signup').addEventListener('click', doSignUp);
-    $('auth-password-signup').addEventListener('keydown', (e) => { if (e.key === 'Enter') doSignUp(); });
+    $('auth-name').addEventListener('keydown',             (e) => { if (e.key === 'Enter') doSignUp(); });
+    $('auth-email-signup').addEventListener('keydown',     (e) => { if (e.key === 'Enter') doSignUp(); });
+    $('auth-password-signup').addEventListener('keydown',  (e) => { if (e.key === 'Enter') doSignUp(); });
   }
 
   function activateTrainee() {
