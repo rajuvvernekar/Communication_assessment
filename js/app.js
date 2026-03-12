@@ -468,7 +468,12 @@ const App = (() => {
       analysis
     };
 
-    await DB.put('sessions', sessionData);
+    try {
+      await DB.put('sessions', sessionData);
+    } catch (e) {
+      console.error('Session save failed:', e.message);
+      toast('⚠ Could not save session: ' + e.message, 'error');
+    }
     showPickSpeakResults(aiScores, finalTranscript, analysis, duration);
   }
 
@@ -588,24 +593,29 @@ const App = (() => {
       if (scoringStatusEl) scoringStatusEl.classList.add('hidden');
 
       // Persist session
-      await DB.put('sessions', {
-        traineeId: _trainee.id,
-        traineeName: _trainee.name,
-        module: 'mock-call',
-        topicId: _currentTopic.id,
-        topicTitle: _currentTopic.title,
-        recordingBlob: blob,
-        transcript: finalTranscript,
-        aiScores,
-        adminScores: null,
-        adminComment: '',
-        status: finalTranscript ? 'ai-evaluated' : 'pending',
-        submittedAt: new Date().toISOString(),
-        timeTaken: elapsed
-      });
+      try {
+        await DB.put('sessions', {
+          traineeId: _trainee.id,
+          traineeName: _trainee.name,
+          module: 'mock-call',
+          topicId: _currentTopic.id,
+          topicTitle: _currentTopic.title,
+          recordingBlob: blob,
+          transcript: finalTranscript,
+          aiScores,
+          adminScores: null,
+          adminComment: '',
+          status: finalTranscript ? 'ai-evaluated' : 'pending',
+          submittedAt: new Date().toISOString(),
+          timeTaken: elapsed
+        });
+        toast('Mock call submitted!', 'success');
+      } catch (e) {
+        console.error('Session save failed:', e.message);
+        toast('⚠ Could not save session: ' + e.message, 'error');
+      }
 
       showMockCallResults(aiScores, finalTranscript, scoringMethod);
-      toast('Mock call submitted!', 'success');
       $('btn-mc-stop').disabled = false;
     };
   }
@@ -709,24 +719,29 @@ const App = (() => {
       let blob = null;
       try { blob = await blobPromise; } catch (e) {}
 
-      await DB.put('sessions', {
-        traineeId: _trainee.id,
-        traineeName: _trainee.name,
-        module: 'role-play',
-        topicId: _currentTopic.id,
-        topicTitle: _currentTopic.title,
-        recordingBlob: blob,
-        transcript: '',
-        aiScores: null,
-        adminScores: null,
-        adminComment: '',
-        status: 'pending',
-        submittedAt: new Date().toISOString(),
-        timeTaken: elapsed
-      });
+      try {
+        await DB.put('sessions', {
+          traineeId: _trainee.id,
+          traineeName: _trainee.name,
+          module: 'role-play',
+          topicId: _currentTopic.id,
+          topicTitle: _currentTopic.title,
+          recordingBlob: blob,
+          transcript: '',
+          aiScores: null,
+          adminScores: null,
+          adminComment: '',
+          status: 'pending',
+          submittedAt: new Date().toISOString(),
+          timeTaken: elapsed
+        });
+        toast('Role play submitted!', 'success');
+      } catch (e) {
+        console.error('Session save failed:', e.message);
+        toast('⚠ Could not save session: ' + e.message, 'error');
+      }
 
       showStep('role-play', 'rp-step-done');
-      toast('Role play submitted!', 'success');
       $('btn-rp-stop').disabled = false;
     };
   }
@@ -763,7 +778,8 @@ const App = (() => {
       let blob = null;
       try { blob = await blobPromise; } catch (e) {}
 
-      await DB.put('sessions', {
+      try {
+       await DB.put('sessions', {
         traineeId: _trainee.id,
         traineeName: _trainee.name,
         module: 'group-discussion',
@@ -779,8 +795,13 @@ const App = (() => {
         timeTaken: elapsed
       });
 
+        toast('Contribution submitted!', 'success');
+      } catch (e) {
+        console.error('Session save failed:', e.message);
+        toast('⚠ Could not save session: ' + e.message, 'error');
+      }
+
       showStep('group-discussion', 'gd-step-done');
-      toast('Contribution submitted!', 'success');
       $('btn-gd-stop').disabled = false;
     };
   }
@@ -850,23 +871,28 @@ const App = (() => {
     const analysis = SpeechEngine.analyze(text, duration);
     const aiScores = SpeechEngine.scoreWriting(text, duration);
 
-    await DB.put('sessions', {
-      traineeId: _trainee.id,
-      traineeName: _trainee.name,
-      module: 'written-comm',
-      topicId: _currentTopic.id,
-      topicTitle: _currentTopic.title,
-      recordingBlob: null,
-      writtenText: text,
-      transcript: text,
-      aiScores,
-      adminScores: null,
-      adminComment: '',
-      status: 'ai-evaluated',
-      submittedAt: new Date().toISOString(),
-      timeTaken: duration,
-      analysis
-    });
+    try {
+      await DB.put('sessions', {
+        traineeId: _trainee.id,
+        traineeName: _trainee.name,
+        module: 'written-comm',
+        topicId: _currentTopic.id,
+        topicTitle: _currentTopic.title,
+        recordingBlob: null,
+        writtenText: text,
+        transcript: text,
+        aiScores,
+        adminScores: null,
+        adminComment: '',
+        status: 'ai-evaluated',
+        submittedAt: new Date().toISOString(),
+        timeTaken: duration,
+        analysis
+      });
+    } catch (e) {
+      console.error('Session save failed:', e.message);
+      toast('⚠ Could not save session: ' + e.message, 'error');
+    }
 
     showWrittenCommResults(aiScores, text, analysis, duration);
   }
