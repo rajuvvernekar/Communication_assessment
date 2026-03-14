@@ -9,76 +9,35 @@ const App = (() => {
   let _wcStartTime = null;
   let _wcTimerInterval = null;
 
-  // ---- Score Bands (thresholds are percentages of max score 5) ----
-  // Percentage = (overallScore / 5) * 100
+  // ---- Score Bands (overall scores are out of 100) ----
   const SCORE_BANDS = {
     'pick-speak': [
-      {
-        maxPct: 40,
-        label: 'Needs Significant Improvement',
-        cls: 'band-poor',
-        icon: '⚠️',
-        feedback: 'Significant gaps in fluency, vocabulary, or content coverage. Focus on maintaining a steady speaking pace, using varied word choices, and fully covering your topic within the time given.'
-      },
-      {
-        maxPct: 60,
-        label: 'Acceptable / Meets Expectations',
-        cls: 'band-fair',
-        icon: '📋',
-        feedback: 'Meets basic expectations. Aim to reduce filler words (um, uh, like), improve your speaking pace, and develop your ideas more thoroughly with examples.'
-      },
-      {
-        maxPct: 80,
-        label: 'Good / Above Average',
-        cls: 'band-good',
-        icon: '👍',
-        feedback: 'Above average performance with good command of language. Refine by increasing vocabulary variety and deepening content coverage to reach the next level.'
-      },
-      {
-        maxPct: Infinity,
-        label: 'Excellent / Consistently Strong',
-        cls: 'band-excellent',
-        icon: '⭐',
-        feedback: 'Consistently strong delivery! Excellent fluency, rich vocabulary, and thorough content coverage. Keep practising to maintain this standard.'
-      }
+      { maxPct: 40,       label: 'Needs Significant Improvement', cls: 'band-poor',      icon: '⚠️',
+        feedback: 'Significant gaps across multiple areas. Focus on building clarity of thought, reducing filler words, improving pace, and using more varied vocabulary. Practice structured speaking with a clear opening, body, and close.' },
+      { maxPct: 60,       label: 'Acceptable / Meets Expectations', cls: 'band-fair',    icon: '📋',
+        feedback: 'Meets basic expectations. Work on reducing filler words (um, uh, like), improving sentence variety, and covering the topic more thoroughly within the time given.' },
+      { maxPct: 80,       label: 'Good / Above Average',           cls: 'band-good',     icon: '👍',
+        feedback: 'Good command of language and delivery. Refine by increasing vocabulary variety, tightening logical flow, and maintaining a more consistent pace throughout.' },
+      { maxPct: Infinity, label: 'Excellent / Consistently Strong', cls: 'band-excellent', icon: '⭐',
+        feedback: 'Consistently strong performance across all areas! Excellent fluency, rich vocabulary, professional tone, and well-structured delivery. Keep practising to maintain this standard.' }
     ],
     'mock-call': [
-      {
-        maxPct: 50,
-        label: 'Needs Significant Improvement',
-        cls: 'band-poor',
-        icon: '⚠️',
-        feedback: 'Key call-handling elements are missing or insufficient. Prioritise training on greeting structure, acknowledging the customer with empathy, probing questions, and proper call closings.'
-      },
-      {
-        maxPct: 60,
-        label: 'Acceptable / Meets Expectations',
-        cls: 'band-fair',
-        icon: '📋',
-        feedback: 'Basic call-handling demonstrated. Work on consistent empathy phrases, clearer communication without fillers, and following hold and closing procedures every time.'
-      },
-      {
-        maxPct: 70,
-        label: 'Good / Above Average',
-        cls: 'band-good',
-        icon: '👍',
-        feedback: 'Good customer service skills shown. Minor refinements needed — ensure you go the extra mile for the customer and follow all hold procedure and closing steps precisely.'
-      },
-      {
-        maxPct: Infinity,
-        label: 'Excellent / Consistently Strong',
-        cls: 'band-excellent',
-        icon: '⭐',
-        feedback: 'Consistently strong call quality! Excellent adherence to protocol, genuine empathy throughout, and professional communication from opening to closing.'
-      }
+      { maxPct: 50,       label: 'Needs Significant Improvement', cls: 'band-poor',      icon: '⚠️',
+        feedback: 'Key call-handling elements are missing or insufficient. Prioritise training on greeting structure, acknowledging the customer with empathy, probing questions, and proper call closings.' },
+      { maxPct: 60,       label: 'Acceptable / Meets Expectations', cls: 'band-fair',    icon: '📋',
+        feedback: 'Basic call-handling demonstrated. Work on consistent empathy phrases, clearer communication without fillers, and following hold and closing procedures every time.' },
+      { maxPct: 70,       label: 'Good / Above Average',           cls: 'band-good',     icon: '👍',
+        feedback: 'Good customer service skills shown. Minor refinements needed — ensure the extra mile is offered and all hold/closing steps are followed precisely.' },
+      { maxPct: Infinity, label: 'Excellent / Consistently Strong', cls: 'band-excellent', icon: '⭐',
+        feedback: 'Consistently strong call quality! Excellent adherence to protocol, genuine empathy throughout, and professional communication from opening to closing.' }
     ]
   };
 
   function getBand(module, overallScore) {
+    // overallScore is 0-100
     const bands = SCORE_BANDS[module];
     if (!bands || overallScore === null || overallScore === undefined) return null;
-    const pct = (overallScore / 5) * 100;
-    return bands.find(b => pct < b.maxPct) || bands[bands.length - 1];
+    return bands.find(b => overallScore < b.maxPct) || bands[bands.length - 1];
   }
 
   function renderBandCard(containerId, module, overallScore) {
@@ -86,14 +45,13 @@ const App = (() => {
     if (!el) return;
     const band = getBand(module, overallScore);
     if (!band) { el.innerHTML = ''; return; }
-    const pct = Math.round((overallScore / 5) * 100);
     el.innerHTML = `
       <div class="band-card ${band.cls}">
         <div class="band-header">
           <span class="band-icon">${band.icon}</span>
           <div class="band-info">
             <div class="band-label">${band.label}</div>
-            <div class="band-score">${overallScore}/5 &nbsp;·&nbsp; ${pct}%</div>
+            <div class="band-score">${overallScore}/100</div>
           </div>
         </div>
         <div class="band-feedback">${band.feedback}</div>
@@ -157,12 +115,12 @@ const App = (() => {
         </div>`;
     });
     if (scores.overall !== undefined) {
+      // overall is out of 100
       el.innerHTML += `
         <div class="ai-score-row" style="background:#eff6ff;border:1px solid #dbeafe">
           <span class="score-label" style="font-weight:800">Overall AI Score</span>
-          <div class="score-bar"><div class="score-bar-fill" style="width:${((scores.overall/5)*100).toFixed(0)}%;background:#3b82f6"></div></div>
-          <span class="score-stars" style="color:#3b82f6">${'★'.repeat(Math.round(scores.overall))}${'☆'.repeat(5-Math.round(scores.overall))}</span>
-          <span class="score-val" style="color:#3b82f6">${scores.overall}/5</span>
+          <div class="score-bar"><div class="score-bar-fill" style="width:${scores.overall.toFixed(0)}%;background:#3b82f6"></div></div>
+          <span class="score-val" style="color:#3b82f6;font-weight:700">${scores.overall}/100</span>
         </div>`;
     }
   }
@@ -492,7 +450,12 @@ const App = (() => {
       renderBandCard('ps-band-display', 'pick-speak', scores.overall);
     }
 
-    const labels = { fluency: 'Fluency', vocabulary: 'Vocabulary', contentCoverage: 'Content Coverage' };
+    const labels = {
+      clarity: 'Clarity of Thought', logicalFlow: 'Logical Flow', relevance: 'Relevance to Topic',
+      grammar: 'Grammar Accuracy', vocabulary: 'Vocabulary', sentenceVariety: 'Sentence Variety',
+      fluency: 'Fluency', pace: 'Pace of Speech', fillerControl: 'Filler Word Control',
+      confidence: 'Confidence', professionalism: 'Tone & Professionalism', timeManagement: 'Time Management'
+    };
     renderAIScores('ps-ai-scores', scores, labels);
     renderAnalysisPills('ps-analysis-pills', analysis, duration);
 

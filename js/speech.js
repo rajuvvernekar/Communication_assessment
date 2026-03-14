@@ -118,48 +118,154 @@ const SpeechEngine = (() => {
     return {
       wordCount, uniqueWordRatio, fillerCount, wpm, sentenceCount,
       avgWordsPerSentence, toneScore, fillerWords: fillerWordsFound,
-      positiveCount, negativeCount
+      positiveCount, negativeCount,
+      _rawText: text   // preserved for sentence-variety variance calculation
     };
   }
 
+  // Pick & Speak — 15-criterion scoring out of 100
+  // Criteria 10 (pronunciation), 11 (intonation), 12 (volume) cannot be
+  // measured from text alone; they are excluded from the AI overall and
+  // left for admin to score manually.
   function scoreSpeech(analysis, durationSeconds) {
     const scores = {};
-
-    // Fluency: ideal WPM 110-160, penalize extremes
-    let fluency;
     const wpm = analysis.wpm;
-    if (wpm === 0) fluency = 1;
-    else if (wpm < 60) fluency = 2;
-    else if (wpm < 100) fluency = 3;
-    else if (wpm <= 160) fluency = 5;
-    else if (wpm <= 200) fluency = 4;
-    else fluency = 3;
+    const wordCount = analysis.wordCount;
+    const fillerRatio = wordCount > 0 ? analysis.fillerCount / wordCount : 0;
+    const uvr = analysis.uniqueWordRatio;
+    const asl = analysis.avgWordsPerSentence;
+    const sc = analysis.sentenceCount;
 
-    // Filler words: penalize heavy usage
-    const fillerRatio = analysis.wordCount > 0 ? analysis.fillerCount / analysis.wordCount : 0;
+    // ── 1. Clarity of Thought (avg sentence length 10-22 = clear)
+    if (wordCount === 0) scores.clarity = 1;
+    else if (asl >= 10 && asl <= 22) scores.clarity = 5;
+    else if (asl >= 7  && asl <= 28) scores.clarity = 4;
+    else if (asl >= 5  && asl <= 35) scores.clarity = 3;
+    else scores.clarity = 2;
+
+    // ── 2. Logical Flow / Structure (sufficient sentences + words)
+    if (sc >= 7 && wordCount >= 110) scores.logicalFlow = 5;
+    else if (sc >= 5 && wordCount >= 70)  scores.logicalFlow = 4;
+    else if (sc >= 3 && wordCount >= 40)  scores.logicalFlow = 3;
+    else if (sc >= 1)                     scores.logicalFlow = 2;
+    else                                  scores.logicalFlow = 1;
+
+    // ── 3. Relevance to Topic (word count vs expected for duration)
+    const expected = (durationSeconds / 60) * 120;
+    const coverage = wordCount / Math.max(expected, 1);
+    if (coverage > 0.75)      scores.relevance = 5;
+    else if (coverage > 0.55) scores.relevance = 4;
+    else if (coverage > 0.35) scores.relevance = 3;
+    else if (coverage > 0.15) scores.relevance = 2;
+    else                      scores.relevance = 1;
+
+    // ── 4. Grammar Accuracy (sentence regularity proxy)
+    let grammar;
+    if (sc >= 5 && asl >= 8)      grammar = 5;
+    else if (sc >= 3 && asl >= 6) grammar = 4;
+    else if (sc >= 2 && asl >= 4) grammar = 3;
+    else if (wordCount > 0)       grammar = 2;
+    else                          grammar = 1;
+    scores.grammar = grammar;
+
+    // ── 5. Vocabulary Appropriateness (unique-word ratio + no slang)
+    const lowerText = (analysis._rawText || '').toLowerCase();
+    const slang = ['gonna','wanna','gotta','kinda','sorta','ya','yeah','nope','yep','dunno','dude','stuff'];
+    const slangHits = slang.filter(s => lowerText.includes(s)).length;
+    let vocab;
+    if (uvr > 0.72 && slangHits === 0) vocab = 5;
+    else if (uvr > 0.60 && slangHits <= 1) vocab = 4;
+    else if (uvr > 0.45 && slangHits <= 2) vocab = 3;
+    else if (uvr > 0.30) vocab = 2;
+    else vocab = 1;
+    scores.vocabulary = vocab;
+
+    // ── 6. Sentence Variety (variance in sentence lengths)
+    let sentenceVariety = 3; // default mid
+    if (sc >= 3) {
+      // Re-split sentences from analysis
+      const rawText = analysis._rawText || '';
+      const sents = rawText.split(/[.!?]+/).filter(s => s.trim().length > 4);
+      if (sents.length >= 3) {
+        const lens = sents.map(s => s.trim().split(/\s+/).length);
+        const mean = lens.reduce((a, b) => a + b, 0) / lens.length;
+        const variance = lens.reduce((s, l) => s + Math.pow(l - mean, 2), 0) / lens.length;
+        if (variance > 45)      sentenceVariety = 5;
+        else if (variance > 25) sentenceVariety = 4;
+        else if (variance > 10) sentenceVariety = 3;
+        else if (variance > 3)  sentenceVariety = 2;
+        else                    sentenceVariety = 1;
+      }
+    }
+    scores.sentenceVariety = sentenceVariety;
+
+    // ── 7. Fluency (WPM, penalised by filler ratio)
+    let fluency;
+    if (wpm === 0)        fluency = 1;
+    else if (wpm < 60)    fluency = 2;
+    else if (wpm < 100)   fluency = 3;
+    else if (wpm <= 160)  fluency = 5;
+    else if (wpm <= 200)  fluency = 4;
+    else                  fluency = 3;
     if (fillerRatio > 0.15) fluency = Math.max(1, fluency - 2);
     else if (fillerRatio > 0.08) fluency = Math.max(1, fluency - 1);
-
     scores.fluency = fluency;
 
-    // Vocabulary: based on unique word ratio
-    const uvr = analysis.uniqueWordRatio;
-    if (uvr > 0.75) scores.vocabulary = 5;
-    else if (uvr > 0.65) scores.vocabulary = 4;
-    else if (uvr > 0.50) scores.vocabulary = 3;
-    else if (uvr > 0.35) scores.vocabulary = 2;
-    else scores.vocabulary = 1;
+    // ── 8. Pace of Speech (ideal conversational 100-150 WPM)
+    let pace;
+    if (wpm === 0)        pace = 1;
+    else if (wpm < 70)    pace = 2; // too slow
+    else if (wpm < 100)   pace = 3;
+    else if (wpm <= 150)  pace = 5; // ideal
+    else if (wpm <= 185)  pace = 4; // slightly fast
+    else                  pace = 2; // too fast
+    scores.pace = pace;
 
-    // Content length adequacy (vs expected duration)
-    const expected = (durationSeconds / 60) * 120; // ~120 WPM expected
-    const coverage = analysis.wordCount / Math.max(expected, 1);
-    if (coverage > 0.75) scores.contentCoverage = 5;
-    else if (coverage > 0.55) scores.contentCoverage = 4;
-    else if (coverage > 0.35) scores.contentCoverage = 3;
-    else if (coverage > 0.15) scores.contentCoverage = 2;
-    else scores.contentCoverage = 1;
+    // ── 9. Filler Word Control
+    if (fillerRatio < 0.01)      scores.fillerControl = 5;
+    else if (fillerRatio < 0.03) scores.fillerControl = 4;
+    else if (fillerRatio < 0.06) scores.fillerControl = 3;
+    else if (fillerRatio < 0.10) scores.fillerControl = 2;
+    else                         scores.fillerControl = 1;
 
-    scores.overall = parseFloat(((scores.fluency + scores.vocabulary + scores.contentCoverage) / 3).toFixed(1));
+    // ── 10. Pronunciation Clarity — cannot measure from text (admin only)
+    // ── 11. Intonation & Stress   — cannot measure from text (admin only)
+    // ── 12. Volume & Audibility   — cannot measure from text (admin only)
+
+    // ── 13. Confidence (low hedge/self-correction phrases)
+    const hedges = ["i think","i mean","you know","kind of","sort of","i guess","maybe","perhaps","i'm not sure","i don't know"];
+    const hedgeHits = hedges.filter(h => lowerText.includes(h)).length;
+    if (hedgeHits === 0 && fillerRatio < 0.03)       scores.confidence = 5;
+    else if (hedgeHits <= 1 && fillerRatio < 0.06)   scores.confidence = 4;
+    else if (hedgeHits <= 2 && fillerRatio < 0.10)   scores.confidence = 3;
+    else if (hedgeHits <= 3)                         scores.confidence = 2;
+    else                                             scores.confidence = 1;
+
+    // ── 14. Tone & Professionalism (positive tone, no slang)
+    let professionalism;
+    if (slangHits === 0 && analysis.toneScore >= 2)      professionalism = 5;
+    else if (slangHits <= 1 && analysis.toneScore >= 0)  professionalism = 4;
+    else if (slangHits <= 2)                             professionalism = 3;
+    else if (slangHits <= 3)                             professionalism = 2;
+    else                                                 professionalism = 1;
+    scores.professionalism = professionalism;
+
+    // ── 15. Time Management (vs 120-second target)
+    const target = 120;
+    const diff = Math.abs(durationSeconds - target) / target;
+    if (diff <= 0.10)      scores.timeManagement = 5;
+    else if (diff <= 0.20) scores.timeManagement = 4;
+    else if (diff <= 0.35) scores.timeManagement = 3;
+    else if (diff <= 0.50) scores.timeManagement = 2;
+    else                   scores.timeManagement = 1;
+
+    // ── Overall: average of 12 AI-scoreable criteria (exclude 10/11/12)
+    const aiKeys = ['clarity','logicalFlow','relevance','grammar','vocabulary',
+                    'sentenceVariety','fluency','pace','fillerControl',
+                    'confidence','professionalism','timeManagement'];
+    const aiSum = aiKeys.reduce((s, k) => s + (scores[k] || 0), 0);
+    scores.overall = parseFloat(((aiSum / (aiKeys.length * 5)) * 100).toFixed(1));
+    scores._method = 'js';
     return scores;
   }
 

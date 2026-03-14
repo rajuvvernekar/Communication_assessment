@@ -34,17 +34,17 @@ window.Admin = (() => {
     'written-comm': 'badge-wc'
   };
 
-  // ---- Score Bands (mirrors app.js — used for admin display) ----
+  // ---- Score Bands (scores are out of 100) ----
   const SCORE_BANDS = {
     'pick-speak': [
       { maxPct: 40, label: 'Needs Significant Improvement', cls: 'band-poor', icon: '⚠️',
-        feedback: 'Significant gaps in fluency, vocabulary, or content coverage. Focus on maintaining a steady speaking pace, using varied word choices, and fully covering the topic within the time given.' },
+        feedback: 'Significant gaps across multiple areas. Focus on building clarity of thought, reducing filler words, improving pace, and using more varied vocabulary. Practice structured speaking with a clear opening, body, and close.' },
       { maxPct: 60, label: 'Acceptable / Meets Expectations', cls: 'band-fair', icon: '📋',
-        feedback: 'Meets basic expectations. Aim to reduce filler words (um, uh, like), improve speaking pace, and develop ideas more thoroughly with examples.' },
+        feedback: 'Meets basic expectations. Work on reducing filler words (um, uh, like), improving sentence variety, and covering the topic more thoroughly within the time given.' },
       { maxPct: 80, label: 'Good / Above Average', cls: 'band-good', icon: '👍',
-        feedback: 'Above average performance with good command of language. Refine by increasing vocabulary variety and deepening content coverage to reach the next level.' },
+        feedback: 'Good command of language and delivery. Refine by increasing vocabulary variety, tightening logical flow, and maintaining a more consistent pace throughout.' },
       { maxPct: Infinity, label: 'Excellent / Consistently Strong', cls: 'band-excellent', icon: '⭐',
-        feedback: 'Consistently strong delivery! Excellent fluency, rich vocabulary, and thorough content coverage. Keep practising to maintain this standard.' }
+        feedback: 'Consistently strong performance across all areas! Excellent fluency, rich vocabulary, professional tone, and well-structured delivery. Keep practising to maintain this standard.' }
     ],
     'mock-call': [
       { maxPct: 50, label: 'Needs Significant Improvement', cls: 'band-poor', icon: '⚠️',
@@ -59,21 +59,54 @@ window.Admin = (() => {
   };
 
   function getBand(module, overallScore) {
+    // overallScore is 0-100
     const bands = SCORE_BANDS[module];
     if (!bands || overallScore === null || overallScore === undefined) return null;
-    const pct = (overallScore / 5) * 100;
-    return bands.find(b => pct < b.maxPct) || bands[bands.length - 1];
+    return bands.find(b => overallScore < b.maxPct) || bands[bands.length - 1];
   }
 
-  // Each criterion: { label, key, desc?, scale135? }
-  // scale135: true = radio buttons 1/3/5 (Not Met / Partial / Fully Met)
+  // Each criterion: { label, key, group?, desc?, scale135? }
+  // group: shown as a section header in the scoring form
+  // scale135: radio buttons 1 / 3 / 5 (Not Met / Partial / Fully Met)
   // default: 1-5 slider
   const SCORING_CRITERIA = {
     'pick-speak': [
-      { label: 'Fluency', key: 'criterion_0' },
-      { label: 'Vocabulary', key: 'criterion_1' },
-      { label: 'Confidence', key: 'criterion_2' },
-      { label: 'Content Coverage', key: 'criterion_3' }
+      // ── 1. Content & Structure
+      { group: '1. Content & Structure', label: 'Clarity of Thought', key: 'clarity',
+        desc: 'Are ideas easy to understand? Is the message relevant to the topic?' },
+      { group: '1. Content & Structure', label: 'Logical Flow / Structure', key: 'logicalFlow',
+        desc: 'Clear opening, body, and closure; smooth transitions between points' },
+      { group: '1. Content & Structure', label: 'Relevance to Topic', key: 'relevance',
+        desc: 'Stays on topic; avoids unnecessary digressions' },
+      // ── 2. Language & Grammar
+      { group: '2. Language & Grammar', label: 'Grammar Accuracy', key: 'grammar',
+        desc: 'Correct tense usage; proper sentence construction' },
+      { group: '2. Language & Grammar', label: 'Vocabulary Appropriateness', key: 'vocabulary',
+        desc: 'Suitable word choice; avoids slang or informal language' },
+      { group: '2. Language & Grammar', label: 'Sentence Variety', key: 'sentenceVariety',
+        desc: 'Mix of simple and compound sentences; avoids repetitive patterns' },
+      // ── 3. Fluency & Delivery
+      { group: '3. Fluency & Delivery', label: 'Fluency', key: 'fluency',
+        desc: 'Minimal pauses or hesitation; natural speech rhythm' },
+      { group: '3. Fluency & Delivery', label: 'Pace of Speech', key: 'pace',
+        desc: 'Not too fast or slow; easy to follow' },
+      { group: '3. Fluency & Delivery', label: 'Filler Word Control', key: 'fillerControl',
+        desc: 'Limited use of "um," "uh," "actually," etc.' },
+      // ── 4. Pronunciation & Voice
+      { group: '4. Pronunciation & Voice', label: 'Pronunciation Clarity', key: 'pronunciation',
+        desc: 'Words are understandable; key terms pronounced correctly' },
+      { group: '4. Pronunciation & Voice', label: 'Intonation & Stress', key: 'intonation',
+        desc: 'Appropriate emphasis; avoids monotone delivery' },
+      { group: '4. Pronunciation & Voice', label: 'Volume & Audibility', key: 'volume',
+        desc: 'Clear and confident voice level' },
+      // ── 5. Confidence & Presence
+      { group: '5. Confidence & Presence', label: 'Confidence', key: 'confidence',
+        desc: 'Speaks without excessive self-correction; maintains composure' },
+      // ── 6. Professionalism
+      { group: '6. Professionalism', label: 'Tone & Professionalism', key: 'professionalism',
+        desc: 'Respectful and appropriate tone; no negative or casual expressions' },
+      { group: '6. Professionalism', label: 'Time Management', key: 'timeManagement',
+        desc: 'Completes within given time; balanced coverage of points' },
     ],
     'mock-call': [
       { label: 'Call Opening',              key: 'callOpening',          desc: 'Greeting + self-intro + company intro + offer to assist (all 4 elements = 5)' },
@@ -142,11 +175,14 @@ window.Admin = (() => {
 
   function calcAdminAvg(adminScores) {
     if (!adminScores) return null;
+    // If overall was already stored as /100, return it directly
+    if (typeof adminScores.overall === 'number') return adminScores.overall;
     const vals = Object.entries(adminScores)
       .filter(([k, v]) => k !== 'overall' && typeof v === 'number')
       .map(([, v]) => v);
     if (!vals.length) return null;
-    return parseFloat((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1));
+    // Each criterion is 1-5; convert sum to 0-100
+    return parseFloat(((vals.reduce((a, b) => a + b, 0) / (vals.length * 5)) * 100).toFixed(1));
   }
 
   function statusBadge(status) {
@@ -265,7 +301,7 @@ window.Admin = (() => {
           <div class="activity-dot" style="background:${MODULE_COLORS[s.module]}"></div>
           <div class="activity-text">
             <strong>${s.traineeName}</strong> completed <em>${MODULE_LABELS[s.module]}</em>
-            ${s.adminScores ? `— scored ${calcAdminAvg(s.adminScores)}/5` : ''}
+            ${s.adminScores ? `— scored ${calcAdminAvg(s.adminScores)}/100` : ''}
           </div>
           <span class="activity-time">${formatDate(s.submittedAt).split(' ')[0]}</span>
         </div>`).join('');
@@ -582,8 +618,8 @@ window.Admin = (() => {
           <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.topicTitle || '—'}</td>
           <td style="white-space:nowrap">${formatDate(s.submittedAt).split(' ')[0]}</td>
           <td>${statusBadge(isScored ? 'scored' : s.status)}</td>
-          <td>${aiScore !== '—' ? aiScore + '/5' : '—'}</td>
-          <td>${adminScore !== '—' ? adminScore + '/5' : '—'}</td>
+          <td>${aiScore !== '—' ? aiScore + '/100' : '—'}</td>
+          <td>${adminScore !== '—' ? adminScore + '/100' : '—'}</td>
           <td>
             <button class="btn-small primary" onclick="Admin.openScoring('${s.id}')">
               ${isScored ? 'Review' : 'Score'}
@@ -677,20 +713,27 @@ window.Admin = (() => {
         aiDisplay.innerHTML += `
           <div class="ai-score-row" style="background:#eff6ff;border:1px solid #dbeafe;margin-top:0.25rem">
             <span class="score-label" style="font-weight:800">AI Overall</span>
-            <div class="score-bar"><div class="score-bar-fill" style="width:${((session.aiScores.overall/5)*100).toFixed(0)}%;background:#3b82f6"></div></div>
-            <span class="score-val" style="color:#3b82f6">${session.aiScores.overall}/5</span>
+            <div class="score-bar"><div class="score-bar-fill" style="width:${session.aiScores.overall.toFixed(0)}%;background:#3b82f6"></div></div>
+            <span class="score-val" style="color:#3b82f6">${session.aiScores.overall}/100</span>
           </div>`;
       }
     }
 
-    // Scoring criteria
+    // Scoring criteria — with category group headers
     const criteria = SCORING_CRITERIA[session.module] || [];
     const criteriaContainer = $('scoring-criteria');
     criteriaContainer.innerHTML = '';
+    let lastGroup = null;
 
     criteria.forEach((criterion, idx) => {
       const key = criterion.key;
-      const existingVal = session.adminScores ? (session.adminScores[key] ?? (criterion.scale135 ? 3 : 3)) : (criterion.scale135 ? 3 : 3);
+      const existingVal = session.adminScores ? (session.adminScores[key] ?? 3) : 3;
+
+      // Insert category group header when group changes
+      if (criterion.group && criterion.group !== lastGroup) {
+        criteriaContainer.innerHTML += `<div class="criterion-group-header">${criterion.group}</div>`;
+        lastGroup = criterion.group;
+      }
 
       if (criterion.scale135) {
         // 1/3/5 radio buttons
@@ -740,7 +783,7 @@ window.Admin = (() => {
     if (aiBandEl) {
       if (session.aiScores && session.aiScores.overall !== undefined) {
         const band = getBand(session.module, session.aiScores.overall);
-        const pct = Math.round((session.aiScores.overall / 5) * 100);
+        const pct = Math.round(session.aiScores.overall); // already /100
         if (band) {
           aiBandEl.innerHTML = `
             <div class="band-card ${band.cls}" style="margin-bottom:0">
@@ -748,13 +791,13 @@ window.Admin = (() => {
                 <span class="band-icon">${band.icon}</span>
                 <div class="band-info">
                   <div class="band-label" style="font-size:0.78rem">${band.label}</div>
-                  <div class="band-score" style="font-size:0.72rem">AI: ${session.aiScores.overall}/5 &nbsp;·&nbsp; ${pct}%</div>
+                  <div class="band-score" style="font-size:0.72rem">AI: ${session.aiScores.overall}/100</div>
                 </div>
               </div>
               <div class="band-feedback" style="font-size:0.72rem">${band.feedback}</div>
             </div>`;
           // Store band feedback for "Use AI feedback" button
-          aiBandEl.dataset.bandFeedback = `[AI Assessment: ${band.label} — ${pct}%]\n${band.feedback}`;
+          aiBandEl.dataset.bandFeedback = `[AI Assessment: ${band.label} — ${pct}/100]\n${band.feedback}`;
         } else {
           aiBandEl.innerHTML = '';
         }
@@ -804,33 +847,36 @@ window.Admin = (() => {
     collectAndUpdateTotal();
   }
 
+  function _bandColor(cls) {
+    return cls === 'band-poor' ? '#dc2626' : cls === 'band-fair' ? '#a16207' : cls === 'band-good' ? '#16a34a' : '#7c3aed';
+  }
+
   function collectAndUpdateTotal() {
-    const criteria = document.querySelectorAll('[id^="criterion-row-"]');
+    const rows = document.querySelectorAll('[id^="criterion-row-"]');
     const vals = [];
-    criteria.forEach((row, idx) => {
+    rows.forEach((row, idx) => {
       const slider = $(`slider-${idx}`);
-      if (slider) {
-        vals.push(parseInt(slider.value));
-        return;
-      }
+      if (slider) { vals.push(parseInt(slider.value)); return; }
       const radio = document.querySelector(`input[name="scale135-${idx}"]:checked`);
       if (radio) vals.push(parseInt(radio.value));
     });
     if (!vals.length) return;
-    const avg = (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1);
-    $('scoring-total-display').textContent = avg;
+    // Each criterion 1-5 → overall out of 100
+    const total = ((vals.reduce((a, b) => a + b, 0) / (vals.length * 5)) * 100).toFixed(1);
+    $('scoring-total-display').textContent = total;
 
     // Update live admin band inline
     const inlineEl = $('admin-band-inline');
     if (inlineEl && _scoringSessionId) {
-      // Get current session module from the modal badge
       const badge = $('scoring-module-badge');
-      const moduleKey = badge ? [...Object.entries({ 'pick-speak': 'Pick & Speak', 'mock-call': 'Mock Call', 'role-play': 'Role Play', 'group-discussion': 'Group Discussion', 'written-comm': 'Written Comm.' })].find(([, v]) => v === badge.textContent)?.[0] : null;
+      const moduleKey = badge
+        ? [...Object.entries({ 'pick-speak': 'Pick & Speak', 'mock-call': 'Mock Call', 'role-play': 'Role Play', 'group-discussion': 'Group Discussion', 'written-comm': 'Written Comm.' })].find(([, v]) => v === badge.textContent)?.[0]
+        : null;
       if (moduleKey && SCORE_BANDS[moduleKey]) {
-        const band = getBand(moduleKey, parseFloat(avg));
+        const band = getBand(moduleKey, parseFloat(total));
         if (band) {
           inlineEl.textContent = `— ${band.icon} ${band.label}`;
-          inlineEl.style.color = band.cls === 'band-poor' ? '#dc2626' : band.cls === 'band-fair' ? '#a16207' : band.cls === 'band-good' ? '#16a34a' : '#7c3aed';
+          inlineEl.style.color = _bandColor(band.cls);
         }
       }
     }
@@ -838,22 +884,23 @@ window.Admin = (() => {
 
   function updateScoringTotal(module, existing) {
     const criteria = SCORING_CRITERIA[module] || [];
-    let avg;
-    if (existing) {
-      const vals = criteria.map(c => existing[c.key] ?? (c.scale135 ? 3 : 3));
-      avg = (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1);
+    let total;
+    if (existing && typeof existing.overall === 'number') {
+      total = existing.overall.toFixed(1);
+    } else if (existing && criteria.length) {
+      const vals = criteria.map(c => existing[c.key] ?? 3);
+      total = ((vals.reduce((a, b) => a + b, 0) / (vals.length * 5)) * 100).toFixed(1);
     } else {
-      avg = '3.0';
+      total = '60.0';
     }
-    $('scoring-total-display').textContent = avg;
+    $('scoring-total-display').textContent = total;
 
-    // Show band label next to admin score
     const inlineEl = $('admin-band-inline');
     if (inlineEl && SCORE_BANDS[module]) {
-      const band = getBand(module, parseFloat(avg));
+      const band = getBand(module, parseFloat(total));
       if (band) {
         inlineEl.textContent = `— ${band.icon} ${band.label}`;
-        inlineEl.style.color = band.cls === 'band-poor' ? '#dc2626' : band.cls === 'band-fair' ? '#a16207' : band.cls === 'band-good' ? '#16a34a' : '#7c3aed';
+        inlineEl.style.color = _bandColor(band.cls);
       }
     }
   }
@@ -875,8 +922,9 @@ window.Admin = (() => {
       }
     });
 
-    const avg = calcAdminAvg(adminScores);
-    adminScores.overall = avg;
+    // Compute overall out of 100 and store it
+    const vals = criteria.map(c => adminScores[c.key] ?? 3);
+    adminScores.overall = parseFloat(((vals.reduce((a, b) => a + b, 0) / (vals.length * 5)) * 100).toFixed(1));
 
     session.adminScores = adminScores;
     session.adminComment = $('scoring-comment').value.trim();
@@ -926,7 +974,7 @@ window.Admin = (() => {
       ? (scored.map(s => calcAdminAvg(s.adminScores)).filter(x => x !== null)
           .reduce((a, b) => a + b, 0) / scored.length).toFixed(1)
       : '—';
-    $('report-avg-score').textContent = avg !== '—' ? avg + '/5' : '—';
+    $('report-avg-score').textContent = avg !== '—' ? avg + '/100' : '—';
 
     // Best module
     const modScores = {};
@@ -952,8 +1000,8 @@ window.Admin = (() => {
             <td>${moduleBadge(s.module)}</td>
             <td>${s.topicTitle || '—'}</td>
             <td>${formatDate(s.submittedAt).split(' ')[0]}</td>
-            <td>${s.aiScores ? (s.aiScores.overall ?? '—') + '/5' : '—'}</td>
-            <td>${s.adminScores ? calcAdminAvg(s.adminScores) + '/5' : '—'}</td>
+            <td>${s.aiScores ? (s.aiScores.overall ?? '—') + '/100' : '—'}</td>
+            <td>${s.adminScores ? calcAdminAvg(s.adminScores) + '/100' : '—'}</td>
           </tr>`).join('');
 
     // Radar chart
