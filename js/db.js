@@ -27,6 +27,7 @@ const DB = (() => {
   };
   const TOPIC_MAP = {
     callerAudioUrl: 'caller_audio_url',
+    botScript:      'bot_script',
     createdAt:      'created_at',
   };
 

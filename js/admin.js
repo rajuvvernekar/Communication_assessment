@@ -620,17 +620,21 @@ window.Admin = (() => {
       createdAt: new Date().toISOString()
     };
 
-    if (_editTopicId) {
-      data.id = _editTopicId;
-      await DB.put('topics', data);
-      toast('Topic updated!', 'success');
-    } else {
-      await DB.put('topics', data);
-      toast('Topic created!', 'success');
+    try {
+      if (_editTopicId) {
+        data.id = _editTopicId;
+        await DB.put('topics', data);
+        toast('Topic updated!', 'success');
+      } else {
+        await DB.put('topics', data);
+        toast('Topic created!', 'success');
+      }
+      closeTopicModal();
+      renderTopicsList();
+    } catch (e) {
+      console.error('Save topic failed:', e);
+      toast('Error saving topic: ' + (e.message || e), 'error');
     }
-
-    closeTopicModal();
-    renderTopicsList();
   }
 
   async function deleteTopic(id) {

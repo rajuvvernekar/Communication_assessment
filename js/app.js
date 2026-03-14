@@ -514,26 +514,31 @@ const App = (() => {
     window.speechSynthesis.cancel();
     const utt = new SpeechSynthesisUtterance(text);
     utt.rate = 0.92; utt.pitch = 1.0; utt.lang = 'en-US';
-    // Try to pick a natural English voice
+    utt.onend   = onEnd;
+    utt.onerror = onEnd;
+
+    let _fired = false;   // guard: only call speak() once
     const trySpeak = () => {
+      if (_fired) return;
+      _fired = true;
       const voices = window.speechSynthesis.getVoices();
-      if (voices.length) {
-        const preferred = voices.find(v =>
-          /google\s+us\s+english|samantha|zira|karen|victoria/i.test(v.name) && v.lang.startsWith('en')
-        ) || voices.find(v => v.lang.startsWith('en-'));
-        if (preferred) utt.voice = preferred;
-      }
-      utt.onend   = onEnd;
-      utt.onerror = onEnd;
+      const preferred = voices.find(v =>
+        /google\s+us\s+english|samantha|zira|karen|victoria/i.test(v.name) && v.lang.startsWith('en')
+      ) || voices.find(v => v.lang.startsWith('en-'));
+      if (preferred) utt.voice = preferred;
       window.speechSynthesis.speak(utt);
     };
-    // Voices may not be loaded yet on first call
+
+    // Voices already loaded (most browsers after first call)
     if (window.speechSynthesis.getVoices().length) {
       trySpeak();
     } else {
-      window.speechSynthesis.onvoiceschanged = () => { window.speechSynthesis.onvoiceschanged = null; trySpeak(); };
-      // Safety fallback in case onvoiceschanged never fires
-      setTimeout(() => { if (!utt.voice) trySpeak(); }, 400);
+      // Wait for voices to load; 600 ms fallback in case event never fires
+      window.speechSynthesis.onvoiceschanged = () => {
+        window.speechSynthesis.onvoiceschanged = null;
+        trySpeak();
+      };
+      setTimeout(trySpeak, 600);
     }
   }
 
