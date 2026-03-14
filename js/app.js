@@ -467,13 +467,6 @@ const App = (() => {
   // ================================================================
   //  MOCK CALL
   // ================================================================
-
-  // ---- Bot-call state ----
-  let _mcTurns       = [];   // botScript lines array
-  let _mcTurnIndex   = 0;    // current turn (0-based)
-  let _mcTranscripts = [];   // partial transcript per trainee turn
-  let _mcBlobPromise = null; // last recording blob promise
-
   function initMockCall() {
     showStep('mock-call', 'mc-step-scenario');
     $('mc-title').textContent = _currentTopic.title;
@@ -498,167 +491,35 @@ const App = (() => {
       audioSection.classList.add('hidden');
     }
 
-    $('btn-mc-ready').onclick = () => {
-      const script = _currentTopic.botScript || [];
-      if (script.length > 0) {
-        startBotCall(script);
-      } else {
-        startMockCallRecording();   // legacy single-recording mode
-      }
-    };
+    $('btn-mc-ready').onclick = () => startMockCallRecording();
   }
 
-  // ---- TTS helper ----
-  function speakBot(text, onEnd) {
-    if (!window.speechSynthesis) { onEnd(); return; }
-    window.speechSynthesis.cancel();
-    const utt = new SpeechSynthesisUtterance(text);
-    utt.rate = 0.92; utt.pitch = 1.0; utt.lang = 'en-US';
-    utt.onend   = onEnd;
-    utt.onerror = onEnd;
-
-    let _fired = false;   // guard: only call speak() once
-    const trySpeak = () => {
-      if (_fired) return;
-      _fired = true;
-      const voices = window.speechSynthesis.getVoices();
-      const preferred = voices.find(v =>
-        /google\s+us\s+english|samantha|zira|karen|victoria/i.test(v.name) && v.lang.startsWith('en')
-      ) || voices.find(v => v.lang.startsWith('en-'));
-      if (preferred) utt.voice = preferred;
-      window.speechSynthesis.speak(utt);
-    };
-
-    // Voices already loaded (most browsers after first call)
-    if (window.speechSynthesis.getVoices().length) {
-      trySpeak();
-    } else {
-      // Wait for voices to load; 600 ms fallback in case event never fires
-      window.speechSynthesis.onvoiceschanged = () => {
-        window.speechSynthesis.onvoiceschanged = null;
-        trySpeak();
-      };
-      setTimeout(trySpeak, 600);
-    }
-  }
-
-  // ---- Bot-driven call ----
-  function startBotCall(script) {
-    _mcTurns       = script;
-    _mcTurnIndex   = 0;
-    _mcTranscripts = [];
-    _mcBlobPromise = null;
-
-    showStep('mock-call', 'mc-step-record');
-    $('mc-bot-mode').classList.remove('hidden');
-    $('mc-legacy-mode').classList.add('hidden');
-    $('mc-chat-thread').innerHTML = '';
-    $('mc-bot-status').classList.add('hidden');
-    $('mc-rec-area').classList.add('hidden');
-    $('btn-mc-finish').classList.add('hidden');
-
-    runBotTurn();
-  }
-
-  function runBotTurn() {
-    const total = _mcTurns.length;
-    const line  = _mcTurns[_mcTurnIndex];
-    $('mc-turn-label').textContent = `Turn ${_mcTurnIndex + 1} of ${total}`;
-
-    // Append bot bubble
-    const bubble = document.createElement('div');
-    bubble.className = 'mc-bubble bot';
-    bubble.textContent = line;
-    $('mc-chat-thread').appendChild(bubble);
-    $('mc-chat-thread').scrollTop = $('mc-chat-thread').scrollHeight;
-
-    // Show speaking indicator
-    $('mc-bot-status').classList.remove('hidden');
-    $('mc-rec-area').classList.add('hidden');
-    $('btn-mc-finish').classList.add('hidden');
-
-    speakBot(line, () => {
-      $('mc-bot-status').classList.add('hidden');
-      startTraineeTurn();
-    });
-  }
-
-  function startTraineeTurn() {
-    $('mc-rec-area').classList.remove('hidden');
-    $('mc-rec-time').textContent = '0:00';
-
-    // Stop any previous recording before starting a new one
-    try { Recorder.stop(); } catch (_) {}
-    _mcBlobPromise = Recorder.start();
-    Recorder.startWaveform($('mc-waveform'));
-    Recorder.startTimer($('mc-rec-time'), 0, null, null, true);
-
-    if (SpeechEngine.isSupported()) {
-      SpeechEngine.startTranscription((text) => {
-        $('mc-live-transcript-box').classList.remove('hidden');
-        $('mc-live-transcript').textContent = text || 'Listening...';
-      });
-    }
-
-    // Single-fire handler — re-assigned each turn
-    const doneBtn = $('btn-mc-done-turn');
-    doneBtn.disabled = false;
-    doneBtn.onclick = async () => {
-      doneBtn.disabled = true;
-
-      Recorder.stop();
-      Recorder.stopWaveform();
-      Recorder.stopTimer();
-      const partial = SpeechEngine.isSupported() ? SpeechEngine.stopTranscription() : '';
-      _mcTranscripts.push(partial);
-
-      // Append trainee bubble
-      const bubble = document.createElement('div');
-      bubble.className = 'mc-bubble trainee';
-      bubble.textContent = partial || '(no transcript captured)';
-      $('mc-chat-thread').appendChild(bubble);
-      $('mc-chat-thread').scrollTop = $('mc-chat-thread').scrollHeight;
-
-      $('mc-rec-area').classList.add('hidden');
-      $('mc-live-transcript-box').classList.add('hidden');
-      $('mc-live-transcript').textContent = 'Listening...';
-
-      _mcTurnIndex++;
-      if (_mcTurnIndex < _mcTurns.length) {
-        runBotTurn();
-      } else {
-        $('btn-mc-finish').classList.remove('hidden');
-        $('btn-mc-finish').onclick = () => finishBotCall();
-      }
-    };
-  }
-
-  async function finishBotCall() {
-    $('btn-mc-finish').disabled = true;
-    window.speechSynthesis && window.speechSynthesis.cancel();
-
-    let blob = null;
-    try { blob = await _mcBlobPromise; } catch (_) {}
-
-    const fullTranscript = _mcTranscripts.join(' ').trim();
-    await _submitMockCall(blob, fullTranscript, Recorder.getElapsed());
-  }
-
-  // ---- Legacy single-recording mode (topics with no botScript) ----
   async function startMockCallRecording() {
     showStep('mock-call', 'mc-step-record');
-    $('mc-legacy-mode').classList.remove('hidden');
-    $('mc-bot-mode').classList.add('hidden');
     $('mc-rec-mini').textContent = _currentTopic.title;
 
-    const blobPromise = Recorder.start();
-    Recorder.startWaveform($('mc-waveform-legacy'));
-    Recorder.startTimer($('mc-rec-time-legacy'), 0, null, null, true);
+    // Show customer questions panel if topic has bot script lines
+    const questions = _currentTopic.botScript || _currentTopic.bot_script || [];
+    const panel = $('mc-questions-panel');
+    const list  = $('mc-questions-list');
+    if (questions.length > 0) {
+      list.innerHTML = questions.map(q => `<li>${q}</li>`).join('');
+      panel.classList.remove('hidden');
+    } else {
+      panel.classList.add('hidden');
+    }
 
+    const blobPromise = Recorder.start();
+    Recorder.startWaveform($('mc-waveform'));
+    Recorder.startTimer($('mc-rec-time'), 0, null, null, true); // count up
+
+    // Start live transcription if browser supports it
+    const transcriptBox = $('mc-live-transcript-box');
+    const transcriptEl  = $('mc-live-transcript');
     if (SpeechEngine.isSupported()) {
-      $('mc-live-transcript-box-legacy').classList.remove('hidden');
+      if (transcriptBox) transcriptBox.classList.remove('hidden');
       SpeechEngine.startTranscription((text) => {
-        $('mc-live-transcript-legacy').textContent = text || 'Listening...';
+        if (transcriptEl) transcriptEl.textContent = text || 'Listening...';
       });
     }
 
@@ -669,78 +530,75 @@ const App = (() => {
       Recorder.stop();
       const elapsed = Recorder.getElapsed();
 
+      // Stop transcription
       const finalTranscript = SpeechEngine.isSupported() ? SpeechEngine.stopTranscription() : '';
-      $('mc-live-transcript-box-legacy').classList.add('hidden');
+      if (transcriptBox) transcriptBox.classList.add('hidden');
 
       let blob = null;
       try { blob = await blobPromise; } catch (e) {}
 
-      await _submitMockCall(blob, finalTranscript, elapsed);
-      $('btn-mc-stop').disabled = false;
-    };
-  }
+      // Show processing state in done step
+      showStep('mock-call', 'mc-step-done');
+      const scoringStatusEl = $('mc-ai-scoring-status');
+      if (scoringStatusEl) {
+        scoringStatusEl.textContent = '⏳ Analyzing your call...';
+        scoringStatusEl.classList.remove('hidden');
+      }
 
-  // ---- Shared submission logic ----
-  async function _submitMockCall(blob, finalTranscript, elapsed) {
-    showStep('mock-call', 'mc-step-done');
-    const scoringStatusEl = $('mc-ai-scoring-status');
-    if (scoringStatusEl) {
-      scoringStatusEl.textContent = '⏳ Analyzing your call...';
-      scoringStatusEl.classList.remove('hidden');
-    }
+      // Score: Claude API → JS fallback
+      let aiScores = null;
+      let scoringMethod = 'none';
 
-    // Score: Claude API → JS fallback
-    let aiScores = null;
-    let scoringMethod = 'none';
-
-    if (finalTranscript) {
-      if (typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
-        try {
-          if (scoringStatusEl) scoringStatusEl.textContent = '🤖 Claude AI is scoring your call...';
-          const claudeResult = await ClaudeEvaluator.evaluate(
-            'mock-call', finalTranscript, _currentTopic.title, _currentTopic.scenario || ''
-          );
-          if (claudeResult && claudeResult.overall !== null) {
-            aiScores = { ...claudeResult.scores, overall: claudeResult.overall, _reasons: claudeResult.reasons, _method: 'claude' };
-            scoringMethod = 'claude';
+      if (finalTranscript) {
+        if (typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
+          try {
+            if (scoringStatusEl) scoringStatusEl.textContent = '🤖 Claude AI is scoring your call...';
+            const claudeResult = await ClaudeEvaluator.evaluate(
+              'mock-call', finalTranscript, _currentTopic.title, _currentTopic.scenario || ''
+            );
+            if (claudeResult && claudeResult.overall !== null) {
+              aiScores = { ...claudeResult.scores, overall: claudeResult.overall, _reasons: claudeResult.reasons, _method: 'claude' };
+              scoringMethod = 'claude';
+            }
+          } catch (e) {
+            console.warn('Claude scoring failed, falling back to JS:', e.message);
           }
-        } catch (e) {
-          console.warn('Claude scoring failed, falling back to JS:', e.message);
+        }
+        if (!aiScores) {
+          aiScores = SpeechEngine.scoreMockCall(finalTranscript);
+          aiScores._method = 'js';
+          scoringMethod = 'js';
         }
       }
-      if (!aiScores) {
-        aiScores = SpeechEngine.scoreMockCall(finalTranscript);
-        aiScores._method = 'js';
-        scoringMethod = 'js';
+
+      if (scoringStatusEl) scoringStatusEl.classList.add('hidden');
+
+      // Persist session
+      try {
+        await DB.put('sessions', {
+          traineeId: _trainee.id,
+          traineeName: _trainee.name,
+          module: 'mock-call',
+          topicId: _currentTopic.id,
+          topicTitle: _currentTopic.title,
+          recordingBlob: blob,
+          transcript: finalTranscript,
+          aiScores,
+          adminScores: null,
+          adminComment: '',
+          status: finalTranscript ? 'ai-evaluated' : 'pending',
+          submittedAt: new Date().toISOString(),
+          timeTaken: elapsed
+        });
+        toast('Mock call submitted!', 'success');
+      } catch (e) {
+        console.error('Session save failed:', e.message);
+        toast('⚠ Could not save session: ' + e.message, 'error');
       }
-    }
 
-    if (scoringStatusEl) scoringStatusEl.classList.add('hidden');
-
-    // Persist session
-    try {
-      await DB.put('sessions', {
-        traineeId: _trainee.id,
-        traineeName: _trainee.name,
-        module: 'mock-call',
-        topicId: _currentTopic.id,
-        topicTitle: _currentTopic.title,
-        recordingBlob: blob,
-        transcript: finalTranscript,
-        aiScores,
-        adminScores: null,
-        adminComment: '',
-        status: finalTranscript ? 'ai-evaluated' : 'pending',
-        submittedAt: new Date().toISOString(),
-        timeTaken: elapsed
-      });
-      toast('Mock call submitted!', 'success');
-    } catch (e) {
-      console.error('Session save failed:', e.message);
-      toast('⚠ Could not save session: ' + e.message, 'error');
-    }
-
-    showMockCallResults(aiScores, finalTranscript, scoringMethod);
+      showMockCallResults(aiScores, finalTranscript, scoringMethod);
+      $('btn-mc-stop').disabled = false;
+    };
   }
 
   function showMockCallResults(aiScores, transcript, method) {
