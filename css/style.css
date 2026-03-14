@@ -741,7 +741,8 @@ body {
 }
 .auth-card h2 { color: #fff; font-size: 1.4rem; font-weight: 800; }
 .auth-card p { color: rgba(255,255,255,0.5); font-size: 0.875rem; margin: 0.4rem 0 1.5rem; }
-.auth-card input[type=password] {
+.auth-card input[type=password],
+.auth-card input[type=text] {
   width: 100%;
   padding: 0.875rem 1rem;
   border-radius: 8px;
@@ -751,9 +752,14 @@ body {
   font-size: 1rem;
   margin-bottom: 1rem;
   outline: none;
+  box-sizing: border-box;
+}
+.auth-card input[type=password] {
   text-align: center;
   letter-spacing: 4px;
 }
+.auth-card input[type=text]::placeholder,
+.auth-card input[type=password]::placeholder { color: rgba(255,255,255,0.35); }
 .auth-card .btn-primary { width: 100%; }
 .error-msg { color: #f87171; font-size: 0.85rem; margin-top: 0.5rem; }
 

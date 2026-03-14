@@ -207,7 +207,16 @@ window.Admin = (() => {
       el.textContent = `Signed in as ${name}`;
       el.style.display = 'block';
     }
-    if (logoutBtn) logoutBtn.style.display = '';
+    if (logoutBtn) {
+      logoutBtn.style.display = '';
+      // Always bind here so it works whether session was restored or just logged in
+      logoutBtn.onclick = (e) => {
+        e.preventDefault();
+        sessionStorage.removeItem('adminAuth');
+        sessionStorage.removeItem('adminName');
+        location.reload();
+      };
+    }
   }
 
   function initAuth() {
@@ -269,17 +278,6 @@ window.Admin = (() => {
     usernameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
     pwdInput.addEventListener('keydown',      (e) => { if (e.key === 'Enter') doLogin(); });
     btn.addEventListener('click', doLogin);
-
-    // Logout button
-    const logoutBtn = $('btn-admin-logout');
-    if (logoutBtn) {
-      logoutBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        sessionStorage.removeItem('adminAuth');
-        sessionStorage.removeItem('adminName');
-        location.reload();
-      });
-    }
   }
 
   // ---- App Init ----
