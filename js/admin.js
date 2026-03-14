@@ -636,8 +636,44 @@ window.Admin = (() => {
       applyAssessmentFilters(sessions, topicMap);
     };
     $('btn-refresh-assessments').onclick = () => loadAssessments();
+    $('btn-export-csv').onclick = () => downloadCSV();
 
     initScoringModal();
+  }
+
+  async function downloadCSV() {
+    const [sessions, trainees] = await Promise.all([DB.getAll('sessions'), DB.getAll('trainees')]);
+    const traineeMap = {};
+    trainees.forEach(t => { traineeMap[t.id] = t; });
+
+    const sorted = [...sessions].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+
+    const headers = ['Name', 'Employee ID', 'Module', 'Topic', 'Date', 'AI Score', 'Admin Score'];
+    const rows = sorted.map(s => {
+      const trainee = traineeMap[s.traineeId] || {};
+      const name     = s.traineeName || trainee.name || '';
+      const empId    = trainee.employee_id || '';
+      const module   = MODULE_LABELS[s.module] || s.module || '';
+      const topic    = s.topicTitle || '';
+      const date     = s.submittedAt ? new Date(s.submittedAt).toLocaleDateString() : '';
+      const aiScore  = s.aiScores?.overall ?? '';
+      const admScore = s.adminScores ? (calcAdminAvg(s.adminScores) ?? '') : '';
+      return [name, empId, module, topic, date, aiScore, admScore];
+    });
+
+    const escape = v => `"${String(v).replace(/"/g, '""')}"`;
+    const csv = [headers, ...rows].map(r => r.map(escape).join(',')).join('\r\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `commassess-scores-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast('CSV downloaded!', 'success');
   }
 
   function applyAssessmentFilters(sessions, topicMap) {
@@ -1192,7 +1228,8 @@ window.Admin = (() => {
     openScoring,
     updateCriterionDisplay,
     selectScale135,
-    viewTraineeSessions
+    viewTraineeSessions,
+    downloadCSV
   };
 })();
 
