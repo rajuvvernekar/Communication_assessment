@@ -106,7 +106,7 @@ const App = (() => {
   function showScreen(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     const el = $(`screen-${id}`);
-    if (el) { el.classList.add('active'); window.scrollTo(0, 0); }
+    if (el) { el.classList.add('active'); setTimeout(() => window.scrollTo(0, 0), 0); }
   }
 
   function showStep(modulePrefix, stepId) {
