@@ -216,9 +216,9 @@ const App = (() => {
   function initAuth() {
     // If already logged in (Supabase session restored), go straight to modules
     if (Auth.isLoggedIn()) {
-      _trainee = { id: Auth.getId(), name: Auth.getName(), email: Auth.getEmail() };
+      _trainee = { id: Auth.getId(), name: Auth.getName(), employeeId: Auth.getEmployeeId(), email: Auth.getEmail() };
       // Ensure trainee row exists (sign-up creates it; restore path might not)
-      DB.put('trainees', { id: _trainee.id, name: _trainee.name, email: _trainee.email }).catch(() => {});
+      DB.put('trainees', { id: _trainee.id, name: _trainee.name, email: _trainee.email, employee_id: _trainee.employeeId }).catch(() => {});
       activateTrainee();
       return;
     }
@@ -244,23 +244,23 @@ const App = (() => {
 
     // ---- Sign In ----
     const doSignIn = async () => {
-      const email    = $('auth-email').value.trim();
-      const password = $('auth-password').value;
-      if (!email || !password) {
-        signinError.textContent = 'Please enter your email and password.';
+      const employeeId = $('auth-empid').value.trim();
+      const password   = $('auth-password').value;
+      if (!employeeId || !password) {
+        signinError.textContent = 'Please enter your Employee ID and password.';
         signinError.classList.remove('hidden'); return;
       }
       $('btn-signin').disabled    = true;
       $('btn-signin').textContent = 'Signing in…';
       signinError.classList.add('hidden');
       try {
-        await Auth.signIn(email, password);
-        _trainee = { id: Auth.getId(), name: Auth.getName(), email: Auth.getEmail() };
+        await Auth.signIn(employeeId, password);
+        _trainee = { id: Auth.getId(), name: Auth.getName(), employeeId: Auth.getEmployeeId(), email: Auth.getEmail() };
         // Ensure trainee row exists (FK required by sessions table)
-        try { await DB.put('trainees', { id: _trainee.id, name: _trainee.name, email: _trainee.email }); } catch (_) {}
+        try { await DB.put('trainees', { id: _trainee.id, name: _trainee.name, email: _trainee.email, employee_id: _trainee.employeeId }); } catch (_) {}
         activateTrainee();
       } catch (e) {
-        signinError.textContent = e.message || 'Sign in failed. Check your credentials.';
+        signinError.textContent = e.message || 'Sign in failed. Check your Employee ID and password.';
         signinError.classList.remove('hidden');
       } finally {
         $('btn-signin').disabled    = false;
@@ -268,15 +268,15 @@ const App = (() => {
       }
     };
     $('btn-signin').addEventListener('click', doSignIn);
-    $('auth-email').addEventListener('keydown',    (e) => { if (e.key === 'Enter') doSignIn(); });
+    $('auth-empid').addEventListener('keydown',    (e) => { if (e.key === 'Enter') doSignIn(); });
     $('auth-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') doSignIn(); });
 
     // ---- Sign Up ----
     const doSignUp = async () => {
-      const name     = $('auth-name').value.trim();
-      const email    = $('auth-email-signup').value.trim();
-      const password = $('auth-password-signup').value;
-      if (!name || !email || !password) {
+      const name       = $('auth-name').value.trim();
+      const employeeId = $('auth-empid-signup').value.trim();
+      const password   = $('auth-password-signup').value;
+      if (!name || !employeeId || !password) {
         signupError.textContent = 'Please fill in all fields.';
         signupError.classList.remove('hidden'); return;
       }
@@ -288,15 +288,15 @@ const App = (() => {
       $('btn-signup').textContent = 'Creating account…';
       signupError.classList.add('hidden');
       try {
-        const result = await Auth.signUp(email, password, name);
+        const result = await Auth.signUp(employeeId, name, password);
         if (result?.needsConfirmation) {
           signupError.style.color = '#16a34a';
-          signupError.textContent = 'Account created! Check your email to confirm, then sign in here.';
+          signupError.textContent = 'Account created! Sign in with your Employee ID and password.';
           signupError.classList.remove('hidden');
           signupForm.classList.add('hidden');
           signinForm.classList.remove('hidden');
         } else {
-          _trainee = { id: Auth.getId(), name: Auth.getName(), email: Auth.getEmail() };
+          _trainee = { id: Auth.getId(), name: Auth.getName(), employeeId: Auth.getEmployeeId(), email: Auth.getEmail() };
           activateTrainee();
         }
       } catch (e) {
@@ -310,7 +310,7 @@ const App = (() => {
     };
     $('btn-signup').addEventListener('click', doSignUp);
     $('auth-name').addEventListener('keydown',             (e) => { if (e.key === 'Enter') doSignUp(); });
-    $('auth-email-signup').addEventListener('keydown',     (e) => { if (e.key === 'Enter') doSignUp(); });
+    $('auth-empid-signup').addEventListener('keydown',     (e) => { if (e.key === 'Enter') doSignUp(); });
     $('auth-password-signup').addEventListener('keydown',  (e) => { if (e.key === 'Enter') doSignUp(); });
   }
 
@@ -323,7 +323,7 @@ const App = (() => {
       _trainee = null;
       $('app-header').classList.add('hidden');
       // Reset sign-in form
-      if ($('auth-email'))    $('auth-email').value    = '';
+      if ($('auth-empid'))    $('auth-empid').value    = '';
       if ($('auth-password')) $('auth-password').value = '';
       if ($('auth-error'))    $('auth-error').classList.add('hidden');
       // Show sign-in, hide sign-up
