@@ -904,7 +904,7 @@ window.Admin = (() => {
     });
 
     select.onchange = async () => {
-      const id = parseInt(select.value);
+      const id = select.value;
       if (!id) { $('report-content').classList.add('hidden'); return; }
       await loadTraineeReport(id);
     };

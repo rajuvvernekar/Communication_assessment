@@ -148,12 +148,21 @@ const DB = (() => {
     }
 
     // Upload blobs to Storage and get public URLs
+    // Failures are non-fatal: session still saves with transcript + AI scores, just no playback URL
     const processed = { ...data };
     if (store === 'sessions' && data.recordingBlob instanceof Blob) {
-      processed.recordingUrl = await _upload('recordings', data.recordingBlob);
+      try {
+        processed.recordingUrl = await _upload('recordings', data.recordingBlob);
+      } catch (e) {
+        console.warn('Recording upload failed (no storage policy?), saving without URL:', e.message);
+      }
     }
     if (store === 'topics' && data.callerAudioBlob instanceof Blob) {
-      processed.callerAudioUrl = await _upload('caller-audio', data.callerAudioBlob);
+      try {
+        processed.callerAudioUrl = await _upload('caller-audio', data.callerAudioBlob);
+      } catch (e) {
+        console.warn('Caller audio upload failed, saving without URL:', e.message);
+      }
     }
 
     const dbData = _toDB(store, processed);
@@ -184,7 +193,9 @@ const DB = (() => {
 
   // ---- getAll: fetch all records in a store ----
   async function getAll(store) {
-    const { data, error } = await _sb.from(store).select('*').order('created_at', { ascending: true });
+    // sessions uses submitted_at; everything else uses created_at
+    const orderCol = store === 'sessions' ? 'submitted_at' : 'created_at';
+    const { data, error } = await _sb.from(store).select('*').order(orderCol, { ascending: true });
     if (error) throw error;
     return (data || []).map(r => _fromDB(store, r));
   }

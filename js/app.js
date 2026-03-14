@@ -217,6 +217,8 @@ const App = (() => {
     // If already logged in (Supabase session restored), go straight to modules
     if (Auth.isLoggedIn()) {
       _trainee = { id: Auth.getId(), name: Auth.getName(), email: Auth.getEmail() };
+      // Ensure trainee row exists (sign-up creates it; restore path might not)
+      DB.put('trainees', { id: _trainee.id, name: _trainee.name, email: _trainee.email }).catch(() => {});
       activateTrainee();
       return;
     }
@@ -254,6 +256,8 @@ const App = (() => {
       try {
         await Auth.signIn(email, password);
         _trainee = { id: Auth.getId(), name: Auth.getName(), email: Auth.getEmail() };
+        // Ensure trainee row exists (FK required by sessions table)
+        try { await DB.put('trainees', { id: _trainee.id, name: _trainee.name, email: _trainee.email }); } catch (_) {}
         activateTrainee();
       } catch (e) {
         signinError.textContent = e.message || 'Sign in failed. Check your credentials.';
