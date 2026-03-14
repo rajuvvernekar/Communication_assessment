@@ -199,35 +199,87 @@ window.Admin = (() => {
   }
 
   // ---- Auth ----
+  function showAdminName() {
+    const name = sessionStorage.getItem('adminName');
+    const el = $('admin-logged-in-name');
+    const logoutBtn = $('btn-admin-logout');
+    if (name && el) {
+      el.textContent = `Signed in as ${name}`;
+      el.style.display = 'block';
+    }
+    if (logoutBtn) logoutBtn.style.display = '';
+  }
+
   function initAuth() {
     const savedAuth = sessionStorage.getItem('adminAuth');
     if (savedAuth === 'true') {
       $('admin-auth-modal').classList.add('hidden');
       $('admin-app').classList.remove('hidden');
+      showAdminName();
       initApp();
       return;
     }
 
-    const input = $('admin-pwd-input');
+    const usernameInput = $('admin-username-input');
+    const pwdInput = $('admin-pwd-input');
     const btn = $('btn-admin-login');
     const errEl = $('admin-pwd-error');
 
-    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') btn.click(); });
-    btn.addEventListener('click', async () => {
-      const pwd = input.value;
-      const stored = await DB.get('settings', 'adminPassword');
-      if (stored && pwd === stored.value) {
-        sessionStorage.setItem('adminAuth', 'true');
-        $('admin-auth-modal').classList.add('hidden');
-        $('admin-app').classList.remove('hidden');
-        errEl.classList.add('hidden');
-        initApp();
-      } else {
-        errEl.classList.remove('hidden');
-        input.value = '';
-        input.focus();
+    const doLogin = async () => {
+      const username = (usernameInput.value || '').trim().toLowerCase();
+      const password = pwdInput.value;
+      if (!username || !password) {
+        errEl.textContent = 'Please enter your username and password.';
+        errEl.classList.remove('hidden'); return;
       }
-    });
+      btn.disabled = true; btn.textContent = 'Signing in…';
+      errEl.classList.add('hidden');
+
+      try {
+        // Load admin users from Supabase settings
+        const stored = await DB.get('settings', 'adminUsers');
+        let users = [];
+        try { users = JSON.parse(stored?.value || stored || '[]'); } catch (_) {}
+
+        const match = users.find(u =>
+          u.username.toLowerCase() === username && u.password === password
+        );
+
+        if (match) {
+          sessionStorage.setItem('adminAuth', 'true');
+          sessionStorage.setItem('adminName', match.username);
+          $('admin-auth-modal').classList.add('hidden');
+          $('admin-app').classList.remove('hidden');
+          showAdminName();
+          initApp();
+        } else {
+          errEl.textContent = 'Incorrect username or password.';
+          errEl.classList.remove('hidden');
+          pwdInput.value = '';
+          pwdInput.focus();
+        }
+      } catch (e) {
+        errEl.textContent = 'Login failed. Please try again.';
+        errEl.classList.remove('hidden');
+      } finally {
+        btn.disabled = false; btn.textContent = 'Sign In →';
+      }
+    };
+
+    usernameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+    pwdInput.addEventListener('keydown',      (e) => { if (e.key === 'Enter') doLogin(); });
+    btn.addEventListener('click', doLogin);
+
+    // Logout button
+    const logoutBtn = $('btn-admin-logout');
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        sessionStorage.removeItem('adminAuth');
+        sessionStorage.removeItem('adminName');
+        location.reload();
+      });
+    }
   }
 
   // ---- App Init ----

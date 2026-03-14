@@ -17,10 +17,11 @@
   <div class="auth-card">
     <div class="auth-logo">CA</div>
     <h2>Admin Portal</h2>
-    <p>Enter your password to access the admin dashboard</p>
-    <input type="password" id="admin-pwd-input" placeholder="Password" autocomplete="current-password" />
+    <p>Sign in with your admin credentials</p>
+    <input type="text"     id="admin-username-input" placeholder="Username"  autocomplete="username"         style="margin-bottom:0.5rem" />
+    <input type="password" id="admin-pwd-input"      placeholder="Password"  autocomplete="current-password" />
     <button id="btn-admin-login" class="btn-primary" style="margin-top:0.25rem">Sign In →</button>
-    <div id="admin-pwd-error" class="error-msg hidden">Incorrect password. Try again.</div>
+    <div id="admin-pwd-error" class="error-msg hidden">Incorrect username or password.</div>
     <div style="margin-top:1.25rem">
       <a href="index.html" style="color:rgba(255,255,255,0.35);font-size:0.8rem;text-decoration:none">
         ← Trainee Portal
@@ -68,6 +69,11 @@
       </a>
     </nav>
     <div class="sidebar-footer">
+      <div class="admin-logged-in" id="admin-logged-in-name"></div>
+      <a href="#" class="nav-item" id="btn-admin-logout" style="display:none">
+        <span class="nav-icon">🚪</span>
+        <span>Sign Out</span>
+      </a>
       <a href="index.html" class="nav-item">
         <span class="nav-icon">🏠</span>
         <span>Trainee Portal</span>
