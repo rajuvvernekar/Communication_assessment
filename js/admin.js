@@ -475,6 +475,7 @@ window.Admin = (() => {
       _callerAudioBlob = topic.callerAudioBlob || null;
 
       renderChecklistItems(topic.checklist || []);
+      renderBotScriptItems(topic.botScript || []);
 
       // Support both Storage URL (new) and legacy Blob
       const callerUrl = topic.callerAudioUrl
@@ -493,14 +494,35 @@ window.Admin = (() => {
       $('caller-preview-audio').classList.add('hidden');
       $('btn-clear-caller-audio').classList.add('hidden');
       renderChecklistItems([]);
+      renderBotScriptItems([]);
     }
 
-    toggleCallerAudioSection($('topic-module').value);
-    $('topic-module').onchange = (e) => toggleCallerAudioSection(e.target.value);
+    toggleMockCallFields($('topic-module').value);
+    $('topic-module').onchange = (e) => toggleMockCallFields(e.target.value);
   }
 
-  function toggleCallerAudioSection(module) {
-    $('topic-caller-audio-group').style.display = module === 'mock-call' ? '' : 'none';
+  function toggleMockCallFields(module) {
+    const isMC = module === 'mock-call';
+    $('topic-caller-audio-group').style.display = isMC ? '' : 'none';
+    $('topic-bot-script-group').style.display    = isMC ? '' : 'none';
+  }
+
+  function renderBotScriptItems(lines = []) {
+    const container = $('bot-script-items');
+    container.innerHTML = lines.map(line => {
+      const safe = line.replace(/"/g, '&quot;');
+      return `<div class="checklist-item-row">
+        <input type="text" placeholder="e.g. I've been charged twice this month!" value="${safe}">
+        <button class="btn-remove-item" title="Remove" onclick="this.parentElement.remove()">✕</button>
+      </div>`;
+    }).join('');
+    $('btn-add-bot-line').onclick = () => {
+      $('bot-script-items').insertAdjacentHTML('beforeend', `
+        <div class="checklist-item-row">
+          <input type="text" placeholder="Customer line...">
+          <button class="btn-remove-item" title="Remove" onclick="this.parentElement.remove()">✕</button>
+        </div>`);
+    };
   }
 
   function renderChecklistItems(items) {
@@ -584,12 +606,16 @@ window.Admin = (() => {
     const checklist = Array.from(document.querySelectorAll('#checklist-items input'))
       .map(i => i.value.trim()).filter(v => v);
 
+    const botScript = Array.from(document.querySelectorAll('#bot-script-items input'))
+      .map(i => i.value.trim()).filter(v => v);
+
     const data = {
       module: $('topic-module').value,
       title,
       description: $('topic-description').value.trim(),
       scenario: $('topic-scenario').value.trim(),
       checklist,
+      botScript,
       callerAudioBlob: _callerAudioBlob || null,
       createdAt: new Date().toISOString()
     };

@@ -275,29 +275,72 @@
     </div>
   </div>
 
-  <!-- Step 2: Recording -->
+  <!-- Step 2: Recording — bot-driven (turn-based) OR legacy single recording -->
   <div class="step-container hidden" id="mc-step-record">
     <div class="step-card">
-      <div class="step-label">Step 2 of 2 — Handle the Call</div>
-      <div class="scenario-mini" style="border-left-color:var(--mc-color)" id="mc-rec-mini"></div>
-      <div class="recording-ui">
-        <div class="rec-timer">
-          <div class="rec-dot"></div>
-          <span id="mc-rec-time">0:00</span>
-          <small>recording...</small>
+
+      <!-- ── BOT-DRIVEN conversation UI (shown when topic has botScript) ── -->
+      <div id="mc-bot-mode" class="hidden">
+        <div class="step-label" id="mc-turn-label">Turn 1 of 1</div>
+
+        <!-- Growing chat thread -->
+        <div id="mc-chat-thread" class="mc-chat-thread"></div>
+
+        <!-- Bot speaking indicator -->
+        <div id="mc-bot-status" class="mc-bot-status hidden">🔊 Customer is speaking...</div>
+
+        <!-- Trainee recording area (shown after bot speaks) -->
+        <div id="mc-rec-area" class="hidden">
+          <div class="recording-ui" style="margin-bottom:0.5rem">
+            <div class="rec-timer">
+              <div class="rec-dot"></div>
+              <span id="mc-rec-time">0:00</span>
+              <small>recording...</small>
+            </div>
+            <canvas id="mc-waveform" class="waveform-canvas" width="600" height="70"></canvas>
+          </div>
+          <div id="mc-live-transcript-box" class="live-transcript-box hidden">
+            <div class="live-transcript-label">📝 Live Transcript</div>
+            <div id="mc-live-transcript" class="live-transcript-text">Listening...</div>
+          </div>
+          <div class="rec-controls">
+            <button id="btn-mc-done-turn" class="btn-primary" style="background:var(--mc-color)">
+              Done Responding →
+            </button>
+          </div>
         </div>
-        <canvas id="mc-waveform" class="waveform-canvas" width="600" height="70"></canvas>
+
+        <!-- Shown after last trainee turn -->
+        <div class="rec-controls">
+          <button id="btn-mc-finish" class="btn-primary hidden" style="background:var(--mc-color)">
+            ✅ Finish Call &amp; Submit
+          </button>
+        </div>
       </div>
-      <!-- Live transcript (shown only on Chrome) -->
-      <div id="mc-live-transcript-box" class="live-transcript-box hidden">
-        <div class="live-transcript-label">📝 Live Transcript</div>
-        <div id="mc-live-transcript" class="live-transcript-text">Listening...</div>
+
+      <!-- ── LEGACY single-recording UI (shown when no botScript) ── -->
+      <div id="mc-legacy-mode" class="hidden">
+        <div class="step-label">Step 2 of 2 — Handle the Call</div>
+        <div class="scenario-mini" style="border-left-color:var(--mc-color)" id="mc-rec-mini"></div>
+        <div class="recording-ui">
+          <div class="rec-timer">
+            <div class="rec-dot"></div>
+            <span id="mc-rec-time-legacy">0:00</span>
+            <small>recording...</small>
+          </div>
+          <canvas id="mc-waveform-legacy" class="waveform-canvas" width="600" height="70"></canvas>
+        </div>
+        <div id="mc-live-transcript-box-legacy" class="live-transcript-box hidden">
+          <div class="live-transcript-label">📝 Live Transcript</div>
+          <div id="mc-live-transcript-legacy" class="live-transcript-text">Listening...</div>
+        </div>
+        <div class="rec-controls">
+          <button id="btn-mc-stop" class="btn-danger" style="background:var(--mc-color)">
+            ⏹ End Call &amp; Submit
+          </button>
+        </div>
       </div>
-      <div class="rec-controls">
-        <button id="btn-mc-stop" class="btn-danger" style="background:var(--mc-color)">
-          ⏹ End Call &amp; Submit
-        </button>
-      </div>
+
     </div>
   </div>
 

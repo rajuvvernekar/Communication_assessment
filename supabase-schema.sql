@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS topics (
   scenario          TEXT        NOT NULL DEFAULT '',
   checklist         JSONB       NOT NULL DEFAULT '[]',
   caller_audio_url  TEXT,                        -- Supabase Storage public URL
+  bot_script        JSONB       NOT NULL DEFAULT '[]',  -- ordered customer lines for turn-based mock call
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
