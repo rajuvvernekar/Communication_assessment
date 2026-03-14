@@ -951,6 +951,7 @@ body {
 .data-table .btn-small:hover { background: #e2e8f0; }
 .data-table .btn-small.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
 .data-table .btn-small.danger { background: #fef2f2; color: var(--danger); border-color: #fecaca; }
+.data-table .btn-small.danger:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
 .empty-state {
   text-align: center;
   padding: 3rem;

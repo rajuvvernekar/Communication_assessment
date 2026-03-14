@@ -706,13 +706,32 @@ window.Admin = (() => {
           <td>${statusBadge(isScored ? 'scored' : s.status)}</td>
           <td>${aiScore !== '—' ? aiScore + '/100' : '—'}</td>
           <td>${adminScore !== '—' ? adminScore + '/100' : '—'}</td>
-          <td>
+          <td style="display:flex;gap:0.4rem;flex-wrap:wrap">
             <button class="btn-small primary" onclick="Admin.openScoring('${s.id}')">
               ${isScored ? 'Review' : 'Score'}
+            </button>
+            <button class="btn-small danger" onclick="Admin.deleteSession('${s.id}', '${(s.traineeName || '').replace(/'/g, "\\'")}')">
+              🗑 Delete
             </button>
           </td>
         </tr>`;
     }).join('');
+  }
+
+  // ---- Delete Session ----
+  async function deleteSession(sessionId, traineeName) {
+    const confirmed = confirm(
+      `Delete this assessment?\n\nTrainee: ${traineeName || 'Unknown'}\n\nThis action cannot be undone.`
+    );
+    if (!confirmed) return;
+    try {
+      await DB.del('sessions', sessionId);
+      toast('Assessment deleted.', '');
+      loadAssessments();
+    } catch (e) {
+      console.error('Delete failed:', e);
+      toast('Failed to delete assessment.', 'error');
+    }
   }
 
   // ---- Scoring Modal ----
@@ -1229,7 +1248,8 @@ window.Admin = (() => {
     updateCriterionDisplay,
     selectScale135,
     viewTraineeSessions,
-    downloadCSV
+    downloadCSV,
+    deleteSession
   };
 })();
 
