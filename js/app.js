@@ -265,40 +265,58 @@ const App = (() => {
 
     showStep('pick-speak', 'ps-step-topic');
 
-    // Reset
-    const revealEl = $('ps-topic-reveal');
+    const revealEl  = $('ps-topic-reveal');
+    const skipBtn   = $('btn-ps-skip-topic');
+    const skipBadge = $('ps-skip-badge');
+
+    // Always start in un-revealed state
     revealEl.classList.remove('revealed');
     $('ps-topic-title').textContent = 'Click to reveal your topic';
-    $('ps-topic-desc').textContent = 'You will have 2 minutes to prepare, then 2 minutes to speak.';
+    $('ps-topic-desc').textContent  = 'You will have 2 minutes to prepare, then 2 minutes to speak.';
     $('btn-ps-ready').classList.add('hidden');
+    $('btn-ps-reveal').style.display = '';
 
-    // Skip button — one use only
-    const skipBtn  = $('btn-ps-skip-topic');
-    const skipBadge = $('ps-skip-badge');
-    if (_psSkipUsed) {
-      skipBtn.disabled = true;
-      skipBadge.textContent = '(no skips remaining)';
-    } else {
-      skipBtn.disabled = false;
-      skipBadge.textContent = '(1 skip available)';
-    }
-    skipBtn.onclick = () => {
-      if (_psSkipUsed) return;
-      _psSkipUsed = true;
-      DB.getByIndex('topics', 'module', 'pick-speak').then(topics => {
-        if (topics.length) {
-          _currentTopic = topics[Math.floor(Math.random() * topics.length)];
-          initPickSpeak(true);
-        }
-      });
-    };
+    // Skip button hidden until topic is revealed
+    skipBtn.style.display = 'none';
 
     $('btn-ps-reveal').onclick = () => {
       revealEl.classList.add('revealed');
       $('ps-topic-title').textContent = _currentTopic.title;
-      $('ps-topic-desc').textContent = _currentTopic.description || '';
+      $('ps-topic-desc').textContent  = _currentTopic.description || '';
       $('btn-ps-ready').classList.remove('hidden');
       $('btn-ps-reveal').style.display = 'none';
+
+      // Show skip button only if skip hasn't been used
+      if (!_psSkipUsed) {
+        skipBadge.textContent  = '(1 skip available)';
+        skipBtn.style.display  = '';
+        skipBtn.disabled       = false;
+      }
+    };
+
+    // Skip: pick new topic and show it immediately (already revealed)
+    skipBtn.onclick = () => {
+      if (_psSkipUsed) return;
+      _psSkipUsed = true;
+      skipBtn.style.display = 'none';
+
+      DB.getByIndex('topics', 'module', 'pick-speak').then(topics => {
+        if (!topics.length) return;
+        // Avoid repeating the same topic if possible
+        let next = topics[Math.floor(Math.random() * topics.length)];
+        if (topics.length > 1) {
+          while (next.id === _currentTopic.id) {
+            next = topics[Math.floor(Math.random() * topics.length)];
+          }
+        }
+        _currentTopic = next;
+        // Reveal the new topic inline — no need to click Reveal again
+        revealEl.classList.add('revealed');
+        $('ps-topic-title').textContent = _currentTopic.title;
+        $('ps-topic-desc').textContent  = _currentTopic.description || '';
+        $('btn-ps-ready').classList.remove('hidden');
+        $('btn-ps-reveal').style.display = 'none';
+      });
     };
 
     $('btn-ps-ready').onclick = () => startPickSpeakPrep();
@@ -310,9 +328,6 @@ const App = (() => {
         }
       });
     };
-
-    // Reset reveal button visibility
-    $('btn-ps-reveal').style.display = '';
   }
 
   async function startPickSpeakPrep() {
