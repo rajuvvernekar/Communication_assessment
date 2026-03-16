@@ -238,6 +238,8 @@ const App = (() => {
       showScreen('welcome');
     };
     showScreen('modules');
+    // Ensure page snaps to top after the header appears and DOM settles
+    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'instant' }));
   }
 
   // ---- Module Dispatch ----
@@ -407,8 +409,16 @@ const App = (() => {
     const duration = _psRecordingStartTime
       ? Math.floor((Date.now() - _psRecordingStartTime) / 1000)
       : 300;
-    const analysis = SpeechEngine.analyze(finalTranscript, Math.max(duration, 10));
-    const aiScores = SpeechEngine.scoreSpeech(analysis, Math.max(duration, 10));
+
+    const MIN_SCORE_DURATION = 120; // must speak for at least 2 minutes to get AI scored
+    const scoreable = duration >= MIN_SCORE_DURATION && !!finalTranscript;
+
+    let analysis = null;
+    let aiScores = null;
+    if (scoreable) {
+      analysis = SpeechEngine.analyze(finalTranscript, duration);
+      aiScores  = SpeechEngine.scoreSpeech(analysis, duration);
+    }
 
     const sessionData = {
       traineeId: _trainee.id,
@@ -421,9 +431,9 @@ const App = (() => {
       aiScores,
       adminScores: null,
       adminComment: '',
-      status: finalTranscript ? 'ai-evaluated' : 'pending',
+      status: scoreable ? 'ai-evaluated' : 'pending',
       submittedAt: new Date().toISOString(),
-      timeTaken: Math.max(duration, 10),
+      timeTaken: Math.max(duration, 1),
       analysis
     };
 
@@ -439,19 +449,10 @@ const App = (() => {
   function showPickSpeakResults(scores, transcript, analysis, duration) {
     showStep('pick-speak', 'ps-step-results');
 
-    // Band card (overall performance classification)
-    if (scores && scores.overall !== undefined) {
-      renderBandCard('ps-band-display', 'pick-speak', scores.overall);
-    }
-
-    const labels = {
-      clarity: 'Clarity of Thought', logicalFlow: 'Logical Flow', relevance: 'Relevance to Topic',
-      grammar: 'Grammar Accuracy', vocabulary: 'Vocabulary', sentenceVariety: 'Sentence Variety',
-      fluency: 'Fluency', pace: 'Pace of Speech', fillerControl: 'Filler Word Control',
-      confidence: 'Confidence', professionalism: 'Tone & Professionalism', timeManagement: 'Time Management'
-    };
-    renderAIScores('ps-ai-scores', scores, labels);
-    renderAnalysisPills('ps-analysis-pills', analysis, duration);
+    // Scores are for admin only — clear any previously rendered content
+    $('ps-band-display').innerHTML  = '';
+    $('ps-ai-scores').innerHTML     = '';
+    $('ps-analysis-pills').innerHTML = '';
 
     $('ps-final-transcript').textContent = transcript || 'No transcript captured. Your recording has been saved for admin review.';
     $('btn-ps-stop').disabled = false;
@@ -601,66 +602,15 @@ const App = (() => {
   }
 
   function showMockCallResults(aiScores, transcript, method) {
-    // Labels in display order matching Excel criteria
-    const MC_LABELS = [
-      { key: 'callOpening',          label: 'Call Opening' },
-      { key: 'acknowledgment',       label: 'Acknowledgment' },
-      { key: 'activeListening',      label: 'Active Listening & Probing' },
-      { key: 'communicationClarity', label: 'Communication Clarity' },
-      { key: 'callEssence',          label: 'Call Essence' },
-      { key: 'holdProcedure',        label: 'Hold Procedure' },
-      { key: 'extraMile',            label: 'Extra Mile' },
-      { key: 'callClosing',          label: 'Call Closing' }
-    ];
-
-    const bandEl = $('mc-band-display');
+    // Scores are for admin only — hide everything score-related from trainee
+    $('mc-band-display').innerHTML = '';
+    $('mc-result-method').innerHTML = '';
     const scoresEl = $('mc-result-scores');
+    if (scoresEl) scoresEl.classList.add('hidden');
+
+    // Show transcript for self-reference
     const transcriptResultEl = $('mc-result-transcript');
-    const transcriptBox = $('mc-result-transcript-box');
-    const methodEl = $('mc-result-method');
-
-    // Band card — shown first, most prominent
-    if (aiScores && typeof aiScores.overall === 'number') {
-      renderBandCard('mc-band-display', 'mock-call', aiScores.overall);
-    }
-
-    if (scoresEl) {
-      if (aiScores && typeof aiScores.overall === 'number') {
-        const reasons = aiScores._reasons || {};
-        let html = `<div class="ai-scores-list">`;
-
-        MC_LABELS.forEach(({ key, label }) => {
-          const val = aiScores[key];
-          if (val === undefined) return;
-          const barPct = ((val / 5) * 100).toFixed(0);
-          const stars = '★'.repeat(Math.round(val)) + '☆'.repeat(5 - Math.round(val));
-          const reason = reasons[key] ? `<div class="score-reason">${reasons[key]}</div>` : '';
-          html += `
-            <div class="ai-score-row">
-              <span class="score-label">${label}</span>
-              <div class="score-bar"><div class="score-bar-fill" style="width:${barPct}%;background:var(--mc-color)"></div></div>
-              <span class="score-stars" style="color:var(--mc-color)">${stars}</span>
-              <span class="score-val">${val}/5</span>
-            </div>${reason}`;
-        });
-        html += `</div>`;
-        scoresEl.innerHTML = html;
-        scoresEl.classList.remove('hidden');
-      } else {
-        scoresEl.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:1rem">
-          No transcript captured — your recording has been saved for admin review.</p>`;
-        scoresEl.classList.remove('hidden');
-      }
-    }
-
-    if (methodEl) {
-      if (method === 'claude') {
-        methodEl.innerHTML = '<span class="pill good">🤖 Scored by Claude AI</span>';
-      } else if (method === 'js') {
-        methodEl.innerHTML = '<span class="pill info">📊 Scored by phrase analysis (add API key for Claude scoring)</span>';
-      }
-    }
-
+    const transcriptBox      = $('mc-result-transcript-box');
     if (transcript && transcriptResultEl) {
       transcriptResultEl.textContent = transcript;
       if (transcriptBox) transcriptBox.classList.remove('hidden');
