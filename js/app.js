@@ -485,10 +485,17 @@ const App = (() => {
       audioSection.classList.add('hidden');
     }
 
-    $('btn-mc-ready').onclick = () => startMockCallRecording();
+    $('btn-mc-ready').onclick = async () => {
+      const micOk = await Recorder.requestMic();
+      if (!micOk) {
+        toast('⚠ Microphone access denied. Please allow mic access in your browser and try again.', 'error');
+        return;
+      }
+      startMockCallRecording();
+    };
   }
 
-  async function startMockCallRecording() {
+  function startMockCallRecording() {
     showStep('mock-call', 'mc-step-record');
     $('mc-rec-mini').textContent = _currentTopic.title;
 
@@ -539,30 +546,28 @@ const App = (() => {
         scoringStatusEl.classList.remove('hidden');
       }
 
-      // Score: Claude API → JS fallback
+      // Score: Claude API → JS fallback (always produces a score)
       let aiScores = null;
-      let scoringMethod = 'none';
+      let scoringMethod = 'js';
 
-      if (finalTranscript) {
-        if (typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
-          try {
-            if (scoringStatusEl) scoringStatusEl.textContent = '🤖 Claude AI is scoring your call...';
-            const claudeResult = await ClaudeEvaluator.evaluate(
-              'mock-call', finalTranscript, _currentTopic.title, _currentTopic.scenario || ''
-            );
-            if (claudeResult && claudeResult.overall !== null) {
-              aiScores = { ...claudeResult.scores, overall: claudeResult.overall, _reasons: claudeResult.reasons, _method: 'claude' };
-              scoringMethod = 'claude';
-            }
-          } catch (e) {
-            console.warn('Claude scoring failed, falling back to JS:', e.message);
+      if (finalTranscript && typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
+        try {
+          if (scoringStatusEl) scoringStatusEl.textContent = '🤖 Claude AI is scoring your call...';
+          const claudeResult = await ClaudeEvaluator.evaluate(
+            'mock-call', finalTranscript, _currentTopic.title, _currentTopic.scenario || ''
+          );
+          if (claudeResult && claudeResult.overall !== null) {
+            aiScores = { ...claudeResult.scores, overall: claudeResult.overall, _reasons: claudeResult.reasons, _method: 'claude' };
+            scoringMethod = 'claude';
           }
+        } catch (e) {
+          console.warn('Claude scoring failed, falling back to JS:', e.message);
         }
-        if (!aiScores) {
-          aiScores = SpeechEngine.scoreMockCall(finalTranscript);
-          aiScores._method = 'js';
-          scoringMethod = 'js';
-        }
+      }
+      // Always fall back to JS scorer (handles empty transcript gracefully)
+      if (!aiScores) {
+        aiScores = SpeechEngine.scoreMockCall(finalTranscript);
+        aiScores._method = 'js';
       }
 
       if (scoringStatusEl) scoringStatusEl.classList.add('hidden');
@@ -580,7 +585,7 @@ const App = (() => {
           aiScores,
           adminScores: null,
           adminComment: '',
-          status: finalTranscript ? 'ai-evaluated' : 'pending',
+          status: 'ai-evaluated',
           submittedAt: new Date().toISOString(),
           timeTaken: elapsed
         });
