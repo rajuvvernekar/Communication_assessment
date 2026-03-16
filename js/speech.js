@@ -40,7 +40,12 @@ const SpeechEngine = (() => {
       let interim = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
         if (e.results[i].isFinal) {
-          finalTranscript += e.results[i][0].transcript + ' ';
+          // Capitalize first letter and ensure the segment ends with punctuation
+          const seg = e.results[i][0].transcript.trim();
+          if (seg) {
+            const cap = seg.charAt(0).toUpperCase() + seg.slice(1);
+            finalTranscript += (/[.!?]$/.test(cap) ? cap : cap + '.') + ' ';
+          }
         } else {
           interim += e.results[i][0].transcript;
         }

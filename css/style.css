@@ -624,11 +624,15 @@ body {
   padding: 1rem;
   font-size: 0.875rem;
   line-height: 1.8;
-  max-height: 160px;
+  max-height: 180px;
   overflow-y: auto;
   color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 .writing-box { max-height: 300px; white-space: pre-wrap; }
+/* Admin scoring panel — more room to read a full transcript */
+#scoring-transcript { max-height: 280px; }
 
 .analysis-pills { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem; }
 .pill {

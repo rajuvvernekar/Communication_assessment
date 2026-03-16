@@ -844,6 +844,26 @@ window.Admin = (() => {
             <span class="score-val">${v}/5</span>
           </div>${reason}`;
       });
+      // For Pick & Speak, show the 3 voice criteria that AI cannot score from text
+      if (session.module === 'pick-speak') {
+        const manualCriteria = [
+          { key: 'pronunciation', label: 'Pronunciation Clarity' },
+          { key: 'intonation',    label: 'Intonation & Stress'   },
+          { key: 'volume',        label: 'Volume & Audibility'   },
+        ];
+        const adminScores = session.adminScores || {};
+        aiDisplay.innerHTML += `<div style="font-size:0.72rem;color:var(--text-muted);margin:0.75rem 0 0.25rem;font-weight:600;letter-spacing:0.03em">🎧 REQUIRES AUDIO REVIEW</div>`;
+        manualCriteria.forEach(({ key, label }) => {
+          const adminVal = adminScores[key] !== undefined ? `${adminScores[key]}/5` : 'not yet scored';
+          aiDisplay.innerHTML += `
+            <div class="ai-score-row" style="opacity:0.7;background:#fafafa">
+              <span class="score-label" style="color:var(--text-muted)">🎧 ${label}</span>
+              <div class="score-bar" style="background:#e2e8f0"><div class="score-bar-fill" style="width:0%"></div></div>
+              <span class="score-val" style="font-size:0.72rem;color:var(--text-muted)">${adminVal}</span>
+            </div>`;
+        });
+      }
+
       if (session.aiScores.overall !== undefined) {
         aiDisplay.innerHTML += `
           <div class="ai-score-row" style="background:#eff6ff;border:1px solid #dbeafe;margin-top:0.25rem">
