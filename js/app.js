@@ -656,7 +656,32 @@ const App = (() => {
     _mcBlobPromise = Recorder.start();
     Recorder.startWaveform($('mc-bot-waveform'));
 
+    // "End Call Early" — always visible; cancels TTS + timer, submits whatever was captured
+    $('btn-mc-end-call').onclick = endBotCallEarly;
+
     runBotTurn();
+  }
+
+  // Called when trainee clicks "End Call Early": cancel TTS, flush any
+  // in-progress trainee turn, then hand off to finishBotCall()
+  function endBotCallEarly() {
+    // Cancel any ongoing TTS
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+
+    // If currently in a trainee turn, capture whatever has been spoken so far
+    const recArea = $('mc-rec-area');
+    if (recArea && recArea.style.display !== 'none' && !_mcTurnEnded) {
+      _mcTurnEnded = true; // prevent endTraineeTurn() from firing via timer
+      clearInterval(_mcTurnTimerId);
+      const partial = SpeechEngine.isSupported() ? SpeechEngine.stopTranscription() : '';
+      _mcTranscripts.push(partial);
+    } else {
+      // Bot was speaking — just clear the timer guard
+      clearInterval(_mcTurnTimerId);
+      if (SpeechEngine.isSupported()) SpeechEngine.stopTranscription();
+    }
+
+    finishBotCall();
   }
 
   // Render the bot's current turn as a chat bubble, then speak via TTS
