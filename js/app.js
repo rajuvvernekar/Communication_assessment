@@ -320,7 +320,7 @@ const App = (() => {
     const revealEl = $('ps-topic-reveal');
     revealEl.classList.remove('revealed');
     $('ps-topic-title').textContent = 'Click to reveal your topic';
-    $('ps-topic-desc').textContent = 'You will have 30 seconds to prepare, then 2 minutes to speak.';
+    $('ps-topic-desc').textContent = 'You will have 2 minutes to prepare, then 2 minutes to speak.';
     $('btn-ps-ready').classList.add('hidden');
 
     $('btn-ps-reveal').onclick = () => {
@@ -350,7 +350,7 @@ const App = (() => {
     $('ps-prep-title').textContent = _currentTopic.title;
     $('ps-prep-desc').textContent = _currentTopic.description || '';
 
-    const PREP = 30;
+    const PREP = 120;
     const ring = $('ps-prep-ring');
     const circumference = 339.3;
 
