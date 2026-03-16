@@ -272,13 +272,26 @@ const App = (() => {
     $('ps-topic-desc').textContent = 'You will have 2 minutes to prepare, then 2 minutes to speak.';
     $('btn-ps-ready').classList.add('hidden');
 
-    // Show/hide skip button based on usage
-    const againBtn = $('btn-ps-again');
+    // Skip button — one use only
+    const skipBtn  = $('btn-ps-skip-topic');
+    const skipBadge = $('ps-skip-badge');
     if (_psSkipUsed) {
-      againBtn.classList.add('hidden');
+      skipBtn.disabled = true;
+      skipBadge.textContent = '(no skips remaining)';
     } else {
-      againBtn.classList.remove('hidden');
+      skipBtn.disabled = false;
+      skipBadge.textContent = '(1 skip available)';
     }
+    skipBtn.onclick = () => {
+      if (_psSkipUsed) return;
+      _psSkipUsed = true;
+      DB.getByIndex('topics', 'module', 'pick-speak').then(topics => {
+        if (topics.length) {
+          _currentTopic = topics[Math.floor(Math.random() * topics.length)];
+          initPickSpeak(true);
+        }
+      });
+    };
 
     $('btn-ps-reveal').onclick = () => {
       revealEl.classList.add('revealed');
@@ -289,13 +302,11 @@ const App = (() => {
     };
 
     $('btn-ps-ready').onclick = () => startPickSpeakPrep();
-    againBtn.onclick = () => {
-      if (_psSkipUsed) return;
-      _psSkipUsed = true;
+    $('btn-ps-again').onclick = () => {
       DB.getByIndex('topics', 'module', 'pick-speak').then(topics => {
         if (topics.length) {
           _currentTopic = topics[Math.floor(Math.random() * topics.length)];
-          initPickSpeak(true);
+          initPickSpeak();
         }
       });
     };
