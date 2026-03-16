@@ -315,7 +315,15 @@ const App = (() => {
     $('btn-ps-reveal').style.display = '';
   }
 
-  function startPickSpeakPrep() {
+  async function startPickSpeakPrep() {
+    // Request mic here — called directly from user click ("I'm Ready"),
+    // so the browser allows the getUserMedia prompt.
+    const micOk = await Recorder.requestMic();
+    if (!micOk) {
+      toast('⚠ Microphone access denied. Please allow mic access in your browser and try again.', 'error');
+      return;
+    }
+
     showStep('pick-speak', 'ps-step-prep');
     $('ps-prep-title').textContent = _currentTopic.title;
     $('ps-prep-desc').textContent = _currentTopic.description || '';
@@ -337,13 +345,8 @@ const App = (() => {
     };
   }
 
-  async function startPickSpeakRecording() {
-    const micOk = await Recorder.requestMic();
-    if (!micOk) {
-      toast('⚠ Microphone access denied. Please allow mic access in your browser and try again.', 'error');
-      return;
-    }
-
+  function startPickSpeakRecording() {
+    // Mic was already granted in startPickSpeakPrep (user gesture context).
     showStep('pick-speak', 'ps-step-record');
     $('ps-rec-title').textContent = _currentTopic.title;
     $('ps-final-transcript').textContent = '';
