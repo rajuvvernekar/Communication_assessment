@@ -10,6 +10,14 @@ const App = (() => {
   let _wcStartTime = null;
   let _wcTimerInterval = null;
 
+  // ── Bot-call turn state ──
+  let _mcTurns       = [];    // botScript lines for current call
+  let _mcTurnIndex   = 0;     // 0-based current turn
+  let _mcTranscripts = [];    // per-turn trainee transcript
+  let _mcBlobPromise = null;  // single continuous recording (start → finish)
+  let _mcTurnTimerId = null;  // per-turn 90s countdown setInterval
+  let _mcTurnEnded   = false; // guard: prevent double-call of endTraineeTurn()
+
   // ---- Score Bands (overall scores are out of 100) ----
   const SCORE_BANDS = {
     'pick-speak': [
@@ -467,6 +475,26 @@ const App = (() => {
   // ================================================================
   //  MOCK CALL
   // ================================================================
+
+  // ── TTS helper: speaks text, calls onEnd when done (or on error / timeout) ──
+  function speakBot(text, onEnd) {
+    if (!window.speechSynthesis) { onEnd(); return; }
+    window.speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.rate = 0.92; utt.pitch = 1.0; utt.lang = 'en-US';
+    // Pick a natural English voice when available; fall back to the default
+    const voices = speechSynthesis.getVoices();
+    const preferred = voices.find(v => v.lang.startsWith('en') && v.localService)
+                   || voices.find(v => v.lang.startsWith('en'));
+    if (preferred) utt.voice = preferred;
+    // Safety guard — iOS sometimes never fires onend; advance after 20 s
+    let fired = false;
+    const guard = setTimeout(() => { if (!fired) { fired = true; onEnd(); } }, 20000);
+    utt.onend  = () => { if (!fired) { fired = true; clearTimeout(guard); onEnd(); } };
+    utt.onerror = () => { if (!fired) { fired = true; clearTimeout(guard); onEnd(); } };
+    speechSynthesis.speak(utt);
+  }
+
   function initMockCall() {
     showStep('mock-call', 'mc-step-scenario');
     $('mc-title').textContent = _currentTopic.title;
@@ -497,7 +525,12 @@ const App = (() => {
         toast('⚠ Microphone access denied. Please allow mic access in your browser and try again.', 'error');
         return;
       }
-      startMockCallRecording();
+      const script = _currentTopic.botScript || _currentTopic.bot_script || [];
+      if (script.length > 0) {
+        startBotCall(script);   // turn-based bot conversation
+      } else {
+        startMockCallRecording(); // legacy single-recording fallback
+      }
     };
   }
 
@@ -604,6 +637,175 @@ const App = (() => {
       showMockCallResults(aiScores, finalTranscript, scoringMethod);
       $('btn-mc-stop').disabled = false;
     };
+  }
+
+  // ================================================================
+  //  MOCK CALL — BOT-DRIVEN TURN-BASED FLOW
+  // ================================================================
+
+  // Entry point: called when topic has a non-empty botScript
+  async function startBotCall(script) {
+    _mcTurns       = script;
+    _mcTurnIndex   = 0;
+    _mcTranscripts = [];
+
+    showStep('mock-call', 'mc-step-bot-call');
+    $('mc-chat-thread').innerHTML = '';
+
+    // Start ONE continuous recording for the entire call
+    _mcBlobPromise = Recorder.start();
+    Recorder.startWaveform($('mc-bot-waveform'));
+
+    runBotTurn();
+  }
+
+  // Render the bot's current turn as a chat bubble, then speak via TTS
+  function runBotTurn() {
+    const line = _mcTurns[_mcTurnIndex];
+    $('mc-turn-label').textContent = `Turn ${_mcTurnIndex + 1} of ${_mcTurns.length}`;
+
+    const bubble = document.createElement('div');
+    bubble.className = 'mc-bubble bot';
+    bubble.textContent = line;
+    $('mc-chat-thread').appendChild(bubble);
+    $('mc-chat-thread').scrollTop = $('mc-chat-thread').scrollHeight;
+
+    $('mc-bot-status').style.display = '';
+    $('mc-rec-area').style.display   = 'none';
+    $('btn-mc-finish').style.display = 'none';
+
+    speakBot(line, startTraineeTurn);
+  }
+
+  // After TTS ends: show recording area + start 90-s countdown
+  function startTraineeTurn() {
+    _mcTurnEnded = false;
+    $('mc-bot-status').style.display = 'none';
+    $('mc-rec-area').style.display   = '';
+
+    // Live transcription (SpeechEngine resets _transcript on each call)
+    if (SpeechEngine.isSupported()) {
+      $('mc-bot-live-transcript-box').style.display = '';
+      $('mc-bot-live-transcript').textContent = 'Listening...';
+      SpeechEngine.startTranscription((text) => {
+        $('mc-bot-live-transcript').textContent = text || 'Listening...';
+      });
+    }
+
+    // 90-second per-turn countdown (uses its own setInterval, not Recorder.startTimer)
+    const TURN_LIMIT = 90;
+    let remaining = TURN_LIMIT;
+    function fmtTime(s) {
+      return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    }
+    $('mc-turn-time').textContent = fmtTime(remaining);
+    clearInterval(_mcTurnTimerId);
+    _mcTurnTimerId = setInterval(() => {
+      remaining--;
+      $('mc-turn-time').textContent = fmtTime(remaining);
+      if (remaining <= 0) endTraineeTurn();
+    }, 1000);
+
+    $('btn-mc-done-turn').onclick = () => endTraineeTurn();
+  }
+
+  // Capture this turn's transcript, advance to next bot turn (or finish)
+  function endTraineeTurn() {
+    if (_mcTurnEnded) return; // guard double-call (timer + button race)
+    _mcTurnEnded = true;
+
+    clearInterval(_mcTurnTimerId);
+
+    const partial = SpeechEngine.isSupported() ? SpeechEngine.stopTranscription() : '';
+    _mcTranscripts.push(partial);
+
+    $('mc-bot-live-transcript-box').style.display = 'none';
+    $('mc-bot-live-transcript').textContent = 'Listening...';
+    $('mc-rec-area').style.display = 'none';
+
+    // Add trainee response bubble
+    const bubble = document.createElement('div');
+    bubble.className = 'mc-bubble trainee';
+    bubble.textContent = partial || '(no transcript captured)';
+    $('mc-chat-thread').appendChild(bubble);
+    $('mc-chat-thread').scrollTop = $('mc-chat-thread').scrollHeight;
+
+    _mcTurnIndex++;
+    if (_mcTurnIndex < _mcTurns.length) {
+      runBotTurn();
+    } else {
+      $('btn-mc-finish').style.display = '';
+      $('btn-mc-finish').onclick = finishBotCall;
+    }
+  }
+
+  // Stop recording, score trainee transcript, save session, show results
+  async function finishBotCall() {
+    $('btn-mc-finish').disabled = true;
+
+    // Stop the single continuous recording
+    Recorder.stop();
+    Recorder.stopWaveform();
+    const elapsed = Recorder.getElapsed();
+
+    let blob = null;
+    try { blob = await _mcBlobPromise; } catch (e) {}
+
+    // Full transcript for storage (Customer/You labels — readable by admin)
+    const fullTranscript = _mcTurns.map((line, i) =>
+      `Customer: ${line}\nYou: ${_mcTranscripts[i] || '(no response)'}`
+    ).join('\n\n');
+
+    // Trainee-only text for AI scoring
+    const traineeOnly = _mcTranscripts.join(' ').trim();
+
+    showStep('mock-call', 'mc-step-done');
+    const statusEl = $('mc-ai-scoring-status');
+    if (statusEl) { statusEl.textContent = '⏳ Analyzing your call...'; statusEl.classList.remove('hidden'); }
+
+    let aiScores = null;
+    if (traineeOnly && typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
+      try {
+        if (statusEl) statusEl.textContent = '🤖 Claude AI is scoring your call...';
+        const result = await ClaudeEvaluator.evaluate(
+          'mock-call', traineeOnly, _currentTopic.title, _currentTopic.scenario || ''
+        );
+        if (result && result.overall !== null) {
+          aiScores = { ...result.scores, overall: result.overall, _reasons: result.reasons, _method: 'claude' };
+        }
+      } catch (e) { console.warn('Claude scoring failed:', e.message); }
+    }
+    if (!aiScores) {
+      aiScores = SpeechEngine.scoreMockCall(traineeOnly);
+      aiScores._method = 'js';
+    }
+
+    if (statusEl) statusEl.classList.add('hidden');
+
+    try {
+      await DB.put('sessions', {
+        traineeId:     _trainee.id,
+        traineeName:   _trainee.name,
+        module:        'mock-call',
+        topicId:       _currentTopic.id,
+        topicTitle:    _currentTopic.title,
+        recordingBlob: blob,
+        transcript:    fullTranscript,
+        aiScores,
+        adminScores:   null,
+        adminComment:  '',
+        status:        'ai-evaluated',
+        submittedAt:   new Date().toISOString(),
+        timeTaken:     Math.max(elapsed, 1),
+      });
+      toast('Mock call submitted!', 'success');
+    } catch (e) {
+      console.error('Session save failed:', e.message);
+      toast('⚠ Could not save session: ' + e.message, 'error');
+    }
+
+    showMockCallResults(aiScores, fullTranscript, aiScores._method);
+    $('btn-mc-finish').disabled = false;
   }
 
   function showMockCallResults(aiScores, transcript, method) {

@@ -1481,3 +1481,84 @@ body {
   .admin-sidebar .sidebar-logo span, .admin-sidebar .nav-item span:last-child { display: none; }
   .admin-main { margin-left: 56px; padding: 1rem; }
 }
+
+/* ================================================================
+   Bot-Call Chat UI (mc-step-bot-call)
+   ================================================================ */
+.mc-turn-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.85rem;
+}
+.mc-call-rec-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #ef4444;
+}
+.mc-chat-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  max-height: 320px;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+.mc-bubble {
+  max-width: 82%;
+  padding: 0.6rem 0.875rem;
+  border-radius: 14px;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  word-break: break-word;
+}
+.mc-bubble.bot {
+  align-self: flex-start;
+  background: #f1f5f9;
+  border-bottom-left-radius: 3px;
+}
+.mc-bubble.bot::before {
+  content: '🤖 Customer';
+  font-weight: 700;
+  display: block;
+  font-size: 0.72rem;
+  margin-bottom: 0.25rem;
+  color: #475569;
+}
+.mc-bubble.trainee {
+  align-self: flex-end;
+  background: #ede9fe;
+  border-bottom-right-radius: 3px;
+}
+.mc-bubble.trainee::before {
+  content: '🎙 You';
+  font-weight: 700;
+  display: block;
+  font-size: 0.72rem;
+  margin-bottom: 0.25rem;
+  color: #7c3aed;
+}
+.mc-bot-status {
+  font-size: 0.85rem;
+  color: #64748b;
+  padding: 0.5rem 0 0.25rem;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.mc-turn-timer-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.6rem 0 0.25rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.mc-turn-time {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+  min-width: 2.5rem;
+}
