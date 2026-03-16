@@ -272,7 +272,7 @@ const App = (() => {
     // Always start in un-revealed state
     revealEl.classList.remove('revealed');
     $('ps-topic-title').textContent = 'Click to reveal your topic';
-    $('ps-topic-desc').textContent  = 'You will have 2 minutes to prepare, then 2 minutes to speak.';
+    $('ps-topic-desc').textContent  = 'You will have 2 minutes to prepare, then 5 minutes to speak.';
     $('btn-ps-ready').classList.add('hidden');
     $('btn-ps-reveal').style.display = '';
 
@@ -383,7 +383,7 @@ const App = (() => {
     Recorder.startWaveform(waveCanvas);
     _psRecordingStartTime = Date.now();
 
-    const REC_DURATION = 120;
+    const REC_DURATION = 300;
 
     Recorder.startTimer($('ps-rec-time'), REC_DURATION, null, () => {
       stopPickSpeakRecording(blobPromise, transcriptText);
@@ -406,7 +406,7 @@ const App = (() => {
     // Compute actual recording duration
     const duration = _psRecordingStartTime
       ? Math.floor((Date.now() - _psRecordingStartTime) / 1000)
-      : 120;
+      : 300;
     const analysis = SpeechEngine.analyze(finalTranscript, Math.max(duration, 10));
     const aiScores = SpeechEngine.scoreSpeech(analysis, Math.max(duration, 10));
 
