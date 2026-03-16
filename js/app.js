@@ -65,7 +65,14 @@ const App = (() => {
   function showScreen(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     const el = $(`screen-${id}`);
-    if (el) { el.classList.add('active'); setTimeout(() => window.scrollTo(0, 0), 0); }
+    if (el) {
+      el.classList.add('active');
+      // Synchronous scroll first, then backed up by a short timeout for
+      // browsers that re-scroll after layout (e.g. after mobile keyboard hides)
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+      setTimeout(() => { document.documentElement.scrollTop = 0; document.body.scrollTop = 0; }, 80);
+    }
   }
 
   function showStep(modulePrefix, stepId) {
@@ -238,8 +245,6 @@ const App = (() => {
       showScreen('welcome');
     };
     showScreen('modules');
-    // Ensure page snaps to top after the header appears and DOM settles
-    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'instant' }));
   }
 
   // ---- Module Dispatch ----
