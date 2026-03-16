@@ -6,6 +6,7 @@ const App = (() => {
   let _currentTopic = null;
   let _recordingPromise = null;
   let _psRecordingStartTime = null; // for duration tracking
+  let _psSkipUsed = false;          // only one topic skip allowed per session
   let _wcStartTime = null;
   let _wcTimerInterval = null;
 
@@ -313,7 +314,9 @@ const App = (() => {
   // ================================================================
   //  PICK & SPEAK
   // ================================================================
-  function initPickSpeak() {
+  function initPickSpeak(isSkip = false) {
+    if (!isSkip) _psSkipUsed = false;
+
     showStep('pick-speak', 'ps-step-topic');
 
     // Reset
@@ -322,6 +325,14 @@ const App = (() => {
     $('ps-topic-title').textContent = 'Click to reveal your topic';
     $('ps-topic-desc').textContent = 'You will have 2 minutes to prepare, then 2 minutes to speak.';
     $('btn-ps-ready').classList.add('hidden');
+
+    // Show/hide skip button based on usage
+    const againBtn = $('btn-ps-again');
+    if (_psSkipUsed) {
+      againBtn.classList.add('hidden');
+    } else {
+      againBtn.classList.remove('hidden');
+    }
 
     $('btn-ps-reveal').onclick = () => {
       revealEl.classList.add('revealed');
@@ -332,11 +343,13 @@ const App = (() => {
     };
 
     $('btn-ps-ready').onclick = () => startPickSpeakPrep();
-    $('btn-ps-again').onclick = () => {
+    againBtn.onclick = () => {
+      if (_psSkipUsed) return;
+      _psSkipUsed = true;
       DB.getByIndex('topics', 'module', 'pick-speak').then(topics => {
         if (topics.length) {
           _currentTopic = topics[Math.floor(Math.random() * topics.length)];
-          initPickSpeak();
+          initPickSpeak(true);
         }
       });
     };
@@ -368,6 +381,12 @@ const App = (() => {
   }
 
   async function startPickSpeakRecording() {
+    const micOk = await Recorder.requestMic();
+    if (!micOk) {
+      toast('⚠ Microphone access denied. Please allow mic access in your browser and try again.', 'error');
+      return;
+    }
+
     showStep('pick-speak', 'ps-step-record');
     $('ps-rec-title').textContent = _currentTopic.title;
     $('ps-final-transcript').textContent = '';
