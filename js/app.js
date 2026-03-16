@@ -11,12 +11,13 @@ const App = (() => {
   let _wcTimerInterval = null;
 
   // ── Bot-call turn state ──
-  let _mcTurns       = [];    // botScript lines for current call
-  let _mcTurnIndex   = 0;     // 0-based current turn
-  let _mcTranscripts = [];    // per-turn trainee transcript
-  let _mcBlobPromise = null;  // single continuous recording (start → finish)
-  let _mcTurnTimerId = null;  // per-turn 90s countdown setInterval
-  let _mcTurnEnded   = false; // guard: prevent double-call of endTraineeTurn()
+  let _mcTurns         = [];    // botScript lines for current call
+  let _mcTurnIndex     = 0;     // 0-based current turn
+  let _mcTranscripts   = [];    // per-turn trainee transcript
+  let _mcBlobPromise   = null;  // single continuous recording (start → finish)
+  let _mcTurnTimerId   = null;  // per-turn 90s countdown setInterval
+  let _mcTurnEnded     = false; // guard: prevent double-call of endTraineeTurn()
+  let _mcCallFinishing = false; // guard: prevent double-call of finishBotCall()
 
   // ── TTS voice cache — Chrome loads voices async; pre-cache on first event ──
   let _ttsVoices = [];
@@ -668,7 +669,7 @@ const App = (() => {
           adminComment: '',
           status: 'ai-evaluated',
           submittedAt: new Date().toISOString(),
-          timeTaken: elapsed
+          timeTaken: Math.max(elapsed, 1)
         });
         toast('Mock call submitted!', 'success');
       } catch (e) {
@@ -687,9 +688,10 @@ const App = (() => {
 
   // Entry point: called when topic has a non-empty botScript
   async function startBotCall(script) {
-    _mcTurns       = script;
-    _mcTurnIndex   = 0;
-    _mcTranscripts = [];
+    _mcTurns         = script;
+    _mcTurnIndex     = 0;
+    _mcTranscripts   = [];
+    _mcCallFinishing = false;
 
     showStep('mock-call', 'mc-step-bot-call');
     $('mc-chat-thread').innerHTML = '';
@@ -697,6 +699,8 @@ const App = (() => {
     // Start ONE continuous recording for the entire call
     _mcBlobPromise = Recorder.start();
     Recorder.startWaveform($('mc-bot-waveform'));
+    // Start a count-up timer (no display element) so Recorder.getElapsed() is accurate
+    Recorder.startTimer(null, 0, null, null, true);
 
     // "End Call Early" — always visible; cancels TTS + timer, submits whatever was captured
     $('btn-mc-end-call').onclick = endBotCallEarly;
@@ -707,6 +711,7 @@ const App = (() => {
   // Called when trainee clicks "End Call Early": cancel TTS, flush any
   // in-progress trainee turn, then hand off to finishBotCall()
   function endBotCallEarly() {
+    if (_mcCallFinishing) return; // already finishing — ignore duplicate clicks
     // Cancel any ongoing TTS
     if (window.speechSynthesis) window.speechSynthesis.cancel();
 
@@ -808,12 +813,13 @@ const App = (() => {
 
   // Stop recording, score trainee transcript, save session, show results
   async function finishBotCall() {
+    if (_mcCallFinishing) return; // prevent double-submission
+    _mcCallFinishing = true;
     $('btn-mc-finish').disabled = true;
 
     // Stop the single continuous recording
-    Recorder.stop();
-    Recorder.stopWaveform();
-    const elapsed = Recorder.getElapsed();
+    Recorder.stop(); // also calls stopWaveform() + stopTimer() internally
+    const elapsed = Recorder.getElapsed(); // works because startTimer(countUp) was called in startBotCall
 
     let blob = null;
     try { blob = await _mcBlobPromise; } catch (e) {}

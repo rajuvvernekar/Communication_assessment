@@ -646,7 +646,21 @@ window.Admin = (() => {
 
   // ---- Assessments ----
   async function loadAssessments(filterTraineeId = null) {
-    const [sessions, topics] = await Promise.all([DB.getAll('sessions'), DB.getAll('topics')]);
+    const tbody = $('assessments-tbody');
+    let sessions, topics;
+    try {
+      [sessions, topics] = await Promise.all([DB.getAll('sessions'), DB.getAll('topics')]);
+    } catch (e) {
+      console.error('loadAssessments DB error:', e);
+      if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="8" class="empty-state" style="color:#ef4444">
+          ⚠ Could not load assessments: ${e.message || e}<br>
+          <small>Check your Supabase configuration and RLS policies, then click Refresh.</small>
+        </td></tr>`;
+      }
+      return;
+    }
+
     const topicMap = {};
     topics.forEach(t => { topicMap[t.id] = t; });
 

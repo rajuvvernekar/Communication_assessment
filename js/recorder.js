@@ -24,20 +24,26 @@ const Recorder = (() => {
 
   function start() {
     return new Promise(async (resolve, reject) => {
-      if (!_stream) {
-        const ok = await requestMic();
-        if (!ok) { reject(new Error('Microphone access denied')); return; }
-      }
+      try {
+        if (!_stream) {
+          const ok = await requestMic();
+          if (!ok) { reject(new Error('Microphone access denied')); return; }
+        }
 
-      _chunks = [];
-      _mediaRecorder = new MediaRecorder(_stream, { mimeType: getSupportedMimeType() });
-      _mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) _chunks.push(e.data); };
-      _mediaRecorder.onstop = () => {
-        const blob = new Blob(_chunks, { type: getSupportedMimeType() });
-        resolve(blob);
-      };
-      _mediaRecorder.onerror = (e) => reject(e.error);
-      _mediaRecorder.start(250);
+        _chunks = [];
+        _mediaRecorder = new MediaRecorder(_stream, { mimeType: getSupportedMimeType() });
+        _mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) _chunks.push(e.data); };
+        _mediaRecorder.onstop = () => {
+          const blob = new Blob(_chunks, { type: getSupportedMimeType() });
+          resolve(blob);
+        };
+        _mediaRecorder.onerror = (e) => reject(e.error || new Error('MediaRecorder error'));
+        _mediaRecorder.start(250);
+      } catch (err) {
+        // Catch synchronous errors (e.g. MediaRecorder.start throws) so the
+        // promise always settles rather than hanging forever.
+        reject(err);
+      }
     });
   }
 
