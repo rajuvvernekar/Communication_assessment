@@ -18,6 +18,33 @@ const App = (() => {
   let _mcTurnTimerId = null;  // per-turn 90s countdown setInterval
   let _mcTurnEnded   = false; // guard: prevent double-call of endTraineeTurn()
 
+  // ── TTS voice cache — Chrome loads voices async; pre-cache on first event ──
+  let _ttsVoices = [];
+  if (window.speechSynthesis) {
+    const _cacheVoices = () => {
+      const v = speechSynthesis.getVoices();
+      if (v.length) _ttsVoices = v;
+    };
+    _cacheVoices(); // populate immediately if already available (Firefox, Safari)
+    speechSynthesis.onvoiceschanged = _cacheVoices; // fires in Chrome after async load
+  }
+
+  // Ranked list of high-quality voices, best first.
+  // The first match found on the device wins.
+  const TTS_VOICE_PRIORITY = [
+    'Google US English',                  // Chrome – natural, widely available
+    'Microsoft Aria Online (Natural)',    // Edge – neural, excellent
+    'Microsoft Jenny Online (Natural)',   // Edge – neural female
+    'Microsoft Guy Online (Natural)',     // Edge – neural male
+    'Microsoft Aria',                     // Edge (older)
+    'Samantha',                           // macOS / iOS – clear female
+    'Alex',                               // macOS – natural male
+    'Karen',                              // macOS / iOS – clear female
+    'Moira',                              // macOS – Irish, clear
+    'Zira',                               // Windows – female
+    'David',                              // Windows – male
+  ];
+
   // ---- Score Bands (overall scores are out of 100) ----
   const SCORE_BANDS = {
     'pick-speak': [
@@ -480,13 +507,28 @@ const App = (() => {
   function speakBot(text, onEnd) {
     if (!window.speechSynthesis) { onEnd(); return; }
     window.speechSynthesis.cancel();
+
+    // Use cached voices; fall back to a live call if the cache is still empty
+    const voices = _ttsVoices.length ? _ttsVoices : speechSynthesis.getVoices();
+
+    // Walk the priority list — pick the first voice available on this device
+    let chosenVoice = null;
+    for (const name of TTS_VOICE_PRIORITY) {
+      chosenVoice = voices.find(v => v.name === name);
+      if (chosenVoice) break;
+    }
+    // Final fallback: any en-US voice, then any English voice
+    if (!chosenVoice) {
+      chosenVoice = voices.find(v => v.lang === 'en-US')
+                 || voices.find(v => v.lang.startsWith('en'));
+    }
+
     const utt = new SpeechSynthesisUtterance(text);
-    utt.rate = 0.92; utt.pitch = 1.0; utt.lang = 'en-US';
-    // Pick a natural English voice when available; fall back to the default
-    const voices = speechSynthesis.getVoices();
-    const preferred = voices.find(v => v.lang.startsWith('en') && v.localService)
-                   || voices.find(v => v.lang.startsWith('en'));
-    if (preferred) utt.voice = preferred;
+    utt.lang  = 'en-US';
+    utt.rate  = 0.92;
+    utt.pitch = 1.0;
+    if (chosenVoice) utt.voice = chosenVoice;
+
     // Safety guard — iOS sometimes never fires onend; advance after 20 s
     let fired = false;
     const guard = setTimeout(() => { if (!fired) { fired = true; onEnd(); } }, 20000);
