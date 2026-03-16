@@ -30,52 +30,24 @@
       <p>Corporate Communication Assessment Platform</p>
     </div>
 
-    <!-- Sign In Form -->
-    <div class="auth-card" id="auth-signin-form">
-      <h2>Sign In</h2>
-
-      <div class="auth-field">
-        <label for="auth-empid">Employee ID</label>
-        <input type="text" id="auth-empid" placeholder="e.g. EMP1234" autocomplete="username" />
-      </div>
-      <div class="auth-field">
-        <label for="auth-password">Password</label>
-        <input type="password" id="auth-password" placeholder="••••••••" autocomplete="current-password" />
-      </div>
-
-      <p id="auth-error" class="auth-msg error hidden"></p>
-      <button id="btn-signin" class="btn-primary full-width">Sign In →</button>
-
-      <p class="auth-toggle">
-        New here? <a href="#" id="link-show-signup">Create an account</a>
-      </p>
-      <p class="auth-toggle" style="margin-top:0.25rem">
-        <a href="admin.html" style="color:var(--text-muted);font-size:0.8rem">Admin Portal ↗</a>
-      </p>
-    </div>
-
-    <!-- Sign Up Form -->
-    <div class="auth-card hidden" id="auth-signup-form">
-      <h2>Create Account</h2>
+    <!-- Simple Entry Form -->
+    <div class="auth-card" id="auth-form">
+      <h2>Welcome</h2>
 
       <div class="auth-field">
         <label for="auth-name">Full Name</label>
         <input type="text" id="auth-name" placeholder="Your full name" autocomplete="name" />
       </div>
       <div class="auth-field">
-        <label for="auth-empid-signup">Employee ID</label>
-        <input type="text" id="auth-empid-signup" placeholder="e.g. EMP1234" autocomplete="username" />
-      </div>
-      <div class="auth-field">
-        <label for="auth-password-signup">Password <span style="font-weight:400;color:var(--text-muted)">(min. 6 chars)</span></label>
-        <input type="password" id="auth-password-signup" placeholder="••••••••" autocomplete="new-password" />
+        <label for="auth-empid">Employee ID</label>
+        <input type="text" id="auth-empid" placeholder="e.g. EMP1234" autocomplete="username" />
       </div>
 
-      <p id="auth-signup-error" class="auth-msg error hidden"></p>
-      <button id="btn-signup" class="btn-primary full-width">Create Account →</button>
+      <p id="auth-error" class="auth-msg error hidden"></p>
+      <button id="btn-start" class="btn-primary full-width">Start Assessment →</button>
 
-      <p class="auth-toggle">
-        Already have an account? <a href="#" id="link-show-signin">Sign in</a>
+      <p class="auth-toggle" style="margin-top:0.5rem">
+        <a href="admin.html" style="color:var(--text-muted);font-size:0.8rem">Admin Portal ↗</a>
       </p>
     </div>
   </div>

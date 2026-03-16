@@ -173,122 +173,68 @@ const App = (() => {
 
   // ---- Auth Screen ----
   function initAuth() {
-    // If already logged in (Supabase session restored), go straight to modules
-    if (Auth.isLoggedIn()) {
-      _trainee = { id: Auth.getId(), name: Auth.getName(), employeeId: Auth.getEmployeeId(), email: Auth.getEmail() };
-      // Ensure trainee row exists (sign-up creates it; restore path might not)
-      DB.put('trainees', { id: _trainee.id, name: _trainee.name, email: _trainee.email, employee_id: _trainee.employeeId }).catch(() => {});
-      activateTrainee();
-      return;
+    // Restore trainee from previous session (same browser/device)
+    const cached = localStorage.getItem('commassess_trainee');
+    if (cached) {
+      try {
+        _trainee = JSON.parse(cached);
+        activateTrainee();
+        return;
+      } catch (_) {
+        localStorage.removeItem('commassess_trainee');
+      }
     }
 
-    const signinForm  = $('auth-signin-form');
-    const signupForm  = $('auth-signup-form');
-    const signinError = $('auth-error');
-    const signupError = $('auth-signup-error');
-
-    // Toggle between Sign In ↔ Sign Up
-    $('link-show-signup').onclick = (e) => {
-      e.preventDefault();
-      signinForm.classList.add('hidden');
-      signupForm.classList.remove('hidden');
-      signinError.classList.add('hidden');
-    };
-    $('link-show-signin').onclick = (e) => {
-      e.preventDefault();
-      signupForm.classList.add('hidden');
-      signinForm.classList.remove('hidden');
-      signupError.classList.add('hidden');
-    };
-
-    // ---- Sign In ----
-    const doSignIn = async () => {
+    const doStart = async () => {
+      const name       = $('auth-name').value.trim();
       const employeeId = $('auth-empid').value.trim();
-      const password   = $('auth-password').value;
-      if (!employeeId || !password) {
-        signinError.textContent = 'Please enter your Employee ID and password.';
-        signinError.classList.remove('hidden'); return;
+      const errorEl    = $('auth-error');
+      if (!name || !employeeId) {
+        errorEl.textContent = 'Please enter your name and Employee ID.';
+        errorEl.classList.remove('hidden');
+        return;
       }
-      $('btn-signin').disabled    = true;
-      $('btn-signin').textContent = 'Signing in…';
-      signinError.classList.add('hidden');
+      errorEl.classList.add('hidden');
+      $('btn-start').disabled    = true;
+      $('btn-start').textContent = 'Starting…';
       try {
-        await Auth.signIn(employeeId, password);
-        _trainee = { id: Auth.getId(), name: Auth.getName(), employeeId: Auth.getEmployeeId(), email: Auth.getEmail() };
-        // Ensure trainee row exists (FK required by sessions table)
-        try { await DB.put('trainees', { id: _trainee.id, name: _trainee.name, email: _trainee.email, employee_id: _trainee.employeeId }); } catch (_) {}
+        // Look up existing trainee by employee_id or create a new one
+        const rows = await DB.getByIndex('trainees', 'employee_id', employeeId);
+        let traineeId;
+        if (rows.length > 0) {
+          traineeId = rows[0].id;
+          await DB.put('trainees', { id: traineeId, name, employee_id: employeeId });
+        } else {
+          traineeId = crypto.randomUUID();
+          await DB.put('trainees', { id: traineeId, name, employee_id: employeeId });
+        }
+        _trainee = { id: traineeId, name, employeeId };
+        localStorage.setItem('commassess_trainee', JSON.stringify(_trainee));
         activateTrainee();
       } catch (e) {
-        signinError.textContent = e.message || 'Sign in failed. Check your Employee ID and password.';
-        signinError.classList.remove('hidden');
+        errorEl.textContent = e.message || 'Something went wrong. Please try again.';
+        errorEl.classList.remove('hidden');
       } finally {
-        $('btn-signin').disabled    = false;
-        $('btn-signin').textContent = 'Sign In →';
+        $('btn-start').disabled    = false;
+        $('btn-start').textContent = 'Start Assessment →';
       }
     };
-    $('btn-signin').addEventListener('click', doSignIn);
-    $('auth-empid').addEventListener('keydown',    (e) => { if (e.key === 'Enter') doSignIn(); });
-    $('auth-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') doSignIn(); });
 
-    // ---- Sign Up ----
-    const doSignUp = async () => {
-      const name       = $('auth-name').value.trim();
-      const employeeId = $('auth-empid-signup').value.trim();
-      const password   = $('auth-password-signup').value;
-      if (!name || !employeeId || !password) {
-        signupError.textContent = 'Please fill in all fields.';
-        signupError.classList.remove('hidden'); return;
-      }
-      if (password.length < 6) {
-        signupError.textContent = 'Password must be at least 6 characters.';
-        signupError.classList.remove('hidden'); return;
-      }
-      $('btn-signup').disabled    = true;
-      $('btn-signup').textContent = 'Creating account…';
-      signupError.classList.add('hidden');
-      try {
-        const result = await Auth.signUp(employeeId, name, password);
-        if (result?.needsConfirmation) {
-          signupError.style.color = '#16a34a';
-          signupError.textContent = 'Account created! Sign in with your Employee ID and password.';
-          signupError.classList.remove('hidden');
-          signupForm.classList.add('hidden');
-          signinForm.classList.remove('hidden');
-        } else {
-          _trainee = { id: Auth.getId(), name: Auth.getName(), employeeId: Auth.getEmployeeId(), email: Auth.getEmail() };
-          activateTrainee();
-        }
-      } catch (e) {
-        signupError.style.color = '';
-        signupError.textContent = e.message || 'Sign up failed. Try again.';
-        signupError.classList.remove('hidden');
-      } finally {
-        $('btn-signup').disabled    = false;
-        $('btn-signup').textContent = 'Create Account →';
-      }
-    };
-    $('btn-signup').addEventListener('click', doSignUp);
-    $('auth-name').addEventListener('keydown',             (e) => { if (e.key === 'Enter') doSignUp(); });
-    $('auth-empid-signup').addEventListener('keydown',     (e) => { if (e.key === 'Enter') doSignUp(); });
-    $('auth-password-signup').addEventListener('keydown',  (e) => { if (e.key === 'Enter') doSignUp(); });
+    $('btn-start').addEventListener('click', doStart);
+    $('auth-name').addEventListener('keydown',  (e) => { if (e.key === 'Enter') doStart(); });
+    $('auth-empid').addEventListener('keydown', (e) => { if (e.key === 'Enter') doStart(); });
   }
 
   function activateTrainee() {
     $('header-trainee-name').textContent = _trainee.name;
     $('app-header').classList.remove('hidden');
-    // Use onclick (not addEventListener) to avoid stacking multiple listeners
-    $('btn-change-trainee').onclick = async () => {
-      await Auth.signOut();
+    $('btn-change-trainee').onclick = () => {
       _trainee = null;
+      localStorage.removeItem('commassess_trainee');
       $('app-header').classList.add('hidden');
-      // Reset sign-in form
-      if ($('auth-empid'))    $('auth-empid').value    = '';
-      if ($('auth-password')) $('auth-password').value = '';
-      if ($('auth-error'))    $('auth-error').classList.add('hidden');
-      // Show sign-in, hide sign-up
-      const sf = $('auth-signin-form'), su = $('auth-signup-form');
-      if (sf) sf.classList.remove('hidden');
-      if (su) su.classList.add('hidden');
+      if ($('auth-name'))  $('auth-name').value  = '';
+      if ($('auth-empid')) $('auth-empid').value = '';
+      if ($('auth-error')) $('auth-error').classList.add('hidden');
       showScreen('welcome');
     };
     showScreen('modules');
@@ -923,8 +869,7 @@ const App = (() => {
   // ---- Init ----
   async function init() {
     await DB.init();
-    await Auth.init();  // restore Supabase session if any
-    initAuth();         // show auth screen or skip straight to modules
+    initAuth();
     bindNavigation();
 
     // Draw idle waveforms on load

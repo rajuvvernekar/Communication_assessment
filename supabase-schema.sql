@@ -3,11 +3,12 @@
 --  Paste this into: Supabase Dashboard → SQL Editor → New Query
 -- ============================================================
 
--- ---- 1. TRAINEES (mirrors auth.users for easy admin listing) ----
+-- ---- 1. TRAINEES ----
 CREATE TABLE IF NOT EXISTS trainees (
-  id          UUID        PRIMARY KEY,           -- same as auth.users.id
+  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   name        TEXT        NOT NULL,
-  email       TEXT        NOT NULL UNIQUE,
+  email       TEXT,                              -- optional, not collected
+  employee_id TEXT        UNIQUE,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -69,25 +70,18 @@ INSERT INTO settings (key, value) VALUES ('adminPassword', 'admin123')
 --  Enable only if you want to restrict to logged-in users.
 -- ============================================================
 
--- Topics: publicly readable (trainees need topics), writable by authenticated
+-- All tables: open to anon key (internal corporate tool — no public exposure)
 ALTER TABLE topics    ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "topics_read_all"  ON topics    FOR SELECT USING (true);
-CREATE POLICY "topics_write_auth" ON topics   FOR ALL    TO authenticated USING (true);
+CREATE POLICY "topics_all"    ON topics    FOR ALL USING (true) WITH CHECK (true);
 
--- Trainees: publicly readable (admin dashboard needs full list), writable by authenticated
 ALTER TABLE trainees  ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "trainees_read_all"   ON trainees  FOR SELECT USING (true);
-CREATE POLICY "trainees_write_auth" ON trainees  FOR ALL    TO authenticated USING (true);
+CREATE POLICY "trainees_all"  ON trainees  FOR ALL USING (true) WITH CHECK (true);
 
--- Sessions: readable by all, writable by authenticated
 ALTER TABLE sessions  ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "sessions_read_all"   ON sessions  FOR SELECT USING (true);
-CREATE POLICY "sessions_write_auth" ON sessions  FOR ALL    TO authenticated USING (true);
+CREATE POLICY "sessions_all"  ON sessions  FOR ALL USING (true) WITH CHECK (true);
 
--- Settings: readable by all (admin password check), writable by authenticated
 ALTER TABLE settings  ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "settings_read_all"   ON settings  FOR SELECT USING (true);
-CREATE POLICY "settings_write_auth" ON settings  FOR ALL    TO authenticated USING (true);
+CREATE POLICY "settings_all"  ON settings  FOR ALL USING (true) WITH CHECK (true);
 
 
 -- ============================================================
