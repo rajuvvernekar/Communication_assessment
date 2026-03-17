@@ -368,5 +368,106 @@ const SpeechEngine = (() => {
     return scores;
   }
 
-  return { isSupported, startTranscription, stopTranscription, analyze, scoreSpeech, scoreWriting, scoreMockCall };
+  // ================================================================
+  //  COACHING SUMMARY GENERATOR
+  // ================================================================
+
+  function generateCoachingSummary(module, scores) {
+    if (!scores) return '';
+    if (module === 'pick-speak')  return _pickSpeakCoach(scores);
+    if (module === 'mock-call')   return _mockCallCoach(scores);
+    if (module === 'written-comm') return _writingCoach(scores);
+    return '';
+  }
+
+  function _pickSpeakCoach(scores) {
+    const LABELS = {
+      clarity: 'Clarity of Expression', logicalFlow: 'Logical Flow', relevance: 'Relevance & Focus',
+      grammar: 'Grammar & Language', vocabulary: 'Vocabulary Range', sentenceVariety: 'Sentence Variety',
+      fluency: 'Fluency', pace: 'Pace & Delivery', fillerControl: 'Filler Word Control',
+      confidence: 'Confidence', professionalism: 'Professionalism', timeManagement: 'Time Management'
+    };
+    const ADVICE = {
+      clarity:         'Express ideas in simpler, direct sentences. Avoid jargon unless essential, and define terms your audience may not know.',
+      logicalFlow:     'Structure your response with a clear opening, middle, and close. Use linking words like "first", "then", and "finally" to guide the listener.',
+      relevance:       'Stay focused on the question given. Before answering, identify the key point you want to make — then stick to it.',
+      grammar:         'Review subject-verb agreement and tense consistency. Reading aloud for 10 minutes daily builds natural grammar awareness.',
+      vocabulary:      'Expand your word bank by reading industry content daily. Aim to introduce at least one new professional term per response.',
+      sentenceVariety: 'Mix short, punchy sentences with longer explanatory ones. Monotone sentence structure makes content harder to follow.',
+      fluency:         'Practice speaking on random topics for 1 minute without stopping. Focus on continuous flow rather than perfection.',
+      pace:            'Record yourself and listen back. Mark natural pause points if you speak too fast; time yourself against a target if too slow.',
+      fillerControl:   'Replace fillers ("um", "uh", "like") with a deliberate pause — silence is more powerful and confident than filler words.',
+      confidence:      'Confidence grows through preparation. Rehearse key points beforehand, and maintain upright posture to signal self-assurance.',
+      professionalism: 'Use formal language and avoid slang. Begin and end with structured, courteous phrases to demonstrate professionalism.',
+      timeManagement:  'Practice timed speaking — set a 2-minute timer and cover your point within it. Both over-running and under-running indicate poor preparation.'
+    };
+    return _buildSummary(scores, LABELS, ADVICE);
+  }
+
+  function _mockCallCoach(scores) {
+    const LABELS = {
+      callOpening: 'Call Opening', acknowledgment: 'Acknowledgment', activeListening: 'Active Listening',
+      communicationClarity: 'Communication Clarity', callEssence: 'Call Essence',
+      holdProcedure: 'Hold Procedure', extraMile: 'Extra Mile', callClosing: 'Call Closing'
+    };
+    const ADVICE = {
+      callOpening:          'Greet warmly, state your name and company, and invite the customer to share their concern. A strong opening sets the tone for the entire call.',
+      acknowledgment:       'Acknowledge the customer\'s issue before jumping to solutions. Phrases like "I understand how frustrating that must be" demonstrate genuine empathy.',
+      activeListening:      'Paraphrase the customer\'s concern back to them before responding. Probing questions ("Could you tell me more about...?") show genuine engagement.',
+      communicationClarity: 'Avoid jargon, speak in short sentences, and confirm understanding at key points. "Does that make sense?" is a simple but effective check.',
+      callEssence:          'Use positive language throughout — "certainly", "happy to help", and "absolutely" create a warm, customer-first atmosphere.',
+      holdProcedure:        'Always ask permission before placing a customer on hold, state the expected wait time, and thank them for holding when you return.',
+      extraMile:            'Look for opportunities to add value — share a useful tip, flag upcoming offers, or proactively confirm adjacent account details.',
+      callClosing:          'Confirm resolution, ask "Is there anything else I can help you with?", and close with a warm sign-off like "Thank you for calling, have a great day."'
+    };
+    return _buildSummary(scores, LABELS, ADVICE);
+  }
+
+  function _writingCoach(scores) {
+    const LABELS = { clarity: 'Clarity', structure: 'Structure', tone: 'Tone' };
+    const ADVICE = {
+      clarity:   'Use shorter sentences and active voice. Each paragraph should have one clear idea. Avoid ambiguous pronouns — state who did what explicitly.',
+      structure: 'Follow a clear opening-body-close format. Use paragraph breaks and bullet points where appropriate to improve readability.',
+      tone:      'Match your tone to your audience — professional but approachable. Avoid being too casual (slang) or overly formal (stiff language).'
+    };
+    return _buildSummary(scores, LABELS, ADVICE);
+  }
+
+  function _buildSummary(scores, labels, advice) {
+    const entries = Object.entries(scores).filter(
+      ([k, v]) => !k.startsWith('_') && k !== 'overall' && typeof v === 'number' && labels[k]
+    );
+    const strong  = entries.filter(([, v]) => v >= 4).sort((a, b) => b[1] - a[1]);
+    const develop = entries.filter(([, v]) => v <  4).sort((a, b) => a[1] - b[1]); // worst first
+
+    const lines = [];
+    lines.push('AI Coaching Summary');
+    lines.push('──────────────────────────────────────');
+
+    if (strong.length > 0) {
+      lines.push('');
+      lines.push('Strengths:');
+      strong.forEach(([k]) => lines.push('  \u2022 ' + labels[k]));
+    }
+
+    if (develop.length > 0) {
+      lines.push('');
+      lines.push('Development Areas (prioritised by impact):');
+      develop.forEach(([k, v]) => {
+        const level = v <= 2 ? 'Needs significant work' : 'Room for improvement';
+        lines.push('  \u2022 ' + labels[k] + ' (' + v + '/5 \u2014 ' + level + ')');
+        if (advice[k]) lines.push('    \u2192 ' + advice[k]);
+      });
+      lines.push('');
+      const [worstKey] = develop[0];
+      lines.push('Priority Action: Start with "' + labels[worstKey] + '" \u2014 this is the highest-impact area to address first.');
+    } else {
+      lines.push('');
+      lines.push('Excellent performance across all criteria! Maintain consistency and consider mentoring peers.');
+    }
+
+    return lines.join('\n');
+  }
+
+  return { isSupported, startTranscription, stopTranscription, analyze, scoreSpeech, scoreWriting, scoreMockCall, generateCoachingSummary };
 })();

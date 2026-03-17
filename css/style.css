@@ -1562,3 +1562,18 @@ body {
   color: var(--text);
   min-width: 2.5rem;
 }
+
+/* ── AI Coaching Summary ── */
+.coaching-summary {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-left: 4px solid #3b82f6;
+  border-radius: 8px;
+  padding: 1rem 1.125rem;
+  margin: 1rem 0;
+  font-size: 0.82rem;
+  line-height: 1.75;
+  white-space: pre-wrap;
+  font-family: inherit;
+  color: var(--text);
+}

@@ -459,6 +459,7 @@ const App = (() => {
     if (scoreable) {
       analysis = SpeechEngine.analyze(finalTranscript, duration);
       aiScores  = SpeechEngine.scoreSpeech(analysis, duration);
+      aiScores._summary = SpeechEngine.generateCoachingSummary('pick-speak', aiScores);
     }
 
     const sessionData = {
@@ -497,6 +498,17 @@ const App = (() => {
 
     $('ps-final-transcript').textContent = transcript || 'No transcript captured. Your recording has been saved for admin review.';
     $('btn-ps-stop').disabled = false;
+
+    const summaryEl = $('ps-coaching-summary');
+    if (summaryEl) {
+      if (scores && scores._summary) {
+        summaryEl.textContent = scores._summary;
+        summaryEl.classList.remove('hidden');
+      } else {
+        summaryEl.classList.add('hidden');
+      }
+    }
+
     toast('Assessment submitted!', 'success');
   }
 
@@ -651,6 +663,7 @@ const App = (() => {
         aiScores = SpeechEngine.scoreMockCall(finalTranscript);
         aiScores._method = 'js';
       }
+      aiScores._summary = SpeechEngine.generateCoachingSummary('mock-call', aiScores);
 
       if (scoringStatusEl) scoringStatusEl.classList.add('hidden');
 
@@ -852,6 +865,7 @@ const App = (() => {
       aiScores = SpeechEngine.scoreMockCall(traineeOnly);
       aiScores._method = 'js';
     }
+    aiScores._summary = SpeechEngine.generateCoachingSummary('mock-call', aiScores);
 
     if (statusEl) statusEl.classList.add('hidden');
 
@@ -894,6 +908,16 @@ const App = (() => {
     if (transcript && transcriptResultEl) {
       transcriptResultEl.textContent = transcript;
       if (transcriptBox) transcriptBox.classList.remove('hidden');
+    }
+
+    const summaryEl = $('mc-coaching-summary');
+    if (summaryEl) {
+      if (aiScores && aiScores._summary) {
+        summaryEl.textContent = aiScores._summary;
+        summaryEl.classList.remove('hidden');
+      } else {
+        summaryEl.classList.add('hidden');
+      }
     }
   }
 
@@ -1080,6 +1104,7 @@ const App = (() => {
     const duration = Math.floor((Date.now() - _wcStartTime) / 1000);
     const analysis = SpeechEngine.analyze(text, duration);
     const aiScores = SpeechEngine.scoreWriting(text, duration);
+    aiScores._summary = SpeechEngine.generateCoachingSummary('written-comm', aiScores);
 
     try {
       await DB.put('sessions', {
@@ -1127,6 +1152,17 @@ const App = (() => {
     }
 
     $('wc-submitted-text').textContent = text;
+
+    const summaryEl = $('wc-coaching-summary');
+    if (summaryEl) {
+      if (scores && scores._summary) {
+        summaryEl.textContent = scores._summary;
+        summaryEl.classList.remove('hidden');
+      } else {
+        summaryEl.classList.add('hidden');
+      }
+    }
+
     toast('Writing submitted!', 'success');
   }
 

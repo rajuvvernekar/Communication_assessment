@@ -692,7 +692,7 @@ window.Admin = (() => {
 
     const sorted = [...sessions].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
 
-    const headers = ['Name', 'Employee ID', 'Module', 'Topic', 'Date', 'AI Score', 'Admin Score'];
+    const headers = ['Name', 'Employee ID', 'Module', 'Topic', 'Date', 'AI Score', 'Admin Score', 'AI Coaching Summary'];
     const rows = sorted.map(s => {
       const trainee = traineeMap[s.traineeId] || {};
       const name     = s.traineeName || trainee.name || '';
@@ -702,7 +702,8 @@ window.Admin = (() => {
       const date     = s.submittedAt ? new Date(s.submittedAt).toLocaleDateString() : '';
       const aiScore  = s.aiScores?.overall ?? '';
       const admScore = s.adminScores ? (calcAdminAvg(s.adminScores) ?? '') : '';
-      return [name, empId, module, topic, date, aiScore, admScore];
+      const summary  = s.aiScores?._summary || '';
+      return [name, empId, module, topic, date, aiScore, admScore, summary];
     });
 
     const escape = v => `"${String(v).replace(/"/g, '""')}"`;
@@ -884,6 +885,16 @@ window.Admin = (() => {
             <span class="score-label" style="font-weight:800">AI Overall</span>
             <div class="score-bar"><div class="score-bar-fill" style="width:${session.aiScores.overall.toFixed(0)}%;background:#3b82f6"></div></div>
             <span class="score-val" style="color:#3b82f6">${session.aiScores.overall}/100</span>
+          </div>`;
+      }
+
+      if (session.aiScores._summary) {
+        aiDisplay.innerHTML += `
+          <div style="margin-top:0.75rem">
+            <div style="font-size:0.72rem;font-weight:700;color:#1d4ed8;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:0.35rem">
+              AI Coaching Summary
+            </div>
+            <pre style="white-space:pre-wrap;font-family:inherit;font-size:0.8rem;line-height:1.7;background:#eff6ff;border:1px solid #bfdbfe;border-left:3px solid #3b82f6;border-radius:6px;padding:0.75rem 0.875rem;margin:0;color:var(--text)">${session.aiScores._summary}</pre>
           </div>`;
       }
     }
