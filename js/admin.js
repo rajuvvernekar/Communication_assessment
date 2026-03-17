@@ -702,7 +702,11 @@ window.Admin = (() => {
       const date     = s.submittedAt ? new Date(s.submittedAt).toLocaleDateString() : '';
       const aiScore  = s.aiScores?.overall ?? '';
       const admScore = s.adminScores ? (calcAdminAvg(s.adminScores) ?? '') : '';
-      const summary  = s.aiScores?._summary || '';
+      const summary  = s.aiScores
+        ? (s.aiScores._summary || (typeof SpeechEngine !== 'undefined'
+            ? SpeechEngine.generateCoachingSummary(s.module, s.aiScores)
+            : ''))
+        : '';
       return [name, empId, module, topic, date, aiScore, admScore, summary];
     });
 
@@ -888,13 +892,17 @@ window.Admin = (() => {
           </div>`;
       }
 
-      if (session.aiScores._summary) {
+      const coachingSummary = session.aiScores._summary
+        || (typeof SpeechEngine !== 'undefined'
+            ? SpeechEngine.generateCoachingSummary(session.module, session.aiScores)
+            : '');
+      if (coachingSummary) {
         aiDisplay.innerHTML += `
           <div style="margin-top:0.75rem">
             <div style="font-size:0.72rem;font-weight:700;color:#1d4ed8;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:0.35rem">
               AI Coaching Summary
             </div>
-            <pre style="white-space:pre-wrap;font-family:inherit;font-size:0.8rem;line-height:1.7;background:#eff6ff;border:1px solid #bfdbfe;border-left:3px solid #3b82f6;border-radius:6px;padding:0.75rem 0.875rem;margin:0;color:var(--text)">${session.aiScores._summary}</pre>
+            <pre style="white-space:pre-wrap;font-family:inherit;font-size:0.8rem;line-height:1.7;background:#eff6ff;border:1px solid #bfdbfe;border-left:3px solid #3b82f6;border-radius:6px;padding:0.75rem 0.875rem;margin:0;color:var(--text)">${coachingSummary}</pre>
           </div>`;
       }
     }
