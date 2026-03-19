@@ -712,15 +712,23 @@ const App = (() => {
     showStep('mock-call', 'mc-step-bot-call');
     $('mc-chat-thread').innerHTML = '';
 
-    // Show scenario so the agent can refer to it throughout the call
-    const scenarioBox  = $('mc-bot-scenario-box');
-    const scenarioText = $('mc-bot-scenario-text');
-    if (scenarioBox && scenarioText && _currentTopic.scenario) {
-      scenarioText.textContent = _currentTopic.scenario;
-      scenarioBox.classList.remove('hidden');
-    } else if (scenarioBox) {
-      scenarioBox.classList.add('hidden');
-    }
+    // Populate the full scenario panel
+    $('mc-bot-sc-title').textContent = _currentTopic.title || '';
+    $('mc-bot-sc-desc').textContent  = _currentTopic.description || '';
+    $('mc-bot-sc-text').textContent  = _currentTopic.scenario || '';
+    const clEl = $('mc-bot-sc-checklist');
+    clEl.innerHTML = '';
+    (_currentTopic.checklist || []).forEach(item => { clEl.innerHTML += `<li>${item}</li>`; });
+
+    // Collapse / expand scenario toggle
+    const scBody   = $('mc-bot-sc-body');
+    const scToggle = $('btn-mc-sc-toggle');
+    let scVisible  = true;
+    scToggle.onclick = () => {
+      scVisible = !scVisible;
+      scBody.classList.toggle('mc-bot-sc-collapsed', !scVisible);
+      scToggle.textContent = scVisible ? 'Hide ▲' : 'Show ▼';
+    };
 
     // Start ONE continuous recording for the entire call
     _mcBlobPromise = Recorder.start();

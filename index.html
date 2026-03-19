@@ -284,52 +284,65 @@
 
   <!-- Step 2b: Bot-driven turn-based call -->
   <div class="step-container hidden" id="mc-step-bot-call">
-    <div class="step-card">
+    <div class="step-card mc-bot-call-card">
 
-      <!-- Scenario reminder — stays visible throughout the call -->
-      <div id="mc-bot-scenario-box" class="mc-scenario-box hidden">
-        <div class="mc-scenario-label">📋 Scenario</div>
-        <div id="mc-bot-scenario-text"></div>
+      <!-- ── Scenario panel (collapsible, always at top) ── -->
+      <div class="mc-bot-sc-bar" id="mc-bot-sc-bar">
+        <span id="mc-bot-sc-bar-title">📋 Scenario</span>
+        <button class="mc-bot-sc-toggle" id="btn-mc-sc-toggle">Hide ▲</button>
       </div>
-
-      <!-- Turn progress + live recording badge -->
-      <div class="mc-turn-header">
-        <div class="step-label" id="mc-turn-label">Turn 1 of 4</div>
-        <div class="mc-call-rec-badge"><span class="rec-dot-pulse"></span> Recording</div>
-      </div>
-
-      <!-- Chat thread — grows as turns complete -->
-      <div id="mc-chat-thread" class="mc-chat-thread"></div>
-
-      <!-- Bot speaking indicator -->
-      <div id="mc-bot-status" class="mc-bot-status" style="display:none">
-        🔊 Customer is speaking...
-      </div>
-
-      <!-- Trainee recording area (visible only during trainee's turn) -->
-      <div id="mc-rec-area" style="display:none">
-        <canvas id="mc-bot-waveform" class="waveform-canvas" width="300" height="40"></canvas>
-        <div id="mc-bot-live-transcript-box" class="live-transcript-box" style="display:none">
-          <div class="live-transcript-label">📝 Live Transcript</div>
-          <div id="mc-bot-live-transcript" class="live-transcript-text">Listening...</div>
+      <div id="mc-bot-sc-body" class="mc-bot-sc-body">
+        <div class="scenario-card mc-scenario mc-bot-sc-inner">
+          <h3 id="mc-bot-sc-title"></h3>
+          <p id="mc-bot-sc-desc"></p>
+          <div class="scenario-call-box">
+            <div class="caller-icon">📞</div>
+            <div>
+              <div class="caller-label">Incoming call — the caller says:</div>
+              <p id="mc-bot-sc-text" style="font-size:0.875rem;margin-top:0.25rem"></p>
+            </div>
+          </div>
+          <div class="checklist-section" style="margin-top:0.75rem">
+            <h4>You will be evaluated on:</h4>
+            <ul id="mc-bot-sc-checklist" class="evaluation-checklist"></ul>
+          </div>
         </div>
-        <button id="btn-mc-done-turn" class="btn-primary"
-                style="background:var(--mc-color);margin-top:1rem;width:100%">
-          Done Responding →
+      </div>
+
+      <!-- ── Call area: turn header + chat ── -->
+      <div class="mc-bot-call-inner">
+        <div class="mc-turn-header">
+          <div class="step-label" id="mc-turn-label">Turn 1 of 4</div>
+          <div class="mc-call-rec-badge"><span class="rec-dot-pulse"></span> Recording</div>
+        </div>
+        <div id="mc-chat-thread" class="mc-chat-thread"></div>
+        <div id="mc-bot-status" class="mc-bot-status" style="display:none">
+          🔊 Customer is speaking...
+        </div>
+      </div>
+
+      <!-- ── Sticky bottom: recording controls, always visible ── -->
+      <div class="mc-bot-call-controls">
+        <div id="mc-rec-area" style="display:none">
+          <canvas id="mc-bot-waveform" class="waveform-canvas" width="300" height="40"></canvas>
+          <div id="mc-bot-live-transcript-box" class="live-transcript-box" style="display:none">
+            <div class="live-transcript-label">📝 Live Transcript</div>
+            <div id="mc-bot-live-transcript" class="live-transcript-text">Listening...</div>
+          </div>
+          <button id="btn-mc-done-turn" class="btn-primary"
+                  style="background:var(--mc-color);margin-top:0.75rem;width:100%">
+            Done Responding →
+          </button>
+        </div>
+        <button id="btn-mc-finish" class="btn-primary"
+                style="display:none;background:var(--mc-color);width:100%">
+          ✅ Finish Call &amp; Submit
+        </button>
+        <button id="btn-mc-end-call" class="btn-ghost"
+                style="margin-top:0.5rem;width:100%;font-size:0.82rem;color:#64748b">
+          ⏹ End Call Early &amp; Submit
         </button>
       </div>
-
-      <!-- Finish button (appears after last turn response) -->
-      <button id="btn-mc-finish" class="btn-primary"
-              style="display:none;background:var(--mc-color);margin-top:1rem;width:100%">
-        ✅ Finish Call &amp; Submit
-      </button>
-
-      <!-- End call early — always visible as a secondary option -->
-      <button id="btn-mc-end-call" class="btn-ghost"
-              style="margin-top:0.75rem;width:100%;font-size:0.82rem;color:#64748b">
-        ⏹ End Call Early &amp; Submit
-      </button>
 
     </div>
   </div>

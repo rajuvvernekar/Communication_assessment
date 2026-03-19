@@ -1563,25 +1563,80 @@ body {
   min-width: 2.5rem;
 }
 
-/* ── Mock Call: Scenario reminder box ── */
-.mc-scenario-box {
-  background: #fefce8;
-  border: 1px solid #fde68a;
-  border-left: 4px solid #f59e0b;
-  border-radius: 8px;
-  padding: 0.75rem 1rem;
-  margin-bottom: 1rem;
-  font-size: 0.83rem;
-  line-height: 1.6;
-  color: var(--text);
+/* ── Mock Call Bot-Call: full-height flex-column layout ── */
+.mc-bot-call-card {
+  padding: 0 !important;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 115px); /* viewport minus module header + container padding */
+  overflow: hidden;
 }
-.mc-scenario-label {
-  font-size: 0.7rem;
+
+/* Scenario collapse/expand bar */
+.mc-bot-sc-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.55rem 1.5rem;
+  background: #fefce8;
+  border-bottom: 1px solid #fde68a;
+  flex-shrink: 0;
+}
+.mc-bot-sc-bar span {
+  font-size: 0.78rem;
   font-weight: 700;
+  color: #92400e;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #92400e;
-  margin-bottom: 0.35rem;
+}
+.mc-bot-sc-toggle {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #b45309;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+.mc-bot-sc-toggle:hover { background: #fde68a; }
+
+/* Scenario body — scrollable, collapses smoothly */
+.mc-bot-sc-body {
+  overflow-y: auto;
+  max-height: 340px;
+  transition: max-height 0.25s ease;
+  flex-shrink: 0;
+}
+.mc-bot-sc-body.mc-bot-sc-collapsed {
+  max-height: 0;
+  overflow: hidden;
+}
+.mc-bot-sc-inner {
+  margin: 0 !important;
+  border-radius: 0 !important;
+  border-left: 4px solid var(--mc-color) !important;
+  border-top: none !important;
+  border-right: none !important;
+  border-bottom: none !important;
+}
+
+/* Call interaction area — grows to fill remaining space, scrollable */
+.mc-bot-call-inner {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.75rem 1.5rem 0.25rem;
+}
+.mc-bot-call-inner .mc-chat-thread {
+  max-height: none; /* let it fill naturally inside the scrollable container */
+}
+
+/* Controls — always at bottom, never scrolled away */
+.mc-bot-call-controls {
+  flex-shrink: 0;
+  padding: 0.75rem 1.5rem 1.25rem;
+  border-top: 1px solid #f1f5f9;
+  background: #fff;
 }
 
 /* ── AI Coaching Summary ── */
