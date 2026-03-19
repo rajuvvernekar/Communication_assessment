@@ -103,11 +103,14 @@ const App = (() => {
     const el = $(`screen-${id}`);
     if (el) {
       el.classList.add('active');
-      // Synchronous scroll first, then backed up by a short timeout for
-      // browsers that re-scroll after layout (e.g. after mobile keyboard hides)
-      document.documentElement.scrollTop = 0;
-      document.body.scrollTop = 0;
-      setTimeout(() => { document.documentElement.scrollTop = 0; document.body.scrollTop = 0; }, 80);
+      // Blur any focused input first — this dismisses the mobile virtual keyboard
+      // and releases the browser's scroll lock before we reset position
+      if (document.activeElement && typeof document.activeElement.blur === 'function') {
+        document.activeElement.blur();
+      }
+      window.scrollTo(0, 0);
+      // Secondary scroll after browser finishes layout/keyboard dismissal
+      setTimeout(() => window.scrollTo(0, 0), 200);
     }
   }
 
@@ -709,6 +712,16 @@ const App = (() => {
     showStep('mock-call', 'mc-step-bot-call');
     $('mc-chat-thread').innerHTML = '';
 
+    // Show scenario so the agent can refer to it throughout the call
+    const scenarioBox  = $('mc-bot-scenario-box');
+    const scenarioText = $('mc-bot-scenario-text');
+    if (scenarioBox && scenarioText && _currentTopic.scenario) {
+      scenarioText.textContent = _currentTopic.scenario;
+      scenarioBox.classList.remove('hidden');
+    } else if (scenarioBox) {
+      scenarioBox.classList.add('hidden');
+    }
+
     // Start ONE continuous recording for the entire call
     _mcBlobPromise = Recorder.start();
     Recorder.startWaveform($('mc-bot-waveform'));
@@ -762,7 +775,7 @@ const App = (() => {
     speakBot(line, startTraineeTurn);
   }
 
-  // After TTS ends: show recording area + start 90-s countdown
+  // After TTS ends: show recording area, wait for agent to click Done
   function startTraineeTurn() {
     _mcTurnEnded = false;
     $('mc-bot-status').style.display = 'none';
@@ -776,20 +789,6 @@ const App = (() => {
         $('mc-bot-live-transcript').textContent = text || 'Listening...';
       });
     }
-
-    // 90-second per-turn countdown (uses its own setInterval, not Recorder.startTimer)
-    const TURN_LIMIT = 90;
-    let remaining = TURN_LIMIT;
-    function fmtTime(s) {
-      return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-    }
-    $('mc-turn-time').textContent = fmtTime(remaining);
-    clearInterval(_mcTurnTimerId);
-    _mcTurnTimerId = setInterval(() => {
-      remaining--;
-      $('mc-turn-time').textContent = fmtTime(remaining);
-      if (remaining <= 0) endTraineeTurn();
-    }, 1000);
 
     $('btn-mc-done-turn').onclick = () => endTraineeTurn();
   }

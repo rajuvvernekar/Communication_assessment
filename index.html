@@ -286,6 +286,12 @@
   <div class="step-container hidden" id="mc-step-bot-call">
     <div class="step-card">
 
+      <!-- Scenario reminder — stays visible throughout the call -->
+      <div id="mc-bot-scenario-box" class="mc-scenario-box hidden">
+        <div class="mc-scenario-label">📋 Scenario</div>
+        <div id="mc-bot-scenario-text"></div>
+      </div>
+
       <!-- Turn progress + live recording badge -->
       <div class="mc-turn-header">
         <div class="step-label" id="mc-turn-label">Turn 1 of 4</div>
@@ -303,10 +309,6 @@
       <!-- Trainee recording area (visible only during trainee's turn) -->
       <div id="mc-rec-area" style="display:none">
         <canvas id="mc-bot-waveform" class="waveform-canvas" width="300" height="40"></canvas>
-        <div class="mc-turn-timer-row">
-          <span class="mc-turn-timer-label">Time remaining:</span>
-          <span id="mc-turn-time" class="mc-turn-time">1:30</span>
-        </div>
         <div id="mc-bot-live-transcript-box" class="live-transcript-box" style="display:none">
           <div class="live-transcript-label">📝 Live Transcript</div>
           <div id="mc-bot-live-transcript" class="live-transcript-text">Listening...</div>
