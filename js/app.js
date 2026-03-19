@@ -103,14 +103,24 @@ const App = (() => {
     const el = $(`screen-${id}`);
     if (el) {
       el.classList.add('active');
-      // Blur any focused input first — this dismisses the mobile virtual keyboard
-      // and releases the browser's scroll lock before we reset position
+      // Blur focused input to start keyboard dismissal
       if (document.activeElement && typeof document.activeElement.blur === 'function') {
         document.activeElement.blur();
       }
       window.scrollTo(0, 0);
-      // Secondary scroll after browser finishes layout/keyboard dismissal
-      setTimeout(() => window.scrollTo(0, 0), 200);
+      // On mobile the virtual keyboard fires a window resize when it fully closes.
+      // Scroll again at that point so the keyboard dismissal can't push us back down.
+      // A 450ms hard fallback covers devices that don't fire resize.
+      let scrollDone = false;
+      const scrollTop = () => {
+        if (scrollDone) return;
+        scrollDone = true;
+        window.scrollTo(0, 0);
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+      };
+      window.addEventListener('resize', scrollTop, { once: true });
+      setTimeout(() => { window.removeEventListener('resize', scrollTop); scrollTop(); }, 450);
     }
   }
 
