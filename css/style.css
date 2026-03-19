@@ -118,8 +118,8 @@ body {
 
 /* ---- App Header ---- */
 #app-header {
-  position: fixed;
-  top: 0; left: 0; right: 0;
+  position: sticky;
+  top: 0;
   height: 56px;
   background: #fff;
   border-bottom: 1px solid var(--border);
