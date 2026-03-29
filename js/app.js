@@ -7,6 +7,8 @@ const App = (() => {
   let _recordingPromise = null;
   let _psRecordingStartTime = null; // for duration tracking
   let _psSkipUsed = false;          // only one topic skip allowed per session
+  let _psCategory = null;           // 'pick-speak-stock' | 'pick-speak-general'
+  let _psTopicsPool = [];           // all fetched topics for current category
   let _wcStartTime = null;
   let _wcTimerInterval = null;
 
@@ -287,6 +289,12 @@ const App = (() => {
 
   // ---- Module Dispatch ----
   async function openModule(module) {
+    if (module === 'pick-speak') {
+      showScreen('pick-speak');
+      initPickSpeakCategory();
+      return;
+    }
+
     const topics = await DB.getByIndex('topics', 'module', module);
     if (!topics.length) {
       toast('No topics available for this module. Ask your admin to add some.', 'error');
@@ -295,8 +303,7 @@ const App = (() => {
     _currentTopic = topics[Math.floor(Math.random() * topics.length)];
     showScreen(module);
 
-    if (module === 'pick-speak') initPickSpeak();
-    else if (module === 'mock-call') initMockCall();
+    if (module === 'mock-call') initMockCall();
     else if (module === 'role-play') initRolePlay();
     else if (module === 'group-discussion') initGroupDiscussion();
     else if (module === 'written-comm') initWrittenComm();
@@ -305,6 +312,32 @@ const App = (() => {
   // ================================================================
   //  PICK & SPEAK
   // ================================================================
+  function initPickSpeakCategory() {
+    _psSkipUsed   = false;
+    _psCategory   = null;
+    _psTopicsPool = [];
+    showStep('pick-speak', 'ps-step-category');
+
+    $('btn-ps-cat-stock').onclick   = () => selectPsCategory('pick-speak-stock');
+    $('btn-ps-cat-general').onclick = () => selectPsCategory('pick-speak-general');
+  }
+
+  async function selectPsCategory(category) {
+    let topics = await DB.getByIndex('topics', 'module', category);
+    // Backward-compat: if no general topics exist yet, fall back to legacy 'pick-speak' module
+    if (!topics.length && category === 'pick-speak-general') {
+      topics = await DB.getByIndex('topics', 'module', 'pick-speak');
+    }
+    if (!topics.length) {
+      toast('No topics available for this category. Ask your admin to add some.', 'error');
+      return;
+    }
+    _psCategory   = category;
+    _psTopicsPool = topics;
+    _currentTopic = topics[Math.floor(Math.random() * topics.length)];
+    initPickSpeak(false);
+  }
+
   function initPickSpeak(isSkip = false) {
     if (!isSkip) _psSkipUsed = false;
 
@@ -339,40 +372,30 @@ const App = (() => {
       }
     };
 
-    // Skip: pick new topic and show it immediately (already revealed)
+    // Skip: pick new topic from the same category pool (already in memory)
     skipBtn.onclick = () => {
       if (_psSkipUsed) return;
       _psSkipUsed = true;
       skipBtn.style.display = 'none';
 
-      DB.getByIndex('topics', 'module', 'pick-speak').then(topics => {
-        if (!topics.length) return;
-        // Avoid repeating the same topic if possible
-        let next = topics[Math.floor(Math.random() * topics.length)];
-        if (topics.length > 1) {
-          while (next.id === _currentTopic.id) {
-            next = topics[Math.floor(Math.random() * topics.length)];
-          }
+      const pool = _psTopicsPool;
+      if (!pool.length) return;
+      let next = pool[Math.floor(Math.random() * pool.length)];
+      if (pool.length > 1) {
+        while (next.id === _currentTopic.id) {
+          next = pool[Math.floor(Math.random() * pool.length)];
         }
-        _currentTopic = next;
-        // Reveal the new topic inline — no need to click Reveal again
-        revealEl.classList.add('revealed');
-        $('ps-topic-title').textContent = _currentTopic.title;
-        $('ps-topic-desc').textContent  = _currentTopic.description || '';
-        $('btn-ps-ready').classList.remove('hidden');
-        $('btn-ps-reveal').style.display = 'none';
-      });
+      }
+      _currentTopic = next;
+      revealEl.classList.add('revealed');
+      $('ps-topic-title').textContent = _currentTopic.title;
+      $('ps-topic-desc').textContent  = _currentTopic.description || '';
+      $('btn-ps-ready').classList.remove('hidden');
+      $('btn-ps-reveal').style.display = 'none';
     };
 
     $('btn-ps-ready').onclick = () => startPickSpeakPrep();
-    $('btn-ps-again').onclick = () => {
-      DB.getByIndex('topics', 'module', 'pick-speak').then(topics => {
-        if (topics.length) {
-          _currentTopic = topics[Math.floor(Math.random() * topics.length)];
-          initPickSpeak();
-        }
-      });
-    };
+    $('btn-ps-again').onclick = () => initPickSpeakCategory();
   }
 
   async function startPickSpeakPrep() {

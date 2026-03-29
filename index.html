@@ -104,8 +104,29 @@
     <h2>🎤 Pick &amp; Speak</h2>
   </div>
 
+  <!-- Step 0: Category Selection -->
+  <div class="step-container" id="ps-step-category">
+    <div class="step-card">
+      <div class="step-label">Choose Your Topic Category</div>
+      <h3 style="text-align:center;margin-bottom:1.5rem">What would you like to speak about?</h3>
+      <div class="ps-category-grid">
+        <button id="btn-ps-cat-stock" class="ps-cat-card">
+          <div class="ps-cat-icon">📈</div>
+          <h4>Stock Market</h4>
+          <p>Investing, markets, trading &amp; finance</p>
+        </button>
+        <button id="btn-ps-cat-general" class="ps-cat-card">
+          <div class="ps-cat-icon">💬</div>
+          <h4>General</h4>
+          <p>Workplace &amp; communication topics</p>
+        </button>
+      </div>
+      <p style="text-align:center;color:var(--text-muted);font-size:0.85rem;margin-top:1.25rem">One topic skip is available per session.</p>
+    </div>
+  </div>
+
   <!-- Step 1: Topic Reveal -->
-  <div class="step-container" id="ps-step-topic">
+  <div class="step-container hidden" id="ps-step-topic">
     <div class="step-card">
       <div class="step-label">Step 1 of 3 — Your Topic</div>
       <div class="topic-reveal" id="ps-topic-reveal">
