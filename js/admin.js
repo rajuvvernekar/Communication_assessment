@@ -11,27 +11,33 @@ window.Admin = (() => {
 
   // ---- Module metadata ----
   const MODULE_LABELS = {
-    'pick-speak': 'Pick & Speak',
-    'mock-call': 'Mock Call',
-    'role-play': 'Role Play',
-    'group-discussion': 'Group Discussion',
-    'written-comm': 'Written Comm.'
+    'pick-speak':         'Pick & Speak',
+    'pick-speak-general': 'P&S — General',
+    'pick-speak-stock':   'P&S — Stock Market',
+    'mock-call':          'Mock Call',
+    'role-play':          'Role Play',
+    'group-discussion':   'Group Discussion',
+    'written-comm':       'Written Comm.'
   };
 
   const MODULE_COLORS = {
-    'pick-speak': '#3b82f6',
-    'mock-call': '#8b5cf6',
-    'role-play': '#f97316',
-    'group-discussion': '#10b981',
-    'written-comm': '#0ea5e9'
+    'pick-speak':         '#3b82f6',
+    'pick-speak-general': '#3b82f6',
+    'pick-speak-stock':   '#3b82f6',
+    'mock-call':          '#8b5cf6',
+    'role-play':          '#f97316',
+    'group-discussion':   '#10b981',
+    'written-comm':       '#0ea5e9'
   };
 
   const MODULE_BADGE_CLASS = {
-    'pick-speak': 'badge-ps',
-    'mock-call': 'badge-mc',
-    'role-play': 'badge-rp',
-    'group-discussion': 'badge-gd',
-    'written-comm': 'badge-wc'
+    'pick-speak':         'badge-ps',
+    'pick-speak-general': 'badge-ps',
+    'pick-speak-stock':   'badge-ps',
+    'mock-call':          'badge-mc',
+    'role-play':          'badge-rp',
+    'group-discussion':   'badge-gd',
+    'written-comm':       'badge-wc'
   };
 
   // ---- Score Bands (scores are out of 100) ----
@@ -431,7 +437,7 @@ window.Admin = (() => {
 
   async function renderTopicsList() {
     const topics = await DB.getAll('topics');
-    const filtered = _topicsFilter === 'all' ? topics : topics.filter(t => t.module === _topicsFilter);
+    const filtered = topics.filter(t => matchesModuleFilter(t.module, _topicsFilter));
     const container = $('topics-list');
 
     if (filtered.length === 0) {
@@ -455,8 +461,15 @@ window.Admin = (() => {
   }
 
   function getModuleShort(module) {
-    const map = { 'pick-speak': 'ps', 'mock-call': 'mc', 'role-play': 'rp', 'group-discussion': 'gd', 'written-comm': 'wc' };
+    const map = { 'pick-speak': 'ps', 'pick-speak-general': 'ps', 'pick-speak-stock': 'ps', 'mock-call': 'mc', 'role-play': 'rp', 'group-discussion': 'gd', 'written-comm': 'wc' };
     return map[module] || '';
+  }
+
+  // Returns true if a topic/session module matches the active filter
+  function matchesModuleFilter(recordModule, filter) {
+    if (filter === 'all') return true;
+    if (filter === 'pick-speak') return recordModule === 'pick-speak' || recordModule === 'pick-speak-general' || recordModule === 'pick-speak-stock';
+    return recordModule === filter;
   }
 
   async function openTopicModal(topicId) {
@@ -727,7 +740,7 @@ window.Admin = (() => {
 
   function applyAssessmentFilters(sessions, topicMap) {
     let filtered = sessions;
-    if (_assessmentsFilter.module !== 'all') filtered = filtered.filter(s => s.module === _assessmentsFilter.module);
+    filtered = filtered.filter(s => matchesModuleFilter(s.module, _assessmentsFilter.module));
     if (_assessmentsFilter.status !== 'all') filtered = filtered.filter(s => s.status === _assessmentsFilter.status);
     renderAssessmentsTable(filtered, topicMap);
   }
