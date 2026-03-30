@@ -361,9 +361,10 @@ const SpeechEngine = (() => {
     const closingScore = [confirmed, anythingElse, brandedClose].filter(Boolean).length;
     scores.callClosing = closingScore === 3 ? 5 : closingScore >= 1 ? 3 : 1;
 
-    // Overall: average of all criteria scores
+    // Overall: average of all criteria scores (out of 5), converted to percentage out of 100
     const vals = Object.values(scores);
-    scores.overall = parseFloat((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1));
+    const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+    scores.overall = parseFloat(((avg / 5) * 100).toFixed(1));
 
     return scores;
   }
