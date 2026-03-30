@@ -203,10 +203,11 @@ Return ONLY a JSON: {"score": <1 or 3 or 5>, "reason": "<one sentence>"}`
         }
       }
 
-      // Calculate overall (normalize 1/3/5 scores: 1→1, 3→3, 5→5 maps directly)
+      // Calculate overall: average out of 5, converted to percentage out of 100
       const vals = Object.values(results.scores).filter(v => typeof v === 'number');
       if (vals.length > 0) {
-        results.overall = parseFloat((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1));
+        const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+        results.overall = parseFloat(((avg / 5) * 100).toFixed(1));
       }
 
       return results;
