@@ -9,6 +9,12 @@ window.Admin = (() => {
   let _topicsFilter = 'all';
   let _assessmentsFilter = { module: 'all', status: 'all' };
 
+  // Convert legacy overall scores stored as raw /5 to /100
+  function normalizeOverall(overall) {
+    if (typeof overall !== 'number') return overall;
+    return overall <= 5 ? parseFloat(((overall / 5) * 100).toFixed(1)) : overall;
+  }
+
   // ---- Module metadata ----
   const MODULE_LABELS = {
     'pick-speak':         'Pick & Speak',
@@ -755,7 +761,7 @@ window.Admin = (() => {
     }
 
     tbody.innerHTML = sorted.map(s => {
-      const aiScore = s.aiScores ? (s.aiScores.overall ?? '—') : '—';
+      const aiScore = s.aiScores ? (normalizeOverall(s.aiScores.overall) ?? '—') : '—';
       const adminScore = s.adminScores ? (calcAdminAvg(s.adminScores) ?? '—') : '—';
       const isScored = !!s.adminScores;
 
@@ -897,11 +903,12 @@ window.Admin = (() => {
       }
 
       if (session.aiScores.overall !== undefined) {
+        const _overallPct = normalizeOverall(session.aiScores.overall);
         aiDisplay.innerHTML += `
           <div class="ai-score-row" style="background:#eff6ff;border:1px solid #dbeafe;margin-top:0.25rem">
             <span class="score-label" style="font-weight:800">AI Overall</span>
-            <div class="score-bar"><div class="score-bar-fill" style="width:${session.aiScores.overall.toFixed(0)}%;background:#3b82f6"></div></div>
-            <span class="score-val" style="color:#3b82f6">${session.aiScores.overall}/100</span>
+            <div class="score-bar"><div class="score-bar-fill" style="width:${_overallPct.toFixed(0)}%;background:#3b82f6"></div></div>
+            <span class="score-val" style="color:#3b82f6">${_overallPct}/100</span>
           </div>`;
       }
 
@@ -983,8 +990,9 @@ window.Admin = (() => {
     const aiBandEl = $('scoring-ai-band');
     if (aiBandEl) {
       if (session.aiScores && session.aiScores.overall !== undefined) {
-        const band = getBand(session.module, session.aiScores.overall);
-        const pct = Math.round(session.aiScores.overall); // already /100
+        const _aiBandPct = normalizeOverall(session.aiScores.overall);
+        const band = getBand(session.module, _aiBandPct);
+        const pct = Math.round(_aiBandPct);
         if (band) {
           aiBandEl.innerHTML = `
             <div class="band-card ${band.cls}" style="margin-bottom:0">
@@ -992,7 +1000,7 @@ window.Admin = (() => {
                 <span class="band-icon">${band.icon}</span>
                 <div class="band-info">
                   <div class="band-label" style="font-size:0.78rem">${band.label}</div>
-                  <div class="band-score" style="font-size:0.72rem">AI: ${session.aiScores.overall}/100</div>
+                  <div class="band-score" style="font-size:0.72rem">AI: ${_aiBandPct}/100</div>
                 </div>
               </div>
               <div class="band-feedback" style="font-size:0.72rem">${band.feedback}</div>
@@ -1201,7 +1209,7 @@ window.Admin = (() => {
             <td>${moduleBadge(s.module)}</td>
             <td>${s.topicTitle || '—'}</td>
             <td>${formatDate(s.submittedAt).split(' ')[0]}</td>
-            <td>${s.aiScores ? (s.aiScores.overall ?? '—') + '/100' : '—'}</td>
+            <td>${s.aiScores ? (normalizeOverall(s.aiScores.overall) ?? '—') + '/100' : '—'}</td>
             <td>${s.adminScores ? calcAdminAvg(s.adminScores) + '/100' : '—'}</td>
           </tr>`).join('');
 
