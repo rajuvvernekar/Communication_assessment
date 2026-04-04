@@ -300,11 +300,17 @@ const App = (() => {
       toast('No topics available for this module. Ask your admin to add some.', 'error');
       return;
     }
+
+    if (module === 'mock-call') {
+      showScreen('mock-call');
+      initMockCallTopicSelect(topics);
+      return;
+    }
+
     _currentTopic = topics[Math.floor(Math.random() * topics.length)];
     showScreen(module);
 
-    if (module === 'mock-call') initMockCall();
-    else if (module === 'role-play') initRolePlay();
+    if (module === 'role-play') initRolePlay();
     else if (module === 'group-discussion') initGroupDiscussion();
     else if (module === 'written-comm') initWrittenComm();
   }
@@ -364,8 +370,8 @@ const App = (() => {
       $('btn-ps-ready').classList.remove('hidden');
       $('btn-ps-reveal').style.display = 'none';
 
-      // Show skip button only if skip hasn't been used
-      if (!_psSkipUsed) {
+      // Show skip button only if skip hasn't been used AND category is not Stock Market
+      if (!_psSkipUsed && _psCategory !== 'pick-speak-stock') {
         skipBadge.textContent  = '(1 skip available)';
         skipBtn.style.display  = '';
         skipBtn.disabled       = false;
@@ -573,6 +579,33 @@ const App = (() => {
     utt.onend  = () => { if (!fired) { fired = true; clearTimeout(guard); onEnd(); } };
     utt.onerror = () => { if (!fired) { fired = true; clearTimeout(guard); onEnd(); } };
     speechSynthesis.speak(utt);
+  }
+
+  function initMockCallTopicSelect(allTopics) {
+    // Randomly pick up to 2 topics from the pool
+    const pool = [...allTopics];
+    const selected = [];
+    while (selected.length < 2 && pool.length > 0) {
+      const idx = Math.floor(Math.random() * pool.length);
+      selected.push(pool.splice(idx, 1)[0]);
+    }
+
+    showStep('mock-call', 'mc-step-topic-select');
+
+    const container = $('mc-topic-cards');
+    container.innerHTML = selected.map((t, i) => `
+      <button class="mc-topic-card" data-idx="${i}">
+        <h4>${t.title}</h4>
+        <p>${t.description || ''}</p>
+      </button>
+    `).join('');
+
+    container.querySelectorAll('.mc-topic-card').forEach((btn, i) => {
+      btn.onclick = () => {
+        _currentTopic = selected[i];
+        initMockCall();
+      };
+    });
   }
 
   function initMockCall() {

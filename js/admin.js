@@ -839,10 +839,18 @@ window.Admin = (() => {
       // Support both Storage URL (new) and legacy Blob
       const recUrl = session.recordingUrl
         || (session.recordingBlob ? URL.createObjectURL(session.recordingBlob) : null);
+      const dlBtn = $('scoring-download-btn');
       if (recUrl) {
         audioEl.src = recUrl;
+        if (dlBtn) {
+          dlBtn.href = recUrl;
+          const ext = recUrl.includes('.webm') ? 'webm' : recUrl.includes('.mp4') ? 'mp4' : 'ogg';
+          dlBtn.download = `${(session.traineeName || 'recording').replace(/\s+/g, '_')}-${session.module}-${(session.submittedAt || '').slice(0, 10)}.${ext}`;
+          dlBtn.style.display = 'inline-block';
+        }
       } else {
         audioEl.src = '';
+        if (dlBtn) dlBtn.style.display = 'none';
         $('scoring-audio-section').innerHTML = '<h4>Recording</h4><p style="color:var(--text-muted);font-size:0.85rem">No recording available.</p>';
       }
       $('scoring-transcript').textContent = session.transcript || 'No transcript available.';
