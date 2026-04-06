@@ -457,17 +457,21 @@ window.Admin = (() => {
       return `
       <div class="topic-card ${getModuleShort(t.module)}${isEnabled ? '' : ' topic-disabled'}">
         <div class="topic-card-header">
-          <h4>${t.title}</h4>
-          ${moduleBadge(t.module)}
-        </div>
-        ${!isEnabled ? '<div class="topic-disabled-label">⏸ Disabled — hidden from users</div>' : ''}
-        <p>${t.description || ''}</p>
-        ${t.checklist && t.checklist.length ? `<div style="font-size:0.75rem;color:var(--text-muted)">${t.checklist.length} evaluation criteria</div>` : ''}
-        <div class="topic-card-actions" style="margin-top:0.875rem">
-          <button class="btn-small primary" onclick="Admin.openTopicModal('${t.id}')">Edit</button>
-          <button class="btn-small ${isEnabled ? 'warning' : 'success'}" onclick="Admin.toggleTopicEnabled('${t.id}')">
-            ${isEnabled ? '⏸ Disable' : '▶ Enable'}
+          <div style="min-width:0">
+            ${moduleBadge(t.module)}
+            <h4 style="margin-top:0.35rem">${t.title}</h4>
+          </div>
+          <button class="topic-toggle-btn${isEnabled ? ' on' : ''}"
+                  onclick="Admin.toggleTopicEnabled('${t.id}')"
+                  title="${isEnabled ? 'Click to disable' : 'Click to enable'}">
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            <span class="toggle-label">${isEnabled ? 'Live' : 'Off'}</span>
           </button>
+        </div>
+        <p>${t.description || ''}</p>
+        ${t.checklist && t.checklist.length ? `<div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.5rem">${t.checklist.length} evaluation criteria</div>` : ''}
+        <div class="topic-card-actions">
+          <button class="btn-small primary" onclick="Admin.openTopicModal('${t.id}')">Edit</button>
           <button class="btn-small danger" onclick="Admin.deleteTopic('${t.id}')">Delete</button>
         </div>
       </div>`;
@@ -480,12 +484,25 @@ window.Admin = (() => {
   }
 
   async function toggleTopicEnabled(topicId) {
-    const topic = await DB.get('topics', topicId);
-    if (!topic) return;
-    const nowEnabled = topic.enabled === false; // flip
-    await DB.put('topics', { ...topic, enabled: nowEnabled });
-    toast(nowEnabled ? 'Topic enabled — visible to users.' : 'Topic disabled — hidden from users.', '');
-    renderTopicsList();
+    try {
+      const topic = await DB.get('topics', topicId);
+      if (!topic) return;
+      const nowEnabled = topic.enabled === false; // flip: false→true, undefined/true→false
+      // Use a targeted PATCH via Supabase client (avoids re-uploading blobs)
+      const { error } = await DB.getClient()
+        .from('topics')
+        .update({ enabled: nowEnabled })
+        .eq('id', topicId);
+      if (error) throw error;
+      toast(nowEnabled ? '✅ Topic enabled — visible to users.' : '⏸ Topic disabled — hidden from users.', '');
+      renderTopicsList();
+    } catch (e) {
+      if (e.message && e.message.toLowerCase().includes('enabled')) {
+        toast('⚠ Missing DB column. Run supabase-add-enabled-column.sql in your Supabase SQL Editor first.', 'error');
+      } else {
+        toast('Failed: ' + e.message, 'error');
+      }
+    }
   }
 
   // Fetch-based download (bypasses cross-origin download restriction)

@@ -1038,13 +1038,56 @@ body {
 .data-table .btn-small.danger { background: #fef2f2; color: var(--danger); border-color: #fecaca; }
 .data-table .btn-small.danger:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
 
-/* Topic enable/disable */
-.topic-card.topic-disabled { opacity: 0.55; border-style: dashed; }
-.topic-disabled-label { font-size: 0.72rem; font-weight: 600; color: #f97316; margin-bottom: 0.4rem; }
-.btn-small.warning { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
-.btn-small.warning:hover { background: #f97316; color: #fff; border-color: #f97316; }
-.btn-small.success { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
-.btn-small.success:hover { background: #16a34a; color: #fff; border-color: #16a34a; }
+/* Topic enable/disable toggle */
+.topic-card.topic-disabled { opacity: 0.5; }
+.topic-card.topic-disabled .topic-card-header h4 { color: var(--text-muted); }
+
+.topic-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem 0.4rem;
+  border-radius: 100px;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.topic-toggle-btn:hover { background: #f1f5f9; }
+
+.toggle-track {
+  width: 40px;
+  height: 22px;
+  border-radius: 11px;
+  background: #cbd5e1;
+  position: relative;
+  transition: background 0.22s;
+  flex-shrink: 0;
+}
+.toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+  transition: transform 0.22s;
+}
+.topic-toggle-btn.on .toggle-track { background: #22c55e; }
+.topic-toggle-btn.on .toggle-thumb { transform: translateX(18px); }
+
+.toggle-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  min-width: 22px;
+}
+.topic-toggle-btn.on .toggle-label { color: #15803d; }
 .empty-state {
   text-align: center;
   padding: 3rem;
