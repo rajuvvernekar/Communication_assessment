@@ -115,6 +115,11 @@ const App = (() => {
     }
   }
 
+  // Only return topics that are enabled (or have no enabled field = legacy = treat as enabled)
+  function enabledTopics(topics) {
+    return topics.filter(t => t.enabled !== false);
+  }
+
   function showStep(modulePrefix, stepId) {
     // Hide all direct step children of the module screen
     const screen = $(`screen-${modulePrefix}`);
@@ -295,7 +300,7 @@ const App = (() => {
       return;
     }
 
-    const topics = await DB.getByIndex('topics', 'module', module);
+    const topics = enabledTopics(await DB.getByIndex('topics', 'module', module));
     if (!topics.length) {
       toast('No topics available for this module. Ask your admin to add some.', 'error');
       return;
@@ -329,10 +334,10 @@ const App = (() => {
   }
 
   async function selectPsCategory(category) {
-    let topics = await DB.getByIndex('topics', 'module', category);
+    let topics = enabledTopics(await DB.getByIndex('topics', 'module', category));
     // Backward-compat: if no general topics exist yet, fall back to legacy 'pick-speak' module
     if (!topics.length && category === 'pick-speak-general') {
-      topics = await DB.getByIndex('topics', 'module', 'pick-speak');
+      topics = enabledTopics(await DB.getByIndex('topics', 'module', 'pick-speak'));
     }
     if (!topics.length) {
       toast('No topics available for this category. Ask your admin to add some.', 'error');

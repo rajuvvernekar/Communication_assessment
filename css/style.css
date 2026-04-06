@@ -1037,6 +1037,14 @@ body {
 .data-table .btn-small.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
 .data-table .btn-small.danger { background: #fef2f2; color: var(--danger); border-color: #fecaca; }
 .data-table .btn-small.danger:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
+
+/* Topic enable/disable */
+.topic-card.topic-disabled { opacity: 0.55; border-style: dashed; }
+.topic-disabled-label { font-size: 0.72rem; font-weight: 600; color: #f97316; margin-bottom: 0.4rem; }
+.btn-small.warning { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+.btn-small.warning:hover { background: #f97316; color: #fff; border-color: #f97316; }
+.btn-small.success { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+.btn-small.success:hover { background: #16a34a; color: #fff; border-color: #16a34a; }
 .empty-state {
   text-align: center;
   padding: 3rem;

@@ -8,6 +8,7 @@ window.Admin = (() => {
   let _scoringSessionId = null;
   let _topicsFilter = 'all';
   let _assessmentsFilter = { module: 'all', status: 'all' };
+  let _currentFilteredSessions = [];
 
   // Convert legacy overall scores stored as raw /5 to /100
   function normalizeOverall(overall) {
@@ -451,24 +452,94 @@ window.Admin = (() => {
       return;
     }
 
-    container.innerHTML = filtered.map(t => `
-      <div class="topic-card ${getModuleShort(t.module)}">
+    container.innerHTML = filtered.map(t => {
+      const isEnabled = t.enabled !== false;
+      return `
+      <div class="topic-card ${getModuleShort(t.module)}${isEnabled ? '' : ' topic-disabled'}">
         <div class="topic-card-header">
           <h4>${t.title}</h4>
           ${moduleBadge(t.module)}
         </div>
+        ${!isEnabled ? '<div class="topic-disabled-label">⏸ Disabled — hidden from users</div>' : ''}
         <p>${t.description || ''}</p>
         ${t.checklist && t.checklist.length ? `<div style="font-size:0.75rem;color:var(--text-muted)">${t.checklist.length} evaluation criteria</div>` : ''}
         <div class="topic-card-actions" style="margin-top:0.875rem">
           <button class="btn-small primary" onclick="Admin.openTopicModal('${t.id}')">Edit</button>
+          <button class="btn-small ${isEnabled ? 'warning' : 'success'}" onclick="Admin.toggleTopicEnabled('${t.id}')">
+            ${isEnabled ? '⏸ Disable' : '▶ Enable'}
+          </button>
           <button class="btn-small danger" onclick="Admin.deleteTopic('${t.id}')">Delete</button>
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   }
 
   function getModuleShort(module) {
     const map = { 'pick-speak': 'ps', 'pick-speak-general': 'ps', 'pick-speak-stock': 'ps', 'mock-call': 'mc', 'role-play': 'rp', 'group-discussion': 'gd', 'written-comm': 'wc' };
     return map[module] || '';
+  }
+
+  async function toggleTopicEnabled(topicId) {
+    const topic = await DB.get('topics', topicId);
+    if (!topic) return;
+    const nowEnabled = topic.enabled === false; // flip
+    await DB.put('topics', { ...topic, enabled: nowEnabled });
+    toast(nowEnabled ? 'Topic enabled — visible to users.' : 'Topic disabled — hidden from users.', '');
+    renderTopicsList();
+  }
+
+  // Fetch-based download (bypasses cross-origin download restriction)
+  async function downloadRecording(url, filename) {
+    try {
+      toast('Preparing download…', '');
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const blob = await resp.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    } catch (e) {
+      toast('Download failed: ' + e.message, 'error');
+    }
+  }
+
+  async function downloadAllRecordings() {
+    const sessions = _currentFilteredSessions.filter(s => s.recordingUrl);
+    if (!sessions.length) {
+      toast('No recordings available in the current view.', 'error');
+      return;
+    }
+    if (typeof JSZip === 'undefined') {
+      toast('JSZip not loaded — cannot create zip.', 'error');
+      return;
+    }
+    toast(`Packaging ${sessions.length} recording(s)… please wait.`, '');
+    try {
+      const zip = new JSZip();
+      await Promise.all(sessions.map(async s => {
+        const resp = await fetch(s.recordingUrl);
+        if (!resp.ok) return; // skip failed fetches silently
+        const blob = await resp.blob();
+        const ext = s.recordingUrl.includes('.webm') ? 'webm' : s.recordingUrl.includes('.mp4') ? 'mp4' : 'ogg';
+        const fname = `${(s.traineeName || 'unknown').replace(/\s+/g, '_')}-${s.module}-${(s.submittedAt || '').slice(0, 10)}.${ext}`;
+        zip.file(fname, blob);
+      }));
+      const content = await zip.generateAsync({ type: 'blob' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(content);
+      a.download = `commassess-recordings-${new Date().toISOString().slice(0, 10)}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      toast('Recordings downloaded!', 'success');
+    } catch (e) {
+      toast('Download failed: ' + e.message, 'error');
+    }
   }
 
   // Returns true if a topic/session module matches the active filter
@@ -754,6 +825,7 @@ window.Admin = (() => {
   function renderAssessmentsTable(sessions, topicMap) {
     const tbody = $('assessments-tbody');
     const sorted = [...sessions].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+    _currentFilteredSessions = sorted; // track for Download All
 
     if (sorted.length === 0) {
       tbody.innerHTML = `<tr><td colspan="8" class="empty-state">No assessments found.</td></tr>`;
@@ -764,6 +836,11 @@ window.Admin = (() => {
       const aiScore = s.aiScores ? (normalizeOverall(s.aiScores.overall) ?? '—') : '—';
       const adminScore = s.adminScores ? (calcAdminAvg(s.adminScores) ?? '—') : '—';
       const isScored = !!s.adminScores;
+      const ext = (s.recordingUrl || '').includes('.mp4') ? 'mp4' : (s.recordingUrl || '').includes('.ogg') ? 'ogg' : 'webm';
+      const dlFilename = `${(s.traineeName || 'recording').replace(/\s+/g, '_')}-${s.module}-${(s.submittedAt || '').slice(0, 10)}.${ext}`;
+      const dlBtn = s.recordingUrl
+        ? `<button class="btn-small" onclick="Admin.downloadRecording('${s.recordingUrl}', '${dlFilename}')">⬇ Recording</button>`
+        : '';
 
       return `
         <tr>
@@ -778,6 +855,7 @@ window.Admin = (() => {
             <button class="btn-small primary" onclick="Admin.openScoring('${s.id}')">
               ${isScored ? 'Review' : 'Score'}
             </button>
+            ${dlBtn}
             <button class="btn-small danger" onclick="Admin.deleteSession('${s.id}', '${(s.traineeName || '').replace(/'/g, "\\'")}')">
               🗑 Delete
             </button>
@@ -839,18 +917,10 @@ window.Admin = (() => {
       // Support both Storage URL (new) and legacy Blob
       const recUrl = session.recordingUrl
         || (session.recordingBlob ? URL.createObjectURL(session.recordingBlob) : null);
-      const dlBtn = $('scoring-download-btn');
       if (recUrl) {
         audioEl.src = recUrl;
-        if (dlBtn) {
-          dlBtn.href = recUrl;
-          const ext = recUrl.includes('.webm') ? 'webm' : recUrl.includes('.mp4') ? 'mp4' : 'ogg';
-          dlBtn.download = `${(session.traineeName || 'recording').replace(/\s+/g, '_')}-${session.module}-${(session.submittedAt || '').slice(0, 10)}.${ext}`;
-          dlBtn.style.display = 'inline-block';
-        }
       } else {
         audioEl.src = '';
-        if (dlBtn) dlBtn.style.display = 'none';
         $('scoring-audio-section').innerHTML = '<h4>Recording</h4><p style="color:var(--text-muted);font-size:0.85rem">No recording available.</p>';
       }
       $('scoring-transcript').textContent = session.transcript || 'No transcript available.';
@@ -1356,11 +1426,14 @@ window.Admin = (() => {
     init,
     openTopicModal,
     deleteTopic,
+    toggleTopicEnabled,
     openScoring,
     updateCriterionDisplay,
     selectScale135,
     viewTraineeSessions,
     downloadCSV,
+    downloadRecording,
+    downloadAllRecordings,
     deleteSession
   };
 })();

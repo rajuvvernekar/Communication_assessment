@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="css/style.css">
   <!-- Supabase JS SDK (CDN) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 </head>
 <body>
 
@@ -207,6 +208,7 @@
         </select>
         <button id="btn-refresh-assessments" class="btn-ghost">↻ Refresh</button>
         <button id="btn-export-csv" class="btn-ghost" style="margin-left:auto">⬇ Export CSV</button>
+        <button class="btn-ghost" onclick="Admin.downloadAllRecordings()">⬇ Download All Recordings</button>
       </div>
 
       <div class="card">
@@ -428,7 +430,6 @@
         <div class="audio-section" id="scoring-audio-section">
           <h4>Recording</h4>
           <audio id="scoring-audio" controls class="scoring-audio-player"></audio>
-          <a id="scoring-download-btn" class="btn-small" style="display:none;margin-top:0.5rem;text-decoration:none" download>⬇ Download Recording</a>
         </div>
 
         <!-- Written text (for written comm) -->
