@@ -306,12 +306,6 @@ const App = (() => {
       return;
     }
 
-    if (module === 'mock-call') {
-      showScreen('mock-call');
-      initMockCallTopicSelect(topics);
-      return;
-    }
-
     _currentTopic = topics[Math.floor(Math.random() * topics.length)];
     showScreen(module);
 
