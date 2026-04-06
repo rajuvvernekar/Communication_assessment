@@ -309,7 +309,8 @@ const App = (() => {
     _currentTopic = topics[Math.floor(Math.random() * topics.length)];
     showScreen(module);
 
-    if (module === 'role-play') initRolePlay();
+    if (module === 'mock-call') initMockCall();
+    else if (module === 'role-play') initRolePlay();
     else if (module === 'group-discussion') initGroupDiscussion();
     else if (module === 'written-comm') initWrittenComm();
   }
