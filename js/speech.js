@@ -366,8 +366,10 @@ const SpeechEngine = (() => {
     // Handle all Pick & Speak subcategories
     if (module === 'pick-speak' || module === 'pick-speak-general' || module === 'pick-speak-stock')
       return _pickSpeakCoach(scores, title);
-    if (module === 'mock-call')    return _mockCallCoach(scores, title);
-    if (module === 'written-comm') return _writingCoach(scores, title);
+    if (module === 'mock-call')         return _mockCallCoach(scores, title);
+    if (module === 'written-comm')      return _writingCoach(scores, title);
+    if (module === 'role-play')         return _rolePlayCoach(scores, title);
+    if (module === 'group-discussion')  return _groupDiscussionCoach(scores, title);
     return '';
   }
 
@@ -418,11 +420,57 @@ const SpeechEngine = (() => {
   }
 
   function _writingCoach(scores, title) {
-    const LABELS = { clarity: 'Clarity', structure: 'Structure', tone: 'Tone' };
+    // Covers both AI score keys (clarity/structure/tone) and admin score keys (criterion_0–4)
+    const LABELS = {
+      clarity:     'Clarity',        structure:    'Structure',  tone:         'Tone',
+      criterion_0: 'Clarity',        criterion_1:  'Structure',  criterion_2:  'Grammar',
+      criterion_3: 'Tone',           criterion_4:  'Professionalism'
+    };
     const ADVICE = {
-      clarity:   'Use shorter sentences and active voice. Each paragraph should have one clear idea. Avoid ambiguous pronouns — state who did what explicitly.',
-      structure: 'Follow a clear opening-body-close format. Use paragraph breaks and bullet points where appropriate to improve readability.',
-      tone:      'Match your tone to your audience — professional but approachable. Avoid being too casual (slang) or overly formal (stiff language).'
+      clarity:     'Use shorter sentences and active voice. Each paragraph should have one clear idea. Avoid ambiguous pronouns — state who did what explicitly.',
+      structure:   'Follow a clear opening-body-close format. Use paragraph breaks and bullet points where appropriate to improve readability.',
+      tone:        'Match your tone to your audience — professional but approachable. Avoid being too casual (slang) or overly formal (stiff language).',
+      criterion_0: 'Use shorter sentences and active voice. Each paragraph should have one clear idea. Avoid ambiguous pronouns — state who did what explicitly.',
+      criterion_1: 'Follow a clear opening-body-close format. Use paragraph breaks and bullet points where appropriate to improve readability.',
+      criterion_2: 'Review grammar rules for tense consistency and subject-verb agreement. Read your writing aloud to catch awkward phrasing before submitting.',
+      criterion_3: 'Match your tone to your audience — professional but approachable. Avoid slang, contractions in formal writing, and overly stiff language.',
+      criterion_4: 'Use formal language throughout. Begin with a clear subject line or heading, maintain structured paragraphs, and close with a courteous sign-off.'
+    };
+    return _buildSummary(scores, LABELS, ADVICE, title);
+  }
+
+  function _rolePlayCoach(scores, title) {
+    // Admin scoring keys: criterion_0 Empathy, criterion_1 Assertiveness,
+    //                     criterion_2 Resolution Approach, criterion_3 Professionalism
+    const LABELS = {
+      criterion_0: 'Empathy',
+      criterion_1: 'Assertiveness',
+      criterion_2: 'Resolution Approach',
+      criterion_3: 'Professionalism'
+    };
+    const ADVICE = {
+      criterion_0: 'Acknowledge the other person\'s feelings before offering solutions. Phrases like "I understand how you feel" validate their concerns and build trust.',
+      criterion_1: 'State your position clearly and confidently using "I" statements. Be firm but respectful — assertiveness is not aggression.',
+      criterion_2: 'Offer practical, actionable solutions and confirm the other party agrees before closing. Follow through on any commitments made.',
+      criterion_3: 'Maintain composure under pressure, use appropriate workplace language, and model the professional behaviour expected in the role.'
+    };
+    return _buildSummary(scores, LABELS, ADVICE, title);
+  }
+
+  function _groupDiscussionCoach(scores, title) {
+    // Admin scoring keys: criterion_0 Participation Quality, criterion_1 Argumentation,
+    //                     criterion_2 Responsiveness, criterion_3 Communication Clarity
+    const LABELS = {
+      criterion_0: 'Participation Quality',
+      criterion_1: 'Argumentation',
+      criterion_2: 'Responsiveness',
+      criterion_3: 'Communication Clarity'
+    };
+    const ADVICE = {
+      criterion_0: 'Contribute meaningfully and consistently. Make relevant points that advance the discussion, and demonstrate preparation by referencing specific facts or examples.',
+      criterion_1: 'Support your views with evidence, data, or logical reasoning. Avoid vague claims — precision and structure strengthen your argument significantly.',
+      criterion_2: 'Listen actively and respond directly to what others say. Acknowledge differing views respectfully, then build on or counter them with reasoning.',
+      criterion_3: 'Speak clearly, structure your points logically, and keep contributions concise. Avoid interrupting others and use formal, professional language throughout.'
     };
     return _buildSummary(scores, LABELS, ADVICE, title);
   }
