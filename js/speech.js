@@ -397,9 +397,13 @@ const SpeechEngine = (() => {
 
   function _mockCallCoach(scores, title) {
     const LABELS = {
-      callOpening: 'Call Opening', acknowledgment: 'Acknowledgment',
-      communicationClarity: 'Communication Clarity', callEssence: 'Call Essence',
-      holdProcedure: 'Hold Procedure', extraMile: 'Extra Mile'
+      callOpening:          'Call Opening',
+      acknowledgment:       'Acknowledgment',
+      communicationClarity: 'Communication Clarity',
+      callEssence:          'Call Essence',
+      holdProcedure:        'Hold Procedure',
+      extraMile:            'Extra Mile',
+      callClosing:          'Call Closing'   // scored by admin only; ignored if absent in AI scores
     };
     const ADVICE = {
       callOpening:          'Greet warmly, state your name and company, and invite the customer to share their concern. A strong opening sets the tone for the entire call.',
@@ -407,7 +411,8 @@ const SpeechEngine = (() => {
       communicationClarity: 'Avoid jargon, speak in short sentences, and confirm understanding at key points. "Does that make sense?" is a simple but effective check.',
       callEssence:          'Use positive language throughout — "certainly", "happy to help", and "absolutely" create a warm, customer-first atmosphere.',
       holdProcedure:        'Always ask permission before placing a customer on hold, state the expected wait time, and thank them for holding when you return.',
-      extraMile:            'Look for opportunities to add value — share a useful tip, flag upcoming offers, or proactively confirm adjacent account details.'
+      extraMile:            'Look for opportunities to add value — share a useful tip, flag upcoming offers, or proactively confirm adjacent account details.',
+      callClosing:          'Confirm resolution, ask "Is there anything else I can help you with?", and close with a warm sign-off like "Thank you for calling, have a great day."'
     };
     return _buildSummary(scores, LABELS, ADVICE, title);
   }
@@ -426,6 +431,8 @@ const SpeechEngine = (() => {
     const entries = Object.entries(scores).filter(
       ([k, v]) => !k.startsWith('_') && k !== 'overall' && typeof v === 'number' && labels[k]
     );
+    // No matching score keys — unsupported module or empty scores; return nothing
+    if (entries.length === 0) return '';
     const strong  = entries.filter(([, v]) => v >= 4).sort((a, b) => b[1] - a[1]);
     const develop = entries.filter(([, v]) => v <  4).sort((a, b) => a[1] - b[1]); // worst first
 

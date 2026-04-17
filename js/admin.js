@@ -863,7 +863,7 @@ window.Admin = (() => {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Assessment Scores');
     const fileName = `commassess-scores-${new Date().toISOString().slice(0, 10)}.xlsx`;
-    XLSX.writeFile(wb, fileName);
+    XLSX.writeFile(wb, fileName, { cellStyles: true, bookSST: false });
     toast('Excel file downloaded!', 'success');
   }
 
