@@ -355,6 +355,10 @@
       <div class="mc-bot-call-controls">
         <div id="mc-rec-area" style="display:none">
           <canvas id="mc-bot-waveform" class="waveform-canvas" width="300" height="40"></canvas>
+          <div class="mc-turn-timer-row">
+            <span class="mc-turn-timer-label">Time remaining:</span>
+            <span id="mc-turn-time" class="mc-turn-time">2:00</span>
+          </div>
           <div id="mc-bot-live-transcript-box" class="live-transcript-box" style="display:none">
             <div class="live-transcript-label">📝 Live Transcript</div>
             <div id="mc-bot-live-transcript" class="live-transcript-text">Listening...</div>
@@ -403,8 +407,6 @@
         <div style="font-size:0.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:0.4rem">Call Transcript</div>
         <div id="mc-result-transcript" class="transcript-box" style="max-height:160px;overflow-y:auto"></div>
       </div>
-
-      <div id="mc-coaching-summary" class="coaching-summary hidden"></div>
 
       <div class="admin-note" style="margin-top:1.25rem">
         <span>📋</span>

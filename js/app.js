@@ -356,29 +356,36 @@ const App = (() => {
     // Always start in un-revealed state
     revealEl.classList.remove('revealed');
     $('ps-topic-title').textContent = 'Click to reveal your topic';
-    $('ps-topic-desc').textContent  = 'You will have 2 minutes to prepare, then 5 minutes to speak.';
+    $('ps-topic-desc').textContent  = 'Your topic will be revealed and the 2-minute prep timer will start immediately.';
     $('btn-ps-ready').classList.add('hidden');
     $('btn-ps-reveal').style.display = '';
 
     // Skip button hidden until topic is revealed
     skipBtn.style.display = 'none';
 
-    $('btn-ps-reveal').onclick = () => {
+    $('btn-ps-reveal').onclick = async () => {
       revealEl.classList.add('revealed');
       $('ps-topic-title').textContent = _currentTopic.title;
       $('ps-topic-desc').textContent  = _currentTopic.description || '';
-      $('btn-ps-ready').classList.remove('hidden');
       $('btn-ps-reveal').style.display = 'none';
 
-      // Show skip button only if skip hasn't been used AND category is not Stock Market
+      // Show skip button briefly (only if skip hasn't been used AND not Stock Market)
       if (!_psSkipUsed && _psCategory !== 'pick-speak-stock') {
         skipBadge.textContent  = '(1 skip available)';
         skipBtn.style.display  = '';
         skipBtn.disabled       = false;
       }
+
+      // Auto-start prep — if mic denied, show "I'm Ready" as fallback retry
+      const ok = await startPickSpeakPrep();
+      if (!ok) {
+        $('btn-ps-ready').textContent = '🎤 Allow Mic & Start Prep';
+        $('btn-ps-ready').classList.remove('hidden');
+      }
     };
 
-    // Skip: pick new topic from the same category pool (already in memory)
+    // Skip: pick new topic from the same pool — update state so startPickSpeakPrep
+    // (which may still be awaiting mic) picks up the new topic
     skipBtn.onclick = () => {
       if (_psSkipUsed) return;
       _psSkipUsed = true;
@@ -393,11 +400,8 @@ const App = (() => {
         }
       }
       _currentTopic = next;
-      revealEl.classList.add('revealed');
       $('ps-topic-title').textContent = _currentTopic.title;
       $('ps-topic-desc').textContent  = _currentTopic.description || '';
-      $('btn-ps-ready').classList.remove('hidden');
-      $('btn-ps-reveal').style.display = 'none';
     };
 
     $('btn-ps-ready').onclick = () => startPickSpeakPrep();
@@ -405,12 +409,11 @@ const App = (() => {
   }
 
   async function startPickSpeakPrep() {
-    // Request mic here — called directly from user click ("I'm Ready"),
-    // so the browser allows the getUserMedia prompt.
+    // Request mic here — called directly from user click, so browser allows the prompt.
     const micOk = await Recorder.requestMic();
     if (!micOk) {
       toast('⚠ Microphone access denied. Please allow mic access in your browser and try again.', 'error');
-      return;
+      return false;
     }
 
     showStep('pick-speak', 'ps-step-prep');
@@ -432,6 +435,7 @@ const App = (() => {
       Recorder.stopTimer();
       startPickSpeakRecording();
     };
+    return true;
   }
 
   function startPickSpeakRecording() {
@@ -853,6 +857,21 @@ const App = (() => {
       });
     }
 
+    // Per-turn 2-minute countdown — auto-advances on timeout
+    const TURN_LIMIT = 120;
+    let remaining = TURN_LIMIT;
+    function fmtTime(s) {
+      return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    }
+    const timeEl = $('mc-turn-time');
+    if (timeEl) timeEl.textContent = fmtTime(remaining);
+    clearInterval(_mcTurnTimerId);
+    _mcTurnTimerId = setInterval(() => {
+      remaining--;
+      if (timeEl) timeEl.textContent = fmtTime(remaining);
+      if (remaining <= 0) endTraineeTurn();
+    }, 1000);
+
     $('btn-mc-done-turn').onclick = () => endTraineeTurn();
   }
 
@@ -958,29 +977,21 @@ const App = (() => {
   }
 
   function showMockCallResults(aiScores, transcript, method) {
-    // Scores are for admin only — hide everything score-related from trainee
-    $('mc-band-display').innerHTML = '';
-    $('mc-result-method').innerHTML = '';
+    // Trainee sees ONLY the thank-you message — no scores, no transcript, no summary
+    const statusEl = $('mc-ai-scoring-status');
+    if (statusEl) statusEl.classList.add('hidden');
     const scoresEl = $('mc-result-scores');
     if (scoresEl) scoresEl.classList.add('hidden');
+    const transcriptBox = $('mc-result-transcript-box');
+    if (transcriptBox) transcriptBox.classList.add('hidden');
 
-    // Show transcript for self-reference
-    const transcriptResultEl = $('mc-result-transcript');
-    const transcriptBox      = $('mc-result-transcript-box');
-    if (transcript && transcriptResultEl) {
-      transcriptResultEl.textContent = transcript;
-      if (transcriptBox) transcriptBox.classList.remove('hidden');
-    }
-
-    const summaryEl = $('mc-coaching-summary');
-    if (summaryEl) {
-      if (aiScores && aiScores._summary) {
-        summaryEl.textContent = aiScores._summary;
-        summaryEl.classList.remove('hidden');
-      } else {
-        summaryEl.classList.add('hidden');
-      }
-    }
+    $('mc-band-display').innerHTML = `
+      <div style="text-align:center;padding:1.5rem 1rem;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;margin-bottom:1rem">
+        <div style="font-size:2.5rem;margin-bottom:0.5rem">🎉</div>
+        <h3 style="color:#15803d;font-size:1.15rem;margin-bottom:0.4rem">Thank you for submitting the call.</h3>
+        <p style="color:#166534;font-size:0.88rem">Your recording has been sent to the Training Team for evaluation. You will receive feedback soon.</p>
+      </div>`;
+    $('mc-result-method').innerHTML = '';
   }
 
   // ================================================================

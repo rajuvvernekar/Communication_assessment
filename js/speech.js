@@ -320,13 +320,6 @@ const SpeechEngine = (() => {
     const empathyCount = empathyPhrases.filter(p => t.includes(p)).length;
     scores.acknowledgment = empathyCount >= 3 ? 5 : empathyCount === 2 ? 4 : empathyCount === 1 ? 3 : 2;
 
-    // Active Listening: unique word ratio as vocabulary diversity proxy
-    const uniqueRatio = words.length > 0 ? new Set(words).size / words.length : 0;
-    if (uniqueRatio > 0.70) scores.activeListening = 5;
-    else if (uniqueRatio > 0.60) scores.activeListening = 4;
-    else if (uniqueRatio > 0.48) scores.activeListening = 3;
-    else scores.activeListening = 2;
-
     // Communication Clarity: filler word ratio
     const analysis = analyze(transcript, 180);
     const fillerRatio = words.length > 0 ? analysis.fillerCount / words.length : 0;
@@ -354,13 +347,6 @@ const SpeechEngine = (() => {
     const extraCount = extraPhrases.filter(p => t.includes(p)).length;
     scores.extraMile = extraCount >= 2 ? 5 : extraCount >= 1 ? 3 : 1;
 
-    // Call Closing (1/3/5): resolved confirmation + anything else + branded close
-    const confirmed = /is (that|this|everything) (resolved|sorted|clear|fine|good)|resolved your|sorted your|taken care/i.test(transcript);
-    const anythingElse = /anything else|anything (more|other)|other (question|concern|issue)|further (assistance|help)/i.test(transcript);
-    const brandedClose = /thank(s| you) for calling|have a (great|good|wonderful|nice|lovely) (day|evening|afternoon|morning)/i.test(transcript);
-    const closingScore = [confirmed, anythingElse, brandedClose].filter(Boolean).length;
-    scores.callClosing = closingScore === 3 ? 5 : closingScore >= 1 ? 3 : 1;
-
     // Overall: average of all criteria scores (out of 5), converted to percentage out of 100
     const vals = Object.values(scores);
     const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
@@ -373,15 +359,19 @@ const SpeechEngine = (() => {
   //  COACHING SUMMARY GENERATOR
   // ================================================================
 
-  function generateCoachingSummary(module, scores) {
+  // source: 'ai' (default) | 'admin'
+  function generateCoachingSummary(module, scores, source) {
     if (!scores) return '';
-    if (module === 'pick-speak')  return _pickSpeakCoach(scores);
-    if (module === 'mock-call')   return _mockCallCoach(scores);
-    if (module === 'written-comm') return _writingCoach(scores);
+    const title = source === 'admin' ? 'Admin Coaching Summary' : 'AI Coaching Summary';
+    // Handle all Pick & Speak subcategories
+    if (module === 'pick-speak' || module === 'pick-speak-general' || module === 'pick-speak-stock')
+      return _pickSpeakCoach(scores, title);
+    if (module === 'mock-call')    return _mockCallCoach(scores, title);
+    if (module === 'written-comm') return _writingCoach(scores, title);
     return '';
   }
 
-  function _pickSpeakCoach(scores) {
+  function _pickSpeakCoach(scores, title) {
     const LABELS = {
       clarity: 'Clarity of Expression', logicalFlow: 'Logical Flow', relevance: 'Relevance & Focus',
       grammar: 'Grammar & Language', vocabulary: 'Vocabulary Range', sentenceVariety: 'Sentence Variety',
@@ -402,39 +392,37 @@ const SpeechEngine = (() => {
       professionalism: 'Use formal language and avoid slang. Begin and end with structured, courteous phrases to demonstrate professionalism.',
       timeManagement:  'Practice timed speaking — set a 2-minute timer and cover your point within it. Both over-running and under-running indicate poor preparation.'
     };
-    return _buildSummary(scores, LABELS, ADVICE);
+    return _buildSummary(scores, LABELS, ADVICE, title);
   }
 
-  function _mockCallCoach(scores) {
+  function _mockCallCoach(scores, title) {
     const LABELS = {
-      callOpening: 'Call Opening', acknowledgment: 'Acknowledgment', activeListening: 'Active Listening',
+      callOpening: 'Call Opening', acknowledgment: 'Acknowledgment',
       communicationClarity: 'Communication Clarity', callEssence: 'Call Essence',
-      holdProcedure: 'Hold Procedure', extraMile: 'Extra Mile', callClosing: 'Call Closing'
+      holdProcedure: 'Hold Procedure', extraMile: 'Extra Mile'
     };
     const ADVICE = {
       callOpening:          'Greet warmly, state your name and company, and invite the customer to share their concern. A strong opening sets the tone for the entire call.',
       acknowledgment:       'Acknowledge the customer\'s issue before jumping to solutions. Phrases like "I understand how frustrating that must be" demonstrate genuine empathy.',
-      activeListening:      'Paraphrase the customer\'s concern back to them before responding. Probing questions ("Could you tell me more about...?") show genuine engagement.',
       communicationClarity: 'Avoid jargon, speak in short sentences, and confirm understanding at key points. "Does that make sense?" is a simple but effective check.',
       callEssence:          'Use positive language throughout — "certainly", "happy to help", and "absolutely" create a warm, customer-first atmosphere.',
       holdProcedure:        'Always ask permission before placing a customer on hold, state the expected wait time, and thank them for holding when you return.',
-      extraMile:            'Look for opportunities to add value — share a useful tip, flag upcoming offers, or proactively confirm adjacent account details.',
-      callClosing:          'Confirm resolution, ask "Is there anything else I can help you with?", and close with a warm sign-off like "Thank you for calling, have a great day."'
+      extraMile:            'Look for opportunities to add value — share a useful tip, flag upcoming offers, or proactively confirm adjacent account details.'
     };
-    return _buildSummary(scores, LABELS, ADVICE);
+    return _buildSummary(scores, LABELS, ADVICE, title);
   }
 
-  function _writingCoach(scores) {
+  function _writingCoach(scores, title) {
     const LABELS = { clarity: 'Clarity', structure: 'Structure', tone: 'Tone' };
     const ADVICE = {
       clarity:   'Use shorter sentences and active voice. Each paragraph should have one clear idea. Avoid ambiguous pronouns — state who did what explicitly.',
       structure: 'Follow a clear opening-body-close format. Use paragraph breaks and bullet points where appropriate to improve readability.',
       tone:      'Match your tone to your audience — professional but approachable. Avoid being too casual (slang) or overly formal (stiff language).'
     };
-    return _buildSummary(scores, LABELS, ADVICE);
+    return _buildSummary(scores, LABELS, ADVICE, title);
   }
 
-  function _buildSummary(scores, labels, advice) {
+  function _buildSummary(scores, labels, advice, title = 'Coaching Summary') {
     const entries = Object.entries(scores).filter(
       ([k, v]) => !k.startsWith('_') && k !== 'overall' && typeof v === 'number' && labels[k]
     );
@@ -442,7 +430,7 @@ const SpeechEngine = (() => {
     const develop = entries.filter(([, v]) => v <  4).sort((a, b) => a[1] - b[1]); // worst first
 
     const lines = [];
-    lines.push('AI Coaching Summary');
+    lines.push(title);
     lines.push('──────────────────────────────────────');
 
     if (strong.length > 0) {

@@ -8,6 +8,7 @@
   <!-- Supabase JS SDK (CDN) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -207,7 +208,7 @@
           <option value="scored">Fully Scored</option>
         </select>
         <button id="btn-refresh-assessments" class="btn-ghost">↻ Refresh</button>
-        <button id="btn-export-csv" class="btn-ghost" style="margin-left:auto">⬇ Export CSV</button>
+        <button id="btn-export-csv" class="btn-ghost" style="margin-left:auto">⬇ Export Excel</button>
         <button class="btn-ghost" onclick="Admin.downloadAllRecordings()">⬇ Download All Recordings</button>
       </div>
 

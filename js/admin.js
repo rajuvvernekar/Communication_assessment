@@ -124,7 +124,6 @@ window.Admin = (() => {
     'mock-call': [
       { label: 'Call Opening',              key: 'callOpening',          desc: 'Greeting + self-intro + company intro + offer to assist (all 4 elements = 5)' },
       { label: 'Acknowledgment',            key: 'acknowledgment',       desc: 'Acknowledged issue promptly with genuine empathy' },
-      { label: 'Active Listening & Probing',key: 'activeListening',      desc: 'No repetitions/interruptions, logical probing, no assumptions' },
       { label: 'Communication Clarity',     key: 'communicationClarity', desc: 'Speech rate, grammar, tone, no fillers, no dead air' },
       { label: 'Call Essence',              key: 'callEssence',          desc: 'Politeness, empathy, rapport building throughout' },
       { label: 'Hold Procedure',            key: 'holdProcedure',        scale135: true, desc: 'Asked permission + reason + time expectation' },
@@ -793,43 +792,79 @@ window.Admin = (() => {
   }
 
   async function downloadCSV() {
+    if (typeof XLSX === 'undefined') {
+      toast('⚠ Excel library not loaded yet. Please wait and try again.', 'error');
+      return;
+    }
+
     const [sessions, trainees] = await Promise.all([DB.getAll('sessions'), DB.getAll('trainees')]);
     const traineeMap = {};
     trainees.forEach(t => { traineeMap[t.id] = t; });
 
     const sorted = [...sessions].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
 
-    const headers = ['Name', 'Employee ID', 'Module', 'Topic', 'Date', 'AI Score', 'Admin Score', 'AI Coaching Summary'];
+    // ── Build rows ──────────────────────────────────────────────
+    const headers = [
+      'Name', 'Employee ID', 'Module', 'Topic', 'Date',
+      'AI Score', 'Admin Score',
+      'AI Coaching Summary', 'Admin Coaching Summary'
+    ];
+
     const rows = sorted.map(s => {
-      const trainee = traineeMap[s.traineeId] || {};
-      const name     = s.traineeName || trainee.name || '';
-      const empId    = trainee.employee_id || '';
-      const module   = MODULE_LABELS[s.module] || s.module || '';
-      const topic    = s.topicTitle || '';
-      const date     = s.submittedAt ? new Date(s.submittedAt).toLocaleDateString() : '';
-      const aiScore  = s.aiScores?.overall ?? '';
-      const admScore = s.adminScores ? (calcAdminAvg(s.adminScores) ?? '') : '';
-      const summary  = s.aiScores
-        ? (s.aiScores._summary || (typeof SpeechEngine !== 'undefined'
-            ? SpeechEngine.generateCoachingSummary(s.module, s.aiScores)
-            : ''))
+      const trainee   = traineeMap[s.traineeId] || {};
+      const name      = s.traineeName || trainee.name || '';
+      const empId     = trainee.employee_id || '';
+      const module    = MODULE_LABELS[s.module] || s.module || '';
+      const topic     = s.topicTitle || '';
+      const date      = s.submittedAt ? new Date(s.submittedAt).toLocaleDateString() : '';
+      const aiScore   = s.aiScores?.overall ?? '';
+      const admScore  = s.adminScores ? (calcAdminAvg(s.adminScores) ?? '') : '';
+      // Always regenerate fresh — avoids stale stored summaries with removed parameters
+      const aiSummary = (s.aiScores && typeof SpeechEngine !== 'undefined')
+        ? SpeechEngine.generateCoachingSummary(s.module, s.aiScores)
         : '';
-      return [name, empId, module, topic, date, aiScore, admScore, summary];
+      const adminSummary = (s.adminScores && typeof SpeechEngine !== 'undefined')
+        ? SpeechEngine.generateCoachingSummary(s.module, s.adminScores, 'admin')
+        : '';
+      return [name, empId, module, topic, date, aiScore, admScore, aiSummary, adminSummary];
     });
 
-    const escape = v => `"${String(v).replace(/"/g, '""')}"`;
-    const csv = [headers, ...rows].map(r => r.map(escape).join(',')).join('\r\n');
+    // ── Build worksheet ─────────────────────────────────────────
+    const wsData = [headers, ...rows];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
 
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
-    a.download = `commassess-scores-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toast('CSV downloaded!', 'success');
+    // Column widths (in characters)
+    ws['!cols'] = [
+      { wch: 22 }, // Name
+      { wch: 14 }, // Employee ID
+      { wch: 22 }, // Module
+      { wch: 30 }, // Topic
+      { wch: 12 }, // Date
+      { wch: 10 }, // AI Score
+      { wch: 12 }, // Admin Score
+      { wch: 55 }, // AI Coaching Summary
+      { wch: 55 }, // Admin Coaching Summary
+    ];
+
+    // Enable text wrap + top-align on all cells
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    for (let R = range.s.r; R <= range.e.r; R++) {
+      for (let C = range.s.c; C <= range.e.c; C++) {
+        const addr = XLSX.utils.encode_cell({ r: R, c: C });
+        if (!ws[addr]) continue;
+        ws[addr].s = {
+          alignment: { wrapText: true, vertical: 'top' },
+          font: R === 0 ? { bold: true } : {}
+        };
+      }
+    }
+
+    // ── Build workbook & download ────────────────────────────────
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Assessment Scores');
+    const fileName = `commassess-scores-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    toast('Excel file downloaded!', 'success');
   }
 
   function applyAssessmentFilters(sessions, topicMap) {
@@ -1007,10 +1042,10 @@ window.Admin = (() => {
           </div>`;
       }
 
-      const coachingSummary = session.aiScores._summary
-        || (typeof SpeechEngine !== 'undefined'
-            ? SpeechEngine.generateCoachingSummary(session.module, session.aiScores)
-            : '');
+      // Always regenerate fresh — never use stored _summary which may reference removed parameters
+      const coachingSummary = typeof SpeechEngine !== 'undefined'
+        ? SpeechEngine.generateCoachingSummary(session.module, session.aiScores)
+        : '';
       if (coachingSummary) {
         aiDisplay.innerHTML += `
           <div style="margin-top:0.75rem">
@@ -1018,6 +1053,22 @@ window.Admin = (() => {
               AI Coaching Summary
             </div>
             <pre style="white-space:pre-wrap;font-family:inherit;font-size:0.8rem;line-height:1.7;background:#eff6ff;border:1px solid #bfdbfe;border-left:3px solid #3b82f6;border-radius:6px;padding:0.75rem 0.875rem;margin:0;color:var(--text)">${coachingSummary}</pre>
+          </div>`;
+      }
+    }
+
+    // Admin coaching summary (if session already has admin scores) — always regenerate fresh
+    if (session.adminScores) {
+      const adminSummary = typeof SpeechEngine !== 'undefined'
+        ? SpeechEngine.generateCoachingSummary(session.module, session.adminScores, 'admin')
+        : '';
+      if (adminSummary) {
+        aiDisplay.innerHTML += `
+          <div style="margin-top:0.75rem">
+            <div style="font-size:0.72rem;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:0.35rem">
+              ✅ Admin Coaching Summary
+            </div>
+            <pre style="white-space:pre-wrap;font-family:inherit;font-size:0.8rem;line-height:1.7;background:#f0fdf4;border:1px solid #bbf7d0;border-left:3px solid #22c55e;border-radius:6px;padding:0.75rem 0.875rem;margin:0;color:var(--text)">${adminSummary}</pre>
           </div>`;
       }
     }
@@ -1230,15 +1281,23 @@ window.Admin = (() => {
     const vals = criteria.map(c => adminScores[c.key] ?? 3);
     adminScores.overall = parseFloat(((vals.reduce((a, b) => a + b, 0) / (vals.length * 5)) * 100).toFixed(1));
 
+    // Generate and store coaching summary from admin scores
+    if (typeof SpeechEngine !== 'undefined') {
+      const adminSummary = SpeechEngine.generateCoachingSummary(session.module, adminScores, 'admin');
+      if (adminSummary) adminScores._summary = adminSummary;
+    }
+
     session.adminScores = adminScores;
     session.adminComment = $('scoring-comment').value.trim();
     session.status = 'scored';
 
     await DB.put('sessions', session);
-    closeScoringModal();
     toast('Scores saved!', 'success');
     await updatePendingBadge();
     loadAssessments();
+
+    // Refresh the scoring modal in-place so the admin sees the coaching summary immediately
+    await openScoring(session.id);
   }
 
   function closeScoringModal() {

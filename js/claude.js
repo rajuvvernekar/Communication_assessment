@@ -41,18 +41,6 @@ Score 1: No acknowledgment at all.
 Return ONLY a JSON: {"score": <1-5>, "reason": "<one sentence>"}`
     },
     {
-      key: 'activeListening',
-      label: 'Active Listening & Probing',
-      scale: '1-5',
-      prompt: `Evaluate Active Listening & Probing on a scale of 1 to 5.
-Score 5: No repetitive or irrelevant questions, no interruptions, probed logically to understand the issue, did not assume without checking.
-Score 4: Mostly good probing with one minor lapse.
-Score 3: Some probing but some unnecessary repetition or assumption.
-Score 2: Multiple unnecessary questions or interrupted customer.
-Score 1: Hardly any effort to understand, frequent interruptions.
-Return ONLY a JSON: {"score": <1-5>, "reason": "<one sentence>"}`
-    },
-    {
       key: 'communicationClarity',
       label: 'Communication Clarity',
       scale: '1-5',
@@ -97,16 +85,6 @@ Score 3 (Partially Met): Hinted at extra help but did not follow through clearly
 Score 1 (Not Met): Only handled the exact query, no effort to add value.
 Return ONLY a JSON: {"score": <1 or 3 or 5>, "reason": "<one sentence>"}`
     },
-    {
-      key: 'callClosing',
-      label: 'Call Closing',
-      scale: '1/3/5',
-      prompt: `Evaluate Call Closing. Only three scores are possible.
-Score 5 (Fully Met): Confirmed issue is resolved, asked "Is there anything else I can help you with?", AND gave a branded closing (e.g., "Thank you for calling Zerodha, have a great day!").
-Score 3 (Partially Met): Did one or two but not all three elements.
-Score 1 (Not Met): Ended call abruptly with no proper closing.
-Return ONLY a JSON: {"score": <1 or 3 or 5>, "reason": "<one sentence>"}`
-    }
   ];
 
   // ---- Generic spoken module prompts ----
