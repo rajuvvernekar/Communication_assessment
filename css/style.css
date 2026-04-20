@@ -1212,6 +1212,7 @@ body {
   box-shadow: var(--shadow-lg);
 }
 .modal-card.large-modal { max-width: 900px; }
+.modal-card.team-modal-card { max-width: 420px; }
 .modal-header {
   display: flex;
   align-items: center;

@@ -227,7 +227,7 @@ const App = (() => {
       const card = e.target.closest('.module-card');
       if (card) {
         const module = card.dataset.module;
-        openModule(module);
+        promptTeamThenOpen(module);
       }
     });
   }
@@ -249,7 +249,6 @@ const App = (() => {
     const doStart = async () => {
       const name       = $('auth-name').value.trim();
       const employeeId = $('auth-empid').value.trim();
-      const team       = ($('auth-team')?.value || '').trim();
       const errorEl    = $('auth-error');
       if (!name || !employeeId) {
         errorEl.textContent = 'Please enter your name and Employee ID.';
@@ -271,19 +270,7 @@ const App = (() => {
           await DB.put('trainees', { id: traineeId, name, employee_id: employeeId });
         }
 
-        // Save team assignment to the shared settings table so admin can filter by team
-        if (team) {
-          try {
-            const s = await DB.get('settings', 'team_assignments');
-            const assignments = (s && s.value) ? JSON.parse(s.value) : {};
-            assignments[traineeId] = team;
-            await DB.put('settings', { key: 'team_assignments', value: JSON.stringify(assignments) });
-          } catch (te) {
-            console.warn('Could not save team assignment:', te.message);
-          }
-        }
-
-        _trainee = { id: traineeId, name, employeeId, team };
+        _trainee = { id: traineeId, name, employeeId };
         localStorage.setItem('commassess_trainee', JSON.stringify(_trainee));
         activateTrainee();
       } catch (e) {
@@ -298,7 +285,6 @@ const App = (() => {
     $('btn-start').addEventListener('click', doStart);
     $('auth-name').addEventListener('keydown',  (e) => { if (e.key === 'Enter') doStart(); });
     $('auth-empid').addEventListener('keydown', (e) => { if (e.key === 'Enter') doStart(); });
-    $('auth-team').addEventListener('keydown',  (e) => { if (e.key === 'Enter') doStart(); });
   }
 
   function activateTrainee() {
@@ -310,11 +296,55 @@ const App = (() => {
       $('app-header').classList.add('hidden');
       if ($('auth-name'))  $('auth-name').value  = '';
       if ($('auth-empid')) $('auth-empid').value = '';
-      if ($('auth-team'))  $('auth-team').value  = '';
       if ($('auth-error')) $('auth-error').classList.add('hidden');
       showScreen('welcome');
     };
     showScreen('modules');
+  }
+
+  // ---- Team Name Prompt (shown before every module) ----
+  function promptTeamThenOpen(module) {
+    const overlay = $('team-modal-overlay');
+    const input   = $('modal-team-input');
+    const confirmBtn = $('modal-team-confirm');
+    const skipBtn    = $('modal-team-skip');
+
+    // Pre-fill with previously saved team name if available
+    input.value = (_trainee && _trainee.team) || '';
+    overlay.classList.remove('hidden');
+    setTimeout(() => input.focus(), 50);
+
+    const proceed = async () => {
+      const team = input.value.trim();
+      overlay.classList.add('hidden');
+
+      if (team && _trainee) {
+        _trainee.team = team;
+        localStorage.setItem('commassess_trainee', JSON.stringify(_trainee));
+        try {
+          const s = await DB.get('settings', 'team_assignments');
+          const assignments = (s && s.value) ? JSON.parse(s.value) : {};
+          assignments[_trainee.id] = team;
+          await DB.put('settings', { key: 'team_assignments', value: JSON.stringify(assignments) });
+        } catch (te) {
+          console.warn('Could not save team assignment:', te.message);
+        }
+      }
+
+      openModule(module);
+    };
+
+    const dismiss = () => {
+      overlay.classList.add('hidden');
+      openModule(module);
+    };
+
+    confirmBtn.onclick = proceed;
+    skipBtn.onclick    = dismiss;
+    input.onkeydown    = (e) => { if (e.key === 'Enter') proceed(); };
+
+    // Click outside the card to skip
+    overlay.onclick = (e) => { if (e.target === overlay) dismiss(); };
   }
 
   // ---- Module Dispatch ----

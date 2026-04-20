@@ -42,11 +42,6 @@
         <label for="auth-empid">Employee ID</label>
         <input type="text" id="auth-empid" placeholder="e.g. EMP1234" autocomplete="username" />
       </div>
-      <div class="auth-field">
-        <label for="auth-team">Team Name</label>
-        <input type="text" id="auth-team" placeholder="e.g. Team Alpha" autocomplete="organization" />
-      </div>
-
       <p id="auth-error" class="auth-msg error hidden"></p>
       <button id="btn-start" class="btn-primary full-width">Start Assessment →</button>
 
@@ -760,15 +755,37 @@
   </div>
 </section>
 
+<!-- Team Name Modal (shown when any assessment module is clicked) -->
+<div id="team-modal-overlay" class="modal-overlay hidden">
+  <div class="modal-card team-modal-card">
+    <div class="modal-header">
+      <h2>👥 Which team are you from?</h2>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--text-muted);font-size:0.875rem;margin-bottom:1rem">
+        Enter your team name so the admin can track results by team.
+      </p>
+      <div class="auth-field" style="margin-bottom:0">
+        <label for="modal-team-input">Team Name</label>
+        <input type="text" id="modal-team-input" placeholder="e.g. Team Alpha" autocomplete="organization" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button id="modal-team-skip" class="btn-secondary">Skip</button>
+      <button id="modal-team-confirm" class="btn-primary">Continue →</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast Notifications -->
 <div id="toast-container"></div>
 
-<script src="config.js?v=4"></script>
-<script src="js/db.js?v=4"></script>
-<script src="js/auth.js?v=4"></script>
-<script src="js/recorder.js?v=4"></script>
-<script src="js/speech.js?v=4"></script>
-<script src="js/claude.js?v=4"></script>
-<script src="js/app.js?v=4"></script>
+<script src="config.js?v=5"></script>
+<script src="js/db.js?v=5"></script>
+<script src="js/auth.js?v=5"></script>
+<script src="js/recorder.js?v=5"></script>
+<script src="js/speech.js?v=5"></script>
+<script src="js/claude.js?v=5"></script>
+<script src="js/app.js?v=5"></script>
 </body>
 </html>
