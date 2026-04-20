@@ -13,9 +13,12 @@ const App = (() => {
   let _wcTimerInterval = null;
 
   // ── Grammar Assessment state ──
-  let _gaQuestions    = [];   // array of { stem, options, correct, explanation }
-  let _gaCurrentIdx   = 0;    // current question index
-  let _gaUserAnswers  = [];   // -1 = unanswered, 0-3 = chosen option index
+  let _gaSections       = [];   // [{id, title, questions}] all sections sorted A → C
+  let _gaCurrentSection = 0;    // 0-based index into _gaSections
+  let _gaSectionResults = [];   // [{title, answerRecord, correct, total, pct}] accumulated
+  let _gaQuestions      = [];   // current section's question array
+  let _gaCurrentIdx     = 0;    // current question index within section
+  let _gaUserAnswers    = [];   // -1 = unanswered, 0-3 = chosen option index
 
   // ── Bot-call turn state ──
   let _mcTurns         = [];    // botScript lines for current call
@@ -1251,38 +1254,54 @@ const App = (() => {
   }
 
   // ================================================================
-  //  GRAMMAR ASSESSMENT (MCQ)
+  //  GRAMMAR ASSESSMENT (MCQ) — all sections in one session
   // ================================================================
 
   async function initGrammarAssessment() {
-    const topics = enabledTopics(await DB.getByIndex('topics', 'module', 'grammar-assessment'));
-    if (!topics.length) {
+    const allTopics = enabledTopics(await DB.getByIndex('topics', 'module', 'grammar-assessment'));
+    if (!allTopics.length) {
       toast('No grammar tests available. Ask your admin to add questions.', 'error');
       return;
     }
-    _currentTopic = topics[Math.floor(Math.random() * topics.length)];
 
-    // Questions are stored as objects in the checklist array
-    const questions = (_currentTopic.checklist || []).filter(q => q && typeof q === 'object' && q.stem);
-    if (!questions.length) {
-      toast('This test has no questions yet. Ask your admin to add questions.', 'error');
+    // Sort by title so Section A → B → C always loads in order
+    allTopics.sort((a, b) => a.title.localeCompare(b.title));
+
+    _gaSections = allTopics
+      .map(t => ({
+        id:        t.id,
+        title:     t.title,
+        questions: (t.checklist || []).filter(q => q && typeof q === 'object' && q.stem)
+      }))
+      .filter(s => s.questions.length > 0);
+
+    if (!_gaSections.length) {
+      toast('No grammar questions found. Ask your admin to add questions.', 'error');
       return;
     }
 
-    _gaQuestions   = questions;
-    _gaCurrentIdx  = 0;
-    _gaUserAnswers = new Array(questions.length).fill(-1);
+    _gaCurrentSection = 0;
+    _gaSectionResults = [];
+
+    const totalQ = _gaSections.reduce((sum, s) => sum + s.questions.length, 0);
 
     showScreen('grammar-assessment');
     showStep('grammar-assessment', 'ga-step-intro');
 
-    $('ga-intro-title').textContent = _currentTopic.title || 'Grammar Assessment';
-    $('ga-intro-desc').textContent  = _currentTopic.description || '';
-    $('ga-intro-count').textContent = `${questions.length} question${questions.length !== 1 ? 's' : ''}`;
-    $('btn-ga-start').onclick = () => startGrammarAssessment();
+    $('ga-intro-title').textContent    = 'Grammar Assessment — Full Test';
+    $('ga-intro-desc').textContent     = 'Complete all sections in one sitting. Your trainer will review and share your results.';
+    $('ga-intro-sections').textContent = `${_gaSections.length} Sections`;
+    $('ga-intro-count').textContent    = `${totalQ} questions total`;
+    $('btn-ga-start').onclick          = () => loadGrammarSection(0);
   }
 
-  function startGrammarAssessment() {
+  function loadGrammarSection(idx) {
+    _gaCurrentSection = idx;
+    const section     = _gaSections[idx];
+    _gaQuestions      = section.questions;
+    _gaCurrentIdx     = 0;
+    _gaUserAnswers    = new Array(section.questions.length).fill(-1);
+
     showStep('grammar-assessment', 'ga-step-quiz');
     renderGrammarQuestion();
   }
@@ -1291,34 +1310,49 @@ const App = (() => {
     const q     = _gaQuestions[_gaCurrentIdx];
     const total = _gaQuestions.length;
     const cur   = _gaCurrentIdx + 1;
+    const secLetter = String.fromCharCode(65 + _gaCurrentSection); // A, B, C
 
-    // Progress bar
-    const pct = ((cur - 1) / total) * 100;
-    $('ga-progress-bar').style.width = `${pct}%`;
-    $('ga-q-num').textContent  = `Question ${cur} of ${total}`;
-    $('ga-q-stem').textContent = q.stem;
+    // Section label + overall progress
+    $('ga-section-label').textContent    = `Section ${secLetter}`;
+    $('ga-section-progress').textContent = `Section ${_gaCurrentSection + 1} of ${_gaSections.length}`;
 
-    const LABELS = ['A', 'B', 'C', 'D'];
+    // Progress bar within this section
+    $('ga-progress-bar').style.width = `${((cur - 1) / total) * 100}%`;
+    $('ga-q-num').textContent        = `Question ${cur} of ${total}`;
+    $('ga-q-stem').textContent       = q.stem;
+
+    // Answer options
+    const LABELS    = ['A', 'B', 'C', 'D'];
     const container = $('ga-options-container');
     container.innerHTML = '';
     (q.options || []).forEach((opt, idx) => {
-      const btn = document.createElement('button');
-      btn.className = 'ga-option-btn' + (_gaUserAnswers[_gaCurrentIdx] === idx ? ' selected' : '');
-      btn.innerHTML = `<span class="ga-option-label">${LABELS[idx]}</span> <span>${opt}</span>`;
-      btn.onclick = () => selectGrammarOption(idx);
+      const btn       = document.createElement('button');
+      btn.className   = 'ga-option-btn' + (_gaUserAnswers[_gaCurrentIdx] === idx ? ' selected' : '');
+      btn.innerHTML   = `<span class="ga-option-label">${LABELS[idx]}</span> <span>${opt}</span>`;
+      btn.onclick     = () => selectGrammarOption(idx);
       container.appendChild(btn);
     });
 
-    // Previous button
-    const prevBtn = $('btn-ga-prev');
+    // Previous button (only within a section)
+    const prevBtn         = $('btn-ga-prev');
     prevBtn.style.display = _gaCurrentIdx > 0 ? '' : 'none';
-    prevBtn.onclick = () => prevGrammarQuestion();
+    prevBtn.onclick       = () => prevGrammarQuestion();
 
-    // Next / Submit button
-    const nextBtn = $('btn-ga-next');
-    const isLast  = _gaCurrentIdx === total - 1;
-    nextBtn.textContent = isLast ? 'Submit Test ✓' : 'Next →';
-    nextBtn.onclick     = isLast ? submitGrammarAssessment : nextGrammarQuestion;
+    // Next / Complete-Section / Submit button
+    const nextBtn         = $('btn-ga-next');
+    const isLastQ         = _gaCurrentIdx === total - 1;
+    const isLastSection   = _gaCurrentSection === _gaSections.length - 1;
+
+    if (!isLastQ) {
+      nextBtn.textContent = 'Next →';
+      nextBtn.onclick     = nextGrammarQuestion;
+    } else if (!isLastSection) {
+      nextBtn.textContent = `Complete Section ${secLetter} →`;
+      nextBtn.onclick     = completeGrammarSection;
+    } else {
+      nextBtn.textContent = 'Submit Full Test ✓';
+      nextBtn.onclick     = completeGrammarSection;
+    }
   }
 
   function selectGrammarOption(idx) {
@@ -1344,103 +1378,108 @@ const App = (() => {
     }
   }
 
-  async function submitGrammarAssessment() {
+  function completeGrammarSection() {
     if (_gaUserAnswers[_gaCurrentIdx] === -1) {
-      toast('Please select an answer before submitting.', 'error');
+      toast('Please select an answer before continuing.', 'error');
       return;
     }
 
-    // Calculate score
+    // Marks per question: Section A (index 0) = 1 mark, Section B & C (index 1,2) = 2 marks
+    const marksPerQ = _gaCurrentSection === 0 ? 1 : 2;
+
+    // Score this section
     let correct = 0;
-    _gaQuestions.forEach((q, idx) => {
-      if (_gaUserAnswers[idx] === q.correct) correct++;
+    const answerRecord = _gaQuestions.map((q, idx) => {
+      const isOk = _gaUserAnswers[idx] === q.correct;
+      if (isOk) correct++;
+      return {
+        stem:        q.stem,
+        options:     q.options,
+        correct:     q.correct,
+        userAnswer:  _gaUserAnswers[idx],
+        isCorrect:   isOk,
+        explanation: q.explanation || ''
+      };
     });
-    const total = _gaQuestions.length;
-    const pct   = Math.round((correct / total) * 100);
 
-    const aiScores = {
-      overall: pct,
-      correctAnswers: correct,
-      totalQuestions: total
+    const marksObtained = correct * marksPerQ;
+    const maxMarks      = _gaQuestions.length * marksPerQ;
+
+    _gaSectionResults.push({
+      title:        _gaSections[_gaCurrentSection].title,
+      answerRecord,
+      correct,
+      total:        _gaQuestions.length,
+      marksPerQ,
+      marksObtained,
+      maxMarks
+    });
+
+    const isLastSection = _gaCurrentSection === _gaSections.length - 1;
+    if (isLastSection) {
+      submitGrammarAssessment();
+    } else {
+      const nextIdx       = _gaCurrentSection + 1;
+      const currentLetter = String.fromCharCode(65 + _gaCurrentSection);
+      const nextLetter    = String.fromCharCode(65 + nextIdx);
+      showStep('grammar-assessment', 'ga-step-transition');
+      $('ga-transition-msg').textContent  = `Section ${currentLetter} complete! Get ready for Section ${nextLetter}.`;
+      $('ga-transition-next').textContent = `Start Section ${nextLetter} →`;
+      $('ga-transition-next').onclick     = () => loadGrammarSection(nextIdx);
+    }
+  }
+
+  async function submitGrammarAssessment() {
+    // Total marks: Section A max=40 (40×1), Section B max=26 (13×2), Section C max=34 (17×2) = 100
+    const totalMarksObtained = _gaSectionResults.reduce((s, r) => s + r.marksObtained, 0);
+    const totalMaxMarks      = _gaSectionResults.reduce((s, r) => s + r.maxMarks, 0); // 100
+    const totalCorrect       = _gaSectionResults.reduce((s, r) => s + r.correct, 0);
+    const totalQuestions     = _gaSectionResults.reduce((s, r) => s + r.total, 0);
+    // Score is directly out of 100 since totalMaxMarks == 100
+    const scoreOutOf100      = totalMaxMarks > 0 ? Math.round((totalMarksObtained / totalMaxMarks) * 100) : 0;
+
+    const sessionData = {
+      sections: _gaSectionResults.map(r => ({
+        title:         r.title,
+        answerRecord:  r.answerRecord,
+        correct:       r.correct,
+        total:         r.total,
+        marksPerQ:     r.marksPerQ,
+        marksObtained: r.marksObtained,
+        maxMarks:      r.maxMarks
+      })),
+      totalCorrect,
+      totalQuestions,
+      totalMarksObtained,
+      totalMaxMarks,
+      scoreOutOf100
     };
-
-    // Build detailed answer record for admin review
-    const LABELS = ['A', 'B', 'C', 'D'];
-    const answerRecord = _gaQuestions.map((q, idx) => ({
-      stem:        q.stem,
-      options:     q.options,
-      correct:     q.correct,
-      userAnswer:  _gaUserAnswers[idx],
-      isCorrect:   _gaUserAnswers[idx] === q.correct,
-      explanation: q.explanation || ''
-    }));
 
     try {
       await DB.put('sessions', {
-        traineeId:   _trainee.id,
-        traineeName: _trainee.name,
-        module:      'grammar-assessment',
-        topicId:     _currentTopic.id,
-        topicTitle:  _currentTopic.title,
+        traineeId:    _trainee.id,
+        traineeName:  _trainee.name,
+        module:       'grammar-assessment',
+        topicId:      _gaSections[0].id,
+        topicTitle:   'Grammar Assessment — Full Test (Sections A + B + C)',
         recordingBlob: null,
-        transcript:  '',
-        writtenText: JSON.stringify(answerRecord),
-        aiScores,
-        adminScores: null,
+        transcript:   '',
+        writtenText:  JSON.stringify(sessionData),
+        aiScores:     { overall: scoreOutOf100, marksObtained: totalMarksObtained, totalMarks: totalMaxMarks, correctAnswers: totalCorrect, totalQuestions },
+        adminScores:  null,
         adminComment: '',
-        status:      'ai-evaluated',
-        submittedAt: new Date().toISOString(),
-        timeTaken:   0
+        status:       'ai-evaluated',
+        submittedAt:  new Date().toISOString(),
+        timeTaken:    0
       });
-      toast('Test submitted!', 'success');
+      toast('Grammar test submitted!', 'success');
     } catch (e) {
       console.error('Session save failed:', e.message);
       toast('⚠ Could not save session: ' + e.message, 'error');
     }
 
-    showGrammarResults(answerRecord, correct, total, pct);
-  }
-
-  function showGrammarResults(answerRecord, correct, total, pct) {
+    // Show confirmation — no scores visible to trainee
     showStep('grammar-assessment', 'ga-step-results');
-
-    $('ga-result-score').textContent = `${correct} / ${total}`;
-    $('ga-result-pct').textContent   = `${pct}%`;
-
-    // Band label & colour
-    let bandText, bandBg, bandColor;
-    if (pct >= 90) {
-      bandText = '⭐ Excellent!'; bandBg = '#d1fae5'; bandColor = '#065f46';
-    } else if (pct >= 70) {
-      bandText = '👍 Good'; bandBg = '#dbeafe'; bandColor = '#1e40af';
-    } else if (pct >= 50) {
-      bandText = '📋 Needs Improvement'; bandBg = '#fef9c3'; bandColor = '#854d0e';
-    } else {
-      bandText = '⚠️ Significant Improvement Needed'; bandBg = '#fee2e2'; bandColor = '#991b1b';
-    }
-    const bandEl = $('ga-result-band');
-    bandEl.textContent        = bandText;
-    bandEl.style.background   = bandBg;
-    bandEl.style.color        = bandColor;
-
-    // Detailed review
-    const LABELS = ['A', 'B', 'C', 'D'];
-    $('ga-review-list').innerHTML = answerRecord.map((item, idx) => {
-      const userLabel    = item.userAnswer >= 0 ? LABELS[item.userAnswer] : '—';
-      const correctLabel = LABELS[item.correct];
-      const userAns      = item.userAnswer >= 0 ? item.options[item.userAnswer] : '(not answered)';
-      const correctAns   = item.options[item.correct];
-      const isOk        = item.isCorrect;
-      return `
-        <div class="ga-review-item ${isOk ? 'ga-correct-item' : 'ga-wrong-item'}">
-          <div class="ga-review-q">${idx + 1}. ${item.stem}</div>
-          <div class="ga-review-answer">
-            ${isOk ? '✅' : '❌'} Your answer: <strong>${userLabel}) ${userAns}</strong>
-            ${!isOk ? `&nbsp;·&nbsp; Correct: <strong>${correctLabel}) ${correctAns}</strong>` : ''}
-          </div>
-          ${item.explanation ? `<div class="ga-review-explanation">💡 ${item.explanation}</div>` : ''}
-        </div>`;
-    }).join('');
   }
 
   // ---- Init ----

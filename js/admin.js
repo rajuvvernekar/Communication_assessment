@@ -921,12 +921,25 @@ window.Admin = (() => {
       const aiScore   = s.aiScores?.overall ?? '';
       const admScore  = s.adminScores ? (calcAdminAvg(s.adminScores) ?? '') : '';
       // Always regenerate fresh — avoids stale stored summaries with removed parameters
-      // Grammar Assessment: AI summary = score breakdown, no text coaching needed
+      // Grammar Assessment: AI summary = section-by-section breakdown
       let aiSummary = '';
       if (s.module === 'grammar-assessment') {
-        if (s.aiScores) {
-          const { correctAnswers, totalQuestions, overall } = s.aiScores;
-          aiSummary = `Score: ${correctAnswers ?? '?'} / ${totalQuestions ?? '?'} correct (${overall ?? '?'}%)`;
+        try {
+          const parsed = JSON.parse(s.writtenText || '{}');
+          if (parsed.sections && Array.isArray(parsed.sections)) {
+            const secBreakdown = parsed.sections.map((sec, i) =>
+              `Sec ${String.fromCharCode(65 + i)}: ${sec.correct}/${sec.total} (${sec.pct}%)`
+            ).join(' | ');
+            aiSummary = `Overall: ${parsed.totalCorrect}/${parsed.totalQuestions} (${parsed.overallPct}%) — ${secBreakdown}`;
+          } else if (s.aiScores) {
+            const { correctAnswers, totalQuestions, overall } = s.aiScores;
+            aiSummary = `Score: ${correctAnswers ?? '?'} / ${totalQuestions ?? '?'} correct (${overall ?? '?'}%)`;
+          }
+        } catch (_) {
+          if (s.aiScores) {
+            const { correctAnswers, totalQuestions, overall } = s.aiScores;
+            aiSummary = `Score: ${correctAnswers ?? '?'} / ${totalQuestions ?? '?'} correct (${overall ?? '?'}%)`;
+          }
         }
       } else if (s.aiScores && typeof SpeechEngine !== 'undefined') {
         aiSummary = SpeechEngine.generateCoachingSummary(s.module, s.aiScores);
@@ -1111,27 +1124,65 @@ window.Admin = (() => {
       $('scoring-written-section').classList.add('hidden');
       $('scoring-mcq-section').classList.remove('hidden');
 
-      // Render MCQ results
+      // Render MCQ results — supports new multi-section format and legacy flat format
       try {
-        const LABELS = ['A', 'B', 'C', 'D'];
-        const answerRecord = JSON.parse(session.writtenText || '[]');
-        const correct = answerRecord.filter(a => a.isCorrect).length;
-        const total   = answerRecord.length;
-        const pct     = total > 0 ? Math.round((correct / total) * 100) : 0;
-        $('scoring-mcq-score').textContent = `Score: ${correct} / ${total} correct (${pct}%)`;
-        $('scoring-mcq-review').innerHTML = answerRecord.map((item, i) => {
-          const userLbl    = item.userAnswer >= 0 ? LABELS[item.userAnswer] : '—';
-          const correctLbl = LABELS[item.correct];
-          return `<div class="mcq-scoring-item ${item.isCorrect ? 'mcq-correct' : 'mcq-wrong'}">
-            <strong>${i + 1}. ${item.stem}</strong><br>
-            ${item.isCorrect ? '✅' : '❌'} Your answer: <strong>${userLbl}) ${item.options?.[item.userAnswer] || '—'}</strong>
-            ${!item.isCorrect ? ` · Correct: <strong>${correctLbl}) ${item.options?.[item.correct] || '—'}</strong>` : ''}
-            ${item.explanation ? `<br><em style="font-size:0.78rem;color:#64748b">💡 ${item.explanation}</em>` : ''}
-          </div>`;
-        }).join('');
+        const LABELS     = ['A', 'B', 'C', 'D'];
+        const parsed     = JSON.parse(session.writtenText || '{}');
+        const isMultiSec = parsed && parsed.sections && Array.isArray(parsed.sections);
+
+        if (isMultiSec) {
+          // ── New format with weighted marks (A=1pt, B/C=2pts, total=100)
+          const { sections, totalMarksObtained, totalMaxMarks, scoreOutOf100,
+                  totalCorrect, totalQuestions } = parsed;
+          const score   = totalMarksObtained ?? totalCorrect ?? 0;
+          const maxScore = totalMaxMarks ?? totalQuestions ?? 0;
+          const pctShow = scoreOutOf100 ?? (maxScore > 0 ? Math.round((score / maxScore) * 100) : 0);
+          $('scoring-mcq-score').innerHTML =
+            `<strong style="font-size:1.05rem">Total Score: ${score} / ${maxScore} marks (${pctShow}%)</strong>`;
+
+          $('scoring-mcq-review').innerHTML = sections.map((sec, secIdx) => {
+            const letter      = String.fromCharCode(65 + secIdx);
+            const mObtained   = sec.marksObtained ?? sec.correct ?? 0;
+            const mMax        = sec.maxMarks ?? sec.total ?? 0;
+            const mPerQ       = sec.marksPerQ ?? 1;
+            const rows = (sec.answerRecord || []).map((item, i) => {
+              const userLbl    = item.userAnswer >= 0 ? LABELS[item.userAnswer] : '—';
+              const correctLbl = LABELS[item.correct];
+              return `<div class="mcq-scoring-item ${item.isCorrect ? 'mcq-correct' : 'mcq-wrong'}">
+                <strong>${i + 1}. ${item.stem}</strong><br>
+                ${item.isCorrect ? `✅ <strong>${userLbl}) ${item.options?.[item.userAnswer] || '—'}</strong> <em style="color:#059669">(+${mPerQ} mark${mPerQ > 1 ? 's' : ''})</em>` : `❌ Your answer: <strong>${userLbl}) ${item.options?.[item.userAnswer] || '—'}</strong> · Correct: <strong>${correctLbl}) ${item.options?.[item.correct] || '—'}</strong>`}
+                ${item.explanation ? `<br><em style="font-size:0.78rem;color:#64748b">💡 ${item.explanation}</em>` : ''}
+              </div>`;
+            }).join('');
+            return `<div style="margin-bottom:1.25rem">
+              <div style="font-weight:700;color:#7c3aed;padding:0.5rem 0.75rem;background:#f5f3ff;border-radius:6px;margin-bottom:0.5rem;display:flex;justify-content:space-between;align-items:center">
+                <span>Section ${letter} — ${sec.correct}/${sec.total} correct</span>
+                <span style="background:#7c3aed;color:#fff;padding:0.15rem 0.6rem;border-radius:999px;font-size:0.82rem">${mObtained} / ${mMax} marks</span>
+              </div>
+              ${rows}
+            </div>`;
+          }).join('');
+        } else {
+          // ── Legacy format: flat answerRecord array
+          const answerRecord = Array.isArray(parsed) ? parsed : [];
+          const correct = answerRecord.filter(a => a.isCorrect).length;
+          const total   = answerRecord.length;
+          const pct     = total > 0 ? Math.round((correct / total) * 100) : 0;
+          $('scoring-mcq-score').textContent = `Score: ${correct} / ${total} correct (${pct}%)`;
+          $('scoring-mcq-review').innerHTML  = answerRecord.map((item, i) => {
+            const userLbl    = item.userAnswer >= 0 ? LABELS[item.userAnswer] : '—';
+            const correctLbl = LABELS[item.correct];
+            return `<div class="mcq-scoring-item ${item.isCorrect ? 'mcq-correct' : 'mcq-wrong'}">
+              <strong>${i + 1}. ${item.stem}</strong><br>
+              ${item.isCorrect ? '✅' : '❌'} Your answer: <strong>${userLbl}) ${item.options?.[item.userAnswer] || '—'}</strong>
+              ${!item.isCorrect ? ` · Correct: <strong>${correctLbl}) ${item.options?.[item.correct] || '—'}</strong>` : ''}
+              ${item.explanation ? `<br><em style="font-size:0.78rem;color:#64748b">💡 ${item.explanation}</em>` : ''}
+            </div>`;
+          }).join('');
+        }
       } catch (e) {
         $('scoring-mcq-score').textContent = 'Could not parse MCQ results.';
-        $('scoring-mcq-review').innerHTML = '';
+        $('scoring-mcq-review').innerHTML  = '';
       }
     } else if (isWritten) {
       $('scoring-audio-section').classList.add('hidden');

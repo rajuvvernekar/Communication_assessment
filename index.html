@@ -651,29 +651,55 @@
   <div class="step-container" id="ga-step-intro">
     <div class="step-card">
       <div class="step-label">Grammar MCQ Test</div>
-      <h3 id="ga-intro-title" style="text-align:center;margin-bottom:0.5rem"></h3>
-      <p id="ga-intro-desc" style="text-align:center;color:var(--text-muted);margin-bottom:1.5rem;font-size:0.9rem"></p>
+      <h3 style="text-align:center;margin-bottom:0.4rem">Grammar Assessment — Full Test</h3>
+      <p style="text-align:center;color:var(--text-muted);margin-bottom:1.25rem;font-size:0.9rem">
+        3 sections · All Multiple Choice · Total: <strong>100 marks</strong>
+      </p>
+
+      <!-- Section marks breakdown -->
+      <div style="background:#f5f3ff;border-radius:10px;padding:1rem;margin-bottom:1.25rem">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.5rem;text-align:center">
+          <div style="background:#fff;border-radius:8px;padding:0.6rem 0.4rem;border:1px solid #e9d5ff">
+            <div style="font-size:1.1rem;font-weight:800;color:var(--ga-color)">40</div>
+            <div style="font-size:0.72rem;color:var(--text-muted);line-height:1.3">Section A<br>1 mark each</div>
+          </div>
+          <div style="background:#fff;border-radius:8px;padding:0.6rem 0.4rem;border:1px solid #e9d5ff">
+            <div style="font-size:1.1rem;font-weight:800;color:var(--ga-color)">13×2</div>
+            <div style="font-size:0.72rem;color:var(--text-muted);line-height:1.3">Section B<br>2 marks each</div>
+          </div>
+          <div style="background:#fff;border-radius:8px;padding:0.6rem 0.4rem;border:1px solid #e9d5ff">
+            <div style="font-size:1.1rem;font-weight:800;color:var(--ga-color)">17×2</div>
+            <div style="font-size:0.72rem;color:var(--text-muted);line-height:1.3">Section C<br>2 marks each</div>
+          </div>
+        </div>
+        <div style="text-align:center;margin-top:0.6rem;font-size:0.78rem;color:#6d28d9;font-weight:600">
+          40 + 26 + 34 = 100 marks total
+        </div>
+      </div>
+
       <div class="ga-intro-meta">
         <div class="ga-meta-item">
+          <span class="ga-meta-icon">📋</span>
+          <span>3 Sections</span>
+        </div>
+        <div class="ga-meta-item">
           <span class="ga-meta-icon">❓</span>
-          <span id="ga-intro-count">— questions</span>
+          <span>70 Questions</span>
         </div>
         <div class="ga-meta-item">
           <span class="ga-meta-icon">⏱️</span>
           <span>No time limit</span>
         </div>
-        <div class="ga-meta-item">
-          <span class="ga-meta-icon">✅</span>
-          <span>Instant results</span>
-        </div>
       </div>
+
       <div class="ga-intro-rules">
         <h4>Instructions</h4>
         <ul>
-          <li>Read each question carefully before selecting an answer.</li>
-          <li>Select the option you think is correct — you can go back to change answers.</li>
-          <li>Use the ← Previous button to revisit earlier questions.</li>
-          <li>Click <strong>Submit Test</strong> on the last question to see your score with detailed explanations.</li>
+          <li>Complete all 3 sections in one sitting — do not close the browser.</li>
+          <li>All questions are multiple choice — select the best answer.</li>
+          <li>Use <strong>← Previous</strong> to revisit earlier questions within a section.</li>
+          <li>Click <strong>Complete Section</strong> at the end of each section to proceed.</li>
+          <li>Your score will be reviewed and shared by your trainer only.</li>
         </ul>
       </div>
       <button id="btn-ga-start" class="btn-primary" style="background:var(--ga-color);width:100%;margin-top:1.5rem">
@@ -685,6 +711,10 @@
   <!-- Step 2: Quiz -->
   <div class="step-container hidden" id="ga-step-quiz">
     <div class="step-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.35rem">
+        <span id="ga-section-label" style="font-size:0.78rem;font-weight:700;color:var(--ga-color);text-transform:uppercase;letter-spacing:0.05em">Section A</span>
+        <span id="ga-section-progress" style="font-size:0.78rem;color:var(--text-muted)">Section 1 of 3</span>
+      </div>
       <div class="ga-progress-bar-wrap">
         <div id="ga-progress-bar" class="ga-progress-bar" style="width:0%"></div>
       </div>
@@ -698,24 +728,28 @@
     </div>
   </div>
 
-  <!-- Step 3: Results -->
+  <!-- Step 2b: Section Transition -->
+  <div class="step-container hidden" id="ga-step-transition">
+    <div class="step-card" style="text-align:center;padding:2.5rem 2rem">
+      <div style="font-size:3.5rem;margin-bottom:1rem">🎯</div>
+      <h3 id="ga-transition-msg" style="margin-bottom:0.75rem"></h3>
+      <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:2rem">Take a moment before continuing to the next section.</p>
+      <button id="ga-transition-next" class="btn-primary" style="background:var(--ga-color);width:100%">Continue →</button>
+    </div>
+  </div>
+
+  <!-- Step 3: Submitted Confirmation (no scores shown to trainee) -->
   <div class="step-container hidden" id="ga-step-results">
-    <div class="results-card">
-      <div class="results-header">
-        <div class="results-icon">📝</div>
-        <h2>Test Complete!</h2>
-        <p>Your grammar assessment result</p>
-      </div>
-      <div class="ga-score-display">
-        <div class="ga-score-big" id="ga-result-score">— / —</div>
-        <div class="ga-score-pct" id="ga-result-pct">—%</div>
-        <div class="ga-score-band" id="ga-result-band"></div>
-      </div>
-      <div>
-        <h3 style="margin-bottom:0.75rem">Detailed Review</h3>
-        <div id="ga-review-list" class="ga-review-list"></div>
-      </div>
-      <div class="results-actions" style="margin-top:1.5rem">
+    <div class="results-card" style="text-align:center;padding:2.5rem 2rem">
+      <div class="results-icon" style="font-size:3.5rem;margin-bottom:1rem">✅</div>
+      <h2 style="margin-bottom:0.5rem">Test Submitted!</h2>
+      <p style="color:var(--text-secondary);margin-bottom:0.5rem">
+        Your grammar assessment has been recorded successfully.
+      </p>
+      <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:2rem">
+        Your trainer will review your results and share feedback with you shortly.
+      </p>
+      <div class="results-actions">
         <button class="btn-secondary" data-back="modules">← Back to Modules</button>
       </div>
     </div>
@@ -725,12 +759,12 @@
 <!-- Toast Notifications -->
 <div id="toast-container"></div>
 
-<script src="config.js"></script>
-<script src="js/db.js"></script>
-<script src="js/auth.js"></script>
-<script src="js/recorder.js"></script>
-<script src="js/speech.js"></script>
-<script src="js/claude.js"></script>
-<script src="js/app.js"></script>
+<script src="config.js?v=4"></script>
+<script src="js/db.js?v=4"></script>
+<script src="js/auth.js?v=4"></script>
+<script src="js/recorder.js?v=4"></script>
+<script src="js/speech.js?v=4"></script>
+<script src="js/claude.js?v=4"></script>
+<script src="js/app.js?v=4"></script>
 </body>
 </html>
