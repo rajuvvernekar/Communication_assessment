@@ -7,8 +7,9 @@ window.Admin = (() => {
   let _callerRecording = false;
   let _scoringSessionId = null;
   let _topicsFilter = 'all';
-  let _assessmentsFilter = { module: 'all', status: 'all' };
+  let _assessmentsFilter = { module: 'all', status: 'all', team: 'all' };
   let _currentFilteredSessions = [];
+  let _teamAssignments = {};   // { traineeId: 'Team Name' }
 
   // Convert legacy overall scores stored as raw /5 to /100
   function normalizeOverall(overall) {
@@ -383,19 +384,55 @@ window.Admin = (() => {
   }
 
   // ---- Trainees ----
+  // ---- Team Assignments (stored in settings table) ----
+  async function loadTeamAssignments() {
+    try {
+      const s = await DB.get('settings', 'team_assignments');
+      _teamAssignments = (s && s.value) ? JSON.parse(s.value) : {};
+    } catch (_) { _teamAssignments = {}; }
+  }
+
+  async function saveTeamAssignments() {
+    try {
+      await DB.put('settings', { key: 'team_assignments', value: JSON.stringify(_teamAssignments) });
+    } catch (e) { toast('Could not save team: ' + e.message, 'error'); }
+  }
+
+  async function setTraineeTeam(traineeId, teamName) {
+    const name = teamName.trim();
+    if (name) {
+      _teamAssignments[traineeId] = name;
+    } else {
+      delete _teamAssignments[traineeId];
+    }
+    await saveTeamAssignments();
+    populateTeamFilter();   // keep assessments dropdown in sync
+    toast(name ? `Assigned to "${name}"` : 'Team removed', 'success');
+  }
+
+  function populateTeamFilter() {
+    const sel = $('filter-team');
+    if (!sel) return;
+    const teams = [...new Set(Object.values(_teamAssignments))].sort();
+    const current = sel.value;
+    sel.innerHTML = '<option value="all">All Teams</option>' +
+      teams.map(t => `<option value="${t}"${t === current ? ' selected' : ''}>${t}</option>`).join('');
+  }
+
   async function loadTrainees() {
+    await loadTeamAssignments();
     const [trainees, sessions] = await Promise.all([DB.getAll('trainees'), DB.getAll('sessions')]);
     renderTraineesTable(trainees, sessions, '');
-
     $('trainee-search').oninput = (e) => renderTraineesTable(trainees, sessions, e.target.value);
   }
 
   function renderTraineesTable(trainees, sessions, filter) {
     const tbody = $('trainees-tbody');
     const filtered = trainees.filter(t => t.name.toLowerCase().includes(filter.toLowerCase()));
+    const allTeams = [...new Set(Object.values(_teamAssignments))].sort();
 
     if (filtered.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="5" class="empty-state">No trainees found.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="empty-state">No trainees found.</td></tr>`;
       return;
     }
 
@@ -409,13 +446,29 @@ window.Admin = (() => {
       const lastActive = ts.length
         ? formatDate([...ts].sort((a,b) => new Date(b.submittedAt)-new Date(a.submittedAt))[0].submittedAt).split(' ')[0]
         : '—';
+      const currentTeam = _teamAssignments[t.id] || '';
+      const datalistId  = `tdl-${t.id.replace(/-/g,'')}`;
 
       return `
         <tr>
-          <td><strong>${t.name}</strong></td>
+          <td><strong>${t.name}</strong><br><small style="color:var(--text-muted)">${t.employee_id || ''}</small></td>
           <td>${ts.length}</td>
           <td>${lastActive}</td>
           <td>${avg !== '—' ? avg + ' / 5' : '—'}</td>
+          <td>
+            <datalist id="${datalistId}">
+              ${allTeams.map(tm => `<option value="${tm}">`).join('')}
+            </datalist>
+            <input
+              type="text"
+              list="${datalistId}"
+              value="${currentTeam.replace(/"/g, '&quot;')}"
+              placeholder="Assign team…"
+              style="border:1px solid var(--border);border-radius:6px;padding:0.3rem 0.6rem;font-size:0.82rem;width:140px;font-family:inherit"
+              onblur="Admin.setTraineeTeam('${t.id}', this.value)"
+              onkeydown="if(event.key==='Enter'){this.blur()}"
+            />
+          </td>
           <td>
             <button class="btn-small" onclick="Admin.viewTraineeSessions('${t.id}')">View Sessions</button>
           </td>
@@ -868,6 +921,9 @@ window.Admin = (() => {
       return;
     }
 
+    await loadTeamAssignments();
+    populateTeamFilter();
+
     const topicMap = {};
     topics.forEach(t => { topicMap[t.id] = t; });
 
@@ -884,6 +940,10 @@ window.Admin = (() => {
     };
     $('filter-status').onchange = () => {
       _assessmentsFilter.status = $('filter-status').value;
+      applyAssessmentFilters(sessions, topicMap);
+    };
+    $('filter-team').onchange = () => {
+      _assessmentsFilter.team = $('filter-team').value;
       applyAssessmentFilters(sessions, topicMap);
     };
     $('btn-refresh-assessments').onclick = () => loadAssessments();
@@ -991,7 +1051,12 @@ window.Admin = (() => {
   function applyAssessmentFilters(sessions, topicMap) {
     let filtered = sessions;
     filtered = filtered.filter(s => matchesModuleFilter(s.module, _assessmentsFilter.module));
-    if (_assessmentsFilter.status !== 'all') filtered = filtered.filter(s => s.status === _assessmentsFilter.status);
+    if (_assessmentsFilter.status !== 'all') {
+      filtered = filtered.filter(s => s.status === _assessmentsFilter.status);
+    }
+    if (_assessmentsFilter.team !== 'all') {
+      filtered = filtered.filter(s => _teamAssignments[s.traineeId] === _assessmentsFilter.team);
+    }
     renderAssessmentsTable(filtered, topicMap);
   }
 
@@ -1767,6 +1832,7 @@ window.Admin = (() => {
     updateCriterionDisplay,
     selectScale135,
     viewTraineeSessions,
+    setTraineeTeam,
     downloadCSV,
     downloadRecording,
     downloadAllRecordings,

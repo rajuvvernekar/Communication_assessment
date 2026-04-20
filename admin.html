@@ -146,14 +146,15 @@
           <thead>
             <tr>
               <th>Name</th>
-              <th>Total Sessions</th>
+              <th>Sessions</th>
               <th>Last Active</th>
-              <th>Avg Admin Score</th>
+              <th>Avg Score</th>
+              <th>Team <span style="font-weight:400;font-size:0.75rem;color:var(--text-muted)">(type &amp; press Enter)</span></th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody id="trainees-tbody">
-            <tr><td colspan="5" class="empty-state">No trainees yet.</td></tr>
+            <tr><td colspan="6" class="empty-state">No trainees yet.</td></tr>
           </tbody>
         </table>
       </div>
@@ -194,6 +195,9 @@
       </div>
 
       <div class="filter-bar">
+        <select id="filter-team" class="filter-select">
+          <option value="all">All Teams</option>
+        </select>
         <select id="filter-module" class="filter-select">
           <option value="all">All Modules</option>
           <option value="pick-speak">Pick &amp; Speak</option>
