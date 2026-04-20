@@ -572,25 +572,37 @@ window.Admin = (() => {
             <div style="min-width:0">
               <span style="font-size:0.82rem;font-weight:600;color:var(--text)">${secLabel}</span>
               <span style="font-size:0.75rem;color:var(--text-muted);margin-left:0.5rem">${qCount} question${qCount !== 1 ? 's' : ''}</span>
-              ${!isEnabled ? '<span style="font-size:0.7rem;color:#ef4444;margin-left:0.4rem">(disabled)</span>' : ''}
             </div>
-            <div style="display:flex;gap:0.4rem;flex-shrink:0">
+            <div style="display:flex;gap:0.4rem;flex-shrink:0;align-items:center">
+              <button class="topic-toggle-btn${isEnabled ? ' on' : ''}"
+                      onclick="Admin.toggleTopicEnabled('${t.id}')"
+                      title="${isEnabled ? 'Click to disable this section' : 'Click to enable this section'}"
+                      style="transform:scale(0.82);transform-origin:right center">
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                <span class="toggle-label">${isEnabled ? 'Live' : 'Off'}</span>
+              </button>
               <button class="btn-small primary" onclick="Admin.openTopicModal('${t.id}')">Edit</button>
               <button class="btn-small danger"  onclick="Admin.deleteTopic('${t.id}')">Delete</button>
             </div>
           </div>`;
       }).join('');
 
+      // Build comma-separated section IDs for the set-level toggle
+      const setIds = sections.map(s => s.id).join("','");
+
       return `
-      <div class="topic-card ga" style="grid-column:span 1">
+      <div class="topic-card ga${allLive ? '' : ' topic-disabled'}" style="grid-column:span 1">
         <div class="topic-card-header">
           <div style="min-width:0">
             ${moduleBadge('grammar-assessment')}
             <h4 style="margin-top:0.35rem">${setName}</h4>
           </div>
-          <span style="font-size:0.75rem;font-weight:600;color:${allLive ? '#10b981' : '#64748b'};background:${allLive ? '#d1fae5' : '#f1f5f9'};padding:0.2rem 0.6rem;border-radius:999px">
-            ${allLive ? '● LIVE' : anyLive ? '◑ PARTIAL' : '○ OFF'}
-          </span>
+          <button class="topic-toggle-btn${allLive ? ' on' : ''}"
+                  onclick="Admin.toggleGrammarSet(['${setIds}'])"
+                  title="${allLive ? 'Disable entire set' : 'Enable entire set'}">
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            <span class="toggle-label">${allLive ? 'Live' : anyLive ? 'Part' : 'Off'}</span>
+          </button>
         </div>
         <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.5rem">
           ${sections.length} sections · ${totalQ} questions total · All MCQ
@@ -626,6 +638,27 @@ window.Admin = (() => {
       } else {
         toast('Failed: ' + e.message, 'error');
       }
+    }
+  }
+
+  // Toggle ALL sections of a grammar set on or off together
+  async function toggleGrammarSet(ids) {
+    try {
+      // Determine new state: if the first section is currently disabled, enable all; else disable all
+      const first = await DB.get('topics', ids[0]);
+      if (!first) return;
+      const nowEnabled = first.enabled === false; // flip
+      for (const id of ids) {
+        const { error } = await DB.getClient()
+          .from('topics')
+          .update({ enabled: nowEnabled })
+          .eq('id', id);
+        if (error) throw error;
+      }
+      toast(nowEnabled ? '✅ Grammar set enabled — visible to trainees.' : '⏸ Grammar set disabled — hidden from trainees.', '');
+      renderTopicsList();
+    } catch (e) {
+      toast('Failed: ' + e.message, 'error');
     }
   }
 
@@ -1895,6 +1928,7 @@ window.Admin = (() => {
     openTopicModal,
     deleteTopic,
     toggleTopicEnabled,
+    toggleGrammarSet,
     openScoring,
     updateCriterionDisplay,
     selectScale135,
