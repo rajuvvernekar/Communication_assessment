@@ -1283,16 +1283,11 @@ const App = (() => {
     _gaCurrentSection = 0;
     _gaSectionResults = [];
 
-    const totalQ = _gaSections.reduce((sum, s) => sum + s.questions.length, 0);
-
     showScreen('grammar-assessment');
     showStep('grammar-assessment', 'ga-step-intro');
 
-    $('ga-intro-title').textContent    = 'Grammar Assessment — Full Test';
-    $('ga-intro-desc').textContent     = 'Complete all sections in one sitting. Your trainer will review and share your results.';
-    $('ga-intro-sections').textContent = `${_gaSections.length} Sections`;
-    $('ga-intro-count').textContent    = `${totalQ} questions total`;
-    $('btn-ga-start').onclick          = () => loadGrammarSection(0);
+    // Intro text is static HTML — just wire up the Start button
+    $('btn-ga-start').onclick = () => loadGrammarSection(0);
   }
 
   function loadGrammarSection(idx) {
