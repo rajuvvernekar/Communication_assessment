@@ -499,6 +499,13 @@ window.Admin = (() => {
     $('btn-new-topic').onclick = () => openTopicModal(null);
   }
 
+  // Extract the set name from a grammar topic title, e.g.
+  // "Grammar Set 3 — Section A: MCQ (40 Questions)" → "Grammar Set 3"
+  function extractGrammarSetName(title) {
+    const m = title.match(/^(.+?)\s+[—–-]+\s+Section/i);
+    return m ? m[1].trim() : title;
+  }
+
   async function renderTopicsList() {
     const topics = await DB.getAll('topics');
     const filtered = topics.filter(t => matchesModuleFilter(t.module, _topicsFilter));
@@ -509,7 +516,20 @@ window.Admin = (() => {
       return;
     }
 
-    container.innerHTML = filtered.map(t => {
+    // Split grammar topics from the rest
+    const grammarTopics = filtered.filter(t => t.module === 'grammar-assessment');
+    const otherTopics   = filtered.filter(t => t.module !== 'grammar-assessment');
+
+    // Group grammar topics by set name
+    const grammarSets = {};
+    grammarTopics.forEach(t => {
+      const setName = extractGrammarSetName(t.title);
+      if (!grammarSets[setName]) grammarSets[setName] = [];
+      grammarSets[setName].push(t);
+    });
+
+    // Render non-grammar topics as individual cards
+    const otherHtml = otherTopics.map(t => {
       const isEnabled = t.enabled !== false;
       return `
       <div class="topic-card ${getModuleShort(t.module)}${isEnabled ? '' : ' topic-disabled'}">
@@ -526,13 +546,60 @@ window.Admin = (() => {
           </button>
         </div>
         <p>${t.description || ''}</p>
-        ${t.checklist && t.checklist.length ? `<div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.5rem">${t.module === 'grammar-assessment' ? t.checklist.length + ' question' + (t.checklist.length !== 1 ? 's' : '') : t.checklist.length + ' evaluation criteria'}</div>` : ''}
+        ${t.checklist && t.checklist.length ? `<div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.5rem">${t.checklist.length} evaluation criteria</div>` : ''}
         <div class="topic-card-actions">
           <button class="btn-small primary" onclick="Admin.openTopicModal('${t.id}')">Edit</button>
           <button class="btn-small danger" onclick="Admin.deleteTopic('${t.id}')">Delete</button>
         </div>
       </div>`;
     }).join('');
+
+    // Render each grammar set as a single grouped card
+    const grammarHtml = Object.entries(grammarSets).map(([setName, sections]) => {
+      // Sort sections alphabetically (Section A, B, C)
+      sections.sort((a, b) => a.title.localeCompare(b.title));
+      const totalQ    = sections.reduce((s, t) => s + (t.checklist?.length || 0), 0);
+      const allLive   = sections.every(t => t.enabled !== false);
+      const anyLive   = sections.some(t => t.enabled !== false);
+      const liveState = allLive ? 'on' : (anyLive ? 'partial' : '');
+
+      const sectionRows = sections.map((t, i) => {
+        const secLabel  = t.title.match(/Section\s+\w+[^)—]*/i)?.[0] || `Section ${i + 1}`;
+        const qCount    = t.checklist?.length || 0;
+        const isEnabled = t.enabled !== false;
+        return `
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:0.5rem 0;border-top:1px solid var(--border)">
+            <div style="min-width:0">
+              <span style="font-size:0.82rem;font-weight:600;color:var(--text)">${secLabel}</span>
+              <span style="font-size:0.75rem;color:var(--text-muted);margin-left:0.5rem">${qCount} question${qCount !== 1 ? 's' : ''}</span>
+              ${!isEnabled ? '<span style="font-size:0.7rem;color:#ef4444;margin-left:0.4rem">(disabled)</span>' : ''}
+            </div>
+            <div style="display:flex;gap:0.4rem;flex-shrink:0">
+              <button class="btn-small primary" onclick="Admin.openTopicModal('${t.id}')">Edit</button>
+              <button class="btn-small danger"  onclick="Admin.deleteTopic('${t.id}')">Delete</button>
+            </div>
+          </div>`;
+      }).join('');
+
+      return `
+      <div class="topic-card ga" style="grid-column:span 1">
+        <div class="topic-card-header">
+          <div style="min-width:0">
+            ${moduleBadge('grammar-assessment')}
+            <h4 style="margin-top:0.35rem">${setName}</h4>
+          </div>
+          <span style="font-size:0.75rem;font-weight:600;color:${allLive ? '#10b981' : '#64748b'};background:${allLive ? '#d1fae5' : '#f1f5f9'};padding:0.2rem 0.6rem;border-radius:999px">
+            ${allLive ? '● LIVE' : anyLive ? '◑ PARTIAL' : '○ OFF'}
+          </span>
+        </div>
+        <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.5rem">
+          ${sections.length} sections · ${totalQ} questions total · All MCQ
+        </div>
+        ${sectionRows}
+      </div>`;
+    }).join('');
+
+    container.innerHTML = otherHtml + grammarHtml;
   }
 
   function getModuleShort(module) {
