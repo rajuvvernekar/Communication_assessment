@@ -1219,6 +1219,7 @@ window.Admin = (() => {
               <span class="score-val" style="font-size:0.72rem;color:var(--text-muted)">${adminVal}</span>
             </div>`;
         });
+      }
       } // end else (non-grammar)
 
       if (!isGrammar && session.aiScores.overall !== undefined) {
