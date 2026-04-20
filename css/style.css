@@ -98,6 +98,8 @@ body {
 }
 .btn-ghost:hover { background: #f8fafc; }
 .btn-ghost.small { padding: 0.4rem 0.875rem; font-size: 0.8rem; }
+.btn-ghost-danger { color: #ef4444; border-color: #fca5a5; }
+.btn-ghost-danger:hover { background: #fef2f2; border-color: #ef4444; }
 
 .btn-danger-outline {
   background: transparent;

@@ -932,6 +932,47 @@ window.Admin = (() => {
     }
   }
 
+  // ---- Delete All Sessions ----
+  async function deleteAllSessions() {
+    const sessions = await DB.getAll('sessions');
+    if (!sessions.length) {
+      toast('No assessments to delete.', '');
+      return;
+    }
+
+    // Two-step confirmation for a destructive bulk action
+    const step1 = confirm(
+      `⚠️ Delete ALL Assessments?\n\nThis will permanently delete ${sessions.length} assessment record${sessions.length !== 1 ? 's' : ''} across all trainees and modules.\n\nThis action cannot be undone.`
+    );
+    if (!step1) return;
+
+    const step2 = confirm(
+      `Are you absolutely sure?\n\nAll ${sessions.length} assessments — including scores, transcripts, and recordings — will be deleted permanently.`
+    );
+    if (!step2) return;
+
+    const btn = $('btn-delete-all-assessments');
+    if (btn) { btn.disabled = true; btn.textContent = '🗑 Deleting…'; }
+
+    try {
+      // Delete all using Supabase bulk delete (not null filter matches every row)
+      const { error } = await DB.getClient()
+        .from('sessions')
+        .delete()
+        .not('id', 'is', null);
+      if (error) throw error;
+
+      toast(`✅ All ${sessions.length} assessments deleted.`, 'success');
+      await updatePendingBadge();
+      loadAssessments();
+    } catch (e) {
+      console.error('Delete all failed:', e);
+      toast('Failed to delete assessments: ' + e.message, 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '🗑 Delete All'; }
+    }
+  }
+
   // ---- Scoring Modal ----
   function initScoringModal() {
     $('btn-close-scoring').onclick = closeScoringModal;
@@ -1510,7 +1551,8 @@ window.Admin = (() => {
     downloadCSV,
     downloadRecording,
     downloadAllRecordings,
-    deleteSession
+    deleteSession,
+    deleteAllSessions
   };
 })();
 
