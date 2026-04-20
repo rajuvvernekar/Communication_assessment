@@ -22,6 +22,7 @@
   --rp-color: #f97316;
   --gd-color: #10b981;
   --wc-color: #0ea5e9;
+  --ga-color: #7c3aed;
 
   --radius: 12px;
   --shadow: 0 1px 3px rgba(0,0,0,0.07), 0 4px 16px rgba(0,0,0,0.05);
@@ -1757,3 +1758,224 @@ body {
   font-family: inherit;
   color: var(--text);
 }
+
+/* ============================================================
+   Grammar Assessment Module
+   ============================================================ */
+
+/* Module card */
+.module-card.ga { border-top: 4px solid var(--ga-color); }
+.ga-header { background: linear-gradient(135deg, #7c3aed, #a855f7); }
+.badge-ga { background: #ede9fe; color: #5b21b6; }
+
+/* Progress bar */
+.ga-progress-bar-wrap {
+  background: #ede9fe;
+  border-radius: 999px;
+  height: 8px;
+  margin-bottom: 1.5rem;
+  overflow: hidden;
+}
+.ga-progress-bar {
+  height: 100%;
+  background: var(--ga-color);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+/* Question number & stem */
+.ga-question-num {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--ga-color);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-bottom: 0.75rem;
+}
+.ga-question-stem {
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.65;
+  margin-bottom: 1.25rem;
+  color: var(--text);
+}
+
+/* Options */
+.ga-options-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  margin-bottom: 1.5rem;
+}
+.ga-option-btn {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.9rem;
+  text-align: left;
+  width: 100%;
+  transition: border-color 0.15s, background 0.15s;
+  font-family: inherit;
+  line-height: 1.5;
+}
+.ga-option-btn:hover:not(:disabled) {
+  border-color: #a78bfa;
+  background: #faf5ff;
+}
+.ga-option-btn.selected {
+  border-color: var(--ga-color);
+  background: #f5f3ff;
+}
+.ga-option-label {
+  font-weight: 700;
+  min-width: 1.2rem;
+  flex-shrink: 0;
+}
+
+/* Navigation row */
+.ga-nav-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* Intro screen */
+.ga-intro-meta {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+.ga-meta-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.ga-meta-icon { font-size: 1.5rem; }
+.ga-intro-rules {
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+}
+.ga-intro-rules h4 { margin-bottom: 0.5rem; font-size: 0.9rem; }
+.ga-intro-rules ul { padding-left: 1.25rem; }
+.ga-intro-rules li { font-size: 0.875rem; color: var(--text-muted); margin-bottom: 0.3rem; }
+
+/* Results */
+.ga-score-display {
+  text-align: center;
+  padding: 1.75rem 1rem;
+  background: #f5f3ff;
+  border: 1px solid #ddd6fe;
+  border-radius: 14px;
+  margin-bottom: 1.5rem;
+}
+.ga-score-big {
+  font-size: 3.5rem;
+  font-weight: 800;
+  color: var(--ga-color);
+  line-height: 1;
+}
+.ga-score-pct {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #6d28d9;
+  margin-top: 0.25rem;
+}
+.ga-score-band {
+  font-size: 0.9rem;
+  font-weight: 700;
+  margin-top: 0.75rem;
+  padding: 0.3rem 1rem;
+  border-radius: 999px;
+  display: inline-block;
+}
+.ga-review-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+.ga-review-item {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem;
+}
+.ga-review-item.ga-correct-item { border-color: #bbf7d0; background: #f0fdf4; }
+.ga-review-item.ga-wrong-item   { border-color: #fecaca; background: #fef2f2; }
+.ga-review-q {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.ga-review-answer { font-size: 0.85rem; margin-bottom: 0.35rem; line-height: 1.5; }
+.ga-review-explanation {
+  font-size: 0.82rem;
+  color: #475569;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed #cbd5e1;
+  line-height: 1.5;
+}
+
+/* ---- MCQ Admin Editor ---- */
+.mcq-question-block {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  background: #f8fafc;
+}
+.mcq-question-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+.mcq-q-label { font-weight: 700; font-size: 0.85rem; color: var(--ga-color); }
+.mcq-stem-input {
+  width: 100%;
+  min-height: 56px;
+  resize: vertical;
+  margin-bottom: 0.625rem;
+  font-size: 0.875rem;
+}
+.mcq-options-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 0.625rem;
+}
+.mcq-option-row { display: flex; align-items: center; gap: 0.5rem; }
+.mcq-option-row input[type="text"] { flex: 1; padding: 0.4rem 0.6rem; font-size: 0.85rem; }
+.mcq-option-letter { font-weight: 700; font-size: 0.85rem; min-width: 1.2rem; color: var(--ga-color); }
+.mcq-option-row input[type="radio"] {
+  accent-color: var(--ga-color);
+  width: 16px; height: 16px; cursor: pointer; flex-shrink: 0;
+}
+.mcq-correct-hint { font-size: 0.72rem; color: var(--text-muted); margin-bottom: 0.4rem; }
+.mcq-explanation-input { width: 100%; padding: 0.4rem 0.6rem; font-size: 0.85rem; }
+
+/* MCQ results in scoring modal */
+.mcq-scoring-review { margin-top: 0.75rem; }
+.mcq-scoring-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.625rem 0.75rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+.mcq-scoring-item.mcq-correct { border-color: #bbf7d0; background: #f0fdf4; }
+.mcq-scoring-item.mcq-wrong   { border-color: #fecaca; background: #fef2f2; }

@@ -12,6 +12,11 @@ const App = (() => {
   let _wcStartTime = null;
   let _wcTimerInterval = null;
 
+  // ── Grammar Assessment state ──
+  let _gaQuestions    = [];   // array of { stem, options, correct, explanation }
+  let _gaCurrentIdx   = 0;    // current question index
+  let _gaUserAnswers  = [];   // -1 = unanswered, 0-3 = chosen option index
+
   // ── Bot-call turn state ──
   let _mcTurns         = [];    // botScript lines for current call
   let _mcTurnIndex     = 0;     // 0-based current turn
@@ -132,7 +137,7 @@ const App = (() => {
         }
       });
       // Hide all elements with step-like IDs within the screen
-      screen.querySelectorAll('[id^="ps-step"],[id^="mc-step"],[id^="rp-step"],[id^="gd-step"],[id^="wc-step"]')
+      screen.querySelectorAll('[id^="ps-step"],[id^="mc-step"],[id^="rp-step"],[id^="gd-step"],[id^="wc-step"],[id^="ga-step"]')
         .forEach(el => el.classList.add('hidden'));
     }
     const el = $(stepId);
@@ -199,7 +204,8 @@ const App = (() => {
       'mock-call': 'Mock Call',
       'role-play': 'Role Play',
       'group-discussion': 'Group Discussion',
-      'written-comm': 'Written Communication'
+      'written-comm': 'Written Communication',
+      'grammar-assessment': 'Grammar Assessment'
     };
     return map[module] || module;
   }
@@ -297,6 +303,11 @@ const App = (() => {
     if (module === 'pick-speak') {
       showScreen('pick-speak');
       initPickSpeakCategory();
+      return;
+    }
+
+    if (module === 'grammar-assessment') {
+      await initGrammarAssessment();
       return;
     }
 
@@ -1237,6 +1248,199 @@ const App = (() => {
     }
 
     toast('Writing submitted!', 'success');
+  }
+
+  // ================================================================
+  //  GRAMMAR ASSESSMENT (MCQ)
+  // ================================================================
+
+  async function initGrammarAssessment() {
+    const topics = enabledTopics(await DB.getByIndex('topics', 'module', 'grammar-assessment'));
+    if (!topics.length) {
+      toast('No grammar tests available. Ask your admin to add questions.', 'error');
+      return;
+    }
+    _currentTopic = topics[Math.floor(Math.random() * topics.length)];
+
+    // Questions are stored as objects in the checklist array
+    const questions = (_currentTopic.checklist || []).filter(q => q && typeof q === 'object' && q.stem);
+    if (!questions.length) {
+      toast('This test has no questions yet. Ask your admin to add questions.', 'error');
+      return;
+    }
+
+    _gaQuestions   = questions;
+    _gaCurrentIdx  = 0;
+    _gaUserAnswers = new Array(questions.length).fill(-1);
+
+    showScreen('grammar-assessment');
+    showStep('grammar-assessment', 'ga-step-intro');
+
+    $('ga-intro-title').textContent = _currentTopic.title || 'Grammar Assessment';
+    $('ga-intro-desc').textContent  = _currentTopic.description || '';
+    $('ga-intro-count').textContent = `${questions.length} question${questions.length !== 1 ? 's' : ''}`;
+    $('btn-ga-start').onclick = () => startGrammarAssessment();
+  }
+
+  function startGrammarAssessment() {
+    showStep('grammar-assessment', 'ga-step-quiz');
+    renderGrammarQuestion();
+  }
+
+  function renderGrammarQuestion() {
+    const q     = _gaQuestions[_gaCurrentIdx];
+    const total = _gaQuestions.length;
+    const cur   = _gaCurrentIdx + 1;
+
+    // Progress bar
+    const pct = ((cur - 1) / total) * 100;
+    $('ga-progress-bar').style.width = `${pct}%`;
+    $('ga-q-num').textContent  = `Question ${cur} of ${total}`;
+    $('ga-q-stem').textContent = q.stem;
+
+    const LABELS = ['A', 'B', 'C', 'D'];
+    const container = $('ga-options-container');
+    container.innerHTML = '';
+    (q.options || []).forEach((opt, idx) => {
+      const btn = document.createElement('button');
+      btn.className = 'ga-option-btn' + (_gaUserAnswers[_gaCurrentIdx] === idx ? ' selected' : '');
+      btn.innerHTML = `<span class="ga-option-label">${LABELS[idx]}</span> <span>${opt}</span>`;
+      btn.onclick = () => selectGrammarOption(idx);
+      container.appendChild(btn);
+    });
+
+    // Previous button
+    const prevBtn = $('btn-ga-prev');
+    prevBtn.style.display = _gaCurrentIdx > 0 ? '' : 'none';
+    prevBtn.onclick = () => prevGrammarQuestion();
+
+    // Next / Submit button
+    const nextBtn = $('btn-ga-next');
+    const isLast  = _gaCurrentIdx === total - 1;
+    nextBtn.textContent = isLast ? 'Submit Test ✓' : 'Next →';
+    nextBtn.onclick     = isLast ? submitGrammarAssessment : nextGrammarQuestion;
+  }
+
+  function selectGrammarOption(idx) {
+    _gaUserAnswers[_gaCurrentIdx] = idx;
+    document.querySelectorAll('#ga-options-container .ga-option-btn').forEach((btn, i) => {
+      btn.classList.toggle('selected', i === idx);
+    });
+  }
+
+  function nextGrammarQuestion() {
+    if (_gaUserAnswers[_gaCurrentIdx] === -1) {
+      toast('Please select an answer before continuing.', 'error');
+      return;
+    }
+    _gaCurrentIdx++;
+    renderGrammarQuestion();
+  }
+
+  function prevGrammarQuestion() {
+    if (_gaCurrentIdx > 0) {
+      _gaCurrentIdx--;
+      renderGrammarQuestion();
+    }
+  }
+
+  async function submitGrammarAssessment() {
+    if (_gaUserAnswers[_gaCurrentIdx] === -1) {
+      toast('Please select an answer before submitting.', 'error');
+      return;
+    }
+
+    // Calculate score
+    let correct = 0;
+    _gaQuestions.forEach((q, idx) => {
+      if (_gaUserAnswers[idx] === q.correct) correct++;
+    });
+    const total = _gaQuestions.length;
+    const pct   = Math.round((correct / total) * 100);
+
+    const aiScores = {
+      overall: pct,
+      correctAnswers: correct,
+      totalQuestions: total
+    };
+
+    // Build detailed answer record for admin review
+    const LABELS = ['A', 'B', 'C', 'D'];
+    const answerRecord = _gaQuestions.map((q, idx) => ({
+      stem:        q.stem,
+      options:     q.options,
+      correct:     q.correct,
+      userAnswer:  _gaUserAnswers[idx],
+      isCorrect:   _gaUserAnswers[idx] === q.correct,
+      explanation: q.explanation || ''
+    }));
+
+    try {
+      await DB.put('sessions', {
+        traineeId:   _trainee.id,
+        traineeName: _trainee.name,
+        module:      'grammar-assessment',
+        topicId:     _currentTopic.id,
+        topicTitle:  _currentTopic.title,
+        recordingBlob: null,
+        transcript:  '',
+        writtenText: JSON.stringify(answerRecord),
+        aiScores,
+        adminScores: null,
+        adminComment: '',
+        status:      'ai-evaluated',
+        submittedAt: new Date().toISOString(),
+        timeTaken:   0
+      });
+      toast('Test submitted!', 'success');
+    } catch (e) {
+      console.error('Session save failed:', e.message);
+      toast('⚠ Could not save session: ' + e.message, 'error');
+    }
+
+    showGrammarResults(answerRecord, correct, total, pct);
+  }
+
+  function showGrammarResults(answerRecord, correct, total, pct) {
+    showStep('grammar-assessment', 'ga-step-results');
+
+    $('ga-result-score').textContent = `${correct} / ${total}`;
+    $('ga-result-pct').textContent   = `${pct}%`;
+
+    // Band label & colour
+    let bandText, bandBg, bandColor;
+    if (pct >= 90) {
+      bandText = '⭐ Excellent!'; bandBg = '#d1fae5'; bandColor = '#065f46';
+    } else if (pct >= 70) {
+      bandText = '👍 Good'; bandBg = '#dbeafe'; bandColor = '#1e40af';
+    } else if (pct >= 50) {
+      bandText = '📋 Needs Improvement'; bandBg = '#fef9c3'; bandColor = '#854d0e';
+    } else {
+      bandText = '⚠️ Significant Improvement Needed'; bandBg = '#fee2e2'; bandColor = '#991b1b';
+    }
+    const bandEl = $('ga-result-band');
+    bandEl.textContent        = bandText;
+    bandEl.style.background   = bandBg;
+    bandEl.style.color        = bandColor;
+
+    // Detailed review
+    const LABELS = ['A', 'B', 'C', 'D'];
+    $('ga-review-list').innerHTML = answerRecord.map((item, idx) => {
+      const userLabel    = item.userAnswer >= 0 ? LABELS[item.userAnswer] : '—';
+      const correctLabel = LABELS[item.correct];
+      const userAns      = item.userAnswer >= 0 ? item.options[item.userAnswer] : '(not answered)';
+      const correctAns   = item.options[item.correct];
+      const isOk        = item.isCorrect;
+      return `
+        <div class="ga-review-item ${isOk ? 'ga-correct-item' : 'ga-wrong-item'}">
+          <div class="ga-review-q">${idx + 1}. ${item.stem}</div>
+          <div class="ga-review-answer">
+            ${isOk ? '✅' : '❌'} Your answer: <strong>${userLabel}) ${userAns}</strong>
+            ${!isOk ? `&nbsp;·&nbsp; Correct: <strong>${correctLabel}) ${correctAns}</strong>` : ''}
+          </div>
+          ${item.explanation ? `<div class="ga-review-explanation">💡 ${item.explanation}</div>` : ''}
+        </div>`;
+    }).join('');
   }
 
   // ---- Init ----

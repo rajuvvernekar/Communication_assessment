@@ -176,6 +176,7 @@
         <button class="tab-btn" data-module="role-play">Role Play</button>
         <button class="tab-btn" data-module="group-discussion">Group Discussion</button>
         <button class="tab-btn" data-module="written-comm">Written Comm.</button>
+        <button class="tab-btn" data-module="grammar-assessment">Grammar</button>
       </div>
 
       <div id="topics-list" class="topics-grid">
@@ -200,6 +201,7 @@
           <option value="role-play">Role Play</option>
           <option value="group-discussion">Group Discussion</option>
           <option value="written-comm">Written Comm.</option>
+          <option value="grammar-assessment">Grammar Assessment</option>
         </select>
         <select id="filter-status" class="filter-select">
           <option value="all">All Status</option>
@@ -361,6 +363,7 @@
           <option value="role-play">Role Play</option>
           <option value="group-discussion">Group Discussion</option>
           <option value="written-comm">Written Communication</option>
+          <option value="grammar-assessment">Grammar Assessment (MCQ)</option>
         </select>
       </div>
       <div class="form-group">
@@ -380,6 +383,16 @@
         <div id="checklist-items"></div>
         <button id="btn-add-checklist" class="btn-ghost small" style="margin-top:0.5rem">+ Add Item</button>
       </div>
+      <!-- MCQ Questions — Grammar Assessment only -->
+      <div class="form-group" id="topic-mcq-group" style="display:none">
+        <label>MCQ Questions</label>
+        <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.75rem">
+          Add multiple-choice questions. Click the radio button (✓) next to the correct answer for each question.
+        </p>
+        <div id="mcq-questions-list"></div>
+        <button id="btn-add-mcq-question" class="btn-ghost small" style="margin-top:0.5rem">+ Add Question</button>
+      </div>
+
       <!-- Bot Script — Mock Call only -->
       <div class="form-group" id="topic-bot-script-group" style="display:none">
         <label>Bot Script — Customer Lines <small style="font-weight:400;color:var(--text-muted)">(one line per turn, in order)</small></label>
@@ -438,6 +451,13 @@
         <div class="written-section hidden" id="scoring-written-section">
           <h4>Submitted Writing</h4>
           <div id="scoring-written-text" class="transcript-box writing-box"></div>
+        </div>
+
+        <!-- MCQ results (for grammar assessment) -->
+        <div class="hidden" id="scoring-mcq-section">
+          <h4>MCQ Test Results</h4>
+          <div id="scoring-mcq-score" style="font-size:1.1rem;font-weight:700;color:#7c3aed;margin-bottom:0.75rem"></div>
+          <div id="scoring-mcq-review" class="mcq-scoring-review"></div>
         </div>
 
         <!-- Transcript (for spoken modules) -->

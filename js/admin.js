@@ -18,33 +18,36 @@ window.Admin = (() => {
 
   // ---- Module metadata ----
   const MODULE_LABELS = {
-    'pick-speak':         'Pick & Speak',
-    'pick-speak-general': 'P&S — General',
-    'pick-speak-stock':   'P&S — Stock Market',
-    'mock-call':          'Mock Call',
-    'role-play':          'Role Play',
-    'group-discussion':   'Group Discussion',
-    'written-comm':       'Written Comm.'
+    'pick-speak':          'Pick & Speak',
+    'pick-speak-general':  'P&S — General',
+    'pick-speak-stock':    'P&S — Stock Market',
+    'mock-call':           'Mock Call',
+    'role-play':           'Role Play',
+    'group-discussion':    'Group Discussion',
+    'written-comm':        'Written Comm.',
+    'grammar-assessment':  'Grammar Assessment'
   };
 
   const MODULE_COLORS = {
-    'pick-speak':         '#3b82f6',
-    'pick-speak-general': '#3b82f6',
-    'pick-speak-stock':   '#3b82f6',
-    'mock-call':          '#8b5cf6',
-    'role-play':          '#f97316',
-    'group-discussion':   '#10b981',
-    'written-comm':       '#0ea5e9'
+    'pick-speak':          '#3b82f6',
+    'pick-speak-general':  '#3b82f6',
+    'pick-speak-stock':    '#3b82f6',
+    'mock-call':           '#8b5cf6',
+    'role-play':           '#f97316',
+    'group-discussion':    '#10b981',
+    'written-comm':        '#0ea5e9',
+    'grammar-assessment':  '#7c3aed'
   };
 
   const MODULE_BADGE_CLASS = {
-    'pick-speak':         'badge-ps',
-    'pick-speak-general': 'badge-ps',
-    'pick-speak-stock':   'badge-ps',
-    'mock-call':          'badge-mc',
-    'role-play':          'badge-rp',
-    'group-discussion':   'badge-gd',
-    'written-comm':       'badge-wc'
+    'pick-speak':          'badge-ps',
+    'pick-speak-general':  'badge-ps',
+    'pick-speak-stock':    'badge-ps',
+    'mock-call':           'badge-mc',
+    'role-play':           'badge-rp',
+    'group-discussion':    'badge-gd',
+    'written-comm':        'badge-wc',
+    'grammar-assessment':  'badge-ga'
   };
 
   // ---- Score Bands (scores are out of 100) ----
@@ -148,7 +151,9 @@ window.Admin = (() => {
       { label: 'Grammar', key: 'criterion_2' },
       { label: 'Tone', key: 'criterion_3' },
       { label: 'Professionalism', key: 'criterion_4' }
-    ]
+    ],
+    // Grammar Assessment is auto-scored — no manual sliders, just admin comment
+    'grammar-assessment': []
   };
 
   // ---- Helpers ----
@@ -468,7 +473,7 @@ window.Admin = (() => {
           </button>
         </div>
         <p>${t.description || ''}</p>
-        ${t.checklist && t.checklist.length ? `<div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.5rem">${t.checklist.length} evaluation criteria</div>` : ''}
+        ${t.checklist && t.checklist.length ? `<div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.5rem">${t.module === 'grammar-assessment' ? t.checklist.length + ' question' + (t.checklist.length !== 1 ? 's' : '') : t.checklist.length + ' evaluation criteria'}</div>` : ''}
         <div class="topic-card-actions">
           <button class="btn-small primary" onclick="Admin.openTopicModal('${t.id}')">Edit</button>
           <button class="btn-small danger" onclick="Admin.deleteTopic('${t.id}')">Delete</button>
@@ -478,7 +483,7 @@ window.Admin = (() => {
   }
 
   function getModuleShort(module) {
-    const map = { 'pick-speak': 'ps', 'pick-speak-general': 'ps', 'pick-speak-stock': 'ps', 'mock-call': 'mc', 'role-play': 'rp', 'group-discussion': 'gd', 'written-comm': 'wc' };
+    const map = { 'pick-speak': 'ps', 'pick-speak-general': 'ps', 'pick-speak-stock': 'ps', 'mock-call': 'mc', 'role-play': 'rp', 'group-discussion': 'gd', 'written-comm': 'wc', 'grammar-assessment': 'ga' };
     return map[module] || '';
   }
 
@@ -562,6 +567,7 @@ window.Admin = (() => {
   function matchesModuleFilter(recordModule, filter) {
     if (filter === 'all') return true;
     if (filter === 'pick-speak') return recordModule === 'pick-speak' || recordModule === 'pick-speak-general' || recordModule === 'pick-speak-stock';
+    if (filter === 'grammar-assessment') return recordModule === 'grammar-assessment';
     return recordModule === filter;
   }
 
@@ -580,7 +586,14 @@ window.Admin = (() => {
       $('topic-scenario').value = topic.scenario || '';
       _callerAudioBlob = topic.callerAudioBlob || null;
 
-      renderChecklistItems(topic.checklist || []);
+      if (topic.module === 'grammar-assessment') {
+        // checklist holds question objects for grammar-assessment
+        const questions = (topic.checklist || []).filter(q => q && typeof q === 'object' && q.stem);
+        renderMcqQuestions(questions);
+        renderChecklistItems([]);
+      } else {
+        renderChecklistItems(topic.checklist || []);
+      }
       renderBotScriptItems(topic.botScript || []);
 
       // Support both Storage URL (new) and legacy Blob
@@ -593,7 +606,7 @@ window.Admin = (() => {
       }
     } else {
       $('topic-modal-title').textContent = 'New Topic';
-      $('topic-module').value = 'pick-speak';
+      $('topic-module').value = 'pick-speak-general';
       $('topic-title').value = '';
       $('topic-description').value = '';
       $('topic-scenario').value = '';
@@ -601,6 +614,7 @@ window.Admin = (() => {
       $('btn-clear-caller-audio').classList.add('hidden');
       renderChecklistItems([]);
       renderBotScriptItems([]);
+      $('mcq-questions-list').innerHTML = '';
     }
 
     toggleMockCallFields($('topic-module').value);
@@ -608,9 +622,20 @@ window.Admin = (() => {
   }
 
   function toggleMockCallFields(module) {
-    const isMC = module === 'mock-call';
+    const isMC  = module === 'mock-call';
+    const isGA  = module === 'grammar-assessment';
     $('topic-caller-audio-group').style.display = isMC ? '' : 'none';
     $('topic-bot-script-group').style.display    = isMC ? '' : 'none';
+    $('topic-mcq-group').style.display           = isGA ? '' : 'none';
+    // For grammar-assessment, hide scenario & checklist (replaced by MCQ editor)
+    const scenarioGroup   = $('topic-scenario').closest('.form-group');
+    const checklistGroup  = $('topic-checklist-group');
+    if (scenarioGroup)  scenarioGroup.style.display  = isGA ? 'none' : '';
+    if (checklistGroup) checklistGroup.style.display = isGA ? 'none' : '';
+    // If switching to grammar-assessment, clear the MCQ list so it starts fresh
+    if (isGA && $('mcq-questions-list') && $('mcq-questions-list').children.length === 0) {
+      addMcqQuestion(); // add one blank question to get started
+    }
   }
 
   function renderBotScriptItems(lines = []) {
@@ -648,8 +673,62 @@ window.Admin = (() => {
     container.appendChild(row);
   }
 
+  // ── MCQ Question Editor (Grammar Assessment) ──
+
+  function renderMcqQuestions(questions = []) {
+    const container = $('mcq-questions-list');
+    container.innerHTML = '';
+    if (questions.length === 0) {
+      addMcqQuestion(); // start with one blank
+    } else {
+      questions.forEach(q => addMcqQuestion(q));
+    }
+  }
+
+  function addMcqQuestion(data = null) {
+    const container = $('mcq-questions-list');
+    const idx       = container.children.length;
+    const LABELS    = ['A', 'B', 'C', 'D'];
+    const defaultOptions = ['', '', '', ''];
+    const opts      = (data && data.options) ? data.options : defaultOptions;
+    const correct   = (data && typeof data.correct === 'number') ? data.correct : 0;
+    const stem      = (data && data.stem) ? data.stem.replace(/"/g, '&quot;') : '';
+    const expl      = (data && data.explanation) ? data.explanation.replace(/"/g, '&quot;') : '';
+
+    const block = document.createElement('div');
+    block.className = 'mcq-question-block';
+    block.innerHTML = `
+      <div class="mcq-question-header">
+        <span class="mcq-q-label">Question ${idx + 1}</span>
+        <button class="btn-remove-item" title="Remove question">✕ Remove</button>
+      </div>
+      <textarea class="mcq-stem-input" placeholder="Type the question or sentence here...">${stem}</textarea>
+      <div class="mcq-correct-hint">Mark the radio button (●) next to the correct answer:</div>
+      <div class="mcq-options-wrap">
+        ${LABELS.map((lbl, i) => `
+          <div class="mcq-option-row">
+            <input type="radio" name="mcq-correct-${idx}-${Date.now()}" class="mcq-correct-radio" value="${i}" ${correct === i ? 'checked' : ''}>
+            <span class="mcq-option-letter">${lbl}</span>
+            <input type="text" class="mcq-option-input" placeholder="Option ${lbl}" value="${(opts[i] || '').replace(/"/g, '&quot;')}">
+          </div>`).join('')}
+      </div>
+      <input type="text" class="mcq-explanation-input" placeholder="Explanation (shown to trainee after test — optional)" value="${expl}">`;
+
+    block.querySelector('.btn-remove-item').onclick = () => {
+      block.remove();
+      // Re-label remaining questions
+      Array.from(container.children).forEach((b, i) => {
+        const lbl = b.querySelector('.mcq-q-label');
+        if (lbl) lbl.textContent = `Question ${i + 1}`;
+      });
+    };
+
+    container.appendChild(block);
+  }
+
   function initTopicModal() {
     $('btn-add-checklist').onclick = () => addChecklistItem();
+    $('btn-add-mcq-question').onclick = () => addMcqQuestion();
     $('btn-close-topic-modal').onclick = closeTopicModal;
     $('btn-cancel-topic').onclick = closeTopicModal;
     $('btn-save-topic').onclick = saveTopic;
@@ -706,20 +785,42 @@ window.Admin = (() => {
   }
 
   async function saveTopic() {
-    const title = $('topic-title').value.trim();
+    const title  = $('topic-title').value.trim();
+    const module = $('topic-module').value;
     if (!title) { toast('Please enter a title.', 'error'); return; }
 
-    const checklist = Array.from(document.querySelectorAll('#checklist-items input'))
-      .map(i => i.value.trim()).filter(v => v);
+    let checklist;
+    if (module === 'grammar-assessment') {
+      // Collect MCQ questions from the editor blocks
+      const blocks = document.querySelectorAll('#mcq-questions-list .mcq-question-block');
+      const questions = [];
+      blocks.forEach(block => {
+        const stem = block.querySelector('.mcq-stem-input')?.value.trim() || '';
+        if (!stem) return; // skip blank questions
+        const options = Array.from(block.querySelectorAll('.mcq-option-input')).map(i => i.value.trim());
+        const correctRadio = block.querySelector('.mcq-correct-radio:checked');
+        const correct      = correctRadio ? parseInt(correctRadio.value) : 0;
+        const explanation  = block.querySelector('.mcq-explanation-input')?.value.trim() || '';
+        questions.push({ stem, options, correct, explanation });
+      });
+      if (!questions.length) {
+        toast('Please add at least one question.', 'error');
+        return;
+      }
+      checklist = questions; // stored as objects in the checklist field
+    } else {
+      checklist = Array.from(document.querySelectorAll('#checklist-items input'))
+        .map(i => i.value.trim()).filter(v => v);
+    }
 
     const botScript = Array.from(document.querySelectorAll('#bot-script-items input'))
       .map(i => i.value.trim()).filter(v => v);
 
     const data = {
-      module: $('topic-module').value,
+      module,
       title,
       description: $('topic-description').value.trim(),
-      scenario: $('topic-scenario').value.trim(),
+      scenario:    module === 'grammar-assessment' ? '' : $('topic-scenario').value.trim(),
       checklist,
       botScript,
       callerAudioBlob: _callerAudioBlob || null,
@@ -820,12 +921,19 @@ window.Admin = (() => {
       const aiScore   = s.aiScores?.overall ?? '';
       const admScore  = s.adminScores ? (calcAdminAvg(s.adminScores) ?? '') : '';
       // Always regenerate fresh — avoids stale stored summaries with removed parameters
-      const aiSummary = (s.aiScores && typeof SpeechEngine !== 'undefined')
-        ? SpeechEngine.generateCoachingSummary(s.module, s.aiScores)
-        : '';
-      const adminSummary = (s.adminScores && typeof SpeechEngine !== 'undefined')
+      // Grammar Assessment: AI summary = score breakdown, no text coaching needed
+      let aiSummary = '';
+      if (s.module === 'grammar-assessment') {
+        if (s.aiScores) {
+          const { correctAnswers, totalQuestions, overall } = s.aiScores;
+          aiSummary = `Score: ${correctAnswers ?? '?'} / ${totalQuestions ?? '?'} correct (${overall ?? '?'}%)`;
+        }
+      } else if (s.aiScores && typeof SpeechEngine !== 'undefined') {
+        aiSummary = SpeechEngine.generateCoachingSummary(s.module, s.aiScores);
+      }
+      const adminSummary = (s.adminScores && s.module !== 'grammar-assessment' && typeof SpeechEngine !== 'undefined')
         ? SpeechEngine.generateCoachingSummary(s.module, s.adminScores, 'admin')
-        : '';
+        : (s.adminScores && s.module === 'grammar-assessment' ? 'Reviewed by admin' : '');
       return [name, empId, module, topic, date, aiScore, admScore, aiSummary, adminSummary];
     });
 
@@ -994,15 +1102,46 @@ window.Admin = (() => {
     $('scoring-date').textContent = formatDate(session.submittedAt);
 
     const isWritten = session.module === 'written-comm';
+    const isGrammar = session.module === 'grammar-assessment';
 
-    // Audio or written text
-    if (isWritten) {
+    // Show correct left-panel section based on module type
+    if (isGrammar) {
+      $('scoring-audio-section').classList.add('hidden');
+      $('scoring-transcript-section').classList.add('hidden');
+      $('scoring-written-section').classList.add('hidden');
+      $('scoring-mcq-section').classList.remove('hidden');
+
+      // Render MCQ results
+      try {
+        const LABELS = ['A', 'B', 'C', 'D'];
+        const answerRecord = JSON.parse(session.writtenText || '[]');
+        const correct = answerRecord.filter(a => a.isCorrect).length;
+        const total   = answerRecord.length;
+        const pct     = total > 0 ? Math.round((correct / total) * 100) : 0;
+        $('scoring-mcq-score').textContent = `Score: ${correct} / ${total} correct (${pct}%)`;
+        $('scoring-mcq-review').innerHTML = answerRecord.map((item, i) => {
+          const userLbl    = item.userAnswer >= 0 ? LABELS[item.userAnswer] : '—';
+          const correctLbl = LABELS[item.correct];
+          return `<div class="mcq-scoring-item ${item.isCorrect ? 'mcq-correct' : 'mcq-wrong'}">
+            <strong>${i + 1}. ${item.stem}</strong><br>
+            ${item.isCorrect ? '✅' : '❌'} Your answer: <strong>${userLbl}) ${item.options?.[item.userAnswer] || '—'}</strong>
+            ${!item.isCorrect ? ` · Correct: <strong>${correctLbl}) ${item.options?.[item.correct] || '—'}</strong>` : ''}
+            ${item.explanation ? `<br><em style="font-size:0.78rem;color:#64748b">💡 ${item.explanation}</em>` : ''}
+          </div>`;
+        }).join('');
+      } catch (e) {
+        $('scoring-mcq-score').textContent = 'Could not parse MCQ results.';
+        $('scoring-mcq-review').innerHTML = '';
+      }
+    } else if (isWritten) {
       $('scoring-audio-section').classList.add('hidden');
       $('scoring-transcript-section').classList.add('hidden');
       $('scoring-written-section').classList.remove('hidden');
+      $('scoring-mcq-section').classList.add('hidden');
       $('scoring-written-text').textContent = session.writtenText || session.transcript || '';
     } else {
       $('scoring-written-section').classList.add('hidden');
+      $('scoring-mcq-section').classList.add('hidden');
       $('scoring-audio-section').classList.remove('hidden');
       $('scoring-transcript-section').classList.remove('hidden');
 
@@ -1023,6 +1162,15 @@ window.Admin = (() => {
     const aiDisplay = $('scoring-ai-scores-display');
     aiDisplay.innerHTML = '';
     if (session.aiScores) {
+      // Grammar assessment: show a simple score summary, not individual criteria bars
+      if (isGrammar) {
+        const { overall, correctAnswers, totalQuestions } = session.aiScores;
+        aiDisplay.innerHTML = `
+          <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:0.75rem;text-align:center;margin-bottom:0.5rem">
+            <div style="font-size:1.5rem;font-weight:800;color:#7c3aed">${correctAnswers ?? '?'} / ${totalQuestions ?? '?'}</div>
+            <div style="font-size:0.85rem;color:#6d28d9;font-weight:600">${overall ?? '?'}% — Auto-graded</div>
+          </div>`;
+      } else {
       // Build label map from SCORING_CRITERIA for this module
       const moduleCriteria = SCORING_CRITERIA[session.module] || [];
       const labelMap = {};
@@ -1071,9 +1219,9 @@ window.Admin = (() => {
               <span class="score-val" style="font-size:0.72rem;color:var(--text-muted)">${adminVal}</span>
             </div>`;
         });
-      }
+      } // end else (non-grammar)
 
-      if (session.aiScores.overall !== undefined) {
+      if (!isGrammar && session.aiScores.overall !== undefined) {
         const _overallPct = normalizeOverall(session.aiScores.overall);
         aiDisplay.innerHTML += `
           <div class="ai-score-row" style="background:#eff6ff;border:1px solid #dbeafe;margin-top:0.25rem">
@@ -1083,18 +1231,20 @@ window.Admin = (() => {
           </div>`;
       }
 
-      // Always regenerate fresh — never use stored _summary which may reference removed parameters
-      const coachingSummary = typeof SpeechEngine !== 'undefined'
-        ? SpeechEngine.generateCoachingSummary(session.module, session.aiScores)
-        : '';
-      if (coachingSummary) {
-        aiDisplay.innerHTML += `
-          <div style="margin-top:0.75rem">
-            <div style="font-size:0.72rem;font-weight:700;color:#1d4ed8;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:0.35rem">
-              AI Coaching Summary
-            </div>
-            <pre style="white-space:pre-wrap;font-family:inherit;font-size:0.8rem;line-height:1.7;background:#eff6ff;border:1px solid #bfdbfe;border-left:3px solid #3b82f6;border-radius:6px;padding:0.75rem 0.875rem;margin:0;color:var(--text)">${coachingSummary}</pre>
-          </div>`;
+      // Always regenerate fresh — never use stored _summary (grammar-assessment has no text summary)
+      if (!isGrammar) {
+        const coachingSummary = typeof SpeechEngine !== 'undefined'
+          ? SpeechEngine.generateCoachingSummary(session.module, session.aiScores)
+          : '';
+        if (coachingSummary) {
+          aiDisplay.innerHTML += `
+            <div style="margin-top:0.75rem">
+              <div style="font-size:0.72rem;font-weight:700;color:#1d4ed8;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:0.35rem">
+                AI Coaching Summary
+              </div>
+              <pre style="white-space:pre-wrap;font-family:inherit;font-size:0.8rem;line-height:1.7;background:#eff6ff;border:1px solid #bfdbfe;border-left:3px solid #3b82f6;border-radius:6px;padding:0.75rem 0.875rem;margin:0;color:var(--text)">${coachingSummary}</pre>
+            </div>`;
+        }
       }
     }
 
@@ -1119,6 +1269,16 @@ window.Admin = (() => {
     const criteriaContainer = $('scoring-criteria');
     criteriaContainer.innerHTML = '';
     let lastGroup = null;
+
+    // Grammar Assessment: no manual scoring criteria — show info note instead
+    if (isGrammar) {
+      criteriaContainer.innerHTML = `
+        <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:0.875rem;font-size:0.85rem;color:#5b21b6">
+          <strong>📊 Auto-graded</strong><br>
+          This test is automatically scored based on correct answers. The score has been calculated and saved. You can add a comment or feedback below.
+        </div>`;
+      $('scoring-total-display').textContent = (session.aiScores?.overall ?? '—');
+    }
 
     criteria.forEach((criterion, idx) => {
       const key = criterion.key;
@@ -1279,6 +1439,7 @@ window.Admin = (() => {
   }
 
   function updateScoringTotal(module, existing) {
+    if (module === 'grammar-assessment') return; // handled separately in openScoring
     const criteria = SCORING_CRITERIA[module] || [];
     let total;
     if (existing && typeof existing.overall === 'number') {
@@ -1305,22 +1466,28 @@ window.Admin = (() => {
     const session = await DB.get('sessions', _scoringSessionId);
     if (!session) return;
 
-    const criteria = SCORING_CRITERIA[session.module] || [];
+    const criteria    = SCORING_CRITERIA[session.module] || [];
     const adminScores = {};
-    criteria.forEach((criterion, i) => {
-      const key = criterion.key;
-      if (criterion.scale135) {
-        const radio = document.querySelector(`input[name="scale135-${i}"]:checked`);
-        if (radio) adminScores[key] = parseInt(radio.value);
-      } else {
-        const slider = $(`slider-${i}`);
-        if (slider) adminScores[key] = parseInt(slider.value);
-      }
-    });
 
-    // Compute overall out of 100 and store it
-    const vals = criteria.map(c => adminScores[c.key] ?? 3);
-    adminScores.overall = parseFloat(((vals.reduce((a, b) => a + b, 0) / (vals.length * 5)) * 100).toFixed(1));
+    // Grammar Assessment is auto-scored — admin just reviews and adds a comment
+    if (session.module === 'grammar-assessment') {
+      adminScores.overall = session.aiScores?.overall ?? 0;
+    } else {
+      criteria.forEach((criterion, i) => {
+        const key = criterion.key;
+        if (criterion.scale135) {
+          const radio = document.querySelector(`input[name="scale135-${i}"]:checked`);
+          if (radio) adminScores[key] = parseInt(radio.value);
+        } else {
+          const slider = $(`slider-${i}`);
+          if (slider) adminScores[key] = parseInt(slider.value);
+        }
+      });
+
+      // Compute overall out of 100 and store it
+      const vals = criteria.map(c => adminScores[c.key] ?? 3);
+      adminScores.overall = parseFloat(((vals.reduce((a, b) => a + b, 0) / (vals.length * 5)) * 100).toFixed(1));
+    }
 
     // Generate and store coaching summary from admin scores
     if (typeof SpeechEngine !== 'undefined') {

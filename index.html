@@ -92,6 +92,12 @@
       <p>Complete a professional writing task — email, memo, or report. AI checks tone and structure.</p>
       <span class="module-tag">AI + Admin</span>
     </div>
+    <div class="module-card ga" data-module="grammar-assessment">
+      <div class="module-icon" style="background:#f5f3ff">📝</div>
+      <h3>Grammar Assessment</h3>
+      <p>Test your grammar knowledge with multiple-choice questions. Get instant scores and detailed explanations.</p>
+      <span class="module-tag">Auto Scored</span>
+    </div>
   </div>
 </section>
 
@@ -626,6 +632,90 @@
         <span>Your admin will review and provide final scores on clarity, structure, grammar, tone, and professionalism.</span>
       </div>
       <div class="results-actions">
+        <button class="btn-secondary" data-back="modules">← Back to Modules</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SCREEN: Grammar Assessment
+     ============================================================ -->
+<section id="screen-grammar-assessment" class="screen">
+  <div class="module-header ga-header">
+    <button class="btn-back" data-back="modules">← Back</button>
+    <h2>📝 Grammar Assessment</h2>
+  </div>
+
+  <!-- Step 1: Intro -->
+  <div class="step-container" id="ga-step-intro">
+    <div class="step-card">
+      <div class="step-label">Grammar MCQ Test</div>
+      <h3 id="ga-intro-title" style="text-align:center;margin-bottom:0.5rem"></h3>
+      <p id="ga-intro-desc" style="text-align:center;color:var(--text-muted);margin-bottom:1.5rem;font-size:0.9rem"></p>
+      <div class="ga-intro-meta">
+        <div class="ga-meta-item">
+          <span class="ga-meta-icon">❓</span>
+          <span id="ga-intro-count">— questions</span>
+        </div>
+        <div class="ga-meta-item">
+          <span class="ga-meta-icon">⏱️</span>
+          <span>No time limit</span>
+        </div>
+        <div class="ga-meta-item">
+          <span class="ga-meta-icon">✅</span>
+          <span>Instant results</span>
+        </div>
+      </div>
+      <div class="ga-intro-rules">
+        <h4>Instructions</h4>
+        <ul>
+          <li>Read each question carefully before selecting an answer.</li>
+          <li>Select the option you think is correct — you can go back to change answers.</li>
+          <li>Use the ← Previous button to revisit earlier questions.</li>
+          <li>Click <strong>Submit Test</strong> on the last question to see your score with detailed explanations.</li>
+        </ul>
+      </div>
+      <button id="btn-ga-start" class="btn-primary" style="background:var(--ga-color);width:100%;margin-top:1.5rem">
+        Start Test →
+      </button>
+    </div>
+  </div>
+
+  <!-- Step 2: Quiz -->
+  <div class="step-container hidden" id="ga-step-quiz">
+    <div class="step-card">
+      <div class="ga-progress-bar-wrap">
+        <div id="ga-progress-bar" class="ga-progress-bar" style="width:0%"></div>
+      </div>
+      <div class="ga-question-num" id="ga-q-num">Question 1 of 10</div>
+      <div class="ga-question-stem" id="ga-q-stem"></div>
+      <div class="ga-options-grid" id="ga-options-container"></div>
+      <div class="ga-nav-row">
+        <button id="btn-ga-prev" class="btn-secondary" style="display:none">← Previous</button>
+        <button id="btn-ga-next" class="btn-primary" style="background:var(--ga-color);margin-left:auto">Next →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3: Results -->
+  <div class="step-container hidden" id="ga-step-results">
+    <div class="results-card">
+      <div class="results-header">
+        <div class="results-icon">📝</div>
+        <h2>Test Complete!</h2>
+        <p>Your grammar assessment result</p>
+      </div>
+      <div class="ga-score-display">
+        <div class="ga-score-big" id="ga-result-score">— / —</div>
+        <div class="ga-score-pct" id="ga-result-pct">—%</div>
+        <div class="ga-score-band" id="ga-result-band"></div>
+      </div>
+      <div>
+        <h3 style="margin-bottom:0.75rem">Detailed Review</h3>
+        <div id="ga-review-list" class="ga-review-list"></div>
+      </div>
+      <div class="results-actions" style="margin-top:1.5rem">
         <button class="btn-secondary" data-back="modules">← Back to Modules</button>
       </div>
     </div>
