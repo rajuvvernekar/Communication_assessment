@@ -12,6 +12,17 @@ const App = (() => {
   let _wcStartTime = null;
   let _wcTimerInterval = null;
 
+  // ── Listening Assessment state ──
+  let _laSections       = [];   // [{id, title, sectionType, questions}] sorted by title
+  let _laCurrentSection = 0;    // 0-based index into _laSections
+  let _laSectionResults = [];   // accumulated results
+  let _laQuestions      = [];   // current section's question array
+  let _laCurrentIdx     = 0;    // current question index within section
+  let _laUserAnswers    = [];   // -1 = unanswered, 0-3 = chosen option index
+
+  // Marks per section: Video=2, Audio=5, Reading=3 (by section index 0,1,2)
+  const LA_MARKS = [2, 5, 3];
+
   // ── Grammar Assessment state ──
   let _gaSections       = [];   // [{id, title, questions}] all sections sorted A → C
   let _gaCurrentSection = 0;    // 0-based index into _gaSections
@@ -140,7 +151,7 @@ const App = (() => {
         }
       });
       // Hide all elements with step-like IDs within the screen
-      screen.querySelectorAll('[id^="ps-step"],[id^="mc-step"],[id^="rp-step"],[id^="gd-step"],[id^="wc-step"],[id^="ga-step"]')
+      screen.querySelectorAll('[id^="ps-step"],[id^="mc-step"],[id^="rp-step"],[id^="gd-step"],[id^="wc-step"],[id^="ga-step"],[id^="la-step"]')
         .forEach(el => el.classList.add('hidden'));
     }
     const el = $(stepId);
@@ -357,6 +368,11 @@ const App = (() => {
 
     if (module === 'grammar-assessment') {
       await initGrammarAssessment();
+      return;
+    }
+
+    if (module === 'listening-assessment') {
+      await initListeningAssessment();
       return;
     }
 
@@ -1521,6 +1537,231 @@ const App = (() => {
 
     // Show confirmation — no scores visible to trainee
     showStep('grammar-assessment', 'ga-step-results');
+  }
+
+  // ================================================================
+  //  LISTENING ASSESSMENT (MCQ) — 3 sections, 100 marks total
+  // ================================================================
+
+  async function initListeningAssessment() {
+    const allTopics = enabledTopics(await DB.getByIndex('topics', 'module', 'listening-assessment'));
+    if (!allTopics.length) {
+      toast('No listening tests available. Ask your admin to add questions.', 'error');
+      return;
+    }
+
+    // Sort by title so Section 1 → 2 → 3 loads in order
+    allTopics.sort((a, b) => a.title.localeCompare(b.title));
+
+    _laSections = allTopics
+      .map(t => {
+        // Extract section type label: "Listening Set 1 — Section 2: Audio (10 Questions)" → "Audio"
+        const typeMatch = t.title.match(/Section\s+\d+:\s*(\w+)/i);
+        return {
+          id:          t.id,
+          title:       t.title,
+          sectionType: typeMatch ? typeMatch[1] : `Section ${allTopics.indexOf(t) + 1}`,
+          questions:   (t.checklist || []).filter(q => q && typeof q === 'object' && q.stem)
+        };
+      })
+      .filter(s => s.questions.length > 0);
+
+    if (!_laSections.length) {
+      toast('No listening questions found. Ask your admin to add questions.', 'error');
+      return;
+    }
+
+    _laCurrentSection = 0;
+    _laSectionResults = [];
+
+    showScreen('listening-assessment');
+    showStep('listening-assessment', 'la-step-intro');
+
+    $('btn-la-start').onclick = () => loadListeningSection(0);
+  }
+
+  function loadListeningSection(idx) {
+    _laCurrentSection = idx;
+    const section     = _laSections[idx];
+    _laQuestions      = section.questions;
+    _laCurrentIdx     = 0;
+    _laUserAnswers    = new Array(section.questions.length).fill(-1);
+
+    showStep('listening-assessment', 'la-step-quiz');
+    renderListeningQuestion();
+  }
+
+  function renderListeningQuestion() {
+    const q     = _laQuestions[_laCurrentIdx];
+    const total = _laQuestions.length;
+    const cur   = _laCurrentIdx + 1;
+    const sec   = _laSections[_laCurrentSection];
+    const marks = LA_MARKS[_laCurrentSection] || 1;
+
+    // Section label + overall progress
+    $('la-section-label').textContent    = `Section ${_laCurrentSection + 1} — ${sec.sectionType} (${marks} mark${marks > 1 ? 's' : ''} each)`;
+    $('la-section-progress').textContent = `Section ${_laCurrentSection + 1} of ${_laSections.length}`;
+
+    // Progress bar within this section
+    $('la-progress-bar').style.width = `${((cur - 1) / total) * 100}%`;
+    $('la-q-num').textContent        = `Question ${cur} of ${total}`;
+    $('la-q-stem').textContent       = q.stem;
+
+    // Answer options
+    const LABELS    = ['A', 'B', 'C', 'D'];
+    const container = $('la-options-container');
+    container.innerHTML = '';
+    (q.options || []).forEach((opt, idx) => {
+      const btn       = document.createElement('button');
+      btn.className   = 'ga-option-btn' + (_laUserAnswers[_laCurrentIdx] === idx ? ' selected' : '');
+      btn.innerHTML   = `<span class="ga-option-label">${LABELS[idx]}</span> <span>${opt}</span>`;
+      btn.onclick     = () => selectListeningOption(idx);
+      container.appendChild(btn);
+    });
+
+    // Previous button
+    const prevBtn         = $('btn-la-prev');
+    prevBtn.style.display = _laCurrentIdx > 0 ? '' : 'none';
+    prevBtn.onclick       = () => prevListeningQuestion();
+
+    // Next / Complete-Section / Submit button
+    const nextBtn       = $('btn-la-next');
+    const isLastQ       = _laCurrentIdx === total - 1;
+    const isLastSection = _laCurrentSection === _laSections.length - 1;
+
+    if (!isLastQ) {
+      nextBtn.textContent = 'Next →';
+      nextBtn.onclick     = nextListeningQuestion;
+    } else if (!isLastSection) {
+      nextBtn.textContent = `Complete Section ${_laCurrentSection + 1} →`;
+      nextBtn.onclick     = completeListeningSection;
+    } else {
+      nextBtn.textContent = 'Submit Full Test ✓';
+      nextBtn.onclick     = completeListeningSection;
+    }
+  }
+
+  function selectListeningOption(idx) {
+    _laUserAnswers[_laCurrentIdx] = idx;
+    document.querySelectorAll('#la-options-container .ga-option-btn').forEach((btn, i) => {
+      btn.classList.toggle('selected', i === idx);
+    });
+  }
+
+  function nextListeningQuestion() {
+    if (_laUserAnswers[_laCurrentIdx] === -1) {
+      toast('Please select an answer before continuing.', 'error');
+      return;
+    }
+    _laCurrentIdx++;
+    renderListeningQuestion();
+  }
+
+  function prevListeningQuestion() {
+    if (_laCurrentIdx > 0) {
+      _laCurrentIdx--;
+      renderListeningQuestion();
+    }
+  }
+
+  function completeListeningSection() {
+    if (_laUserAnswers[_laCurrentIdx] === -1) {
+      toast('Please select an answer before continuing.', 'error');
+      return;
+    }
+
+    const marksPerQ = LA_MARKS[_laCurrentSection] || 1;
+
+    let correct = 0;
+    const answerRecord = _laQuestions.map((q, idx) => {
+      const isOk = _laUserAnswers[idx] === q.correct;
+      if (isOk) correct++;
+      return {
+        stem:        q.stem,
+        options:     q.options,
+        correct:     q.correct,
+        userAnswer:  _laUserAnswers[idx],
+        isCorrect:   isOk,
+        explanation: q.explanation || ''
+      };
+    });
+
+    const marksObtained = correct * marksPerQ;
+    const maxMarks      = _laQuestions.length * marksPerQ;
+
+    _laSectionResults.push({
+      title:        _laSections[_laCurrentSection].title,
+      sectionType:  _laSections[_laCurrentSection].sectionType,
+      answerRecord,
+      correct,
+      total:        _laQuestions.length,
+      marksPerQ,
+      marksObtained,
+      maxMarks
+    });
+
+    const isLastSection = _laCurrentSection === _laSections.length - 1;
+    if (isLastSection) {
+      submitListeningAssessment();
+    } else {
+      const nextIdx      = _laCurrentSection + 1;
+      const nextSec      = _laSections[nextIdx];
+      showStep('listening-assessment', 'la-step-transition');
+      $('la-transition-msg').textContent  = `Section ${_laCurrentSection + 1} complete! Get ready for Section ${nextIdx + 1}: ${nextSec.sectionType}.`;
+      $('la-transition-next').textContent = `Start Section ${nextIdx + 1}: ${nextSec.sectionType} →`;
+      $('la-transition-next').onclick     = () => loadListeningSection(nextIdx);
+    }
+  }
+
+  async function submitListeningAssessment() {
+    const totalMarksObtained = _laSectionResults.reduce((s, r) => s + r.marksObtained, 0);
+    const totalMaxMarks      = _laSectionResults.reduce((s, r) => s + r.maxMarks, 0);
+    const totalCorrect       = _laSectionResults.reduce((s, r) => s + r.correct, 0);
+    const totalQuestions     = _laSectionResults.reduce((s, r) => s + r.total, 0);
+    const scoreOutOf100      = totalMaxMarks > 0 ? Math.round((totalMarksObtained / totalMaxMarks) * 100) : 0;
+
+    const sessionData = {
+      sections: _laSectionResults.map(r => ({
+        title:         r.title,
+        sectionType:   r.sectionType,
+        answerRecord:  r.answerRecord,
+        correct:       r.correct,
+        total:         r.total,
+        marksPerQ:     r.marksPerQ,
+        marksObtained: r.marksObtained,
+        maxMarks:      r.maxMarks
+      })),
+      totalCorrect,
+      totalQuestions,
+      totalMarksObtained,
+      totalMaxMarks,
+      scoreOutOf100
+    };
+
+    try {
+      await DB.put('sessions', {
+        traineeId:    _trainee.id,
+        traineeName:  _trainee.name,
+        module:       'listening-assessment',
+        topicId:      _laSections[0].id,
+        topicTitle:   'Listening Assessment — Full Test (Video + Audio + Reading)',
+        recordingBlob: null,
+        transcript:   '',
+        writtenText:  JSON.stringify(sessionData),
+        aiScores:     { overall: scoreOutOf100, marksObtained: totalMarksObtained, totalMarks: totalMaxMarks, correctAnswers: totalCorrect, totalQuestions },
+        adminScores:  null,
+        adminComment: '',
+        status:       'ai-evaluated',
+        submittedAt:  new Date().toISOString(),
+        timeTaken:    0
+      });
+      toast('Listening test submitted!', 'success');
+    } catch (e) {
+      console.error('Session save failed:', e.message);
+      toast('⚠ Could not save session: ' + e.message, 'error');
+    }
+
+    showStep('listening-assessment', 'la-step-results');
   }
 
   // ---- Init ----
