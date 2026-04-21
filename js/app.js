@@ -439,25 +439,22 @@ const App = (() => {
     // Skip button hidden until topic is revealed
     skipBtn.style.display = 'none';
 
-    $('btn-ps-reveal').onclick = async () => {
+    $('btn-ps-reveal').onclick = () => {
       revealEl.classList.add('revealed');
       $('ps-topic-title').textContent = _currentTopic.title;
       $('ps-topic-desc').textContent  = _currentTopic.description || '';
       $('btn-ps-reveal').style.display = 'none';
 
-      // Show skip button briefly (only if skip hasn't been used AND not Stock Market)
+      // Show skip button (only if skip hasn't been used AND not Stock Market)
       if (!_psSkipUsed && _psCategory !== 'pick-speak-stock') {
-        skipBadge.textContent  = '(1 skip available)';
-        skipBtn.style.display  = '';
-        skipBtn.disabled       = false;
+        skipBadge.textContent = '(1 skip available)';
+        skipBtn.style.display = '';
+        skipBtn.disabled      = false;
       }
 
-      // Auto-start prep — if mic denied, show "I'm Ready" as fallback retry
-      const ok = await startPickSpeakPrep();
-      if (!ok) {
-        $('btn-ps-ready').textContent = '🎤 Allow Mic & Start Prep';
-        $('btn-ps-ready').classList.remove('hidden');
-      }
+      // Always show "I'm Ready" button — user decides when to start prep
+      $('btn-ps-ready').textContent = "I'm Ready → Start Prep Time";
+      $('btn-ps-ready').classList.remove('hidden');
     };
 
     // Skip: pick new topic from the same pool — update state so startPickSpeakPrep
@@ -480,7 +477,14 @@ const App = (() => {
       $('ps-topic-desc').textContent  = _currentTopic.description || '';
     };
 
-    $('btn-ps-ready').onclick = () => startPickSpeakPrep();
+    $('btn-ps-ready').onclick = async () => {
+      const ok = await startPickSpeakPrep();
+      if (!ok) {
+        // Mic was denied — stay on topic step, let user try again
+        $('btn-ps-ready').textContent = '🎤 Allow Mic & Try Again';
+        $('btn-ps-ready').classList.remove('hidden');
+      }
+    };
     $('btn-ps-again').onclick = () => initPickSpeakCategory();
   }
 
