@@ -155,30 +155,48 @@
 
   <!-- Step 2: Prep Timer -->
   <div class="step-container hidden" id="ps-step-prep">
-    <div class="step-card">
+    <div class="step-card ps-prep-card">
       <div class="step-label">Step 2 of 3 — Preparation Time</div>
-      <div class="topic-mini">
-        <strong id="ps-prep-title"></strong>
-        <p id="ps-prep-desc"></p>
-      </div>
-      <div class="timer-display">
-        <div class="timer-ring">
-          <svg viewBox="0 0 120 120">
-            <circle cx="60" cy="60" r="54" fill="none" stroke="#e2e8f0" stroke-width="8"/>
-            <circle id="ps-prep-ring" cx="60" cy="60" r="54" fill="none"
-              stroke="var(--ps-color)" stroke-width="8"
-              stroke-dasharray="339.3" stroke-dashoffset="0"
-              stroke-linecap="round" transform="rotate(-90 60 60)"/>
-          </svg>
-          <div class="timer-text">
-            <span id="ps-prep-time">30</span>
-            <small>seconds</small>
+
+      <!-- Topic + compact timer row -->
+      <div class="ps-prep-top">
+        <div class="ps-prep-topic-col">
+          <div class="topic-mini" style="margin-bottom:0">
+            <strong id="ps-prep-title"></strong>
+            <p id="ps-prep-desc" style="margin-top:0.25rem"></p>
           </div>
         </div>
-        <p class="timer-hint">Organize your thoughts. You'll speak for 2 minutes without stopping.</p>
+        <div class="ps-prep-timer-col">
+          <div class="timer-ring timer-ring-sm">
+            <svg viewBox="0 0 120 120">
+              <circle cx="60" cy="60" r="54" fill="none" stroke="#e2e8f0" stroke-width="8"/>
+              <circle id="ps-prep-ring" cx="60" cy="60" r="54" fill="none"
+                stroke="var(--ps-color)" stroke-width="8"
+                stroke-dasharray="339.3" stroke-dashoffset="0"
+                stroke-linecap="round" transform="rotate(-90 60 60)"/>
+            </svg>
+            <div class="timer-text">
+              <span id="ps-prep-time">120</span>
+              <small>sec</small>
+            </div>
+          </div>
+          <p style="font-size:0.72rem;color:var(--text-muted);text-align:center;margin-top:0.35rem">Prep time</p>
+        </div>
       </div>
-      <div style="text-align:center">
-        <button id="btn-ps-skip-prep" class="btn-ghost">Skip → Start Recording Now</button>
+
+      <!-- Notepad area -->
+      <div class="ps-notepad-wrap">
+        <div class="ps-notepad-header">
+          <span>📝 Your Notes</span>
+          <span id="ps-note-wordcount" class="ps-note-wc">0 words</span>
+        </div>
+        <textarea id="ps-notepad"
+          placeholder="Jot down your key points, structure your talk, note examples you want to use...&#10;&#10;• Opening line / hook&#10;• Main point 1&#10;• Main point 2&#10;• Closing / summary"
+          class="ps-notepad-area"></textarea>
+      </div>
+
+      <div style="text-align:center;margin-top:1rem">
+        <button id="btn-ps-skip-prep" class="btn-ghost">Skip Prep → Start Recording Now</button>
       </div>
     </div>
   </div>

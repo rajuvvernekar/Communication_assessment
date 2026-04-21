@@ -500,6 +500,18 @@ const App = (() => {
     $('ps-prep-title').textContent = _currentTopic.title;
     $('ps-prep-desc').textContent = _currentTopic.description || '';
 
+    // Clear notepad and wire up word counter for this session
+    const notepad  = $('ps-notepad');
+    const noteWc   = $('ps-note-wordcount');
+    if (notepad) {
+      notepad.value = '';
+      if (noteWc) noteWc.textContent = '0 words';
+      notepad.oninput = () => {
+        const words = notepad.value.trim() ? notepad.value.trim().split(/\s+/).length : 0;
+        if (noteWc) noteWc.textContent = `${words} word${words !== 1 ? 's' : ''}`;
+      };
+    }
+
     const PREP = 120;
     const ring = $('ps-prep-ring');
     const circumference = 339.3;
