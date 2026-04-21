@@ -1612,7 +1612,8 @@ const App = (() => {
     const total = _laQuestions.length;
     const cur   = _laCurrentIdx + 1;
     const sec   = _laSections[_laCurrentSection];
-    const marks = LA_MARKS[_laCurrentSection] || 1;
+    // Use per-question marksPerQ if set (Set 2+), else fall back to LA_MARKS array (Set 1)
+    const marks = (_laQuestions[0] && _laQuestions[0].marksPerQ) || LA_MARKS[_laCurrentSection] || 1;
 
     // Section label + overall progress
     $('la-section-label').textContent    = `Section ${_laCurrentSection + 1} — ${sec.sectionType} (${marks} mark${marks > 1 ? 's' : ''} each)`;
@@ -1686,7 +1687,8 @@ const App = (() => {
       return;
     }
 
-    const marksPerQ = LA_MARKS[_laCurrentSection] || 1;
+    // Use per-question marksPerQ if set (Set 2+), else fall back to LA_MARKS array (Set 1)
+    const marksPerQ = (_laQuestions[0] && _laQuestions[0].marksPerQ) || LA_MARKS[_laCurrentSection] || 1;
 
     let correct = 0;
     const answerRecord = _laQuestions.map((q, idx) => {
