@@ -1388,6 +1388,19 @@ window.Admin = (() => {
             const mMax        = sec.maxMarks ?? sec.total ?? 0;
             const mPerQ       = sec.marksPerQ ?? 1;
             const rows = (sec.answerRecord || []).map((item, i) => {
+              // Written-answer questions (fill-blank / rewrite)
+              if (item.type === 'fill-blank' || item.type === 'rewrite') {
+                const acceptedStr = (item.acceptedAnswers || []).join(' / ');
+                const userText    = item.userAnswer || '(no answer)';
+                return `<div class="mcq-scoring-item ${item.isCorrect ? 'mcq-correct' : 'mcq-wrong'}">
+                  <strong>${i + 1}. ${item.stem}</strong><br>
+                  ${item.isCorrect
+                    ? `✅ <strong>"${userText}"</strong> <em style="color:#059669">(+${mPerQ} mark${mPerQ > 1 ? 's' : ''})</em>`
+                    : `❌ Your answer: <strong>"${userText}"</strong><br>✔ Accepted: <em style="color:#7c3aed">${acceptedStr}</em>`}
+                  ${item.explanation ? `<br><em style="font-size:0.78rem;color:#64748b">💡 ${item.explanation}</em>` : ''}
+                </div>`;
+              }
+              // MCQ questions
               const userLbl    = item.userAnswer >= 0 ? LABELS[item.userAnswer] : '—';
               const correctLbl = LABELS[item.correct];
               return `<div class="mcq-scoring-item ${item.isCorrect ? 'mcq-correct' : 'mcq-wrong'}">

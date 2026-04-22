@@ -1921,6 +1921,58 @@ body {
   flex-shrink: 0;
 }
 
+/* Written answer — hint text */
+.ga-written-hint {
+  font-size: 0.85rem;
+  color: var(--ga-color);
+  font-weight: 600;
+  margin: 0 0 0.6rem;
+  letter-spacing: 0.01em;
+}
+
+/* Written answer — fill-in-the-blank single-line input */
+.ga-written-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  font-size: 1rem;
+  font-family: inherit;
+  color: var(--text);
+  background: #fff;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  box-sizing: border-box;
+  margin-bottom: 1rem;
+}
+.ga-written-input:focus {
+  outline: none;
+  border-color: var(--ga-color);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12);
+}
+
+/* Written answer — rewrite multi-line textarea */
+.ga-written-textarea {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  color: var(--text);
+  background: #fff;
+  resize: vertical;
+  min-height: 90px;
+  line-height: 1.65;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  box-sizing: border-box;
+  margin-bottom: 1rem;
+}
+.ga-written-textarea:focus {
+  outline: none;
+  border-color: var(--ga-color);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12);
+}
+
 /* Navigation row */
 .ga-nav-row {
   display: flex;

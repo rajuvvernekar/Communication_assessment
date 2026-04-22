@@ -1373,17 +1373,21 @@ const App = (() => {
     const section     = _gaSections[idx];
     _gaQuestions      = section.questions;
     _gaCurrentIdx     = 0;
-    _gaUserAnswers    = new Array(section.questions.length).fill(-1);
+    // Written-answer questions get '' as initial value; MCQ questions get -1
+    _gaUserAnswers    = section.questions.map(q =>
+      (q.type === 'fill-blank' || q.type === 'rewrite') ? '' : -1
+    );
 
     showStep('grammar-assessment', 'ga-step-quiz');
     renderGrammarQuestion();
   }
 
   function renderGrammarQuestion() {
-    const q     = _gaQuestions[_gaCurrentIdx];
-    const total = _gaQuestions.length;
-    const cur   = _gaCurrentIdx + 1;
+    const q         = _gaQuestions[_gaCurrentIdx];
+    const total     = _gaQuestions.length;
+    const cur       = _gaCurrentIdx + 1;
     const secLetter = String.fromCharCode(65 + _gaCurrentSection); // A, B, C
+    const isWritten = q.type === 'fill-blank' || q.type === 'rewrite';
 
     // Section label + overall progress
     $('ga-section-label').textContent    = `Section ${secLetter}`;
@@ -1394,27 +1398,70 @@ const App = (() => {
     $('ga-q-num').textContent        = `Question ${cur} of ${total}`;
     $('ga-q-stem').textContent       = q.stem;
 
-    // Answer options
-    const LABELS    = ['A', 'B', 'C', 'D'];
     const container = $('ga-options-container');
     container.innerHTML = '';
-    (q.options || []).forEach((opt, idx) => {
-      const btn       = document.createElement('button');
-      btn.className   = 'ga-option-btn' + (_gaUserAnswers[_gaCurrentIdx] === idx ? ' selected' : '');
-      btn.innerHTML   = `<span class="ga-option-label">${LABELS[idx]}</span> <span>${opt}</span>`;
-      btn.onclick     = () => selectGrammarOption(idx);
-      container.appendChild(btn);
-    });
 
-    // Previous button (only within a section)
+    if (q.type === 'fill-blank') {
+      // ── Fill-in-the-blank: show instruction + single-line text input ──
+      const hint      = document.createElement('p');
+      hint.className  = 'ga-written-hint';
+      hint.textContent = 'Type the word or phrase that best fills the blank:';
+      container.appendChild(hint);
+
+      const input         = document.createElement('input');
+      input.type          = 'text';
+      input.className     = 'ga-written-input';
+      input.placeholder   = 'Your answer…';
+      input.value         = _gaUserAnswers[_gaCurrentIdx] || '';
+      input.autocomplete  = 'off';
+      input.oninput       = () => { _gaUserAnswers[_gaCurrentIdx] = input.value; };
+      input.onkeydown     = (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (_gaCurrentIdx < total - 1) nextGrammarQuestion();
+          else completeGrammarSection();
+        }
+      };
+      container.appendChild(input);
+      setTimeout(() => input.focus(), 50);
+
+    } else if (q.type === 'rewrite') {
+      // ── Rewrite: show instruction + multi-line textarea ──
+      const hint      = document.createElement('p');
+      hint.className  = 'ga-written-hint';
+      hint.textContent = 'Rewrite the sentence correctly (fix the grammatical error):';
+      container.appendChild(hint);
+
+      const ta        = document.createElement('textarea');
+      ta.className    = 'ga-written-textarea';
+      ta.placeholder  = 'Type the corrected sentence here…';
+      ta.value        = _gaUserAnswers[_gaCurrentIdx] || '';
+      ta.rows         = 3;
+      ta.oninput      = () => { _gaUserAnswers[_gaCurrentIdx] = ta.value; };
+      container.appendChild(ta);
+      setTimeout(() => ta.focus(), 50);
+
+    } else {
+      // ── MCQ: show option buttons ──
+      const LABELS = ['A', 'B', 'C', 'D'];
+      (q.options || []).forEach((opt, idx) => {
+        const btn     = document.createElement('button');
+        btn.className = 'ga-option-btn' + (_gaUserAnswers[_gaCurrentIdx] === idx ? ' selected' : '');
+        btn.innerHTML = `<span class="ga-option-label">${LABELS[idx]}</span> <span>${opt}</span>`;
+        btn.onclick   = () => selectGrammarOption(idx);
+        container.appendChild(btn);
+      });
+    }
+
+    // Previous button (only within a section, and disable for written sections after first q)
     const prevBtn         = $('btn-ga-prev');
     prevBtn.style.display = _gaCurrentIdx > 0 ? '' : 'none';
     prevBtn.onclick       = () => prevGrammarQuestion();
 
     // Next / Complete-Section / Submit button
-    const nextBtn         = $('btn-ga-next');
-    const isLastQ         = _gaCurrentIdx === total - 1;
-    const isLastSection   = _gaCurrentSection === _gaSections.length - 1;
+    const nextBtn       = $('btn-ga-next');
+    const isLastQ       = _gaCurrentIdx === total - 1;
+    const isLastSection = _gaCurrentSection === _gaSections.length - 1;
 
     if (!isLastQ) {
       nextBtn.textContent = 'Next →';
@@ -1436,8 +1483,12 @@ const App = (() => {
   }
 
   function nextGrammarQuestion() {
-    if (_gaUserAnswers[_gaCurrentIdx] === -1) {
-      toast('Please select an answer before continuing.', 'error');
+    const q         = _gaQuestions[_gaCurrentIdx];
+    const ans       = _gaUserAnswers[_gaCurrentIdx];
+    const isWritten = q.type === 'fill-blank' || q.type === 'rewrite';
+
+    if (isWritten ? (!ans || !ans.trim()) : ans === -1) {
+      toast('Please enter your answer before continuing.', 'error');
       return;
     }
     _gaCurrentIdx++;
@@ -1451,29 +1502,84 @@ const App = (() => {
     }
   }
 
-  function completeGrammarSection() {
-    if (_gaUserAnswers[_gaCurrentIdx] === -1) {
-      toast('Please select an answer before continuing.', 'error');
+  async function completeGrammarSection() {
+    const lastQ      = _gaQuestions[_gaCurrentIdx];
+    const lastAns    = _gaUserAnswers[_gaCurrentIdx];
+    const isLastWritten = lastQ.type === 'fill-blank' || lastQ.type === 'rewrite';
+
+    if (isLastWritten ? (!lastAns || !lastAns.trim()) : lastAns === -1) {
+      toast('Please enter your answer before continuing.', 'error');
       return;
     }
 
     // Marks per question: Section A (index 0) = 1 mark, Section B & C (index 1,2) = 2 marks
     const marksPerQ = _gaCurrentSection === 0 ? 1 : 2;
 
+    // Determine if this section has any written-answer questions
+    const hasWritten = _gaQuestions.some(q => q.type === 'fill-blank' || q.type === 'rewrite');
+
+    // Disable nav buttons and show loading indicator for sections requiring Claude
+    const nextBtn = $('btn-ga-next');
+    const prevBtn = $('btn-ga-prev');
+    if (hasWritten) {
+      nextBtn.disabled    = true;
+      nextBtn.textContent = '⌛ Evaluating answers…';
+      if (prevBtn) prevBtn.disabled = true;
+    }
+
+    // Normalise helper: trim, lowercase, strip punctuation, collapse spaces
+    const normalise = s => (s || '').trim().toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ');
+
     // Score this section
     let correct = 0;
-    const answerRecord = _gaQuestions.map((q, idx) => {
-      const isOk = _gaUserAnswers[idx] === q.correct;
-      if (isOk) correct++;
-      return {
-        stem:        q.stem,
-        options:     q.options,
-        correct:     q.correct,
-        userAnswer:  _gaUserAnswers[idx],
-        isCorrect:   isOk,
-        explanation: q.explanation || ''
-      };
-    });
+    const answerRecord = [];
+
+    for (let idx = 0; idx < _gaQuestions.length; idx++) {
+      const q  = _gaQuestions[idx];
+      const ua = _gaUserAnswers[idx];
+
+      if (q.type === 'fill-blank' || q.type === 'rewrite') {
+        // Written answer: exact-match first (case-insensitive, no punctuation)
+        const userNorm = normalise(ua);
+        let isOk = (q.acceptedAnswers || []).some(a => normalise(a) === userNorm);
+
+        // Rewrite: if not an exact match, ask Claude for semantic/grammar evaluation
+        if (!isOk && q.type === 'rewrite' && userNorm) {
+          try {
+            isOk = await ClaudeEvaluator.evaluateRewrite(q.stem, ua, q.acceptedAnswers || []);
+          } catch (e) {
+            console.warn('Claude rewrite eval failed:', e.message);
+            isOk = false;
+          }
+        }
+
+        if (isOk) correct++;
+        answerRecord.push({
+          stem:            q.stem,
+          type:            q.type,
+          acceptedAnswers: q.acceptedAnswers,
+          userAnswer:      ua,
+          isCorrect:       isOk,
+          explanation:     q.explanation || ''
+        });
+      } else {
+        // MCQ
+        const isOk = ua === q.correct;
+        if (isOk) correct++;
+        answerRecord.push({
+          stem:        q.stem,
+          options:     q.options,
+          correct:     q.correct,
+          userAnswer:  ua,
+          isCorrect:   isOk,
+          explanation: q.explanation || ''
+        });
+      }
+    }
+
+    // Re-enable buttons
+    if (nextBtn) nextBtn.disabled = false;
+    if (prevBtn) prevBtn.disabled = false;
 
     const marksObtained = correct * marksPerQ;
     const maxMarks      = _gaQuestions.length * marksPerQ;

@@ -195,11 +195,45 @@ Return ONLY a JSON: {"score": <1 or 3 or 5>, "reason": "<one sentence>"}`
     }
   }
 
+  // ---- Evaluate a rewrite-the-sentence answer ----
+  // Returns true if the student's answer is grammatically correct AND
+  // fixes the same error as the model answer (same meaning preserved).
+  async function evaluateRewrite(originalSentence, studentAnswer, modelAnswers) {
+    if (!isAvailable()) return false;
+    if (!studentAnswer || !studentAnswer.trim()) return false;
+
+    const modelStr = modelAnswers.join(' OR ');
+    const system   = `You are a strict grammar examiner for an English proficiency test. Your ONLY job is to decide if a student's rewritten sentence is acceptable. Respond ONLY with valid JSON.`;
+    const user     = `Original (incorrect) sentence: "${originalSentence}"
+Model answer(s): "${modelStr}"
+Student's answer: "${studentAnswer}"
+
+Evaluate the student's answer:
+1. Is the student's answer grammatically correct?
+2. Does it fix the same grammatical error as the model answer?
+3. Does it preserve the original meaning?
+
+If ALL three conditions are true, award full marks. If any condition fails, award zero.
+Return ONLY this JSON: {"pass": true} or {"pass": false}`;
+
+    try {
+      const raw  = await callClaude(system, user);
+      const match = raw.match(/\{[^}]+\}/);
+      if (match) {
+        const obj = JSON.parse(match[0]);
+        return obj.pass === true;
+      }
+    } catch (e) {
+      console.warn('evaluateRewrite Claude error:', e.message);
+    }
+    return false;
+  }
+
   // ---- Get criteria for a module (for display purposes) ----
   function getCriteria(module) {
     if (module === 'mock-call') return MOCK_CALL_CRITERIA;
     return SPOKEN_CRITERIA[module] || [];
   }
 
-  return { isAvailable, evaluate, getCriteria, MOCK_CALL_CRITERIA };
+  return { isAvailable, evaluate, evaluateRewrite, getCriteria, MOCK_CALL_CRITERIA };
 })();
