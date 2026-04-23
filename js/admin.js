@@ -1132,6 +1132,19 @@ window.Admin = (() => {
 
     const sorted = [...sessions].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
 
+    // ── P&S best-session pre-compute (same rule as table: highest effective score per trainee) ──
+    const CSV_PS = new Set(['pick-speak', 'pick-speak-general', 'pick-speak-stock']);
+    const csvPsBest = {};
+    sorted.forEach(s => {
+      if (!CSV_PS.has(s.module)) return;
+      const aN = s.adminScores ? (calcAdminAvg(s.adminScores) ?? null)              : null;
+      const iN = s.aiScores    ? (normalizeOverall(s.aiScores.overall) ?? null)     : null;
+      const eff = aN !== null ? aN : iN;
+      if (eff !== null && (!csvPsBest[s.traineeId] || eff > csvPsBest[s.traineeId].eff)) {
+        csvPsBest[s.traineeId] = { id: s.id, eff };
+      }
+    });
+
     // ── Build rows ──────────────────────────────────────────────
     const headers = [
       'Name', 'Employee ID', 'Module', 'Topic', 'Date',
@@ -1148,11 +1161,15 @@ window.Admin = (() => {
       const date      = s.submittedAt ? new Date(s.submittedAt).toLocaleDateString() : '';
       const aiScore   = s.aiScores?.overall != null ? normalizeOverall(s.aiScores.overall) : '';
       const admScore  = s.adminScores ? (calcAdminAvg(s.adminScores) ?? '') : '';
-      const csvAI     = aiScore    !== '' ? parseFloat(aiScore)    : null;
-      const csvAdmin  = admScore   !== '' ? parseFloat(admScore)   : null;
-      const avgScore  = (csvAI !== null && csvAdmin !== null)
+      const csvAI     = aiScore  !== '' ? parseFloat(aiScore)  : null;
+      const csvAdmin  = admScore !== '' ? parseFloat(admScore) : null;
+      const computedAvg = (csvAI !== null && csvAdmin !== null)
         ? parseFloat(((csvAI + csvAdmin) / 2).toFixed(1))
-        : (csvAI !== null ? csvAI : '');
+        : (csvAdmin !== null ? csvAdmin : (csvAI !== null ? csvAI : ''));
+      // P&S: only best session gets avg; others get 'N/A'
+      const avgScore = CSV_PS.has(s.module)
+        ? (csvPsBest[s.traineeId]?.id === s.id ? computedAvg : 'N/A')
+        : computedAvg;
       // Always regenerate fresh — avoids stale stored summaries with removed parameters
       // Grammar / Listening Assessment: AI summary = section-by-section breakdown
       let aiSummary = '';
@@ -1247,19 +1264,41 @@ window.Admin = (() => {
       return;
     }
 
+    // ── Pick & Speak: pre-compute which session per trainee has the highest effective score.
+    // Effective score = admin score if scored, otherwise AI score.
+    // Only that session gets the Avg Score; all other P&S rows for the same trainee show N/A.
+    const PS_MODULES = new Set(['pick-speak', 'pick-speak-general', 'pick-speak-stock']);
+    const psBestByTrainee = {}; // traineeId → { id, effScore }
+    sorted.forEach(s => {
+      if (!PS_MODULES.has(s.module)) return;
+      const adminNum = s.adminScores ? (calcAdminAvg(s.adminScores) ?? null)              : null;
+      const aiNum    = s.aiScores    ? (normalizeOverall(s.aiScores.overall) ?? null)     : null;
+      const eff      = adminNum !== null ? adminNum : aiNum; // prefer admin score
+      if (eff === null) return;
+      if (!psBestByTrainee[s.traineeId] || eff > psBestByTrainee[s.traineeId].effScore) {
+        psBestByTrainee[s.traineeId] = { id: s.id, effScore: eff };
+      }
+    });
+
     tbody.innerHTML = sorted.map(s => {
-      const aiScore    = s.aiScores   ? (normalizeOverall(s.aiScores.overall) ?? '—') : '—';
-      const adminScore = s.adminScores ? (calcAdminAvg(s.adminScores)         ?? '—') : '—';
+      const aiScore    = s.aiScores    ? (normalizeOverall(s.aiScores.overall) ?? '—') : '—';
+      const adminScore = s.adminScores ? (calcAdminAvg(s.adminScores)          ?? '—') : '—';
       const isScored   = !!s.adminScores;
 
-      // Average score: (AI + Admin) / 2 if both present; AI score only if admin hasn't scored yet
-      let avgScore = '—';
+      // Compute the effective average for this row
       const aiNum    = aiScore    !== '—' ? parseFloat(aiScore)    : null;
       const adminNum = adminScore !== '—' ? parseFloat(adminScore) : null;
-      if (aiNum !== null && adminNum !== null) {
-        avgScore = parseFloat(((aiNum + adminNum) / 2).toFixed(1));
-      } else if (aiNum !== null) {
-        avgScore = aiNum;
+      const computedAvg = (aiNum !== null && adminNum !== null)
+        ? parseFloat(((aiNum + adminNum) / 2).toFixed(1))
+        : (adminNum !== null ? adminNum : (aiNum !== null ? aiNum : '—'));
+
+      // For P&S: only the highest-scoring session per trainee shows the avg; others show N/A
+      let avgScore;
+      if (PS_MODULES.has(s.module)) {
+        const isBest = psBestByTrainee[s.traineeId]?.id === s.id;
+        avgScore = isBest ? computedAvg : 'N/A';
+      } else {
+        avgScore = computedAvg;
       }
       const ext = (s.recordingUrl || '').includes('.mp4') ? 'mp4' : (s.recordingUrl || '').includes('.ogg') ? 'ogg' : 'webm';
       const dlFilename = `${(s.traineeName || 'recording').replace(/\s+/g, '_')}-${s.module}-${(s.submittedAt || '').slice(0, 10)}.${ext}`;
@@ -1276,7 +1315,7 @@ window.Admin = (() => {
           <td>${statusBadge(isScored ? 'scored' : s.status)}</td>
           <td>${aiScore    !== '—' ? aiScore    + '/100' : '—'}</td>
           <td>${adminScore !== '—' ? adminScore + '/100' : '—'}</td>
-          <td style="font-weight:600;color:${avgScore !== '—' ? '#1d4ed8' : 'var(--text-muted)'}">${avgScore !== '—' ? avgScore + '/100' : '—'}</td>
+          <td style="font-weight:600;color:${avgScore === 'N/A' || avgScore === '—' ? 'var(--text-muted)' : '#1d4ed8'}">${avgScore !== '—' && avgScore !== 'N/A' ? avgScore + '/100' : avgScore}</td>
           <td style="display:flex;gap:0.4rem;flex-wrap:wrap">
             <button class="btn-small primary" onclick="Admin.openScoring('${s.id}')">
               ${isScored ? 'Review' : 'Score'}
@@ -1891,16 +1930,32 @@ window.Admin = (() => {
     const best = modAvgs.length ? modAvgs.sort((a,b)=>b.avg-a.avg)[0] : null;
     $('report-best-module').textContent = best ? MODULE_LABELS[best.module] : '—';
 
-    // Session history
+    // Session history — P&S: only the highest-scoring session per trainee shows avg
+    const PS_MODS = new Set(['pick-speak', 'pick-speak-general', 'pick-speak-stock']);
+    // This report is already filtered to one trainee, so just find the best P&S session id
+    let psBestId = null;
+    let psBestEff = -Infinity;
+    sessions.forEach(s => {
+      if (!PS_MODS.has(s.module)) return;
+      const adminNum = s.adminScores ? (calcAdminAvg(s.adminScores) ?? null)              : null;
+      const aiNum    = s.aiScores    ? (normalizeOverall(s.aiScores.overall) ?? null)     : null;
+      const eff = adminNum !== null ? adminNum : aiNum;
+      if (eff !== null && eff > psBestEff) { psBestEff = eff; psBestId = s.id; }
+    });
+
     const tbody = $('report-sessions-tbody');
     tbody.innerHTML = sessions.length === 0
       ? `<tr><td colspan="6" class="empty-state">No sessions yet.</td></tr>`
       : sessions.sort((a,b) => new Date(b.submittedAt)-new Date(a.submittedAt)).map(s => {
           const rAI    = s.aiScores    ? (normalizeOverall(s.aiScores.overall) ?? null) : null;
           const rAdmin = s.adminScores ? (calcAdminAvg(s.adminScores) ?? null)          : null;
-          let rAvg = '—';
-          if (rAI !== null && rAdmin !== null) rAvg = parseFloat(((rAI + rAdmin) / 2).toFixed(1));
-          else if (rAI !== null)               rAvg = rAI;
+          const computed = (rAI !== null && rAdmin !== null)
+            ? parseFloat(((rAI + rAdmin) / 2).toFixed(1))
+            : (rAdmin !== null ? rAdmin : (rAI !== null ? rAI : '—'));
+          // For P&S rows only the best session shows avg; others show N/A
+          const rAvg = PS_MODS.has(s.module)
+            ? (s.id === psBestId ? computed : 'N/A')
+            : computed;
           return `
           <tr>
             <td>${moduleBadge(s.module)}</td>
@@ -1908,7 +1963,7 @@ window.Admin = (() => {
             <td>${formatDate(s.submittedAt).split(' ')[0]}</td>
             <td>${rAI    !== null ? rAI    + '/100' : '—'}</td>
             <td>${rAdmin !== null ? rAdmin + '/100' : '—'}</td>
-            <td style="font-weight:600;color:${rAvg !== '—' ? '#1d4ed8' : 'var(--text-muted)'}">${rAvg !== '—' ? rAvg + '/100' : '—'}</td>
+            <td style="font-weight:600;color:${rAvg === 'N/A' || rAvg === '—' ? 'var(--text-muted)' : '#1d4ed8'}">${rAvg !== '—' && rAvg !== 'N/A' ? rAvg + '/100' : rAvg}</td>
           </tr>`;
         }).join('');
 
