@@ -2094,9 +2094,10 @@ window.Admin = (() => {
 
     card.innerHTML = `
       <div class="lrc-print-btn-wrap">
-        <button class="btn-secondary" style="font-size:0.8rem;padding:0.4rem 0.9rem" onclick="window.print()">🖨 Print / Save PDF</button>
+        <button id="lrc-copy-btn" class="btn-secondary" style="font-size:0.8rem;padding:0.4rem 0.9rem" onclick="Admin.copyLetter()">📋 Copy to Clipboard</button>
       </div>
 
+      <div id="lrc-letter-body">
       <p class="lrc-salutation">Dear ${trainee.name},</p>
       <p>Thank you for your active participation in the recent <strong>Communicate 360</strong> training program. Please find below the summary of your performance assessment:</p>
 
@@ -2123,7 +2124,36 @@ window.Admin = (() => {
 
       <p style="margin-top:1.25rem">${closing1}</p>
       <p style="margin-top:0.5rem"><strong>${closing2}</strong></p>
+      </div>
     `;
+  }
+
+  async function copyLetter() {
+    const body = document.getElementById('lrc-letter-body');
+    const btn  = document.getElementById('lrc-copy-btn');
+    if (!body || !btn) return;
+
+    try {
+      // Build a plain-text version for apps that only accept text
+      const plainText = body.innerText;
+
+      // Try rich (HTML) copy first so Word / Outlook / Gmail paste with formatting
+      if (window.ClipboardItem) {
+        const htmlBlob  = new Blob([body.innerHTML], { type: 'text/html' });
+        const textBlob  = new Blob([plainText],      { type: 'text/plain' });
+        await navigator.clipboard.write([new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })]);
+      } else {
+        // Fallback: plain text
+        await navigator.clipboard.writeText(plainText);
+      }
+
+      btn.textContent = '✅ Copied!';
+      setTimeout(() => { btn.textContent = '📋 Copy to Clipboard'; }, 2500);
+    } catch (err) {
+      console.error('Copy failed:', err);
+      btn.textContent = '❌ Copy failed';
+      setTimeout(() => { btn.textContent = '📋 Copy to Clipboard'; }, 2500);
+    }
   }
 
   async function loadTraineeReport(traineeId) {
@@ -2726,7 +2756,8 @@ window.Admin = (() => {
     downloadAllRecordings,
     deleteSession,
     deleteAllSessions,
-    generateAllAgentsReport
+    generateAllAgentsReport,
+    copyLetter
   };
 })();
 

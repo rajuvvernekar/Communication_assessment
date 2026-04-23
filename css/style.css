@@ -2253,7 +2253,7 @@ body {
   position: relative;
 }
 
-/* Print button wrapper — floated top-right */
+/* Copy button wrapper — floated top-right */
 .lrc-print-btn-wrap {
   position: absolute;
   top: 1.5rem;
@@ -2347,7 +2347,7 @@ body {
     max-width: 100%;
     font-size: 0.9rem;
   }
-  .lrc-print-btn-wrap { display: none !important; }
+  .lrc-print-btn-wrap, #lrc-copy-btn { display: none !important; }
   .lrc-score-list { grid-template-columns: 1fr 1fr; }
   .lrc-h2 { color: #000; border-color: #999; }
   /* Hide admin-only chrome */
