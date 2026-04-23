@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CommAssess — Admin Portal</title>
-  <link rel="stylesheet" href="css/style.css?v=9">
+  <link rel="stylesheet" href="css/style.css?v=10">
   <!-- Supabase JS SDK (CDN) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
@@ -275,43 +275,27 @@
       </div>
 
       <div id="report-content" class="hidden">
-        <div class="report-grid">
-          <div class="card report-card">
-            <h3 id="report-trainee-name"></h3>
-            <div class="report-stats">
-              <div class="report-stat">
-                <span id="report-total-sessions">0</span>
-                <small>Sessions</small>
-              </div>
-              <div class="report-stat">
-                <span id="report-avg-score">—</span>
-                <small>Avg Score</small>
-              </div>
-              <div class="report-stat">
-                <span id="report-best-module">—</span>
-                <small>Best Module</small>
-              </div>
-            </div>
-            <canvas id="report-radar" width="280" height="280" style="max-width:100%"></canvas>
-          </div>
-          <div class="card">
-            <h3>Session History</h3>
-            <table class="data-table" id="report-sessions-table">
-              <thead>
-                <tr>
-                  <th>Module</th>
-                  <th>Topic</th>
-                  <th>Date</th>
-                  <th>AI Score</th>
-                  <th>Admin Score</th>
-                  <th>Avg Score</th>
-                </tr>
-              </thead>
-              <tbody id="report-sessions-tbody">
-                <tr><td colspan="5" class="empty-state">No sessions for this trainee.</td></tr>
-              </tbody>
-            </table>
-          </div>
+        <!-- Letter-style performance report -->
+        <div id="report-letter-card" class="card letter-report-card"></div>
+
+        <!-- Session history (admin reference) -->
+        <div class="card" style="margin-top:1.25rem">
+          <h3 style="margin:0 0 0.75rem;font-size:0.9rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em">Session History</h3>
+          <table class="data-table" id="report-sessions-table">
+            <thead>
+              <tr>
+                <th>Module</th>
+                <th>Topic</th>
+                <th>Date</th>
+                <th>AI Score</th>
+                <th>Admin Score</th>
+                <th>Avg Score</th>
+              </tr>
+            </thead>
+            <tbody id="report-sessions-tbody">
+              <tr><td colspan="6" class="empty-state">No sessions for this trainee.</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </section>
@@ -531,6 +515,6 @@
 <script src="js/db.js?v=6"></script>
 <script src="js/recorder.js?v=6"></script>
 <script src="js/speech.js?v=6"></script>
-<script src="js/admin.js?v=9"></script>
+<script src="js/admin.js?v=10"></script>
 </body>
 </html>

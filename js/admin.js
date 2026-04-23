@@ -1913,53 +1913,255 @@ window.Admin = (() => {
     };
   }
 
+  // ── Letter-report insight builder ─────────────────────────────
+  function buildLetterInsights(scores, details, totalMark) {
+    const r2 = v => parseFloat(v.toFixed(2));
+    const ps = scores['pick-speak'];
+    const mc = scores['mock-call'];
+    const ga = scores['grammar-assessment'];
+    const la = scores['listening-assessment'];
+
+    const modNames = {
+      'pick-speak': 'Pick & Speak',
+      'mock-call':  'Mock Call',
+      'grammar-assessment': 'Grammar',
+      'listening-assessment': 'Listening'
+    };
+    const available = Object.entries(scores).filter(([, v]) => v != null).sort(([, a], [, b]) => b - a);
+    const bestMod   = available[0]?.[0];
+    const overall   = totalMark ?? 0;
+
+    // ── Strengths paragraph ──
+    let strengthPara = '';
+    const subStrengths = [];
+
+    // P&S sub-criteria
+    const bestPS = (details['pick-speak'] || []).reduce((b, s) => {
+      const e = effScore(s), be = b ? effScore(b) : -1;
+      return (e !== null && e > (be ?? -1)) ? s : b;
+    }, null);
+    if (bestPS?.aiScores) {
+      const ai = bestPS.aiScores;
+      if (typeof ai.fluency        === 'number' && ai.fluency        >= 4) subStrengths.push('spoken fluency');
+      if (typeof ai.vocabulary     === 'number' && ai.vocabulary     >= 4) subStrengths.push('vocabulary');
+      if (typeof ai.contentCoverage === 'number' && ai.contentCoverage >= 4) subStrengths.push('content coverage and logical flow');
+    }
+    // Mock call sub-criteria
+    const latestMC = (details['mock-call'] || []).sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt))[0];
+    if (latestMC) {
+      const cr = { ...(latestMC.aiScores || {}), ...(latestMC.adminScores || {}) };
+      if (typeof cr.callOpening         === 'number' && cr.callOpening         >= 4) subStrengths.push('professional call opening');
+      if (typeof cr.acknowledgment      === 'number' && cr.acknowledgment      >= 4) subStrengths.push('empathy and acknowledgment');
+      if (typeof cr.communicationClarity === 'number' && cr.communicationClarity >= 4) subStrengths.push('communication clarity');
+      if (typeof cr.callEssence         === 'number' && cr.callEssence         >= 4) subStrengths.push('call essence and warmth');
+    }
+    if (la >= 70) subStrengths.push('listening comprehension');
+    if (ga >= 75) subStrengths.push('grammatical precision');
+
+    if (overall >= 72) {
+      strengthPara = `You are among the stronger performers in this program${bestMod ? `, with particularly good results in ${modNames[bestMod]}` : ''}. ${subStrengths.length ? `Your performance reflects real strengths in ${subStrengths.slice(0, 3).join(', ')}.` : 'Your consistent performance reflects a high standard of professional communication.'}`;
+    } else if (overall >= 55) {
+      strengthPara = `You demonstrate a solid foundation in professional communication${bestMod ? `, with ${modNames[bestMod]} being your strongest area` : ''}. ${subStrengths.length ? `Specific strengths include ${subStrengths.slice(0, 2).join(' and ')}.` : 'With focused practice, you can build significantly on this foundation.'}`;
+    } else {
+      strengthPara = `You have engaged actively in the Communicate 360 program${bestMod ? ` and show early promise in ${modNames[bestMod]}` : ''}. Your participation across all assessments forms the starting point for meaningful growth.`;
+    }
+
+    // ── Priority bullets ──
+    const priorityBullets = [];
+    const addedParams = new Set();
+
+    // P&S — find the weakest sub-criteria
+    if (bestPS?.aiScores && ps != null) {
+      const PS_CRIT = [
+        { key: 'fluency',         label: 'Fluency',         mod: 'Pick & Speak' },
+        { key: 'vocabulary',      label: 'Vocabulary',      mod: 'Pick & Speak' },
+        { key: 'contentCoverage', label: 'Content Coverage', mod: 'Pick & Speak' },
+      ];
+      PS_CRIT.filter(c => typeof bestPS.aiScores[c.key] === 'number' && bestPS.aiScores[c.key] < 3.5)
+        .sort((a, b) => bestPS.aiScores[a.key] - bestPS.aiScores[b.key])
+        .slice(0, 2)
+        .forEach(c => { priorityBullets.push({ param: c.label, desc: `This is the highest-impact area for your ${c.mod}.` }); addedParams.add(c.key); });
+    } else if (ps != null && ps < 60) {
+      priorityBullets.push({ param: 'Spoken Delivery', desc: 'Focus on structure, fluency and topic depth in Pick & Speak.' });
+    }
+
+    // Mock Call — weakest criteria
+    if (latestMC) {
+      const cr = { ...(latestMC.aiScores || {}), ...(latestMC.adminScores || {}) };
+      const MC_CRIT = [
+        { key: 'callOpening',          label: 'Call Opening',           mod: 'Mock Calls' },
+        { key: 'acknowledgment',        label: 'Acknowledgment',         mod: 'Mock Calls' },
+        { key: 'communicationClarity',  label: 'Communication Clarity',  mod: 'Mock Calls' },
+        { key: 'callEssence',           label: 'Call Essence',           mod: 'Mock Calls' },
+        { key: 'holdProcedure',         label: 'Hold Procedure',         mod: 'Mock Calls' },
+        { key: 'extraMile',             label: 'Going the Extra Mile',   mod: 'Mock Calls' },
+      ];
+      MC_CRIT.filter(c => typeof cr[c.key] === 'number' && cr[c.key] < 3.5)
+        .sort((a, b) => cr[a.key] - cr[b.key])
+        .slice(0, 2)
+        .forEach(c => { priorityBullets.push({ param: c.label, desc: `This is the highest-impact area for your ${c.mod}.` }); });
+    } else if (mc == null) {
+      priorityBullets.push({ param: 'Mock Call', desc: 'Assessment pending — your score will be updated once reviewed by your manager.' });
+    } else if (mc < 60) {
+      priorityBullets.push({ param: 'Call Handling', desc: 'Focus on consistent greeting structure, empathy language and hold procedure.' });
+    }
+
+    // Grammar — weakest section
+    if (ga != null && ga < 75) {
+      const latestGA = (details['grammar-assessment'] || []).sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt))[0];
+      let gaAdded = false;
+      if (latestGA) {
+        try {
+          const parsed = JSON.parse(latestGA.writtenText || '{}');
+          if (parsed.sections) {
+            const weakSec = parsed.sections
+              .filter(sec => sec.maxMarks > 0 && (sec.marksObtained / sec.maxMarks) < 0.65)
+              .sort((a, b) => (a.marksObtained / a.maxMarks) - (b.marksObtained / b.maxMarks))[0];
+            if (weakSec) {
+              const letter = weakSec.title?.match(/Section\s+([A-C])/i)?.[1];
+              const label  = letter === 'A' ? 'Grammar — Section A (MCQ)' : letter === 'B' ? 'Grammar — Section B (Fill-in-blank)' : 'Grammar — Section C (Sentence Correction)';
+              priorityBullets.push({ param: label, desc: 'Targeted practice on this section will have the highest impact on your Grammar score.' });
+              gaAdded = true;
+            }
+          }
+        } catch (_) {}
+      }
+      if (!gaAdded) priorityBullets.push({ param: 'Grammar', desc: 'Focus on conditionals, prepositions and subject-verb agreement.' });
+    }
+
+    // Listening — weakest section
+    if (la != null && la < 70) {
+      const latestLA = (details['listening-assessment'] || []).sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt))[0];
+      if (latestLA) {
+        try {
+          const parsed = JSON.parse(latestLA.writtenText || '{}');
+          if (parsed.sections) {
+            const weakSec = parsed.sections
+              .filter(sec => sec.maxMarks > 0 && (sec.marksObtained / sec.maxMarks) < 0.65)
+              .sort((a, b) => (a.marksObtained / a.maxMarks) - (b.marksObtained / b.maxMarks))[0];
+            if (weakSec) {
+              const type = weakSec.sectionType || 'Listening';
+              priorityBullets.push({ param: `Listening — ${type}`, desc: `Active listening practice with ${type.toLowerCase()} material will improve this section significantly.` });
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    // Priority intro paragraph
+    let priorityIntro = '';
+    if (overall >= 70) {
+      priorityIntro = 'You communicate with structure and precision. The missing layer is warmth and consistency in the areas below. We recommend prioritizing:';
+    } else if (overall >= 50) {
+      priorityIntro = 'To strengthen your overall communication profile, we recommend focusing on the following areas:';
+    } else {
+      priorityIntro = 'To build a stronger communication foundation, prioritize the following areas in your daily practice:';
+    }
+
+    // ── Action plan ──
+    const { actions } = buildAgentInsights(scores, details);
+    const actionIntro = overall >= 65
+      ? 'We suggest the following routines to build on your Key Strengths:'
+      : 'We suggest the following targeted practices to address your priority areas:';
+
+    // ── Closing ──
+    const closing1 = 'Consistent practice of these focused actions will help you achieve greater consistency and impact in your communication.';
+    const closing2 = overall >= 70 ? 'You have made excellent progress. Keep up the momentum.'
+      : overall >= 50 ? 'You are on the right track. Stay committed to daily practice.'
+      : 'Every step of deliberate practice builds lasting improvement. Keep going.';
+
+    return { strengthPara, priorityIntro, priorityBullets, actionIntro, actions, closing1, closing2 };
+  }
+
+  // ── Render the letter into #report-letter-card ─────────────────
+  function renderTraineeLetter(trainee, marks, insights) {
+    const card = $('report-letter-card');
+    if (!card) return;
+    const { lisMark, psMark, gaMark, mcMark, aiMgrMark, totalMark } = marks;
+    const { strengthPara, priorityIntro, priorityBullets, actionIntro, actions, closing1, closing2 } = insights;
+
+    const fmt = (v, max) => v != null
+      ? `<strong>${v.toFixed(2)} / ${max}</strong>`
+      : `<strong style="color:#94a3b8">Not attempted / ${max}</strong>`;
+
+    const priorityList = priorityBullets.length
+      ? `<ul>${priorityBullets.map(b => `<li><strong>${b.param}:</strong> ${b.desc}</li>`).join('')}</ul>`
+      : '<p style="color:var(--text-muted)">No specific priority areas — maintain your current standards.</p>';
+
+    const actionList = actions.length
+      ? `<ul>${actions.map(a => `<li>${a}</li>`).join('')}</ul>`
+      : '<ul><li>Continue participating actively in all assessment modules.</li></ul>';
+
+    card.innerHTML = `
+      <div class="lrc-print-btn-wrap">
+        <button class="btn-secondary" style="font-size:0.8rem;padding:0.4rem 0.9rem" onclick="window.print()">🖨 Print / Save PDF</button>
+      </div>
+
+      <p class="lrc-salutation">Dear ${trainee.name},</p>
+      <p>Thank you for your active participation in the recent <strong>Communicate 360</strong> training program. Please find below the summary of your performance assessment:</p>
+
+      <h2 class="lrc-h2">Overall Performance Summary</h2>
+      <p class="lrc-total">Total Score: ${totalMark != null ? totalMark.toFixed(2) : '—'} / 100</p>
+      <ul class="lrc-score-list">
+        <li>Listening: ${fmt(lisMark, 20)}</li>
+        <li>Pick &amp; Speak: ${fmt(psMark, 20)}</li>
+        <li>Grammar: ${fmt(gaMark, 25)}</li>
+        <li>Mock Call: ${fmt(mcMark, 20)}</li>
+        <li><em>AI &amp; Manager scores (taken into consideration &amp; have a weightage of 15%)</em></li>
+      </ul>
+
+      <h2 class="lrc-h2">Key Strengths</h2>
+      <p>${strengthPara}</p>
+
+      <h2 class="lrc-h2">Priority Areas for Development</h2>
+      <p>${priorityIntro}</p>
+      ${priorityList}
+
+      <h2 class="lrc-h2">Your Action Plan</h2>
+      <p>${actionIntro}</p>
+      ${actionList}
+
+      <p style="margin-top:1.25rem">${closing1}</p>
+      <p style="margin-top:0.5rem"><strong>${closing2}</strong></p>
+    `;
+  }
+
   async function loadTraineeReport(traineeId) {
     const [trainee, sessions] = await Promise.all([
       DB.get('trainees', traineeId),
       DB.getByIndex('sessions', 'traineeId', traineeId)
     ]);
-
     if (!trainee) return;
     $('report-content').classList.remove('hidden');
-    $('report-trainee-name').textContent = trainee.name;
-    $('report-total-sessions').textContent = sessions.length;
 
-    const scored = sessions.filter(s => s.adminScores);
-    const avg = scored.length
-      ? (scored.map(s => calcAdminAvg(s.adminScores)).filter(x => x !== null)
-          .reduce((a, b) => a + b, 0) / scored.length).toFixed(1)
-      : '—';
-    $('report-avg-score').textContent = avg !== '—' ? avg + '/100' : '—';
+    // ── Module scores ──
+    const { scores, details } = computeAgentScores(traineeId, sessions);
+    const r2 = v => v != null ? parseFloat(v.toFixed(2)) : null;
 
-    // Best module
-    const modScores = {};
-    scored.forEach(s => {
-      const val = calcAdminAvg(s.adminScores);
-      if (val !== null) {
-        if (!modScores[s.module]) modScores[s.module] = [];
-        modScores[s.module].push(val);
-      }
-    });
-    const modAvgs = Object.entries(modScores).map(([m, vals]) => ({
-      module: m, avg: vals.reduce((a,b)=>a+b,0)/vals.length
-    }));
-    const best = modAvgs.length ? modAvgs.sort((a,b)=>b.avg-a.avg)[0] : null;
-    $('report-best-module').textContent = best ? MODULE_LABELS[best.module] : '—';
+    const lisMark   = scores['listening-assessment'] != null ? r2(scores['listening-assessment'] / 100 * 20) : null;
+    const psMark    = scores['pick-speak']            != null ? r2(scores['pick-speak']            / 100 * 20) : null;
+    const gaMark    = scores['grammar-assessment']    != null ? r2(scores['grammar-assessment']    / 100 * 25) : null;
+    const mcMark    = scores['mock-call']             != null ? r2(scores['mock-call']             / 100 * 20) : null;
+    const avail     = Object.values(scores).filter(v => v != null);
+    const aiMgrMark = avail.length ? r2((avail.reduce((a, b) => a + b, 0) / avail.length) / 100 * 15) : null;
+    const allMarks  = [lisMark, psMark, gaMark, mcMark, aiMgrMark].filter(x => x != null);
+    const totalMark = allMarks.length ? r2(allMarks.reduce((a, b) => a + b, 0)) : null;
 
-    // Session history — P&S: average of effective scores across ALL P&S sessions.
-    // Effective = admin score if scored, else AI score.
-    // Show avg only on the best-scoring session row; all other P&S rows → N/A.
+    // ── Render letter ──
+    const insights = buildLetterInsights(scores, details, totalMark);
+    renderTraineeLetter(trainee, { lisMark, psMark, gaMark, mcMark, aiMgrMark, totalMark }, insights);
+
+    // ── Session history table ── (same P&S avg logic as before)
     const PS_MODS = new Set(['pick-speak', 'pick-speak-general', 'pick-speak-stock']);
-    const rPsList = []; // { id, eff }
+    const rPsList = [];
     sessions.forEach(s => {
       if (!PS_MODS.has(s.module)) return;
-      const adminNum = s.adminScores ? (calcAdminAvg(s.adminScores)          ?? null) : null;
-      const aiNum    = s.aiScores    ? (normalizeOverall(s.aiScores.overall) ?? null) : null;
-      const eff = adminNum !== null ? adminNum : aiNum;
+      const aN = s.adminScores ? (calcAdminAvg(s.adminScores) ?? null) : null;
+      const iN = s.aiScores    ? (normalizeOverall(s.aiScores.overall) ?? null) : null;
+      const eff = aN !== null ? aN : iN;
       if (eff !== null) rPsList.push({ id: s.id, eff });
     });
-    let rPsBestId   = null;
-    let rPsAvgOfAll = null;
+    let rPsBestId = null, rPsAvgOfAll = null;
     if (rPsList.length) {
       rPsBestId   = rPsList.reduce((a, b) => b.eff > a.eff ? b : a).id;
       rPsAvgOfAll = parseFloat((rPsList.reduce((s, x) => s + x.eff, 0) / rPsList.length).toFixed(1));
@@ -1968,31 +2170,26 @@ window.Admin = (() => {
     const tbody = $('report-sessions-tbody');
     tbody.innerHTML = sessions.length === 0
       ? `<tr><td colspan="6" class="empty-state">No sessions yet.</td></tr>`
-      : sessions.sort((a,b) => new Date(b.submittedAt)-new Date(a.submittedAt)).map(s => {
-          const rAI    = s.aiScores    ? (normalizeOverall(s.aiScores.overall) ?? null) : null;
-          const rAdmin = s.adminScores ? (calcAdminAvg(s.adminScores) ?? null)          : null;
+      : sessions.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt)).map(s => {
+          const rAI   = s.aiScores    ? (normalizeOverall(s.aiScores.overall) ?? null) : null;
+          const rAdm  = s.adminScores ? (calcAdminAvg(s.adminScores)          ?? null) : null;
           let rAvg;
           if (PS_MODS.has(s.module)) {
             rAvg = (s.id === rPsBestId && rPsAvgOfAll !== null) ? rPsAvgOfAll : 'N/A';
           } else {
-            // Non-P&S: (admin + AI) / 2, or whichever is available
-            rAvg = (rAI !== null && rAdmin !== null)
-              ? parseFloat(((rAI + rAdmin) / 2).toFixed(1))
-              : (rAdmin !== null ? rAdmin : (rAI !== null ? rAI : '—'));
+            rAvg = (rAI !== null && rAdm !== null)
+              ? parseFloat(((rAI + rAdm) / 2).toFixed(1))
+              : (rAdm !== null ? rAdm : (rAI !== null ? rAI : '—'));
           }
-          return `
-          <tr>
+          return `<tr>
             <td>${moduleBadge(s.module)}</td>
             <td>${s.topicTitle || '—'}</td>
             <td>${formatDate(s.submittedAt).split(' ')[0]}</td>
-            <td>${rAI    !== null ? rAI    + '/100' : '—'}</td>
-            <td>${rAdmin !== null ? rAdmin + '/100' : '—'}</td>
+            <td>${rAI  !== null ? rAI  + '/100' : '—'}</td>
+            <td>${rAdm !== null ? rAdm + '/100' : '—'}</td>
             <td style="font-weight:600;color:${rAvg === 'N/A' || rAvg === '—' ? 'var(--text-muted)' : '#1d4ed8'}">${rAvg !== '—' && rAvg !== 'N/A' ? rAvg + '/100' : rAvg}</td>
           </tr>`;
         }).join('');
-
-    // Radar chart
-    drawRadarChart(trainee, scored, modAvgs);
   }
 
   function drawRadarChart(trainee, sessions, modAvgs) {
