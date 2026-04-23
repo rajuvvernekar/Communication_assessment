@@ -1132,17 +1132,25 @@ window.Admin = (() => {
 
     const sorted = [...sessions].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
 
-    // ── P&S best-session pre-compute (same rule as table: highest effective score per trainee) ──
+    // ── P&S: effective score per session = admin if scored, else AI.
+    //    avgOfAll = average of effective scores across ALL that trainee's P&S sessions.
+    //    bestId   = session with highest effective score (only that row shows avgOfAll).
     const CSV_PS = new Set(['pick-speak', 'pick-speak-general', 'pick-speak-stock']);
-    const csvPsBest = {};
+    const csvPsGrouped = {};
     sorted.forEach(s => {
       if (!CSV_PS.has(s.module)) return;
-      const aN = s.adminScores ? (calcAdminAvg(s.adminScores) ?? null)              : null;
-      const iN = s.aiScores    ? (normalizeOverall(s.aiScores.overall) ?? null)     : null;
+      const aN  = s.adminScores ? (calcAdminAvg(s.adminScores)          ?? null) : null;
+      const iN  = s.aiScores    ? (normalizeOverall(s.aiScores.overall) ?? null) : null;
       const eff = aN !== null ? aN : iN;
-      if (eff !== null && (!csvPsBest[s.traineeId] || eff > csvPsBest[s.traineeId].eff)) {
-        csvPsBest[s.traineeId] = { id: s.id, eff };
-      }
+      if (eff === null) return;
+      if (!csvPsGrouped[s.traineeId]) csvPsGrouped[s.traineeId] = [];
+      csvPsGrouped[s.traineeId].push({ id: s.id, eff });
+    });
+    const csvPsInfo = {}; // traineeId → { bestId, avgOfAll }
+    Object.entries(csvPsGrouped).forEach(([tid, list]) => {
+      const best     = list.reduce((a, b) => b.eff > a.eff ? b : a);
+      const avgOfAll = parseFloat((list.reduce((s, x) => s + x.eff, 0) / list.length).toFixed(1));
+      csvPsInfo[tid] = { bestId: best.id, avgOfAll };
     });
 
     // ── Build rows ──────────────────────────────────────────────
@@ -1161,15 +1169,19 @@ window.Admin = (() => {
       const date      = s.submittedAt ? new Date(s.submittedAt).toLocaleDateString() : '';
       const aiScore   = s.aiScores?.overall != null ? normalizeOverall(s.aiScores.overall) : '';
       const admScore  = s.adminScores ? (calcAdminAvg(s.adminScores) ?? '') : '';
-      const csvAI     = aiScore  !== '' ? parseFloat(aiScore)  : null;
-      const csvAdmin  = admScore !== '' ? parseFloat(admScore) : null;
-      const computedAvg = (csvAI !== null && csvAdmin !== null)
-        ? parseFloat(((csvAI + csvAdmin) / 2).toFixed(1))
-        : (csvAdmin !== null ? csvAdmin : (csvAI !== null ? csvAI : ''));
-      // P&S: only best session gets avg; others get 'N/A'
-      const avgScore = CSV_PS.has(s.module)
-        ? (csvPsBest[s.traineeId]?.id === s.id ? computedAvg : 'N/A')
-        : computedAvg;
+      const csvAI    = aiScore  !== '' ? parseFloat(aiScore)  : null;
+      const csvAdmin = admScore !== '' ? parseFloat(admScore) : null;
+      // P&S: best session shows average of ALL sessions' effective scores; others → 'N/A'
+      // Non-P&S: (admin + AI) / 2, or whichever is available
+      let avgScore;
+      if (CSV_PS.has(s.module)) {
+        const info = csvPsInfo[s.traineeId];
+        avgScore = (info && s.id === info.bestId) ? info.avgOfAll : 'N/A';
+      } else {
+        avgScore = (csvAI !== null && csvAdmin !== null)
+          ? parseFloat(((csvAI + csvAdmin) / 2).toFixed(1))
+          : (csvAdmin !== null ? csvAdmin : (csvAI !== null ? csvAI : ''));
+      }
       // Always regenerate fresh — avoids stale stored summaries with removed parameters
       // Grammar / Listening Assessment: AI summary = section-by-section breakdown
       let aiSummary = '';
@@ -1264,20 +1276,26 @@ window.Admin = (() => {
       return;
     }
 
-    // ── Pick & Speak: pre-compute which session per trainee has the highest effective score.
-    // Effective score = admin score if scored, otherwise AI score.
-    // Only that session gets the Avg Score; all other P&S rows for the same trainee show N/A.
+    // ── Pick & Speak: pre-compute per-trainee.
+    // Effective score per session = admin score if scored, else AI score.
+    // avgOfAll  = average of effective scores across ALL that trainee's P&S sessions.
+    // bestId    = session with the highest effective score (that row shows avgOfAll; rest → N/A).
     const PS_MODULES = new Set(['pick-speak', 'pick-speak-general', 'pick-speak-stock']);
-    const psBestByTrainee = {}; // traineeId → { id, effScore }
+    const psGrouped  = {}; // traineeId → [{ id, eff }]
     sorted.forEach(s => {
       if (!PS_MODULES.has(s.module)) return;
-      const adminNum = s.adminScores ? (calcAdminAvg(s.adminScores) ?? null)              : null;
-      const aiNum    = s.aiScores    ? (normalizeOverall(s.aiScores.overall) ?? null)     : null;
-      const eff      = adminNum !== null ? adminNum : aiNum; // prefer admin score
+      const adminNum = s.adminScores ? (calcAdminAvg(s.adminScores)          ?? null) : null;
+      const aiNum    = s.aiScores    ? (normalizeOverall(s.aiScores.overall) ?? null) : null;
+      const eff      = adminNum !== null ? adminNum : aiNum; // prefer admin
       if (eff === null) return;
-      if (!psBestByTrainee[s.traineeId] || eff > psBestByTrainee[s.traineeId].effScore) {
-        psBestByTrainee[s.traineeId] = { id: s.id, effScore: eff };
-      }
+      if (!psGrouped[s.traineeId]) psGrouped[s.traineeId] = [];
+      psGrouped[s.traineeId].push({ id: s.id, eff });
+    });
+    const psByTrainee = {}; // traineeId → { bestId, avgOfAll }
+    Object.entries(psGrouped).forEach(([tid, list]) => {
+      const best     = list.reduce((a, b) => b.eff > a.eff ? b : a);
+      const avgOfAll = parseFloat((list.reduce((s, x) => s + x.eff, 0) / list.length).toFixed(1));
+      psByTrainee[tid] = { bestId: best.id, avgOfAll };
     });
 
     tbody.innerHTML = sorted.map(s => {
@@ -1285,20 +1303,18 @@ window.Admin = (() => {
       const adminScore = s.adminScores ? (calcAdminAvg(s.adminScores)          ?? '—') : '—';
       const isScored   = !!s.adminScores;
 
-      // Compute the effective average for this row
-      const aiNum    = aiScore    !== '—' ? parseFloat(aiScore)    : null;
-      const adminNum = adminScore !== '—' ? parseFloat(adminScore) : null;
-      const computedAvg = (aiNum !== null && adminNum !== null)
-        ? parseFloat(((aiNum + adminNum) / 2).toFixed(1))
-        : (adminNum !== null ? adminNum : (aiNum !== null ? aiNum : '—'));
-
-      // For P&S: only the highest-scoring session per trainee shows the avg; others show N/A
+      // For P&S: best-session row shows average of all sessions' effective scores; others → N/A
+      // For all other modules: (admin + AI) / 2, or whichever is available
       let avgScore;
       if (PS_MODULES.has(s.module)) {
-        const isBest = psBestByTrainee[s.traineeId]?.id === s.id;
-        avgScore = isBest ? computedAvg : 'N/A';
+        const info = psByTrainee[s.traineeId];
+        avgScore = (info && s.id === info.bestId) ? info.avgOfAll : 'N/A';
       } else {
-        avgScore = computedAvg;
+        const aiNum    = aiScore    !== '—' ? parseFloat(aiScore)    : null;
+        const adminNum = adminScore !== '—' ? parseFloat(adminScore) : null;
+        avgScore = (aiNum !== null && adminNum !== null)
+          ? parseFloat(((aiNum + adminNum) / 2).toFixed(1))
+          : (adminNum !== null ? adminNum : (aiNum !== null ? aiNum : '—'));
       }
       const ext = (s.recordingUrl || '').includes('.mp4') ? 'mp4' : (s.recordingUrl || '').includes('.ogg') ? 'ogg' : 'webm';
       const dlFilename = `${(s.traineeName || 'recording').replace(/\s+/g, '_')}-${s.module}-${(s.submittedAt || '').slice(0, 10)}.${ext}`;
@@ -1930,18 +1946,24 @@ window.Admin = (() => {
     const best = modAvgs.length ? modAvgs.sort((a,b)=>b.avg-a.avg)[0] : null;
     $('report-best-module').textContent = best ? MODULE_LABELS[best.module] : '—';
 
-    // Session history — P&S: only the highest-scoring session per trainee shows avg
+    // Session history — P&S: average of effective scores across ALL P&S sessions.
+    // Effective = admin score if scored, else AI score.
+    // Show avg only on the best-scoring session row; all other P&S rows → N/A.
     const PS_MODS = new Set(['pick-speak', 'pick-speak-general', 'pick-speak-stock']);
-    // This report is already filtered to one trainee, so just find the best P&S session id
-    let psBestId = null;
-    let psBestEff = -Infinity;
+    const rPsList = []; // { id, eff }
     sessions.forEach(s => {
       if (!PS_MODS.has(s.module)) return;
-      const adminNum = s.adminScores ? (calcAdminAvg(s.adminScores) ?? null)              : null;
-      const aiNum    = s.aiScores    ? (normalizeOverall(s.aiScores.overall) ?? null)     : null;
+      const adminNum = s.adminScores ? (calcAdminAvg(s.adminScores)          ?? null) : null;
+      const aiNum    = s.aiScores    ? (normalizeOverall(s.aiScores.overall) ?? null) : null;
       const eff = adminNum !== null ? adminNum : aiNum;
-      if (eff !== null && eff > psBestEff) { psBestEff = eff; psBestId = s.id; }
+      if (eff !== null) rPsList.push({ id: s.id, eff });
     });
+    let rPsBestId   = null;
+    let rPsAvgOfAll = null;
+    if (rPsList.length) {
+      rPsBestId   = rPsList.reduce((a, b) => b.eff > a.eff ? b : a).id;
+      rPsAvgOfAll = parseFloat((rPsList.reduce((s, x) => s + x.eff, 0) / rPsList.length).toFixed(1));
+    }
 
     const tbody = $('report-sessions-tbody');
     tbody.innerHTML = sessions.length === 0
@@ -1949,13 +1971,15 @@ window.Admin = (() => {
       : sessions.sort((a,b) => new Date(b.submittedAt)-new Date(a.submittedAt)).map(s => {
           const rAI    = s.aiScores    ? (normalizeOverall(s.aiScores.overall) ?? null) : null;
           const rAdmin = s.adminScores ? (calcAdminAvg(s.adminScores) ?? null)          : null;
-          const computed = (rAI !== null && rAdmin !== null)
-            ? parseFloat(((rAI + rAdmin) / 2).toFixed(1))
-            : (rAdmin !== null ? rAdmin : (rAI !== null ? rAI : '—'));
-          // For P&S rows only the best session shows avg; others show N/A
-          const rAvg = PS_MODS.has(s.module)
-            ? (s.id === psBestId ? computed : 'N/A')
-            : computed;
+          let rAvg;
+          if (PS_MODS.has(s.module)) {
+            rAvg = (s.id === rPsBestId && rPsAvgOfAll !== null) ? rPsAvgOfAll : 'N/A';
+          } else {
+            // Non-P&S: (admin + AI) / 2, or whichever is available
+            rAvg = (rAI !== null && rAdmin !== null)
+              ? parseFloat(((rAI + rAdmin) / 2).toFixed(1))
+              : (rAdmin !== null ? rAdmin : (rAI !== null ? rAI : '—'));
+          }
           return `
           <tr>
             <td>${moduleBadge(s.module)}</td>
