@@ -1081,7 +1081,7 @@ window.Admin = (() => {
     } catch (e) {
       console.error('loadAssessments DB error:', e);
       if (tbody) {
-        tbody.innerHTML = `<tr><td colspan="8" class="empty-state" style="color:#ef4444">
+        tbody.innerHTML = `<tr><td colspan="9" class="empty-state" style="color:#ef4444">
           ⚠ Could not load assessments: ${e.message || e}<br>
           <small>Check your Supabase configuration and RLS policies, then click Refresh.</small>
         </td></tr>`;
@@ -1135,7 +1135,7 @@ window.Admin = (() => {
     // ── Build rows ──────────────────────────────────────────────
     const headers = [
       'Name', 'Employee ID', 'Module', 'Topic', 'Date',
-      'AI Score', 'Admin Score',
+      'AI Score', 'Admin Score', 'Avg Score',
       'AI Coaching Summary', 'Admin Coaching Summary'
     ];
 
@@ -1146,8 +1146,13 @@ window.Admin = (() => {
       const module    = MODULE_LABELS[s.module] || s.module || '';
       const topic     = s.topicTitle || '';
       const date      = s.submittedAt ? new Date(s.submittedAt).toLocaleDateString() : '';
-      const aiScore   = s.aiScores?.overall ?? '';
+      const aiScore   = s.aiScores?.overall != null ? normalizeOverall(s.aiScores.overall) : '';
       const admScore  = s.adminScores ? (calcAdminAvg(s.adminScores) ?? '') : '';
+      const csvAI     = aiScore    !== '' ? parseFloat(aiScore)    : null;
+      const csvAdmin  = admScore   !== '' ? parseFloat(admScore)   : null;
+      const avgScore  = (csvAI !== null && csvAdmin !== null)
+        ? parseFloat(((csvAI + csvAdmin) / 2).toFixed(1))
+        : (csvAI !== null ? csvAI : '');
       // Always regenerate fresh — avoids stale stored summaries with removed parameters
       // Grammar / Listening Assessment: AI summary = section-by-section breakdown
       let aiSummary = '';
@@ -1178,7 +1183,7 @@ window.Admin = (() => {
       const adminSummary = (s.adminScores && !isAutoScoredModule && typeof SpeechEngine !== 'undefined')
         ? SpeechEngine.generateCoachingSummary(s.module, s.adminScores, 'admin')
         : (s.adminScores && isAutoScoredModule ? 'Reviewed by admin' : '');
-      return [name, empId, module, topic, date, aiScore, admScore, aiSummary, adminSummary];
+      return [name, empId, module, topic, date, aiScore, admScore, avgScore, aiSummary, adminSummary];
     });
 
     // ── Build worksheet ─────────────────────────────────────────
@@ -1194,6 +1199,7 @@ window.Admin = (() => {
       { wch: 12 }, // Date
       { wch: 10 }, // AI Score
       { wch: 12 }, // Admin Score
+      { wch: 11 }, // Avg Score
       { wch: 55 }, // AI Coaching Summary
       { wch: 55 }, // Admin Coaching Summary
     ];
@@ -1237,14 +1243,24 @@ window.Admin = (() => {
     _currentFilteredSessions = sorted; // track for Download All
 
     if (sorted.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="8" class="empty-state">No assessments found.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="9" class="empty-state">No assessments found.</td></tr>`;
       return;
     }
 
     tbody.innerHTML = sorted.map(s => {
-      const aiScore = s.aiScores ? (normalizeOverall(s.aiScores.overall) ?? '—') : '—';
-      const adminScore = s.adminScores ? (calcAdminAvg(s.adminScores) ?? '—') : '—';
-      const isScored = !!s.adminScores;
+      const aiScore    = s.aiScores   ? (normalizeOverall(s.aiScores.overall) ?? '—') : '—';
+      const adminScore = s.adminScores ? (calcAdminAvg(s.adminScores)         ?? '—') : '—';
+      const isScored   = !!s.adminScores;
+
+      // Average score: (AI + Admin) / 2 if both present; AI score only if admin hasn't scored yet
+      let avgScore = '—';
+      const aiNum    = aiScore    !== '—' ? parseFloat(aiScore)    : null;
+      const adminNum = adminScore !== '—' ? parseFloat(adminScore) : null;
+      if (aiNum !== null && adminNum !== null) {
+        avgScore = parseFloat(((aiNum + adminNum) / 2).toFixed(1));
+      } else if (aiNum !== null) {
+        avgScore = aiNum;
+      }
       const ext = (s.recordingUrl || '').includes('.mp4') ? 'mp4' : (s.recordingUrl || '').includes('.ogg') ? 'ogg' : 'webm';
       const dlFilename = `${(s.traineeName || 'recording').replace(/\s+/g, '_')}-${s.module}-${(s.submittedAt || '').slice(0, 10)}.${ext}`;
       const dlBtn = s.recordingUrl
@@ -1258,8 +1274,9 @@ window.Admin = (() => {
           <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.topicTitle || '—'}</td>
           <td style="white-space:nowrap">${formatDate(s.submittedAt).split(' ')[0]}</td>
           <td>${statusBadge(isScored ? 'scored' : s.status)}</td>
-          <td>${aiScore !== '—' ? aiScore + '/100' : '—'}</td>
+          <td>${aiScore    !== '—' ? aiScore    + '/100' : '—'}</td>
           <td>${adminScore !== '—' ? adminScore + '/100' : '—'}</td>
+          <td style="font-weight:600;color:${avgScore !== '—' ? '#1d4ed8' : 'var(--text-muted)'}">${avgScore !== '—' ? avgScore + '/100' : '—'}</td>
           <td style="display:flex;gap:0.4rem;flex-wrap:wrap">
             <button class="btn-small primary" onclick="Admin.openScoring('${s.id}')">
               ${isScored ? 'Review' : 'Score'}
@@ -1877,15 +1894,23 @@ window.Admin = (() => {
     // Session history
     const tbody = $('report-sessions-tbody');
     tbody.innerHTML = sessions.length === 0
-      ? `<tr><td colspan="5" class="empty-state">No sessions yet.</td></tr>`
-      : sessions.sort((a,b) => new Date(b.submittedAt)-new Date(a.submittedAt)).map(s => `
+      ? `<tr><td colspan="6" class="empty-state">No sessions yet.</td></tr>`
+      : sessions.sort((a,b) => new Date(b.submittedAt)-new Date(a.submittedAt)).map(s => {
+          const rAI    = s.aiScores    ? (normalizeOverall(s.aiScores.overall) ?? null) : null;
+          const rAdmin = s.adminScores ? (calcAdminAvg(s.adminScores) ?? null)          : null;
+          let rAvg = '—';
+          if (rAI !== null && rAdmin !== null) rAvg = parseFloat(((rAI + rAdmin) / 2).toFixed(1));
+          else if (rAI !== null)               rAvg = rAI;
+          return `
           <tr>
             <td>${moduleBadge(s.module)}</td>
             <td>${s.topicTitle || '—'}</td>
             <td>${formatDate(s.submittedAt).split(' ')[0]}</td>
-            <td>${s.aiScores ? (normalizeOverall(s.aiScores.overall) ?? '—') + '/100' : '—'}</td>
-            <td>${s.adminScores ? calcAdminAvg(s.adminScores) + '/100' : '—'}</td>
-          </tr>`).join('');
+            <td>${rAI    !== null ? rAI    + '/100' : '—'}</td>
+            <td>${rAdmin !== null ? rAdmin + '/100' : '—'}</td>
+            <td style="font-weight:600;color:${rAvg !== '—' ? '#1d4ed8' : 'var(--text-muted)'}">${rAvg !== '—' ? rAvg + '/100' : '—'}</td>
+          </tr>`;
+        }).join('');
 
     // Radar chart
     drawRadarChart(trainee, scored, modAvgs);
