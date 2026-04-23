@@ -1414,6 +1414,8 @@ const App = (() => {
       input.placeholder   = 'Your answer…';
       input.value         = _gaUserAnswers[_gaCurrentIdx] || '';
       input.autocomplete  = 'off';
+      input.dataset.gramm        = 'false';
+      input.dataset.gramm_editor = 'false';
       input.oninput       = () => { _gaUserAnswers[_gaCurrentIdx] = input.value; };
       input.onkeydown     = (e) => {
         if (e.key === 'Enter') {
@@ -1437,6 +1439,8 @@ const App = (() => {
       ta.placeholder  = 'Type the corrected sentence here…';
       ta.value        = _gaUserAnswers[_gaCurrentIdx] || '';
       ta.rows         = 3;
+      ta.dataset.gramm        = 'false';
+      ta.dataset.gramm_editor = 'false';
       ta.oninput      = () => { _gaUserAnswers[_gaCurrentIdx] = ta.value; };
       container.appendChild(ta);
       setTimeout(() => ta.focus(), 50);
