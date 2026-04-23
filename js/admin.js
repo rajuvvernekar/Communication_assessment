@@ -2121,6 +2121,397 @@ window.Admin = (() => {
     initAuth();
   }
 
+  // ================================================================
+  //  ALL AGENTS REPORT
+  // ================================================================
+
+  const PS_MODS_REPORT = new Set(['pick-speak', 'pick-speak-general', 'pick-speak-stock']);
+
+  // Helper: given a list of P&S sessions for one trainee, return the average effective score
+  function psAvgEff(sessions) {
+    const effs = sessions.map(s => {
+      const aN = s.adminScores ? (calcAdminAvg(s.adminScores) ?? null) : null;
+      const iN = s.aiScores    ? (normalizeOverall(s.aiScores.overall) ?? null) : null;
+      return aN !== null ? aN : iN;
+    }).filter(x => x !== null);
+    if (!effs.length) return null;
+    return parseFloat((effs.reduce((a, b) => a + b, 0) / effs.length).toFixed(1));
+  }
+
+  // Helper: effective score for a single session
+  function effScore(s) {
+    const aN = s.adminScores ? (calcAdminAvg(s.adminScores) ?? null) : null;
+    const iN = s.aiScores    ? (normalizeOverall(s.aiScores.overall) ?? null) : null;
+    return aN !== null ? aN : iN;
+  }
+
+  // ---- Rule-based insight generator ----
+  function buildAgentInsights(scores, details) {
+    const strengths  = [];
+    const priorities = [];
+    const actions    = [];
+
+    // ── Pick & Speak ──────────────────────────────────────────────
+    const ps = scores['pick-speak'];
+    if (ps !== null && ps !== undefined) {
+      if (ps >= 80) {
+        strengths.push(`Excellent spoken communication — delivers clear, structured and fluent responses (P&S: ${ps}%)`);
+      } else if (ps >= 65) {
+        strengths.push(`Above-average spoken delivery with good topic command (P&S: ${ps}%)`);
+      } else {
+        priorities.push(`Spoken communication (Pick & Speak: ${ps}%) — structure, delivery and vocabulary need development`);
+      }
+
+      // Sub-criteria from AI scores of the best P&S session
+      const bestPS = (details['pick-speak'] || []).reduce((b, s) => {
+        const e = effScore(s); const be = effScore(b);
+        return (e !== null && (be === null || e > be)) ? s : b;
+      }, details['pick-speak']?.[0] || null);
+
+      if (bestPS?.aiScores) {
+        const ai = bestPS.aiScores;
+        const subStrong = [], subWeak = [];
+        if (typeof ai.fluency        === 'number') (ai.fluency        >= 4 ? subStrong : subWeak).push('Fluency');
+        if (typeof ai.vocabulary     === 'number') (ai.vocabulary     >= 4 ? subStrong : subWeak).push('Vocabulary');
+        if (typeof ai.contentCoverage === 'number') (ai.contentCoverage >= 4 ? subStrong : subWeak).push('Content Coverage');
+
+        if (subStrong.length) strengths.push(`P&S strengths: ${subStrong.join(', ')}`);
+        if (subWeak.length)   priorities.push(`P&S sub-areas to improve: ${subWeak.join(', ')}`);
+
+        if (subWeak.includes('Fluency')) {
+          actions.push('Spoken Fluency: Record a 2-minute talk on any topic every day, replay it and count filler words (um, uh, like, you know). Target zero fillers within 2 weeks.');
+        }
+        if (subWeak.includes('Vocabulary')) {
+          actions.push('Vocabulary Building: Read one financial news article (Economic Times / Mint) daily — highlight 5 unfamiliar words, look them up and use each in a sentence by end of day.');
+        }
+        if (subWeak.includes('Content Coverage')) {
+          actions.push('Content Structure: Practice the PREP method (Point → Reason → Example → Point) for every Pick & Speak topic. Prepare 5 topics per week using this framework before attempting them.');
+        }
+      } else if (ps < 70) {
+        actions.push('Pick & Speak: Practice 10-minute structured talks daily using the PREP framework (Point, Reason, Example, Point) — record yourself and review for clarity and completeness.');
+      }
+    }
+
+    // ── Mock Call ─────────────────────────────────────────────────
+    const mc = scores['mock-call'];
+    if (mc !== null && mc !== undefined) {
+      if (mc >= 75) {
+        strengths.push(`Strong call-handling skills — professional communication with good protocol adherence (Mock Call: ${mc}%)`);
+      } else if (mc >= 60) {
+        strengths.push(`Developing call management skills — core competencies present (Mock Call: ${mc}%)`);
+      } else {
+        priorities.push(`Mock Call (${mc}%) — needs focused work on greeting structure, empathy language and call protocol`);
+      }
+
+      // Check individual criteria
+      const mcSessions = (details['mock-call'] || []).sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+      const latestMC   = mcSessions[0];
+      if (latestMC) {
+        const cr = { ...(latestMC.aiScores || {}), ...(latestMC.adminScores || {}) };
+        const strong = [], weak = [];
+        const CRIT = [
+          { key: 'callOpening',          label: 'Call Opening'           },
+          { key: 'acknowledgment',        label: 'Acknowledgment & Empathy' },
+          { key: 'communicationClarity',  label: 'Communication Clarity' },
+          { key: 'callEssence',           label: 'Call Essence'          },
+          { key: 'holdProcedure',         label: 'Hold Procedure'        },
+          { key: 'extraMile',             label: 'Going the Extra Mile'  },
+        ];
+        CRIT.forEach(({ key, label }) => {
+          if (typeof cr[key] === 'number') (cr[key] >= 4 ? strong : weak).push(label);
+        });
+        if (strong.length) strengths.push(`Mock Call strengths: ${strong.join(', ')}`);
+        if (weak.length)   priorities.push(`Mock Call areas to improve: ${weak.join(', ')}`);
+
+        if (weak.includes('Call Opening')) {
+          actions.push('Call Opening: Memorise the full greeting script until automatic — "Good [morning/afternoon], thank you for calling [Company], this is [Name], how may I assist you today?" Practise aloud 10× daily.');
+        }
+        if (weak.includes('Acknowledgment & Empathy')) {
+          actions.push('Empathy Language: Open every customer response with an empathy phrase. Practise these until natural: "I completely understand your concern" / "I can see how this is frustrating, let me sort this for you right away."');
+        }
+        if (weak.includes('Hold Procedure')) {
+          actions.push('Hold Protocol: Always follow 3 steps — (1) Ask permission: "May I place you on a brief hold?" (2) Give reason + time: "I need 2 minutes to check this for you." (3) Thank on return: "Thank you for holding." Role-play this 5× daily with a colleague.');
+        }
+      }
+
+      if (actions.filter(a => a.startsWith('Call') || a.startsWith('Mock') || a.startsWith('Empathy') || a.startsWith('Hold')).length === 0 && mc < 70) {
+        actions.push('Mock Call Practice: Role-play 3 full mock calls per week with a colleague — one person plays the customer, the other is the agent. Record and review together for missed protocol steps.');
+      }
+    } else {
+      // No mock call score yet
+      priorities.push('Mock Call — assessment pending; complete at least one scored mock call session to build profile');
+    }
+
+    // ── Grammar Assessment ────────────────────────────────────────
+    const ga = scores['grammar-assessment'];
+    if (ga !== null && ga !== undefined) {
+      if (ga >= 80) {
+        strengths.push(`Excellent grammatical accuracy across MCQ, fill-in-blank and sentence correction (Grammar: ${ga}%)`);
+      } else if (ga >= 65) {
+        strengths.push(`Good grammar foundation with solid MCQ performance (Grammar: ${ga}%)`);
+      } else {
+        priorities.push(`Grammar (${ga}%) — gaps in conditional structures, preposition use or error recognition`);
+      }
+
+      // Section breakdown
+      const gaSessions = (details['grammar-assessment'] || []).sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+      const latestGA   = gaSessions[0];
+      if (latestGA) {
+        try {
+          const parsed = JSON.parse(latestGA.writtenText || '{}');
+          if (parsed.sections) {
+            const secLabels = { 0: 'Section A (MCQ)', 1: 'Section B (Fill-in-blank)', 2: 'Section C (Sentence Correction)' };
+            const weakSecs  = parsed.sections
+              .filter((sec, i) => sec.maxMarks > 0 && (sec.marksObtained / sec.maxMarks) < 0.6)
+              .map((sec, i) => {
+                const letter = sec.title?.match(/Section\s+([A-C])/i)?.[1];
+                const idx    = letter ? letter.charCodeAt(0) - 65 : i;
+                const pct    = Math.round((sec.marksObtained / sec.maxMarks) * 100);
+                return `${secLabels[idx] || `Section ${letter || i + 1}`} (${pct}%)`;
+              });
+            if (weakSecs.length) priorities.push(`Grammar weak sections: ${weakSecs.join(', ')}`);
+          }
+        } catch (_) {}
+      }
+
+      if (ga < 75) {
+        actions.push('Grammar Practice: Complete 15 targeted grammar exercises per week covering conditionals, prepositions, tenses and subject-verb agreement. Review every incorrect answer explanation before moving on — understanding the rule matters more than the score.');
+      }
+    }
+
+    // ── Listening Assessment ──────────────────────────────────────
+    const la = scores['listening-assessment'];
+    if (la !== null && la !== undefined) {
+      if (la >= 80) {
+        strengths.push(`Outstanding comprehension — follows complex audio, video, call and reading content with accuracy (Listening: ${la}%)`);
+      } else if (la >= 65) {
+        strengths.push(`Good listening comprehension for audio and video content (Listening: ${la}%)`);
+      } else {
+        priorities.push(`Listening comprehension (${la}%) — needs improvement in processing audio, calls and reading material under time pressure`);
+      }
+
+      // Section breakdown
+      const laSessions = (details['listening-assessment'] || []).sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+      const latestLA   = laSessions[0];
+      if (latestLA) {
+        try {
+          const parsed = JSON.parse(latestLA.writtenText || '{}');
+          if (parsed.sections) {
+            const weakSecs = parsed.sections
+              .filter(sec => sec.maxMarks > 0 && (sec.marksObtained / sec.maxMarks) < 0.6)
+              .map(sec => {
+                const pct = Math.round((sec.marksObtained / sec.maxMarks) * 100);
+                return `${sec.sectionType || sec.title || 'Section'} (${pct}%)`;
+              });
+            if (weakSecs.length) priorities.push(`Listening weak sections: ${weakSecs.join(', ')}`);
+          }
+        } catch (_) {}
+      }
+
+      if (la < 75) {
+        actions.push('Active Listening: Listen to a 5-minute financial news podcast (ET Money / Zerodha Varsity audio) each day. Pause at the end, write a 5-point summary without replaying. Then re-listen and compare — close the gaps in what you missed.');
+      }
+    }
+
+    // ── Fallback strengths / generic actions ─────────────────────
+    if (strengths.length === 0) {
+      strengths.push('Shows commitment to professional development by completing communication assessments');
+    }
+    if (actions.length === 0) {
+      actions.push('Schedule a 30-minute self-review session every week — replay recordings, rework grammar corrections and re-listen to sections where marks were dropped.');
+    }
+    // Cap to 3 actions
+    return { strengths, priorities, actions: actions.slice(0, 3) };
+  }
+
+  // ---- Compute per-trainee module scores from sessions ----
+  function computeAgentScores(traineeId, allSessions) {
+    const ts = allSessions.filter(s => s.traineeId === traineeId);
+    const scores  = {};
+    const details = {};
+
+    // P&S
+    const psSess = ts.filter(s => PS_MODS_REPORT.has(s.module));
+    if (psSess.length) {
+      const avg = psAvgEff(psSess);
+      if (avg !== null) { scores['pick-speak'] = avg; details['pick-speak'] = psSess; }
+    }
+
+    // Mock Call
+    const mcSess = ts.filter(s => s.module === 'mock-call');
+    if (mcSess.length) {
+      const effs = mcSess.map(effScore).filter(x => x !== null);
+      if (effs.length) {
+        scores['mock-call'] = parseFloat((effs.reduce((a, b) => a + b, 0) / effs.length).toFixed(1));
+        details['mock-call'] = mcSess;
+      }
+    }
+
+    // Grammar
+    const gaSess = ts.filter(s => s.module === 'grammar-assessment');
+    if (gaSess.length) {
+      const vals = gaSess.map(s => s.aiScores ? (normalizeOverall(s.aiScores.overall) ?? null) : null).filter(x => x !== null);
+      if (vals.length) {
+        scores['grammar-assessment'] = parseFloat((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1));
+        details['grammar-assessment'] = gaSess;
+      }
+    }
+
+    // Listening
+    const laSess = ts.filter(s => s.module === 'listening-assessment');
+    if (laSess.length) {
+      const vals = laSess.map(s => s.aiScores ? (normalizeOverall(s.aiScores.overall) ?? null) : null).filter(x => x !== null);
+      if (vals.length) {
+        scores['listening-assessment'] = parseFloat((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1));
+        details['listening-assessment'] = laSess;
+      }
+    }
+
+    const available = Object.values(scores).filter(v => v != null);
+    const overall   = available.length
+      ? parseFloat((available.reduce((a, b) => a + b, 0) / available.length).toFixed(1))
+      : null;
+
+    return { scores, details, overall };
+  }
+
+  // ---- Render the full report ----
+  function renderAllAgentsReport(agentRows) {
+    const container = $('all-agents-report');
+    if (!container) return;
+
+    if (!agentRows.length) {
+      container.innerHTML = `<p style="padding:1rem;color:var(--text-muted)">No assessments found for Pick &amp; Speak, Mock Call, Grammar or Listening.</p>`;
+      container.classList.remove('hidden');
+      return;
+    }
+
+    const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
+
+    const scoreColor = v => v == null ? '#94a3b8' : v >= 70 ? '#059669' : v >= 50 ? '#d97706' : '#dc2626';
+    const scoreBand  = v => v == null ? '—' : v >= 70 ? 'On Track' : v >= 50 ? 'Developing' : 'Needs Attention';
+    const fmtScore   = v => v != null ? `${v}%` : '—';
+
+    // ── Summary table ─────────────────────────────────────────────
+    const summaryRows = agentRows.map(({ trainee, scores, overall }) => `
+      <tr>
+        <td><strong>${trainee.name}</strong>${trainee.employee_id ? `<br><span style="font-size:0.75rem;color:var(--text-muted)">${trainee.employee_id}</span>` : ''}</td>
+        <td style="text-align:center;font-weight:600;color:${scoreColor(scores['pick-speak'])}">${fmtScore(scores['pick-speak'])}</td>
+        <td style="text-align:center;font-weight:600;color:${scoreColor(scores['mock-call'])}">${scores['mock-call'] != null ? fmtScore(scores['mock-call']) : '<span style="color:#94a3b8;font-size:0.8rem">Pending</span>'}</td>
+        <td style="text-align:center;font-weight:600;color:${scoreColor(scores['grammar-assessment'])}">${fmtScore(scores['grammar-assessment'])}</td>
+        <td style="text-align:center;font-weight:600;color:${scoreColor(scores['listening-assessment'])}">${fmtScore(scores['listening-assessment'])}</td>
+        <td style="text-align:center;font-weight:800;font-size:1rem;color:${scoreColor(overall)}">${fmtScore(overall)}</td>
+      </tr>`).join('');
+
+    // ── Individual agent cards ────────────────────────────────────
+    const cards = agentRows.map(({ trainee, scores, overall, insights }) => {
+      const modules = [
+        { key: 'pick-speak',          label: 'Pick & Speak',  color: '#3b82f6' },
+        { key: 'mock-call',           label: 'Mock Call',     color: '#8b5cf6', pending: scores['mock-call'] == null },
+        { key: 'grammar-assessment',  label: 'Grammar',       color: '#7c3aed' },
+        { key: 'listening-assessment',label: 'Listening',     color: '#db2877' },
+      ];
+
+      const scorePills = modules.map(m => `
+        <div class="aar-pill">
+          <div class="aar-pill-score" style="color:${m.pending ? '#94a3b8' : scoreColor(scores[m.key])}">${m.pending ? 'Pending' : fmtScore(scores[m.key])}</div>
+          <div class="aar-pill-label">${m.label}</div>
+        </div>`).join('');
+
+      const ul = items => items.length
+        ? items.map(x => `<li>${x}</li>`).join('')
+        : '<li style="color:var(--text-muted)">Complete more assessments to populate this section</li>';
+
+      return `
+        <div class="aar-card">
+          <div class="aar-card-header">
+            <div>
+              <div class="aar-name">${trainee.name}</div>
+              ${trainee.employee_id ? `<div class="aar-emp">${trainee.employee_id}</div>` : ''}
+            </div>
+            <div class="aar-overall-wrap">
+              <div class="aar-overall-score" style="color:${scoreColor(overall)}">${fmtScore(overall)}</div>
+              <div class="aar-overall-band"  style="color:${scoreColor(overall)}">${scoreBand(overall)}</div>
+            </div>
+          </div>
+
+          <div class="aar-pills">${scorePills}</div>
+
+          <div class="aar-sections-grid">
+            <div class="aar-section aar-strengths">
+              <div class="aar-section-title">✅ Key Strengths</div>
+              <ul>${ul(insights.strengths)}</ul>
+            </div>
+            <div class="aar-section aar-priorities">
+              <div class="aar-section-title">🎯 Priority Areas</div>
+              <ul>${ul(insights.priorities)}</ul>
+            </div>
+          </div>
+
+          <div class="aar-section aar-actions">
+            <div class="aar-section-title">📋 Action Plan</div>
+            <ol>${insights.actions.map(a => `<li>${a}</li>`).join('')}</ol>
+          </div>
+        </div>`;
+    }).join('');
+
+    container.innerHTML = `
+      <div style="margin-top:1.5rem" id="aar-report-body">
+        <div class="aar-report-topbar">
+          <div>
+            <div class="aar-report-title">All Agents Communication Report</div>
+            <div class="aar-report-sub">Generated on ${today} &nbsp;·&nbsp; Modules: Pick &amp; Speak · Mock Call · Grammar · Listening &nbsp;·&nbsp; Mock Call scores shown as AI scores where admin has not yet scored</div>
+          </div>
+          <button class="btn-secondary aar-print-btn" onclick="window.print()">🖨 Print / Save PDF</button>
+        </div>
+
+        <div class="card" style="overflow-x:auto;margin-bottom:1.5rem">
+          <table class="data-table" style="min-width:560px">
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th style="text-align:center">Pick &amp; Speak</th>
+                <th style="text-align:center">Mock Call</th>
+                <th style="text-align:center">Grammar</th>
+                <th style="text-align:center">Listening</th>
+                <th style="text-align:center">Overall</th>
+              </tr>
+            </thead>
+            <tbody>${summaryRows}</tbody>
+          </table>
+        </div>
+
+        ${cards}
+      </div>`;
+    container.classList.remove('hidden');
+  }
+
+  // ---- Entry point ----
+  async function generateAllAgentsReport() {
+    const btn = $('btn-all-agents-report');
+    if (btn) { btn.disabled = true; btn.textContent = '⌛ Generating…'; }
+    try {
+      const [trainees, sessions] = await Promise.all([DB.getAll('trainees'), DB.getAll('sessions')]);
+      const TARGET = new Set(['pick-speak', 'pick-speak-general', 'pick-speak-stock', 'mock-call', 'grammar-assessment', 'listening-assessment']);
+
+      const agentRows = trainees
+        .filter(t => sessions.some(s => s.traineeId === t.id && TARGET.has(s.module)))
+        .map(trainee => {
+          const { scores, details, overall } = computeAgentScores(trainee.id, sessions);
+          const insights = buildAgentInsights(scores, details);
+          return { trainee, scores, overall, insights };
+        })
+        .sort((a, b) => (b.overall ?? -1) - (a.overall ?? -1)); // best performers first
+
+      renderAllAgentsReport(agentRows);
+    } catch (e) {
+      console.error('generateAllAgentsReport error:', e);
+      toast('Could not generate report: ' + e.message, 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Generate Report'; }
+    }
+  }
+
   // ---- Public API (called from inline onclick) ----
   return {
     init,
@@ -2137,7 +2528,8 @@ window.Admin = (() => {
     downloadRecording,
     downloadAllRecordings,
     deleteSession,
-    deleteAllSessions
+    deleteAllSessions,
+    generateAllAgentsReport
   };
 })();
 
