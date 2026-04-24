@@ -1954,6 +1954,7 @@ window.Admin = (() => {
       if (typeof cr.acknowledgment      === 'number' && cr.acknowledgment      >= 4) subStrengths.push('empathy and acknowledgment');
       if (typeof cr.communicationClarity === 'number' && cr.communicationClarity >= 4) subStrengths.push('communication clarity');
       if (typeof cr.callEssence         === 'number' && cr.callEssence         >= 4) subStrengths.push('call essence and warmth');
+      if (typeof cr.callClosing         === 'number' && cr.callClosing         >= 4) subStrengths.push('professional call closing');
     }
     if (la >= 70) subStrengths.push('listening comprehension');
     if (ga >= 75) subStrengths.push('grammatical precision');
@@ -1995,6 +1996,7 @@ window.Admin = (() => {
         { key: 'callEssence',           label: 'Call Essence',           mod: 'Mock Calls' },
         { key: 'holdProcedure',         label: 'Hold Procedure',         mod: 'Mock Calls' },
         { key: 'extraMile',             label: 'Going the Extra Mile',   mod: 'Mock Calls' },
+        { key: 'callClosing',           label: 'Call Closing',           mod: 'Mock Calls' },
       ];
       MC_CRIT.filter(c => typeof cr[c.key] === 'number' && cr[c.key] < 3.5)
         .sort((a, b) => cr[a.key] - cr[b.key])
@@ -2443,6 +2445,7 @@ window.Admin = (() => {
           { key: 'callEssence',           label: 'Call Essence'          },
           { key: 'holdProcedure',         label: 'Hold Procedure'        },
           { key: 'extraMile',             label: 'Going the Extra Mile'  },
+          { key: 'callClosing',           label: 'Call Closing'          },
         ];
         CRIT.forEach(({ key, label }) => {
           if (typeof cr[key] === 'number') (cr[key] >= 4 ? strong : weak).push(label);

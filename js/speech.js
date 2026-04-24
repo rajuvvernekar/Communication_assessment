@@ -347,6 +347,15 @@ const SpeechEngine = (() => {
     const extraCount = extraPhrases.filter(p => t.includes(p)).length;
     scores.extraMile = extraCount >= 2 ? 5 : extraCount >= 1 ? 3 : 1;
 
+    // Call Closing (1/3/5): confirmed resolution + asked "anything else" + warm branded close
+    const askedAnythingElse = /is there (anything|something) (else|more) (i can|i could|i may) (help|assist)/i.test(transcript)
+      || /anything else (i can|i could|i may) (help|assist|do)/i.test(transcript);
+    const warmClose = /thank(s| you) for calling|have a (great|good|wonderful|nice|lovely) (day|evening|morning|afternoon)|it('s| is) (been )?a pleasure|take care|goodbye|good bye/i.test(transcript);
+    const confirmedResolution = /i('ve| have) (resolved|sorted|taken care of|fixed)|is (everything|that) (sorted|resolved|okay now|all good|all set)/i.test(transcript)
+      || /your (issue|problem|concern|request) (has been|is) (resolved|sorted|addressed)/i.test(transcript);
+    const closingCount = [askedAnythingElse, warmClose, confirmedResolution].filter(Boolean).length;
+    scores.callClosing = closingCount >= 3 ? 5 : closingCount >= 1 ? 3 : 1;
+
     // Overall: average of all criteria scores (out of 5), converted to percentage out of 100
     const vals = Object.values(scores);
     const avg = vals.reduce((a, b) => a + b, 0) / vals.length;

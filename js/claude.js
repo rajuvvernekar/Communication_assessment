@@ -85,6 +85,16 @@ Score 3 (Partially Met): Hinted at extra help but did not follow through clearly
 Score 1 (Not Met): Only handled the exact query, no effort to add value.
 Return ONLY a JSON: {"score": <1 or 3 or 5>, "reason": "<one sentence>"}`
     },
+    {
+      key: 'callClosing',
+      label: 'Call Closing',
+      scale: '1/3/5',
+      prompt: `Evaluate Call Closing. Only three scores are possible.
+Score 5 (Fully Met): Agent did ALL three — (1) confirmed resolution ("I've resolved your issue / Is everything sorted?"), (2) asked "Is there anything else I can help/assist you with?", AND (3) closed warmly with a branded sign-off (e.g., "Thank you for calling, have a great day").
+Score 3 (Partially Met): Agent did 1 or 2 of the three closing elements but not all three.
+Score 1 (Not Met): Call ended abruptly with no proper closing, no confirmation, and no warm farewell.
+Return ONLY a JSON: {"score": <1 or 3 or 5>, "reason": "<one sentence>"}`
+    },
   ];
 
   // ---- Generic spoken module prompts ----
