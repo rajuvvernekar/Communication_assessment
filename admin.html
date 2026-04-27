@@ -139,12 +139,17 @@
         </div>
       </div>
       <div class="card">
-        <div class="table-toolbar">
-          <input type="text" id="trainee-search" placeholder="Search trainees by name..." class="search-input" />
+        <div class="table-toolbar" style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+          <input type="text" id="trainee-search" placeholder="Search trainees by name..." class="search-input" style="flex:1;min-width:180px" />
+          <button id="btn-delete-selected-trainees" class="btn-ghost btn-ghost-danger" onclick="Admin.deleteSelectedTrainees()" disabled>🗑 Delete Selected</button>
+          <button class="btn-ghost btn-ghost-danger" onclick="Admin.deleteAllTrainees()">🗑 Delete All</button>
         </div>
         <table class="data-table">
           <thead>
             <tr>
+              <th style="width:36px;text-align:center">
+                <input type="checkbox" id="select-all-trainees" title="Select all" onchange="Admin.toggleAllTrainees(this.checked)" />
+              </th>
               <th>Name</th>
               <th>Sessions</th>
               <th>Last Active</th>
@@ -154,7 +159,7 @@
             </tr>
           </thead>
           <tbody id="trainees-tbody">
-            <tr><td colspan="6" class="empty-state">No trainees yet.</td></tr>
+            <tr><td colspan="7" class="empty-state">No trainees yet.</td></tr>
           </tbody>
         </table>
       </div>
@@ -516,6 +521,6 @@
 <script src="js/recorder.js?v=6"></script>
 <script src="js/speech.js?v=6"></script>
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
-<script src="js/admin.js?v=21"></script>
+<script src="js/admin.js?v=22"></script>
 </body>
 </html>

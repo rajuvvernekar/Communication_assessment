@@ -67,6 +67,8 @@ window.Admin = (() => {
   let _currentReportData = null; // { trainee, marks, scores, details }
   let _cachedSessions  = [];   // all sessions from last loadAssessments call
   let _cachedTopicMap  = {};   // topicId → topic from last loadAssessments call
+  let _selectedTraineeIds = new Set(); // trainee ids checked in the trainees table
+  let _allFilteredTrainees = [];       // trainees currently rendered in the table
 
   // Convert legacy overall scores stored as raw /5 to /100
   function normalizeOverall(overall) {
@@ -492,8 +494,13 @@ window.Admin = (() => {
     const filtered = trainees.filter(t => t.name.toLowerCase().includes(filter.toLowerCase()));
     const allTeams = [...new Set(Object.values(_teamAssignments))].sort();
 
+    // Reset selection state whenever the table re-renders
+    _selectedTraineeIds.clear();
+    _allFilteredTrainees = filtered;
+    _updateTraineeDeleteBtn();
+
     if (filtered.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="6" class="empty-state">No trainees found.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No trainees found.</td></tr>`;
       return;
     }
 
@@ -512,6 +519,10 @@ window.Admin = (() => {
 
       return `
         <tr>
+          <td style="width:36px;text-align:center">
+            <input type="checkbox" class="trainee-cb" data-id="${t.id}"
+              onchange="Admin.toggleTraineeCheckbox('${t.id}', this.checked)" />
+          </td>
           <td><strong>${t.name}</strong><br><small style="color:var(--text-muted)">${t.employee_id || ''}</small></td>
           <td>${ts.length}</td>
           <td>${lastActive}</td>
@@ -535,6 +546,78 @@ window.Admin = (() => {
           </td>
         </tr>`;
     }).join('');
+  }
+
+  // ---- Trainee selection helpers ----
+  function _updateTraineeDeleteBtn() {
+    const btn = $('btn-delete-selected-trainees');
+    if (!btn) return;
+    const n = _selectedTraineeIds.size;
+    btn.disabled = n === 0;
+    btn.textContent = n > 0 ? `🗑 Delete Selected (${n})` : '🗑 Delete Selected';
+  }
+
+  function toggleTraineeCheckbox(id, checked) {
+    if (checked) {
+      _selectedTraineeIds.add(id);
+    } else {
+      _selectedTraineeIds.delete(id);
+    }
+    _updateTraineeDeleteBtn();
+    // Sync select-all checkbox
+    const allCb = $('select-all-trainees');
+    if (allCb && _allFilteredTrainees.length > 0) {
+      const n = _selectedTraineeIds.size;
+      allCb.indeterminate = n > 0 && n < _allFilteredTrainees.length;
+      allCb.checked = n === _allFilteredTrainees.length;
+    }
+  }
+
+  function toggleAllTrainees(checked) {
+    _selectedTraineeIds.clear();
+    if (checked) _allFilteredTrainees.forEach(t => _selectedTraineeIds.add(t.id));
+    document.querySelectorAll('.trainee-cb').forEach(cb => { cb.checked = checked; });
+    _updateTraineeDeleteBtn();
+  }
+
+  // ---- Internal: delete trainees + their sessions ----
+  async function _doDeleteTrainees(ids) {
+    const allSessions = await DB.getAll('sessions');
+    const sessionIds = allSessions.filter(s => ids.includes(s.traineeId)).map(s => s.id);
+
+    // Cascade delete sessions then trainees
+    await Promise.all(sessionIds.map(sid => DB.del('sessions', sid)));
+    await Promise.all(ids.map(id => DB.del('trainees', id)));
+
+    _selectedTraineeIds.clear();
+    _updateTraineeDeleteBtn();
+    toast(`Deleted ${ids.length} trainee${ids.length !== 1 ? 's' : ''} and ${sessionIds.length} session${sessionIds.length !== 1 ? 's' : ''}.`, 'success');
+    await updatePendingBadge();
+    await loadTrainees();
+  }
+
+  async function deleteSelectedTrainees() {
+    const ids = [..._selectedTraineeIds];
+    if (ids.length === 0) return;
+    const confirmed = confirm(
+      `⚠️ Delete ${ids.length} selected trainee${ids.length !== 1 ? 's' : ''}?\n\nThis will also permanently delete ALL their assessments, scores, and recordings.\n\nThis action cannot be undone.`
+    );
+    if (!confirmed) return;
+    await _doDeleteTrainees(ids);
+  }
+
+  async function deleteAllTrainees() {
+    const all = await DB.getAll('trainees');
+    if (!all.length) { toast('No trainees to delete.', ''); return; }
+    const step1 = confirm(
+      `⚠️ Delete ALL ${all.length} trainees?\n\nThis will permanently delete every trainee and ALL their assessments, scores, and recordings.\n\nThis action cannot be undone.`
+    );
+    if (!step1) return;
+    const step2 = confirm(
+      `Are you absolutely sure?\n\nAll ${all.length} trainees and their data will be deleted permanently.`
+    );
+    if (!step2) return;
+    await _doDeleteTrainees(all.map(t => t.id));
   }
 
   async function viewTraineeSessions(traineeId) {
@@ -3290,6 +3373,10 @@ window.Admin = (() => {
     selectScale135,
     viewTraineeSessions,
     setTraineeTeam,
+    toggleTraineeCheckbox,
+    toggleAllTrainees,
+    deleteSelectedTrainees,
+    deleteAllTrainees,
     downloadCSV,
     downloadRecording,
     downloadAllRecordings,
