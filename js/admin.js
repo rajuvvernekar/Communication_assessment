@@ -2498,11 +2498,11 @@ window.Admin = (() => {
     s4.addShape(pptx.ShapeType.rect, { x:0.18, y:0.9, w:4.55, h:0.42, fill:{color:C.teal}, line:noBorder });
     s4.addText(`👂  Listening · ${fmt2(lisMark)} / 20`, { x:0.22, y:0.9, w:4.5, h:0.42, fontSize:12, bold:true, color:C.white, valign:'middle', fontFace:'Calibri' });
     let laY=1.38;
-    laStrong.slice(0,2).forEach(txt=>{ s4.addShape(pptx.ShapeType.rect,{x:0.18,y:laY,w:4.55,h:0.37,fill:{color:C.white},line:{color:C.divider,pt:0.5}}); s4.addShape(pptx.ShapeType.rect,{x:0.18,y:laY,w:0.08,h:0.37,fill:{color:C.green},line:noBorder}); s4.addText(txt,{x:0.32,y:laY+0.04,w:4.3,h:0.29,fontSize:9.5,color:C.darkNav,fontFace:'Calibri'}); laY+=0.42; });
+    laStrong.slice(0,2).forEach(txt=>{ s4.addShape(pptx.ShapeType.rect,{x:0.18,y:laY,w:4.55,h:0.44,fill:{color:C.white},line:{color:C.divider,pt:0.5}}); s4.addShape(pptx.ShapeType.rect,{x:0.18,y:laY,w:0.08,h:0.44,fill:{color:C.green},line:noBorder}); s4.addText(txt,{x:0.32,y:laY+0.04,w:4.3,h:0.36,fontSize:9.5,color:C.darkNav,fontFace:'Calibri',wrap:true,insetT:0.02,insetB:0.02}); laY+=0.49; });
     s4.addShape(pptx.ShapeType.rect, { x:0.18, y:laY, w:4.55, h:0.29, fill:{color:C.amber}, line:noBorder });
     s4.addText('Areas of Improvement', { x:0.22, y:laY, w:4.5, h:0.29, fontSize:9.5, bold:true, color:C.white, valign:'middle', fontFace:'Calibri' });
     laY+=0.33;
-    laWeak.slice(0,3).forEach(txt=>{ s4.addShape(pptx.ShapeType.rect,{x:0.18,y:laY,w:4.55,h:0.37,fill:{color:C.white},line:{color:C.divider,pt:0.5}}); s4.addShape(pptx.ShapeType.rect,{x:0.18,y:laY,w:0.08,h:0.37,fill:{color:C.amber},line:noBorder}); s4.addText(txt,{x:0.32,y:laY+0.04,w:4.3,h:0.29,fontSize:9.5,color:C.darkNav,fontFace:'Calibri',wrap:true}); laY+=0.42; });
+    laWeak.slice(0,3).forEach(txt=>{ s4.addShape(pptx.ShapeType.rect,{x:0.18,y:laY,w:4.55,h:0.44,fill:{color:C.white},line:{color:C.divider,pt:0.5}}); s4.addShape(pptx.ShapeType.rect,{x:0.18,y:laY,w:0.08,h:0.44,fill:{color:C.amber},line:noBorder}); s4.addText(txt,{x:0.32,y:laY+0.04,w:4.3,h:0.36,fontSize:9.5,color:C.darkNav,fontFace:'Calibri',wrap:true,insetT:0.02,insetB:0.02}); laY+=0.49; });
 
     // RIGHT — Grammar
     const GRAM_TOPICS2 = { 'A':'Multiple Choice — Tense, Articles, Basic Grammar Rules', 'B':'Fill in the Blanks — Articles (a/an/the), Prepositions, Conjunctions', 'C':'Sentence Rewriting — Tense Correction, Subject-Verb Agreement' };
@@ -2516,11 +2516,11 @@ window.Admin = (() => {
     s4.addShape(pptx.ShapeType.rect, { x:5.05, y:0.9, w:4.75, h:0.42, fill:{color:C.darkNav}, line:noBorder });
     s4.addText(`📝  Grammar · ${fmt2(gaMark)} / 25`, { x:5.09, y:0.9, w:4.7, h:0.42, fontSize:12, bold:true, color:C.white, valign:'middle', fontFace:'Calibri' });
     let gaY=1.38;
-    gaStrong.slice(0,2).forEach(txt=>{ s4.addShape(pptx.ShapeType.rect,{x:5.05,y:gaY,w:4.75,h:0.37,fill:{color:C.white},line:{color:C.divider,pt:0.5}}); s4.addShape(pptx.ShapeType.rect,{x:5.05,y:gaY,w:0.08,h:0.37,fill:{color:C.green},line:noBorder}); s4.addText(txt,{x:5.19,y:gaY+0.04,w:4.5,h:0.29,fontSize:9.5,color:C.darkNav,fontFace:'Calibri'}); gaY+=0.42; });
+    gaStrong.slice(0,2).forEach(txt=>{ s4.addShape(pptx.ShapeType.rect,{x:5.05,y:gaY,w:4.75,h:0.44,fill:{color:C.white},line:{color:C.divider,pt:0.5}}); s4.addShape(pptx.ShapeType.rect,{x:5.05,y:gaY,w:0.08,h:0.44,fill:{color:C.green},line:noBorder}); s4.addText(txt,{x:5.19,y:gaY+0.04,w:4.5,h:0.36,fontSize:9.5,color:C.darkNav,fontFace:'Calibri',wrap:true,insetT:0.02,insetB:0.02}); gaY+=0.49; });
     s4.addShape(pptx.ShapeType.rect, { x:5.05, y:gaY, w:4.75, h:0.29, fill:{color:C.amber}, line:noBorder });
     s4.addText('Areas of Improvement', { x:5.09, y:gaY, w:4.7, h:0.29, fontSize:9.5, bold:true, color:C.white, valign:'middle', fontFace:'Calibri' });
     gaY+=0.33;
-    gaWeak.slice(0,3).forEach(txt=>{ s4.addShape(pptx.ShapeType.rect,{x:5.05,y:gaY,w:4.75,h:0.37,fill:{color:C.white},line:{color:C.divider,pt:0.5}}); s4.addShape(pptx.ShapeType.rect,{x:5.05,y:gaY,w:0.08,h:0.37,fill:{color:C.amber},line:noBorder}); s4.addText(txt,{x:5.19,y:gaY+0.04,w:4.5,h:0.29,fontSize:9.5,color:C.darkNav,fontFace:'Calibri',wrap:true}); gaY+=0.42; });
+    gaWeak.slice(0,3).forEach(txt=>{ s4.addShape(pptx.ShapeType.rect,{x:5.05,y:gaY,w:4.75,h:0.44,fill:{color:C.white},line:{color:C.divider,pt:0.5}}); s4.addShape(pptx.ShapeType.rect,{x:5.05,y:gaY,w:0.08,h:0.44,fill:{color:C.amber},line:noBorder}); s4.addText(txt,{x:5.19,y:gaY+0.04,w:4.5,h:0.36,fontSize:9.5,color:C.darkNav,fontFace:'Calibri',wrap:true,insetT:0.02,insetB:0.02}); gaY+=0.49; });
 
     // ── SLIDE 5 — Overall Diagnosis ──────────────────────────────────────────────
     const s5 = pptx.addSlide();
@@ -2612,7 +2612,9 @@ window.Admin = (() => {
       // Step label — centred in left panel
       s6.addText(`Step ${i + 1}`, { x:0.45, y:labelY, w:1.30, h:0.40, fontSize:11, bold:true, color:C.white, align:'center', fontFace:'Calibri', valign:'middle' });
       // Bullet lines — right content panel
-      s6.addText(content, { x:1.85, y:sY + 0.10, w:7.50, h:stepH - 0.18, fontSize:11, color:C.white, fontFace:'Calibri', valign:'top', wrap:true, lineSpacingMultiple:1.3 });
+      // Font 10.5pt + lineSpacing 1.1 + explicit small insets ensure 4 lines never overflow
+      // into the next row's background rect (verified: 4×10.5pt×1.1 = 0.64" < 0.88" box)
+      s6.addText(content, { x:1.85, y:sY + 0.08, w:7.50, h:stepH - 0.14, fontSize:10.5, color:C.white, fontFace:'Calibri', valign:'top', wrap:true, lineSpacingMultiple:1.1, insetT:0.04, insetB:0.03 });
     });
 
     // Footer bar
