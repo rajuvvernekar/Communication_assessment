@@ -2195,121 +2195,123 @@ window.Admin = (() => {
   //  PPT REPORT GENERATION (PptxGenJS)
   // ================================================================
 
+  // Returns array of { lines: [...] } — short bullet lines for the right content panel.
+  // Left panel shows only "Step N"; right panel shows these lines at 11pt white.
   function buildRoadmapSteps(name, scores, details, marks) {
     const steps = [];
     const { psMark, lisMark, gaMark, mcMark } = marks;
 
-    // ── P&S weaknesses ──
+    // ── Pick & Speak ──────────────────────────────────────────────────────────
     const psSessions = details['pick-speak'] || [];
     const bestPS = psSessions.reduce((b, s) => {
       const e = effScore(s), be = b ? effScore(b) : -1;
       return (e !== null && e > (be ?? -1)) ? s : b;
     }, null);
     const psAI = bestPS?.aiScores || {};
-    const PS_LABELS = { fluency:'Fluency', pace:'Pace & Delivery', logicalFlow:'Logical Flow',
-      clarity:'Clarity of Expression', confidence:'Confidence', fillerControl:'Filler Word Control',
-      vocabulary:'Vocabulary', professionalism:'Professionalism' };
-    const PS_TIPS = {
-      fluency:        'Practice speaking on random topics for 1 minute without stopping — keep going even when stuck.',
-      pace:           'Record yourself and listen back. Target 100–150 WPM. Use a stopwatch to self-check.',
-      logicalFlow:    'Use "first / then / finally" to structure every response. Practice structured 2-minute talks.',
-      clarity:        'Use short sentences (10–20 words), one idea per sentence. Avoid complex clauses.',
-      confidence:     'Replace hedge phrases ("I think", "sort of") with confident statements. Pause instead of filling.',
-      fillerControl:  'Replace "um / uh / like" with a deliberate pause. Silence signals confidence.',
-      vocabulary:     'Introduce one new professional term per response. Read financial content daily.',
-      professionalism:'Use formal language throughout. Open and close responses with structured, courteous phrases.'
+    const PS_LINES = {
+      fluency:        'Speak for 1 minute non-stop on any topic — flow matters more than perfection',
+      pace:           'Record yourself and listen back; aim for 120–140 WPM for clear, natural delivery',
+      logicalFlow:    'Structure every response: clear opening → developed middle → strong close',
+      clarity:        'Use short sentences (10–15 words) — one idea per sentence, avoid jargon',
+      confidence:     'Replace hedge phrases ("I think", "sort of") with confident, direct statements',
+      fillerControl:  'Replace "um / uh / like" with a deliberate pause — silence sounds confident',
+      vocabulary:     'Introduce one new professional term per response; read financial content daily',
+      professionalism:'Use formal language throughout; open and close with structured, courteous phrases'
     };
     const weakPS = Object.entries(psAI)
-      .filter(([k, v]) => PS_LABELS[k] && typeof v === 'number' && v < 4)
-      .sort(([,a],[,b]) => a - b).slice(0, 2);
-    if (weakPS.length) {
-      const [k0] = weakPS[0];
-      steps.push({
-        focus: `Pick & Speak\n${PS_LABELS[k0]}`,
-        content: (PS_TIPS[k0] || 'Focus on structured daily practice.') +
-          (weakPS[1] ? `\n\nAlso work on: ${PS_LABELS[weakPS[1][0]]} — ${PS_TIPS[weakPS[1][0]] || 'Practice regularly.'}` : '')
-      });
-    } else if (psMark != null && psMark < 15) {
-      steps.push({ focus: 'Pick & Speak\nDelivery', content: 'Build structure: clear opening, developed middle, strong close. Record a 2-minute talk daily on a financial topic and self-review.' });
+      .filter(([k, v]) => PS_LINES[k] && typeof v === 'number' && v < 4)
+      .sort(([,a],[,b]) => a - b);
+    if (weakPS.length || (psMark != null && psMark < 15)) {
+      const lines = weakPS.slice(0, 3).map(([k]) => PS_LINES[k]);
+      if (lines.length < 2) {
+        lines.push('Structure every response: clear opening → developed middle → strong close');
+        lines.push('Record a 2-minute talk daily on a workplace topic and self-review');
+      }
+      steps.push({ lines });
     }
 
-    // ── Mock Call weaknesses ──
+    // ── Mock Call ─────────────────────────────────────────────────────────────
     const mcSess = details['mock-call'] || [];
-    const latestMC = mcSess.sort((a,b) => new Date(b.submittedAt) - new Date(a.submittedAt))[0];
+    const latestMC = [...mcSess].sort((a,b) => new Date(b.submittedAt) - new Date(a.submittedAt))[0];
     const mcCom = { ...(latestMC?.aiScores||{}), ...(latestMC?.adminScores||{}) };
-    const MC_LABELS = { callOpening:'Call Opening', acknowledgment:'Acknowledgment & Empathy',
-      communicationClarity:'Communication Clarity', callEssence:'Call Essence',
-      holdProcedure:'Hold Procedure', extraMile:'Going the Extra Mile', callClosing:'Call Closing' };
-    const MC_TIPS = {
-      callOpening:          '"Good morning/afternoon, thank you for calling [Company], this is [Name], how may I assist you?" — all four elements every time.',
-      acknowledgment:       '"I completely understand how frustrating this must be" — always acknowledge before solving. Practice empathy statements daily.',
-      communicationClarity: 'Speak at 120–140 WPM, use simple language, confirm understanding at key points: "Does that make sense?"',
-      callEssence:          'Use "certainly", "happy to help", "absolutely" throughout. Build rapport with a warm, genuine tone.',
-      holdProcedure:        '"May I place you on hold for 2 minutes while I check?" — permission + reason + time. Thank them on return.',
-      extraMile:            'After solving the query: "Also, I noticed… you might benefit from…" — add one proactive tip per call.',
-      callClosing:          '"Is there anything else I can help you with?" then "Thank you for calling, have a great day!" — every call, every time.'
+    const MC_LINES = {
+      callOpening:          '"Good morning/afternoon, [Company], this is [Name], how may I assist?" — all 4 elements, every call',
+      acknowledgment:       'Acknowledge before solving: "I completely understand how frustrating this must be"',
+      communicationClarity: 'Avoid jargon; use short sentences and confirm understanding: "Does that make sense?"',
+      callEssence:          'Use positive words throughout: "certainly", "happy to help", "absolutely"',
+      holdProcedure:        '"May I place you on hold for 2 minutes while I check?" — permission + reason + time',
+      extraMile:            'After resolving: offer one proactive tip or related info the customer did not ask for',
+      callClosing:          '"Is there anything else I can help you with?" then a warm sign-off — every call'
     };
     const weakMC = Object.entries(mcCom)
-      .filter(([k, v]) => MC_LABELS[k] && typeof v === 'number' && v < 4)
-      .sort(([,a],[,b]) => a - b).slice(0, 2);
-    if (weakMC.length) {
-      const [k0] = weakMC[0];
-      steps.push({
-        focus: `Mock Call\n${MC_LABELS[k0]}`,
-        content: (MC_TIPS[k0] || 'Practice mock call scenarios regularly.') +
-          (weakMC[1] ? `\n\nAlso address: ${MC_LABELS[weakMC[1][0]]}.` : '')
-      });
-    } else if (mcMark != null && mcMark < 15) {
-      steps.push({ focus: 'Mock Call\nCall Handling', content: 'Role-play 3 full mock calls per week. Record them and identify missed protocol steps. Focus on opening, empathy, and closing.' });
+      .filter(([k, v]) => MC_LINES[k] && typeof v === 'number' && v < 4)
+      .sort(([,a],[,b]) => a - b);
+    if (weakMC.length || (mcMark != null && mcMark < 15)) {
+      const lines = weakMC.slice(0, 3).map(([k]) => MC_LINES[k]);
+      if (lines.length < 2) {
+        lines.push('Role-play 3 full mock calls per week and identify missed protocol steps');
+        lines.push('Practice the call opening 10 times daily until it becomes automatic');
+      }
+      steps.push({ lines });
     }
 
-    // ── Listening weaknesses ──
-    const laSess = details['listening-assessment'] || [];
-    const latestLA = laSess.sort((a,b) => new Date(b.submittedAt) - new Date(a.submittedAt))[0];
-    const laSecs  = latestLA?.aiScores?.sections || [];
-    const weakLA  = laSecs.filter(s => s.pct < 60);
+    // ── Listening ─────────────────────────────────────────────────────────────
     if (lisMark != null && lisMark < 15) {
-      const focus = weakLA.length ? weakLA.map(s => s.title).join(', ') : 'Detail Retention';
-      steps.push({
-        focus: `Listening\n${focus.split('—')[0].trim()}`,
-        content: (weakLA.length ? `Focus on accuracy in: ${weakLA.map(s => s.title).join(', ')}.` : 'Focus on capturing finer details while listening.') +
-          '\n\nListen to a 5-min financial podcast daily. Pause after, write 5 key points without replaying, then re-listen and close the gap.'
-      });
+      const laSess = details['listening-assessment'] || [];
+      const latestLA = [...laSess].sort((a,b) => new Date(b.submittedAt) - new Date(a.submittedAt))[0];
+      const weakLA = (latestLA?.aiScores?.sections || []).filter(s => s.pct < 60);
+      const lines = [
+        'Listen to a 5-min audio clip; pause and write 5 key points without replaying',
+        'Watch short video clips and capture specific details: names, numbers, sequence',
+        'Avoid assumptions — verify exactly what you heard before forming a response'
+      ];
+      if (weakLA.length) lines.unshift(`Needs consistency in: ${weakLA.slice(0,2).map(s=>s.title.split('—')[0].trim()).join(' & ')}`);
+      steps.push({ lines: lines.slice(0, 4) });
     }
 
-    // ── Grammar weaknesses — mention specific topics ──
-    const GRAM_TOPICS = {
-      'A': { short: 'Grammar Rules (MCQ)',           detail: 'Multiple Choice — Tense, Articles, Basic Grammar Rules',                                            practice: 'Complete 10 MCQ grammar exercises daily. Review tense rules and article usage.' },
-      'B': { short: 'Prepositions & Conjunctions',   detail: 'Fill in the Blanks — Articles (a/an/the), Prepositions (in/on/at/to/for), Conjunctions (and/but/so)', practice: 'Practice fill-in-the-blank exercises daily. Focus on preposition collocations and conjunction choice. Use Grammarly to review written work.' },
-      'C': { short: 'Sentence Rewriting',             detail: 'Rewrite the Sentence — Tense Correction, Subject-Verb Agreement, Modal Verbs (should/could/would)',   practice: 'Rewrite 5 incorrect sentences daily. Read the corrected version aloud to internalise the pattern.' }
-    };
+    // ── Grammar ───────────────────────────────────────────────────────────────
     const gaSess = details['grammar-assessment'] || [];
-    const latestGA = gaSess.sort((a,b) => new Date(b.submittedAt) - new Date(a.submittedAt))[0];
-    const gaSecs = latestGA?.aiScores?.sections || [];
-    const weakGA = gaSecs.filter(s => s.pct < 65).sort((a,b) => a.pct - b.pct);
-
-    if (weakGA.length) {
-      const topicLines = [], practiceLines = [];
-      weakGA.slice(0, 2).forEach(s => {
-        const letter = (s.title || '').match(/Section\s+([A-C])/i)?.[1]?.toUpperCase() || '';
-        const t = GRAM_TOPICS[letter];
-        if (t) { topicLines.push(`• ${t.detail}`); practiceLines.push(t.practice); }
-        else     { topicLines.push(`• ${s.title}`); practiceLines.push('Practice exercises on this topic daily.'); }
-      });
-      steps.push({
-        focus: `Grammar\n${GRAM_TOPICS[((weakGA[0]?.title||'').match(/Section\s+([A-C])/i)?.[1]?.toUpperCase())]?.short || 'Mixed Topics'}`,
-        content: `Work specifically on:\n${topicLines.join('\n')}\n\n${practiceLines[0]}${practiceLines[1] ? '\n' + practiceLines[1] : ''}\n\n📖 Read aloud daily  🎙 Record & self-correct  ✍ Keep an error notebook`
-      });
-    } else if (gaMark != null && gaMark < 18) {
-      steps.push({
-        focus: 'Grammar\nMixed Topics',
-        content: 'Focus on:\n• Articles (a/an/the) and Prepositions (in/on/at/to)\n• Conjunctions (and/but/so/because)\n• Tense consistency in sentences\n\n📖 Read aloud daily  🎙 Record & self-correct  ✍ Keep an error notebook'
-      });
+    const latestGA = [...gaSess].sort((a,b) => new Date(b.submittedAt) - new Date(a.submittedAt))[0];
+    const gaSecs  = latestGA?.aiScores?.sections || [];
+    const weakGA  = gaSecs.filter(s => s.pct < 65).sort((a,b) => a.pct - b.pct);
+    const GRAM_LINES = {
+      A: [
+        'Take 10 grammar MCQ tests daily and review every wrong answer carefully',
+        'Tense drill: write 3 sentences each in simple, continuous and perfect tense daily',
+        'Articles review: a/an/the — practice with fill-in-the-blank exercises every morning',
+        '📖 Read aloud daily  🎙 Record & self-correct  ✍ Keep an error notebook'
+      ],
+      B: [
+        'Study prepositions: in/on/at for time and place — use each in 5 real sentences daily',
+        'Articles drill: a (consonant sound), an (vowel sound), the (specific/known noun)',
+        'Conjunctions practice: and (addition), but (contrast), so (result), because (reason)',
+        '📖 Read aloud daily  🎙 Record & self-correct  ✍ Keep an error notebook'
+      ],
+      C: [
+        'Rewrite 5 incorrect sentences daily — focus on tense consistency throughout',
+        'Subject–verb agreement: singular subject = singular verb; plural = plural verb',
+        'Modal verbs: should (advice), could (possibility), would (conditional/polite)',
+        '📖 Read aloud daily  🎙 Record & self-correct  ✍ Keep an error notebook'
+      ]
+    };
+    const topLetter = (weakGA[0]?.title || '').match(/Section\s+([A-C])/i)?.[1]?.toUpperCase() || '';
+    const gramLines = GRAM_LINES[topLetter] || [
+      'Understand the right usage of articles (a/an/the) and prepositions (in/on/at/to/for)',
+      'Concepts: subject + verb agreement; sentence structure; tense consistency',
+      'Practise fill-in-the-blank and sentence rewriting exercises daily',
+      '📖 Read aloud daily  🎙 Record & self-correct  ✍ Keep an error notebook'
+    ];
+    if (weakGA.length || (gaMark != null && gaMark < 18)) {
+      steps.push({ lines: gramLines });
     }
 
-    // Pad to minimum 3 steps
+    // ── Pad to minimum 3 steps ────────────────────────────────────────────────
     while (steps.length < 3) {
-      steps.push({ focus: 'Daily Practice\nConsistency', content: 'Dedicate 20 minutes daily: 5 min listening drill, 5 min grammar exercise, 10 min speaking / mock call practice. Consistency over intensity.' });
+      steps.push({ lines: [
+        'Dedicate 20 minutes daily: 5 min listening drill, 5 min grammar, 10 min speaking',
+        'Record yourself weekly and compare to previous recordings to measure progress',
+        'Consistency over intensity — small daily practice compounds into lasting skill'
+      ]});
     }
     return steps.slice(0, 4);
   }
@@ -2554,28 +2556,43 @@ window.Admin = (() => {
     s5.addText(insightTxt, { x:0.48, y:3.55, w:W-0.88, h:1.44, fontSize:11, color:C.darkNav, wrap:true, fontFace:'Calibri', valign:'top', lineSpacingMultiple:1.35 });
 
     // ── SLIDE 6 — Development Roadmap ────────────────────────────────────────────
+    // Layout matches reference PPT exactly:
+    //   Left teal panel  x=0.45 w=1.30 — only "Step N" centred
+    //   Right dark panel x=1.85 w=7.50 — short bullet lines 11pt white
+    //   Row gap = 0.08", footer at y=5.23
     const s6 = pptx.addSlide();
     s6.background = { color: C.navy };
+    // Mint left stripe (full height)
     s6.addShape(pptx.ShapeType.rect, { x:0, y:0, w:0.18, h:H, fill:{color:C.mint}, line:noBorder });
-    s6.addText('🚀  Development Roadmap', { x:0.28, y:0.08, w:W-0.5, h:0.5, fontSize:22, bold:true, color:C.white, fontFace:'Calibri' });
+    // Title
+    s6.addText('🚀  Development Roadmap', { x:0.45, y:0.13, w:9.00, h:0.65, fontSize:26, bold:true, color:C.white, fontFace:'Calibri', valign:'middle' });
 
     const steps = buildRoadmapSteps(name, scores, details, marks);
-    const leftW=1.5, stepGap=0.06;
-    const availH = H - 0.65 - 0.48;
-    const stepH  = (availH - stepGap*(steps.length-1)) / steps.length;
-    const stepY0 = 0.62;
+    const n = steps.length;
+    const rowGap  = 0.08;
+    const areaY   = 0.91;
+    const footerY = 5.23;
+    const totalH  = footerY - areaY;                          // 4.32"
+    const stepH   = (totalH - rowGap * (n - 1)) / n;         // distribute evenly
 
     steps.forEach((step, i) => {
-      const sy = stepY0 + i*(stepH+stepGap);
-      s6.addShape(pptx.ShapeType.rect, { x:0.18, y:sy, w:W-0.18, h:stepH, fill:{color:C.sidebar}, line:noBorder });
-      s6.addShape(pptx.ShapeType.rect, { x:0.18, y:sy, w:leftW, h:stepH, fill:{color:C.teal}, line:noBorder });
-      s6.addText(`Step ${i+1}`, { x:0.22, y:sy+0.04, w:leftW-0.1, h:0.28, fontSize:10, bold:true, color:C.white, fontFace:'Calibri' });
-      s6.addText(step.focus, { x:0.22, y:sy+0.3, w:leftW-0.1, h:stepH-0.36, fontSize:8.5, color:'CCDDEE', wrap:true, fontFace:'Calibri', valign:'top' });
-      s6.addText(step.content, { x:0.18+leftW+0.1, y:sy+0.06, w:W-0.18-leftW-0.2, h:stepH-0.12, fontSize:9.5, color:C.white, wrap:true, fontFace:'Calibri', valign:'top' });
+      const sY      = areaY + i * (stepH + rowGap);
+      const labelY  = sY + (stepH - 0.40) / 2;               // vertically centre "Step N"
+      const content = step.lines.join('\n');
+
+      // Row background (dark navy sidebar)
+      s6.addShape(pptx.ShapeType.rect, { x:0.45, y:sY, w:9.10, h:stepH, fill:{color:C.sidebar}, line:noBorder });
+      // Left teal panel
+      s6.addShape(pptx.ShapeType.rect, { x:0.45, y:sY, w:1.30, h:stepH, fill:{color:C.teal},    line:noBorder });
+      // Step label — centred in left panel
+      s6.addText(`Step ${i + 1}`, { x:0.45, y:labelY, w:1.30, h:0.40, fontSize:11, bold:true, color:C.white, align:'center', fontFace:'Calibri', valign:'middle' });
+      // Bullet lines — right content panel
+      s6.addText(content, { x:1.85, y:sY + 0.10, w:7.50, h:stepH - 0.18, fontSize:11, color:C.white, fontFace:'Calibri', valign:'top', wrap:true, lineSpacingMultiple:1.3 });
     });
 
-    s6.addShape(pptx.ShapeType.rect, { x:0, y:H-0.45, w:W, h:0.45, fill:{color:C.teal}, line:noBorder });
-    s6.addText(`Consistent practice is the key. You've got this, ${name}! 💪`, { x:0.3, y:H-0.42, w:W-0.6, h:0.38, fontSize:11, bold:true, color:C.white, align:'center', valign:'middle', fontFace:'Calibri' });
+    // Footer bar
+    s6.addShape(pptx.ShapeType.rect, { x:0, y:footerY, w:W, h:0.40, fill:{color:C.teal}, line:noBorder });
+    s6.addText(`Consistent practice is the key. You've got this, ${name}! 💪`, { x:0.30, y:footerY + 0.03, w:9.00, h:0.35, fontSize:11, bold:true, color:C.white, align:'center', fontFace:'Calibri', valign:'middle' });
 
     const filename = `${name.replace(/\s+/g,'_')}_Performance_Report.pptx`;
     await pptx.writeFile({ fileName: filename });
