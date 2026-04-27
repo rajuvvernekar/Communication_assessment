@@ -2379,8 +2379,13 @@ window.Admin = (() => {
     s2.addText(`${fmt2(psMark)} / 20`, { x:8.08, y:0.1, w:1.72, h:0.62, fontSize:13, bold:true, color:C.mint, align:'center', valign:'middle', fontFace:'Calibri' });
 
     const psSessions = details['pick-speak'] || [];
-    const bestPS = psSessions.reduce((b,s) => { const e=effScore(s),be=b?effScore(b):-1; return (e!==null&&e>(be??-1))?s:b; }, null);
-    const psAI = bestPS?.aiScores || {};
+    // Pick session with highest effective score
+    const bestPS = psSessions.reduce((b, s) => {
+      const e = effScore(s), be = b ? effScore(b) : -1;
+      return (e !== null && e > (be ?? -1)) ? s : b;
+    }, null);
+    // Merge aiScores + adminScores — union of all available criteria (adminScores override where both exist)
+    const psAI = { ...(bestPS?.aiScores || {}), ...(bestPS?.adminScores || {}) };
     const PS_CRIT = [
       { key:'fluency',        label:'Fluency',              tip:'Practice speaking on random topics for 1 minute non-stop. Focus on flow, not perfection.' },
       { key:'pace',           label:'Pace & Delivery',       tip:'Record yourself. Target 100–150 WPM for clear conversational delivery.' },
@@ -2389,28 +2394,40 @@ window.Admin = (() => {
       { key:'confidence',     label:'Confidence',            tip:'Replace "I think" / "sort of" with confident statements. Pause instead of using fillers.' },
       { key:'fillerControl',  label:'Filler Word Control',   tip:'Replace "um / uh / like" with a deliberate pause — silence sounds more confident.' },
       { key:'vocabulary',     label:'Vocabulary',            tip:'Introduce one new professional term per response. Read industry content daily.' },
-      { key:'professionalism',label:'Professionalism',       tip:'Avoid slang. Use formal language and close with structured, courteous phrases.' }
+      { key:'professionalism',label:'Professionalism',       tip:'Avoid slang. Use formal language and close with structured, courteous phrases.' },
+      { key:'contentCoverage',label:'Content Coverage',      tip:'Cover the topic thoroughly — relevant examples, well-developed ideas, clear conclusion.' },
+      { key:'timeManagement', label:'Time Management',       tip:'Practice pacing: cover your key points within the allotted time without rushing.' },
+      { key:'sentenceVariety',label:'Sentence Variety',      tip:'Mix short punchy sentences with longer ones. Vary your sentence structure to keep listeners engaged.' }
     ];
-    const sortedPS = [...PS_CRIT].filter(c => typeof psAI[c.key]==='number').sort((a,b)=>(psAI[a.key]??5)-(psAI[b.key]??5));
-    const unknownPS = PS_CRIT.filter(c => typeof psAI[c.key]!=='number');
-    const displayPS = [...sortedPS, ...unknownPS].slice(0, 6);
-    const priorityPS = sortedPS[0]?.label || 'Communication Delivery';
+    // Show ONLY criteria with actual scores (no N/A cards); sort worst-first so priority is obvious
+    const displayPS = PS_CRIT
+      .filter(c => typeof psAI[c.key] === 'number')
+      .sort((a, b) => (psAI[a.key] ?? 5) - (psAI[b.key] ?? 5))
+      .slice(0, 6);
+    const priorityPS = displayPS[0]?.label || 'Communication Delivery';
 
     s2.addShape(pptx.ShapeType.rect, { x:0, y:0.82, w:W, h:0.5, fill:{color:C.amber}, line:noBorder });
     s2.addText(`🎯  Priority Action: Start with '${priorityPS}' — highest-impact area to address first`, { x:0.25, y:0.82, w:W-0.5, h:0.5, fontSize:12, bold:true, color:C.white, fontFace:'Calibri', valign:'middle' });
 
     const psCardW=4.68, psCardH=0.76, psGap=0.07, psStartY=1.41;
-    displayPS.forEach((c, idx) => {
-      const col=idx%2, row=Math.floor(idx/2);
-      const cx=(col===0)?0.22:5.1, cy=psStartY+row*(psCardH+psGap);
-      const score=typeof psAI[c.key]==='number'?psAI[c.key]:null;
-      const sc=score!=null?(score>=4?C.teal:C.amber):C.muted;
-      s2.addShape(pptx.ShapeType.rect, { x:cx, y:cy, w:psCardW, h:psCardH, fill:{color:C.white}, line:{color:C.divider,pt:0.75} });
-      s2.addShape(pptx.ShapeType.rect, { x:cx, y:cy, w:0.08, h:psCardH, fill:{color:sc}, line:noBorder });
-      s2.addText(c.label,                                { x:cx+0.15, y:cy+0.06, w:psCardW-0.9, h:0.3, fontSize:11, bold:true, color:C.darkNav, fontFace:'Calibri' });
-      s2.addText(score!=null?`${score}/5`:'N/A',         { x:cx+psCardW-0.78, y:cy+0.06, w:0.65, h:0.3, fontSize:11, bold:true, color:sc, align:'right', fontFace:'Calibri' });
-      s2.addText(c.tip,                                  { x:cx+0.15, y:cy+0.35, w:psCardW-0.28, h:0.35, fontSize:8.5, color:C.muted, wrap:true, fontFace:'Calibri' });
-    });
+    if (displayPS.length === 0) {
+      // No detailed criteria available — show a single info card
+      s2.addShape(pptx.ShapeType.rect, { x:0.22, y:psStartY, w:W-0.44, h:0.76, fill:{color:C.white}, line:{color:C.divider,pt:0.75} });
+      s2.addShape(pptx.ShapeType.rect, { x:0.22, y:psStartY, w:0.08, h:0.76, fill:{color:C.muted}, line:noBorder });
+      s2.addText('No detailed breakdown available for this session.', { x:0.40, y:psStartY+0.08, w:W-0.7, h:0.56, fontSize:11, color:C.muted, fontFace:'Calibri', valign:'middle' });
+    } else {
+      displayPS.forEach((c, idx) => {
+        const col=idx%2, row=Math.floor(idx/2);
+        const cx=(col===0)?0.22:5.1, cy=psStartY+row*(psCardH+psGap);
+        const score = psAI[c.key];
+        const sc = score >= 4 ? C.teal : C.amber;
+        s2.addShape(pptx.ShapeType.rect, { x:cx, y:cy, w:psCardW, h:psCardH, fill:{color:C.white}, line:{color:C.divider,pt:0.75} });
+        s2.addShape(pptx.ShapeType.rect, { x:cx, y:cy, w:0.08, h:psCardH, fill:{color:sc}, line:noBorder });
+        s2.addText(c.label,          { x:cx+0.15, y:cy+0.06, w:psCardW-0.9, h:0.3, fontSize:11, bold:true, color:C.darkNav, fontFace:'Calibri' });
+        s2.addText(`${score}/5`,     { x:cx+psCardW-0.78, y:cy+0.06, w:0.65, h:0.3, fontSize:11, bold:true, color:sc, align:'right', fontFace:'Calibri' });
+        s2.addText(c.tip,            { x:cx+0.15, y:cy+0.35, w:psCardW-0.28, h:0.35, fontSize:8.5, color:C.muted, wrap:true, fontFace:'Calibri' });
+      });
+    }
 
     // ── SLIDE 3 — Mock Call ──────────────────────────────────────────────────────
     const s3 = pptx.addSlide();
@@ -2432,10 +2449,12 @@ window.Admin = (() => {
       { key:'extraMile',            label:'Extra Mile',            tip:'Proactively share a useful tip or related info beyond the specific query asked.' },
       { key:'callClosing',          label:'Call Closing',          tip:'"Is there anything else I can help you with?" + warm sign-off — every call.' }
     ];
-    const sortedMC = [...MC_CRIT2].filter(c=>typeof mcCom[c.key]==='number').sort((a,b)=>(mcCom[a.key]??5)-(mcCom[b.key]??5));
-    const unknownMC = MC_CRIT2.filter(c=>typeof mcCom[c.key]!=='number');
-    const displayMC = [...sortedMC,...unknownMC].slice(0,6);
-    const priorityMC = sortedMC[0]?.label || 'Call Handling';
+    // Show ONLY scored criteria (no N/A cards); worst-first so priority is obvious
+    const displayMC = [...MC_CRIT2]
+      .filter(c => typeof mcCom[c.key] === 'number')
+      .sort((a, b) => (mcCom[a.key] ?? 5) - (mcCom[b.key] ?? 5))
+      .slice(0, 6);
+    const priorityMC = displayMC[0]?.label || 'Call Handling';
 
     s3.addShape(pptx.ShapeType.rect, { x:0, y:0.82, w:W/2, h:0.5, fill:{color:C.green}, line:noBorder });
     s3.addText('✨  Development Areas (prioritised):', { x:0.1, y:0.82, w:W/2-0.15, h:0.5, fontSize:10, bold:true, color:C.white, fontFace:'Calibri', valign:'middle' });
@@ -2443,17 +2462,23 @@ window.Admin = (() => {
     s3.addText(`🎯  Priority: '${priorityMC}' — highest-impact area`, { x:W/2+0.1, y:0.82, w:W/2-0.2, h:0.5, fontSize:10, bold:true, color:C.white, fontFace:'Calibri', valign:'middle' });
 
     const mcCols=[0.15,3.42,6.69], mcCW=3.08, mcCH=0.84, mcCGap=0.08, mcStartY=1.42;
-    displayMC.forEach((c,idx)=>{
-      const col=idx%3, row=Math.floor(idx/3);
-      const cx=mcCols[col], cy=mcStartY+row*(mcCH+mcCGap);
-      const score=typeof mcCom[c.key]==='number'?mcCom[c.key]:null;
-      const sc=score!=null?(score>=4?C.teal:C.amber):C.muted;
-      s3.addShape(pptx.ShapeType.rect, { x:cx, y:cy, w:mcCW, h:mcCH, fill:{color:C.white}, line:{color:C.divider,pt:0.75} });
-      s3.addShape(pptx.ShapeType.rect, { x:cx, y:cy, w:0.08, h:mcCH, fill:{color:sc}, line:noBorder });
-      s3.addText(c.label,                            { x:cx+0.15, y:cy+0.07, w:mcCW-0.85, h:0.3, fontSize:10.5, bold:true, color:C.darkNav, fontFace:'Calibri' });
-      s3.addText(score!=null?`${score}/5`:'N/A',     { x:cx+mcCW-0.72, y:cy+0.07, w:0.6, h:0.3, fontSize:10.5, bold:true, color:sc, align:'right', fontFace:'Calibri' });
-      s3.addText(c.tip,                              { x:cx+0.15, y:cy+0.37, w:mcCW-0.25, h:0.42, fontSize:8, color:C.muted, wrap:true, fontFace:'Calibri' });
-    });
+    if (displayMC.length === 0) {
+      s3.addShape(pptx.ShapeType.rect, { x:0.15, y:mcStartY, w:W-0.3, h:0.84, fill:{color:C.white}, line:{color:C.divider,pt:0.75} });
+      s3.addShape(pptx.ShapeType.rect, { x:0.15, y:mcStartY, w:0.08, h:0.84, fill:{color:C.muted}, line:noBorder });
+      s3.addText('No detailed breakdown available for this session.', { x:0.33, y:mcStartY+0.10, w:W-0.6, h:0.60, fontSize:11, color:C.muted, fontFace:'Calibri', valign:'middle' });
+    } else {
+      displayMC.forEach((c, idx) => {
+        const col=idx%3, row=Math.floor(idx/3);
+        const cx=mcCols[col], cy=mcStartY+row*(mcCH+mcCGap);
+        const score = mcCom[c.key];
+        const sc = score >= 4 ? C.teal : C.amber;
+        s3.addShape(pptx.ShapeType.rect, { x:cx, y:cy, w:mcCW, h:mcCH, fill:{color:C.white}, line:{color:C.divider,pt:0.75} });
+        s3.addShape(pptx.ShapeType.rect, { x:cx, y:cy, w:0.08, h:mcCH, fill:{color:sc}, line:noBorder });
+        s3.addText(c.label,        { x:cx+0.15, y:cy+0.07, w:mcCW-0.85, h:0.3, fontSize:10.5, bold:true, color:C.darkNav, fontFace:'Calibri' });
+        s3.addText(`${score}/5`,   { x:cx+mcCW-0.72, y:cy+0.07, w:0.6, h:0.3, fontSize:10.5, bold:true, color:sc, align:'right', fontFace:'Calibri' });
+        s3.addText(c.tip,          { x:cx+0.15, y:cy+0.37, w:mcCW-0.25, h:0.42, fontSize:8, color:C.muted, wrap:true, fontFace:'Calibri' });
+      });
+    }
 
     // ── SLIDE 4 — Listening & Grammar ────────────────────────────────────────────
     const s4 = pptx.addSlide();
