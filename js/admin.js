@@ -1,5 +1,52 @@
 'use strict';
 
+// ── Master score lookup (Self Assessment + AI Audit weighted scores from Excel) ──
+// Source: "Master total (1).xlsx" — Col Q (Self Assessment Score) + Col R (AI Audit Score)
+// Matched case-insensitively by trainee name. Fallback: null (skipped from total).
+const MASTER_SCORES = {
+  "abdul razak":                     { selfAssessment: 9.243,  aiAudit: 3.945 },
+  "love preet singh":                { selfAssessment: 7.892,  aiAudit: 3.705 },
+  "mohit sharma":                    { selfAssessment: 8.324,  aiAudit: 4.005 },
+  "avinash bhagwanrao pawde":        { selfAssessment: 6.541,  aiAudit: 3.665 },
+  "vijay kumar n":                   { selfAssessment: 7.459,  aiAudit: 3.765 },
+  "k g saroj":                       { selfAssessment: 6.541,  aiAudit: 3.825 },
+  "ayachi mishra":                   { selfAssessment: 8.703,  aiAudit: 3.885 },
+  "naveenkumar ayyangoudar":         { selfAssessment: 7.459,  aiAudit: 3.945 },
+  "indranil bose":                   { selfAssessment: 8.649,  aiAudit: 3.965 },
+  "seema k s":                       { selfAssessment: 9.351,  aiAudit: 4.020 },
+  "d karthik":                       { selfAssessment: 9.405,  aiAudit: 3.810 },
+  "anupama h":                       { selfAssessment: 9.514,  aiAudit: 4.005 },
+  "stavan bhardwaj":                 { selfAssessment: 9.189,  aiAudit: 4.140 },
+  "n s sindhu":                      { selfAssessment: 8.865,  aiAudit: 3.855 },
+  "shefali tyagi":                   { selfAssessment: 18.500, aiAudit: 3.725 },
+  "saneeth t s":                     { selfAssessment: 0.000,  aiAudit: 0.000 },
+  "akash kumar singh":               { selfAssessment: 16.000, aiAudit: 3.905 },
+  "nikhil v durgude":                { selfAssessment: 9.459,  aiAudit: 3.920 },
+  "swetha a":                        { selfAssessment: 9.946,  aiAudit: 3.715 },
+  "shruthi k b":                     { selfAssessment: 9.297,  aiAudit: 3.975 },
+  "sachita g harihar":               { selfAssessment: 9.676,  aiAudit: 3.770 },
+  "adnan sahil s":                   { selfAssessment: 9.568,  aiAudit: 4.100 },
+  "mohammed jabeer khan":            { selfAssessment: 9.784,  aiAudit: 3.930 },
+  "heeral sonagare":                 { selfAssessment: 7.568,  aiAudit: 3.720 },
+  "aryaman m math":                  { selfAssessment: 7.027,  aiAudit: 3.605 },
+  "srusti vishnukant ladda":         { selfAssessment: 9.730,  aiAudit: 3.910 },
+  "m keshava naik":                  { selfAssessment: 9.189,  aiAudit: 3.845 },
+  "shankar kumar":                   { selfAssessment: 8.054,  aiAudit: 3.705 },
+  "alihussain basha hyatkhan":       { selfAssessment: 7.622,  aiAudit: 3.925 },
+  "suma manjunath tumbraguddi":      { selfAssessment: 9.081,  aiAudit: 3.965 },
+  "abhishek tenginkai":              { selfAssessment: 8.000,  aiAudit: 3.580 },
+  "ambaldhage vinay kumar":          { selfAssessment: 7.351,  aiAudit: 4.080 },
+  "lilesh bhaskar sapaliga":         { selfAssessment: 9.514,  aiAudit: 3.795 },
+  "anand jaiswal":                   { selfAssessment: 8.432,  aiAudit: 3.765 }
+};
+
+// Look up master scores by trainee name (case-insensitive, trimmed). Returns null if not found.
+function getMasterScores(name) {
+  if (!name) return null;
+  const key = name.trim().toLowerCase();
+  return MASTER_SCORES[key] || null;
+}
+
 window.Admin = (() => {
   // ---- State ----
   let _editTopicId = null; // null = new, number = edit existing
@@ -2079,7 +2126,7 @@ window.Admin = (() => {
   function renderTraineeLetter(trainee, marks, insights) {
     const card = $('report-letter-card');
     if (!card) return;
-    const { lisMark, psMark, gaMark, mcMark, aiMgrMark, totalMark } = marks;
+    const { lisMark, psMark, gaMark, mcMark, totalMark } = marks;
     const { strengthPara, priorityIntro, priorityBullets, actionIntro, actions, closing1, closing2 } = insights;
 
     const fmt = (v, max) => v != null
@@ -2110,7 +2157,6 @@ window.Admin = (() => {
         <li>Pick &amp; Speak: ${fmt(psMark, 20)}</li>
         <li>Grammar: ${fmt(gaMark, 25)}</li>
         <li>Mock Call: ${fmt(mcMark, 20)}</li>
-        <li><em>AI &amp; Manager scores (taken into consideration &amp; have a weightage of 15%)</em></li>
       </ul>
 
       <h2 class="lrc-h2">Key Strengths</h2>
@@ -2170,18 +2216,26 @@ window.Admin = (() => {
     const { scores, details } = computeAgentScores(traineeId, sessions);
     const r2 = v => v != null ? parseFloat(v.toFixed(2)) : null;
 
-    const lisMark   = scores['listening-assessment'] != null ? r2(scores['listening-assessment'] / 100 * 20) : null;
-    const psMark    = scores['pick-speak']            != null ? r2(scores['pick-speak']            / 100 * 20) : null;
-    const gaMark    = scores['grammar-assessment']    != null ? r2(scores['grammar-assessment']    / 100 * 25) : null;
-    const mcMark    = scores['mock-call']             != null ? r2(scores['mock-call']             / 100 * 20) : null;
-    const avail     = Object.values(scores).filter(v => v != null);
-    const aiMgrMark = avail.length ? r2((avail.reduce((a, b) => a + b, 0) / avail.length) / 100 * 15) : null;
-    const allMarks  = [lisMark, psMark, gaMark, mcMark, aiMgrMark].filter(x => x != null);
+    const lisMark = scores['listening-assessment'] != null ? r2(scores['listening-assessment'] / 100 * 20) : null;
+    const psMark  = scores['pick-speak']            != null ? r2(scores['pick-speak']            / 100 * 20) : null;
+    const gaMark  = scores['grammar-assessment']    != null ? r2(scores['grammar-assessment']    / 100 * 25) : null;
+    const mcMark  = scores['mock-call']             != null ? r2(scores['mock-call']             / 100 * 20) : null;
+
+    // ── Self Assessment + AI Audit scores from master Excel (silent, not displayed) ──
+    let excelBonus = null;
+    try {
+      const ms = getMasterScores(trainee.name);
+      if (ms && (ms.selfAssessment > 0 || ms.aiAudit > 0)) {
+        excelBonus = r2(ms.selfAssessment + ms.aiAudit);
+      }
+    } catch (_) { /* fall back gracefully */ }
+
+    const allMarks  = [lisMark, psMark, gaMark, mcMark, excelBonus].filter(x => x != null);
     const totalMark = allMarks.length ? r2(allMarks.reduce((a, b) => a + b, 0)) : null;
 
     // ── Render letter ──
     const insights = buildLetterInsights(scores, details, totalMark);
-    renderTraineeLetter(trainee, { lisMark, psMark, gaMark, mcMark, aiMgrMark, totalMark }, insights);
+    renderTraineeLetter(trainee, { lisMark, psMark, gaMark, mcMark, totalMark }, insights);
 
     // ── Session history table ── (same P&S avg logic as before)
     const PS_MODS = new Set(['pick-speak', 'pick-speak-general', 'pick-speak-stock']);
