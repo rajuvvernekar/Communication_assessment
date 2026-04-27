@@ -1,43 +1,45 @@
 'use strict';
 
-// ── Master score lookup (Self Assessment + AI Audit weighted scores from Excel) ──
-// Source: "Master total (1).xlsx" — Col Q (Self Assessment Score) + Col R (AI Audit Score)
-// Matched case-insensitively by trainee name. Fallback: null (skipped from total).
+// ── Master score lookup — Source: "Master total (1).xlsx" ──
+// Col Q (Self Assessment Score) + Col R (AI Audit Score) + Col W (Grand Total, all components)
+// Grand Total (W) = Self Assess + AI Audit + P&S + Listening + Mock Call + Grammar (all weighted)
+// totalScore is used directly as the report total; selfAssessment+aiAudit kept for reference.
+// Matched case-insensitively by trainee name. Returns null if not found.
 const MASTER_SCORES = {
-  "abdul razak":                     { selfAssessment: 9.243,  aiAudit: 3.945 },
-  "love preet singh":                { selfAssessment: 7.892,  aiAudit: 3.705 },
-  "mohit sharma":                    { selfAssessment: 8.324,  aiAudit: 4.005 },
-  "avinash bhagwanrao pawde":        { selfAssessment: 6.541,  aiAudit: 3.665 },
-  "vijay kumar n":                   { selfAssessment: 7.459,  aiAudit: 3.765 },
-  "k g saroj":                       { selfAssessment: 6.541,  aiAudit: 3.825 },
-  "ayachi mishra":                   { selfAssessment: 8.703,  aiAudit: 3.885 },
-  "naveenkumar ayyangoudar":         { selfAssessment: 7.459,  aiAudit: 3.945 },
-  "indranil bose":                   { selfAssessment: 8.649,  aiAudit: 3.965 },
-  "seema k s":                       { selfAssessment: 9.351,  aiAudit: 4.020 },
-  "d karthik":                       { selfAssessment: 9.405,  aiAudit: 3.810 },
-  "anupama h":                       { selfAssessment: 9.514,  aiAudit: 4.005 },
-  "stavan bhardwaj":                 { selfAssessment: 9.189,  aiAudit: 4.140 },
-  "n s sindhu":                      { selfAssessment: 8.865,  aiAudit: 3.855 },
-  "shefali tyagi":                   { selfAssessment: 18.500, aiAudit: 3.725 },
-  "saneeth t s":                     { selfAssessment: 0.000,  aiAudit: 0.000 },
-  "akash kumar singh":               { selfAssessment: 16.000, aiAudit: 3.905 },
-  "nikhil v durgude":                { selfAssessment: 9.459,  aiAudit: 3.920 },
-  "swetha a":                        { selfAssessment: 9.946,  aiAudit: 3.715 },
-  "shruthi k b":                     { selfAssessment: 9.297,  aiAudit: 3.975 },
-  "sachita g harihar":               { selfAssessment: 9.676,  aiAudit: 3.770 },
-  "adnan sahil s":                   { selfAssessment: 9.568,  aiAudit: 4.100 },
-  "mohammed jabeer khan":            { selfAssessment: 9.784,  aiAudit: 3.930 },
-  "heeral sonagare":                 { selfAssessment: 7.568,  aiAudit: 3.720 },
-  "aryaman m math":                  { selfAssessment: 7.027,  aiAudit: 3.605 },
-  "srusti vishnukant ladda":         { selfAssessment: 9.730,  aiAudit: 3.910 },
-  "m keshava naik":                  { selfAssessment: 9.189,  aiAudit: 3.845 },
-  "shankar kumar":                   { selfAssessment: 8.054,  aiAudit: 3.705 },
-  "alihussain basha hyatkhan":       { selfAssessment: 7.622,  aiAudit: 3.925 },
-  "suma manjunath tumbraguddi":      { selfAssessment: 9.081,  aiAudit: 3.965 },
-  "abhishek tenginkai":              { selfAssessment: 8.000,  aiAudit: 3.580 },
-  "ambaldhage vinay kumar":          { selfAssessment: 7.351,  aiAudit: 4.080 },
-  "lilesh bhaskar sapaliga":         { selfAssessment: 9.514,  aiAudit: 3.795 },
-  "anand jaiswal":                   { selfAssessment: 8.432,  aiAudit: 3.765 }
+  "abdul razak":                     { selfAssessment: 9.243,  aiAudit: 3.945,  totalScore: 57.65 },
+  "love preet singh":                { selfAssessment: 7.892,  aiAudit: 3.705,  totalScore: 43.97 },
+  "mohit sharma":                    { selfAssessment: 8.324,  aiAudit: 4.005,  totalScore: 56.01 },
+  "avinash bhagwanrao pawde":        { selfAssessment: 6.541,  aiAudit: 3.665,  totalScore: 56.94 },
+  "vijay kumar n":                   { selfAssessment: 7.459,  aiAudit: 3.765,  totalScore: 54.16 },
+  "k g saroj":                       { selfAssessment: 6.541,  aiAudit: 3.825,  totalScore: 63.23 },
+  "ayachi mishra":                   { selfAssessment: 8.703,  aiAudit: 3.885,  totalScore: 64.11 },
+  "naveenkumar ayyangoudar":         { selfAssessment: 7.459,  aiAudit: 3.945,  totalScore: 55.03 },
+  "indranil bose":                   { selfAssessment: 8.649,  aiAudit: 3.965,  totalScore: 67.00 },
+  "seema k s":                       { selfAssessment: 9.351,  aiAudit: 4.020,  totalScore: 55.58 },
+  "d karthik":                       { selfAssessment: 9.405,  aiAudit: 3.810,  totalScore: 63.94 },
+  "anupama h":                       { selfAssessment: 9.514,  aiAudit: 4.005,  totalScore: 66.76 },
+  "stavan bhardwaj":                 { selfAssessment: 9.189,  aiAudit: 4.140,  totalScore: 72.49 },
+  "n s sindhu":                      { selfAssessment: 8.865,  aiAudit: 3.855,  totalScore: 57.40 },
+  "shefali tyagi":                   { selfAssessment: 18.500, aiAudit: 3.725,  totalScore: 71.52 },
+  "saneeth t s":                     { selfAssessment: 0.000,  aiAudit: 0.000,  totalScore: 48.31 },
+  "akash kumar singh":               { selfAssessment: 16.000, aiAudit: 3.905,  totalScore: 62.92 },
+  "nikhil v durgude":                { selfAssessment: 9.459,  aiAudit: 3.920,  totalScore: 55.01 },
+  "swetha a":                        { selfAssessment: 9.946,  aiAudit: 3.715,  totalScore: 53.33 },
+  "shruthi k b":                     { selfAssessment: 9.297,  aiAudit: 3.975,  totalScore: 41.39 },
+  "sachita g harihar":               { selfAssessment: 9.676,  aiAudit: 3.770,  totalScore: 60.14 },
+  "adnan sahil s":                   { selfAssessment: 9.568,  aiAudit: 4.100,  totalScore: 68.91 },
+  "mohammed jabeer khan":            { selfAssessment: 9.784,  aiAudit: 3.930,  totalScore: 57.13 },
+  "heeral sonagare":                 { selfAssessment: 7.568,  aiAudit: 3.720,  totalScore: 59.65 },
+  "aryaman m math":                  { selfAssessment: 7.027,  aiAudit: 3.605,  totalScore: 64.29 },
+  "srusti vishnukant ladda":         { selfAssessment: 9.730,  aiAudit: 3.910,  totalScore: 66.22 },
+  "m keshava naik":                  { selfAssessment: 9.189,  aiAudit: 3.845,  totalScore: 54.84 },
+  "shankar kumar":                   { selfAssessment: 8.054,  aiAudit: 3.705,  totalScore: 51.77 },
+  "alihussain basha hyatkhan":       { selfAssessment: 7.622,  aiAudit: 3.925,  totalScore: 54.40 },
+  "suma manjunath tumbraguddi":      { selfAssessment: 9.081,  aiAudit: 3.965,  totalScore: 51.57 },
+  "abhishek tenginkai":              { selfAssessment: 8.000,  aiAudit: 3.580,  totalScore: 56.44 },
+  "ambaldhage vinay kumar":          { selfAssessment: 7.351,  aiAudit: 4.080,  totalScore: 56.25 },
+  "lilesh bhaskar sapaliga":         { selfAssessment: 9.514,  aiAudit: 3.795,  totalScore: 68.03 },
+  "anand jaiswal":                   { selfAssessment: 8.432,  aiAudit: 3.765,  totalScore: 52.81 }
 };
 
 // Look up master scores by trainee name (case-insensitive, trimmed). Returns null if not found.
@@ -2221,17 +2223,21 @@ window.Admin = (() => {
     const gaMark  = scores['grammar-assessment']    != null ? r2(scores['grammar-assessment']    / 100 * 25) : null;
     const mcMark  = scores['mock-call']             != null ? r2(scores['mock-call']             / 100 * 20) : null;
 
-    // ── Self Assessment + AI Audit scores from master Excel (silent, not displayed) ──
-    let excelBonus = null;
+    // ── Total score: use Excel master total (W) directly for exact match ──
+    // Falls back to sum of module marks if trainee not found in master sheet.
+    let totalMark = null;
     try {
       const ms = getMasterScores(trainee.name);
-      if (ms && (ms.selfAssessment > 0 || ms.aiAudit > 0)) {
-        excelBonus = r2(ms.selfAssessment + ms.aiAudit);
+      if (ms && typeof ms.totalScore === 'number' && ms.totalScore > 0) {
+        totalMark = r2(ms.totalScore);  // use pre-computed Excel grand total
       }
     } catch (_) { /* fall back gracefully */ }
 
-    const allMarks  = [lisMark, psMark, gaMark, mcMark, excelBonus].filter(x => x != null);
-    const totalMark = allMarks.length ? r2(allMarks.reduce((a, b) => a + b, 0)) : null;
+    if (totalMark === null) {
+      // Fallback: sum of whatever module marks are available
+      const allMarks = [lisMark, psMark, gaMark, mcMark].filter(x => x != null);
+      totalMark = allMarks.length ? r2(allMarks.reduce((a, b) => a + b, 0)) : null;
+    }
 
     // ── Render letter ──
     const insights = buildLetterInsights(scores, details, totalMark);
