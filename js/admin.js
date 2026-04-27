@@ -42,11 +42,16 @@ const MASTER_SCORES = {
   "anand jaiswal":                   { selfAssessment: 8.432,  aiAudit: 3.765,  totalScore: 52.81 }
 };
 
-// Look up master scores by trainee name (case-insensitive, trimmed). Returns null if not found.
+// Look up master scores by trainee name (case-insensitive, trimmed).
+// Also tries stripping all internal whitespace so "KG Saroj" → "kgsaroj" matches "k g saroj" → "kgsaroj".
+// Returns null if not found.
 function getMasterScores(name) {
   if (!name) return null;
   const key = name.trim().toLowerCase();
-  return MASTER_SCORES[key] || null;
+  if (MASTER_SCORES[key]) return MASTER_SCORES[key];
+  // Collapse all whitespace and try again (handles "KG Saroj" vs "K G Saroj")
+  const compact = key.replace(/\s+/g, '');
+  return Object.entries(MASTER_SCORES).find(([k]) => k.replace(/\s+/g, '') === compact)?.[1] || null;
 }
 
 window.Admin = (() => {
@@ -2071,8 +2076,13 @@ window.Admin = (() => {
               .sort((a, b) => (a.marksObtained / a.maxMarks) - (b.marksObtained / b.maxMarks))[0];
             if (weakSec) {
               const letter = weakSec.title?.match(/Section\s+([A-C])/i)?.[1];
-              const label  = letter === 'A' ? 'Grammar — Section A (MCQ)' : letter === 'B' ? 'Grammar — Section B (Fill-in-blank)' : 'Grammar — Section C (Sentence Correction)';
-              priorityBullets.push({ param: label, desc: 'Targeted practice on this section will have the highest impact on your Grammar score.' });
+              const GRAM_LABEL = {
+                A: { param: 'Grammar — Tense, Articles & Basic Grammar Rules',   desc: 'Practise identifying correct tense forms (past/present/future), and using articles (a/an/the) in context.' },
+                B: { param: 'Grammar — Prepositions & Conjunctions',             desc: 'Focus on articles (a/an/the), prepositions (in/on/at/to/for) and conjunctions (and/but/so/because) in fill-in-the-blank exercises.' },
+                C: { param: 'Grammar — Sentence Rewriting & Tense Correction',   desc: 'Practise rewriting sentences with correct tense, subject-verb agreement and modal verbs (should/could/would).' }
+              };
+              const gi = GRAM_LABEL[letter] || { param: 'Grammar', desc: 'Focus on prepositions, conjunctions and tense correction through daily practice.' };
+              priorityBullets.push(gi);
               gaAdded = true;
             }
           }
@@ -2162,6 +2172,7 @@ window.Admin = (() => {
         <li>Grammar: ${fmt(gaMark, 25)}</li>
         <li>Mock Call: ${fmt(mcMark, 20)}</li>
       </ul>
+      <p style="font-size:0.82rem;color:var(--text-muted);margin-top:0.3rem;margin-bottom:0.1rem"><em>* AI &amp; Manager evaluation scores are taken into consideration and carry a weightage of 15% in the total score.</em></p>
 
       <h2 class="lrc-h2">Key Strengths</h2>
       <p>${strengthPara}</p>
@@ -2324,13 +2335,13 @@ window.Admin = (() => {
     const s1 = pptx.addSlide();
     s1.background = { color: C.navy };
     // Left mint stripe
-    s1.addShape(pptx.ShapeType.RECT, { x:0, y:0, w:0.18, h:H, fill:{color:C.mint}, line:noBorder });
+    s1.addShape(pptx.ShapeType.rect, { x:0, y:0, w:0.18, h:H, fill:{color:C.mint}, line:noBorder });
     // Top-right teal circle (decorative)
-    s1.addShape(pptx.ShapeType.ELLIPSE, { x:6.4, y:-0.55, w:4.3, h:4.3, fill:{color:C.mint}, line:noBorder });
+    s1.addShape(pptx.ShapeType.ellipse, { x:6.4, y:-0.55, w:4.3, h:4.3, fill:{color:C.mint}, line:noBorder });
     // Navy overlay square (creates window-in-circle effect)
-    s1.addShape(pptx.ShapeType.RECT, { x:7.25, y:0.82, w:2.5, h:2.5, fill:{color:C.navy}, line:noBorder });
+    s1.addShape(pptx.ShapeType.rect, { x:7.25, y:0.82, w:2.5, h:2.5, fill:{color:C.navy}, line:noBorder });
     // Total score circle
-    s1.addShape(pptx.ShapeType.ELLIPSE, { x:7.55, y:0.92, w:1.9, h:1.9, fill:{color:C.darkNav}, line:noBorder });
+    s1.addShape(pptx.ShapeType.ellipse, { x:7.55, y:0.92, w:1.9, h:1.9, fill:{color:C.darkNav}, line:noBorder });
     // Total score text
     s1.addText('Total Score',         { x:7.55, y:1.02, w:1.9, h:0.28, fontSize:9,  bold:true, color:C.label, align:'center', fontFace:'Calibri' });
     s1.addText(fmt2(totalMark),        { x:7.55, y:1.28, w:1.9, h:0.62, fontSize:30, bold:true, color:C.white, align:'center', fontFace:'Calibri' });
@@ -2348,21 +2359,21 @@ window.Admin = (() => {
     ];
     const cXs = [0.3, 2.58, 4.86, 7.14], cW=2.1, cH=1.55, cY=3.55;
     cards.forEach((c, i) => {
-      s1.addShape(pptx.ShapeType.RECT, { x:cXs[i], y:cY, w:cW, h:cH, fill:{color:C.darkNav}, line:noBorder });
+      s1.addShape(pptx.ShapeType.rect, { x:cXs[i], y:cY, w:cW, h:cH, fill:{color:C.darkNav}, line:noBorder });
       s1.addText(c.label, { x:cXs[i]+0.1, y:cY+0.12, w:cW-0.2, h:0.26, fontSize:9, bold:true, color:C.label, align:'center', fontFace:'Calibri' });
       s1.addText(c.score!=null ? c.score.toFixed(2) : 'N/A', { x:cXs[i]+0.1, y:cY+0.36, w:cW-0.2, h:0.68, fontSize:26, bold:true, color:sColor(c.score,c.max), align:'center', fontFace:'Calibri' });
       s1.addText(`/ ${c.max}`, { x:cXs[i]+0.1, y:cY+1.08, w:cW-0.2, h:0.32, fontSize:12, color:C.denom, align:'center', fontFace:'Calibri' });
     });
     // Footer
-    s1.addShape(pptx.ShapeType.RECT, { x:0, y:H-0.42, w:W, h:0.42, fill:{color:C.teal}, line:noBorder });
-    s1.addText('Confidential  |  Individual Coaching Report', { x:0.3, y:H-0.4, w:W-0.6, h:0.36, fontSize:10, color:C.white, align:'center', fontFace:'Calibri', valign:'middle' });
+    s1.addShape(pptx.ShapeType.rect, { x:0, y:H-0.42, w:W, h:0.42, fill:{color:C.teal}, line:noBorder });
+    s1.addText('Confidential  |  Individual Coaching Report  |  * AI & Manager scores included (15% weightage)', { x:0.3, y:H-0.4, w:W-0.6, h:0.36, fontSize:9, color:C.white, align:'center', fontFace:'Calibri', valign:'middle' });
 
     // ── SLIDE 2 — Pick & Speak ───────────────────────────────────────────────────
     const s2 = pptx.addSlide();
     s2.background = { color: C.lightBg };
-    s2.addShape(pptx.ShapeType.RECT, { x:0, y:0, w:W, h:0.82, fill:{color:C.teal}, line:noBorder });
+    s2.addShape(pptx.ShapeType.rect, { x:0, y:0, w:W, h:0.82, fill:{color:C.teal}, line:noBorder });
     s2.addText('🎤  Pick & Speak Feedback', { x:0.25, y:0.08, w:7.6, h:0.66, fontSize:20, bold:true, color:C.white, fontFace:'Calibri', valign:'middle' });
-    s2.addShape(pptx.ShapeType.RECT, { x:8.08, y:0.1, w:1.72, h:0.62, fill:{color:C.darkNav}, line:noBorder });
+    s2.addShape(pptx.ShapeType.rect, { x:8.08, y:0.1, w:1.72, h:0.62, fill:{color:C.darkNav}, line:noBorder });
     s2.addText(`${fmt2(psMark)} / 20`, { x:8.08, y:0.1, w:1.72, h:0.62, fontSize:13, bold:true, color:C.mint, align:'center', valign:'middle', fontFace:'Calibri' });
 
     const psSessions = details['pick-speak'] || [];
@@ -2383,7 +2394,7 @@ window.Admin = (() => {
     const displayPS = [...sortedPS, ...unknownPS].slice(0, 6);
     const priorityPS = sortedPS[0]?.label || 'Communication Delivery';
 
-    s2.addShape(pptx.ShapeType.RECT, { x:0, y:0.82, w:W, h:0.5, fill:{color:C.amber}, line:noBorder });
+    s2.addShape(pptx.ShapeType.rect, { x:0, y:0.82, w:W, h:0.5, fill:{color:C.amber}, line:noBorder });
     s2.addText(`🎯  Priority Action: Start with '${priorityPS}' — highest-impact area to address first`, { x:0.25, y:0.82, w:W-0.5, h:0.5, fontSize:12, bold:true, color:C.white, fontFace:'Calibri', valign:'middle' });
 
     const psCardW=4.68, psCardH=0.76, psGap=0.07, psStartY=1.41;
@@ -2392,8 +2403,8 @@ window.Admin = (() => {
       const cx=(col===0)?0.22:5.1, cy=psStartY+row*(psCardH+psGap);
       const score=typeof psAI[c.key]==='number'?psAI[c.key]:null;
       const sc=score!=null?(score>=4?C.teal:C.amber):C.muted;
-      s2.addShape(pptx.ShapeType.RECT, { x:cx, y:cy, w:psCardW, h:psCardH, fill:{color:C.white}, line:{color:C.divider,pt:0.75} });
-      s2.addShape(pptx.ShapeType.RECT, { x:cx, y:cy, w:0.08, h:psCardH, fill:{color:sc}, line:noBorder });
+      s2.addShape(pptx.ShapeType.rect, { x:cx, y:cy, w:psCardW, h:psCardH, fill:{color:C.white}, line:{color:C.divider,pt:0.75} });
+      s2.addShape(pptx.ShapeType.rect, { x:cx, y:cy, w:0.08, h:psCardH, fill:{color:sc}, line:noBorder });
       s2.addText(c.label,                                { x:cx+0.15, y:cy+0.06, w:psCardW-0.9, h:0.3, fontSize:11, bold:true, color:C.darkNav, fontFace:'Calibri' });
       s2.addText(score!=null?`${score}/5`:'N/A',         { x:cx+psCardW-0.78, y:cy+0.06, w:0.65, h:0.3, fontSize:11, bold:true, color:sc, align:'right', fontFace:'Calibri' });
       s2.addText(c.tip,                                  { x:cx+0.15, y:cy+0.35, w:psCardW-0.28, h:0.35, fontSize:8.5, color:C.muted, wrap:true, fontFace:'Calibri' });
@@ -2402,9 +2413,9 @@ window.Admin = (() => {
     // ── SLIDE 3 — Mock Call ──────────────────────────────────────────────────────
     const s3 = pptx.addSlide();
     s3.background = { color: C.lightBg };
-    s3.addShape(pptx.ShapeType.RECT, { x:0, y:0, w:W, h:0.82, fill:{color:C.darkNav}, line:noBorder });
+    s3.addShape(pptx.ShapeType.rect, { x:0, y:0, w:W, h:0.82, fill:{color:C.darkNav}, line:noBorder });
     s3.addText('📞  Mock Call Feedback', { x:0.25, y:0.08, w:7.6, h:0.66, fontSize:20, bold:true, color:C.white, fontFace:'Calibri', valign:'middle' });
-    s3.addShape(pptx.ShapeType.RECT, { x:8.08, y:0.1, w:1.72, h:0.62, fill:{color:C.teal}, line:noBorder });
+    s3.addShape(pptx.ShapeType.rect, { x:8.08, y:0.1, w:1.72, h:0.62, fill:{color:C.teal}, line:noBorder });
     s3.addText(`${fmt2(mcMark)} / 20`, { x:8.08, y:0.1, w:1.72, h:0.62, fontSize:13, bold:true, color:C.white, align:'center', valign:'middle', fontFace:'Calibri' });
 
     const mcSess = details['mock-call'] || [];
@@ -2424,9 +2435,9 @@ window.Admin = (() => {
     const displayMC = [...sortedMC,...unknownMC].slice(0,6);
     const priorityMC = sortedMC[0]?.label || 'Call Handling';
 
-    s3.addShape(pptx.ShapeType.RECT, { x:0, y:0.82, w:W/2, h:0.5, fill:{color:C.green}, line:noBorder });
+    s3.addShape(pptx.ShapeType.rect, { x:0, y:0.82, w:W/2, h:0.5, fill:{color:C.green}, line:noBorder });
     s3.addText('✨  Development Areas (prioritised):', { x:0.1, y:0.82, w:W/2-0.15, h:0.5, fontSize:10, bold:true, color:C.white, fontFace:'Calibri', valign:'middle' });
-    s3.addShape(pptx.ShapeType.RECT, { x:W/2, y:0.82, w:W/2, h:0.5, fill:{color:C.amber}, line:noBorder });
+    s3.addShape(pptx.ShapeType.rect, { x:W/2, y:0.82, w:W/2, h:0.5, fill:{color:C.amber}, line:noBorder });
     s3.addText(`🎯  Priority: '${priorityMC}' — highest-impact area`, { x:W/2+0.1, y:0.82, w:W/2-0.2, h:0.5, fontSize:10, bold:true, color:C.white, fontFace:'Calibri', valign:'middle' });
 
     const mcCols=[0.15,3.42,6.69], mcCW=3.08, mcCH=0.84, mcCGap=0.08, mcStartY=1.42;
@@ -2435,8 +2446,8 @@ window.Admin = (() => {
       const cx=mcCols[col], cy=mcStartY+row*(mcCH+mcCGap);
       const score=typeof mcCom[c.key]==='number'?mcCom[c.key]:null;
       const sc=score!=null?(score>=4?C.teal:C.amber):C.muted;
-      s3.addShape(pptx.ShapeType.RECT, { x:cx, y:cy, w:mcCW, h:mcCH, fill:{color:C.white}, line:{color:C.divider,pt:0.75} });
-      s3.addShape(pptx.ShapeType.RECT, { x:cx, y:cy, w:0.08, h:mcCH, fill:{color:sc}, line:noBorder });
+      s3.addShape(pptx.ShapeType.rect, { x:cx, y:cy, w:mcCW, h:mcCH, fill:{color:C.white}, line:{color:C.divider,pt:0.75} });
+      s3.addShape(pptx.ShapeType.rect, { x:cx, y:cy, w:0.08, h:mcCH, fill:{color:sc}, line:noBorder });
       s3.addText(c.label,                            { x:cx+0.15, y:cy+0.07, w:mcCW-0.85, h:0.3, fontSize:10.5, bold:true, color:C.darkNav, fontFace:'Calibri' });
       s3.addText(score!=null?`${score}/5`:'N/A',     { x:cx+mcCW-0.72, y:cy+0.07, w:0.6, h:0.3, fontSize:10.5, bold:true, color:sc, align:'right', fontFace:'Calibri' });
       s3.addText(c.tip,                              { x:cx+0.15, y:cy+0.37, w:mcCW-0.25, h:0.42, fontSize:8, color:C.muted, wrap:true, fontFace:'Calibri' });
@@ -2445,9 +2456,9 @@ window.Admin = (() => {
     // ── SLIDE 4 — Listening & Grammar ────────────────────────────────────────────
     const s4 = pptx.addSlide();
     s4.background = { color: C.lightBg };
-    s4.addShape(pptx.ShapeType.RECT, { x:0, y:0, w:W, h:0.82, fill:{color:C.navy}, line:noBorder });
+    s4.addShape(pptx.ShapeType.rect, { x:0, y:0, w:W, h:0.82, fill:{color:C.navy}, line:noBorder });
     s4.addText('👂  Listening & Grammar Feedback', { x:0.25, y:0.08, w:W-0.5, h:0.66, fontSize:20, bold:true, color:C.white, fontFace:'Calibri', valign:'middle' });
-    s4.addShape(pptx.ShapeType.RECT, { x:4.87, y:0.9, w:0.06, h:H-1.05, fill:{color:C.divider}, line:noBorder });
+    s4.addShape(pptx.ShapeType.rect, { x:4.87, y:0.9, w:0.06, h:H-1.05, fill:{color:C.divider}, line:noBorder });
 
     // LEFT — Listening
     const laSess2 = details['listening-assessment'] || [];
@@ -2457,14 +2468,14 @@ window.Admin = (() => {
     const laWeak   = laSecs.filter(s=>s.pct<60).map(s=>`→ ${s.title} — needs focused practice`);
     if (!laSecs.length) { laStrong.push('✓ Demonstrates ability to follow spoken instructions'); laWeak.push('→ Focus on capturing finer details while listening'); laWeak.push('→ Avoid assumptions; verify before responding'); }
 
-    s4.addShape(pptx.ShapeType.RECT, { x:0.18, y:0.9, w:4.55, h:0.42, fill:{color:C.teal}, line:noBorder });
+    s4.addShape(pptx.ShapeType.rect, { x:0.18, y:0.9, w:4.55, h:0.42, fill:{color:C.teal}, line:noBorder });
     s4.addText(`👂  Listening · ${fmt2(lisMark)} / 20`, { x:0.22, y:0.9, w:4.5, h:0.42, fontSize:12, bold:true, color:C.white, valign:'middle', fontFace:'Calibri' });
     let laY=1.38;
-    laStrong.slice(0,2).forEach(txt=>{ s4.addShape(pptx.ShapeType.RECT,{x:0.18,y:laY,w:4.55,h:0.37,fill:{color:C.white},line:{color:C.divider,pt:0.5}}); s4.addShape(pptx.ShapeType.RECT,{x:0.18,y:laY,w:0.08,h:0.37,fill:{color:C.green},line:noBorder}); s4.addText(txt,{x:0.32,y:laY+0.04,w:4.3,h:0.29,fontSize:9.5,color:C.darkNav,fontFace:'Calibri'}); laY+=0.42; });
-    s4.addShape(pptx.ShapeType.RECT, { x:0.18, y:laY, w:4.55, h:0.29, fill:{color:C.amber}, line:noBorder });
+    laStrong.slice(0,2).forEach(txt=>{ s4.addShape(pptx.ShapeType.rect,{x:0.18,y:laY,w:4.55,h:0.37,fill:{color:C.white},line:{color:C.divider,pt:0.5}}); s4.addShape(pptx.ShapeType.rect,{x:0.18,y:laY,w:0.08,h:0.37,fill:{color:C.green},line:noBorder}); s4.addText(txt,{x:0.32,y:laY+0.04,w:4.3,h:0.29,fontSize:9.5,color:C.darkNav,fontFace:'Calibri'}); laY+=0.42; });
+    s4.addShape(pptx.ShapeType.rect, { x:0.18, y:laY, w:4.55, h:0.29, fill:{color:C.amber}, line:noBorder });
     s4.addText('Areas of Improvement', { x:0.22, y:laY, w:4.5, h:0.29, fontSize:9.5, bold:true, color:C.white, valign:'middle', fontFace:'Calibri' });
     laY+=0.33;
-    laWeak.slice(0,3).forEach(txt=>{ s4.addShape(pptx.ShapeType.RECT,{x:0.18,y:laY,w:4.55,h:0.37,fill:{color:C.white},line:{color:C.divider,pt:0.5}}); s4.addShape(pptx.ShapeType.RECT,{x:0.18,y:laY,w:0.08,h:0.37,fill:{color:C.amber},line:noBorder}); s4.addText(txt,{x:0.32,y:laY+0.04,w:4.3,h:0.29,fontSize:9.5,color:C.darkNav,fontFace:'Calibri',wrap:true}); laY+=0.42; });
+    laWeak.slice(0,3).forEach(txt=>{ s4.addShape(pptx.ShapeType.rect,{x:0.18,y:laY,w:4.55,h:0.37,fill:{color:C.white},line:{color:C.divider,pt:0.5}}); s4.addShape(pptx.ShapeType.rect,{x:0.18,y:laY,w:0.08,h:0.37,fill:{color:C.amber},line:noBorder}); s4.addText(txt,{x:0.32,y:laY+0.04,w:4.3,h:0.29,fontSize:9.5,color:C.darkNav,fontFace:'Calibri',wrap:true}); laY+=0.42; });
 
     // RIGHT — Grammar
     const GRAM_TOPICS2 = { 'A':'Multiple Choice — Tense, Articles, Basic Grammar Rules', 'B':'Fill in the Blanks — Articles (a/an/the), Prepositions, Conjunctions', 'C':'Sentence Rewriting — Tense Correction, Subject-Verb Agreement' };
@@ -2475,19 +2486,19 @@ window.Admin = (() => {
     const gaWeak    = gaSecs2.filter(s=>s.pct<60).map(s=>{const l=(s.title||'').match(/Section\s+([A-C])/i)?.[1]?.toUpperCase()||'';return `→ ${GRAM_TOPICS2[l]||s.title}`;});
     if (!gaSecs2.length) { gaStrong.push('✓ Shows understanding of basic grammar concepts'); gaWeak.push('→ Articles (a/an/the) and Prepositions (in/on/at)'); gaWeak.push('→ Sentence rewriting and tense correction'); }
 
-    s4.addShape(pptx.ShapeType.RECT, { x:5.05, y:0.9, w:4.75, h:0.42, fill:{color:C.darkNav}, line:noBorder });
+    s4.addShape(pptx.ShapeType.rect, { x:5.05, y:0.9, w:4.75, h:0.42, fill:{color:C.darkNav}, line:noBorder });
     s4.addText(`📝  Grammar · ${fmt2(gaMark)} / 25`, { x:5.09, y:0.9, w:4.7, h:0.42, fontSize:12, bold:true, color:C.white, valign:'middle', fontFace:'Calibri' });
     let gaY=1.38;
-    gaStrong.slice(0,2).forEach(txt=>{ s4.addShape(pptx.ShapeType.RECT,{x:5.05,y:gaY,w:4.75,h:0.37,fill:{color:C.white},line:{color:C.divider,pt:0.5}}); s4.addShape(pptx.ShapeType.RECT,{x:5.05,y:gaY,w:0.08,h:0.37,fill:{color:C.green},line:noBorder}); s4.addText(txt,{x:5.19,y:gaY+0.04,w:4.5,h:0.29,fontSize:9.5,color:C.darkNav,fontFace:'Calibri'}); gaY+=0.42; });
-    s4.addShape(pptx.ShapeType.RECT, { x:5.05, y:gaY, w:4.75, h:0.29, fill:{color:C.amber}, line:noBorder });
+    gaStrong.slice(0,2).forEach(txt=>{ s4.addShape(pptx.ShapeType.rect,{x:5.05,y:gaY,w:4.75,h:0.37,fill:{color:C.white},line:{color:C.divider,pt:0.5}}); s4.addShape(pptx.ShapeType.rect,{x:5.05,y:gaY,w:0.08,h:0.37,fill:{color:C.green},line:noBorder}); s4.addText(txt,{x:5.19,y:gaY+0.04,w:4.5,h:0.29,fontSize:9.5,color:C.darkNav,fontFace:'Calibri'}); gaY+=0.42; });
+    s4.addShape(pptx.ShapeType.rect, { x:5.05, y:gaY, w:4.75, h:0.29, fill:{color:C.amber}, line:noBorder });
     s4.addText('Areas of Improvement', { x:5.09, y:gaY, w:4.7, h:0.29, fontSize:9.5, bold:true, color:C.white, valign:'middle', fontFace:'Calibri' });
     gaY+=0.33;
-    gaWeak.slice(0,3).forEach(txt=>{ s4.addShape(pptx.ShapeType.RECT,{x:5.05,y:gaY,w:4.75,h:0.37,fill:{color:C.white},line:{color:C.divider,pt:0.5}}); s4.addShape(pptx.ShapeType.RECT,{x:5.05,y:gaY,w:0.08,h:0.37,fill:{color:C.amber},line:noBorder}); s4.addText(txt,{x:5.19,y:gaY+0.04,w:4.5,h:0.29,fontSize:9.5,color:C.darkNav,fontFace:'Calibri',wrap:true}); gaY+=0.42; });
+    gaWeak.slice(0,3).forEach(txt=>{ s4.addShape(pptx.ShapeType.rect,{x:5.05,y:gaY,w:4.75,h:0.37,fill:{color:C.white},line:{color:C.divider,pt:0.5}}); s4.addShape(pptx.ShapeType.rect,{x:5.05,y:gaY,w:0.08,h:0.37,fill:{color:C.amber},line:noBorder}); s4.addText(txt,{x:5.19,y:gaY+0.04,w:4.5,h:0.29,fontSize:9.5,color:C.darkNav,fontFace:'Calibri',wrap:true}); gaY+=0.42; });
 
     // ── SLIDE 5 — Overall Diagnosis ──────────────────────────────────────────────
     const s5 = pptx.addSlide();
     s5.background = { color: C.lightBg };
-    s5.addShape(pptx.ShapeType.RECT, { x:0, y:0, w:W, h:0.82, fill:{color:C.navy}, line:noBorder });
+    s5.addShape(pptx.ShapeType.rect, { x:0, y:0, w:W, h:0.82, fill:{color:C.navy}, line:noBorder });
     s5.addText('Overall Diagnosis', { x:0.25, y:0.08, w:W-0.5, h:0.66, fontSize:20, bold:true, color:C.white, fontFace:'Calibri', valign:'middle' });
 
     const tot = totalMark ?? 0;
@@ -2499,21 +2510,21 @@ window.Admin = (() => {
     else if (tot>=55){level='Developing Performer';overallTxt=`${name} shows a solid foundation across the communication assessment${bestMod?`, with ${bestMod} as the standout area`:''}.  There is clear capability that can grow into consistent excellence with targeted effort.`;insightTxt=`The gap between current performance and the next level is bridgeable.  Prioritise ${weakMod||'the lower-scoring module'} — structured daily practice of 15–20 minutes will show measurable improvement within two weeks.`;}
     else{level='Needs Focused Improvement';overallTxt=`${name} has actively engaged with the Communicate 360 program${bestMod?` and shows early promise in ${bestMod}`:''}.  Current scores highlight areas needing dedicated practice before they become consistent strengths.`;insightTxt=`Start with fundamentals: active listening, structured speaking (opening-middle-close), and daily grammar review.  A consistent 20-minute daily routine focused on core weaknesses will accelerate progress significantly.`;}
 
-    s5.addShape(pptx.ShapeType.RECT, { x:0.28, y:1.05, w:W-0.56, h:1.9, fill:{color:C.white}, line:{color:C.divider,pt:1} });
-    s5.addShape(pptx.ShapeType.RECT, { x:0.28, y:1.05, w:0.1, h:1.9, fill:{color:C.green}, line:noBorder });
+    s5.addShape(pptx.ShapeType.rect, { x:0.28, y:1.05, w:W-0.56, h:1.9, fill:{color:C.white}, line:{color:C.divider,pt:1} });
+    s5.addShape(pptx.ShapeType.rect, { x:0.28, y:1.05, w:0.1, h:1.9, fill:{color:C.green}, line:noBorder });
     s5.addText('Overall Assessment', { x:0.48, y:1.13, w:W-0.88, h:0.33, fontSize:12, bold:true, color:C.navy, fontFace:'Calibri' });
-    s5.addText(`${level}  ·  Total Score: ${fmt2(totalMark)} / 100`, { x:0.48, y:1.43, w:W-0.88, h:0.28, fontSize:10.5, bold:true, color:C.teal, fontFace:'Calibri' });
+    s5.addText(`${level}  ·  Total Score: ${fmt2(totalMark)} / 100  (incl. AI & Manager scores — 15% weightage)`, { x:0.48, y:1.43, w:W-0.88, h:0.28, fontSize:9.5, bold:true, color:C.teal, fontFace:'Calibri' });
     s5.addText(overallTxt, { x:0.48, y:1.71, w:W-0.88, h:1.18, fontSize:10.5, color:C.darkNav, wrap:true, fontFace:'Calibri' });
 
-    s5.addShape(pptx.ShapeType.RECT, { x:0.28, y:3.15, w:W-0.56, h:1.9, fill:{color:C.white}, line:{color:C.divider,pt:1} });
-    s5.addShape(pptx.ShapeType.RECT, { x:0.28, y:3.15, w:0.1, h:1.9, fill:{color:C.orange}, line:noBorder });
+    s5.addShape(pptx.ShapeType.rect, { x:0.28, y:3.15, w:W-0.56, h:1.9, fill:{color:C.white}, line:{color:C.divider,pt:1} });
+    s5.addShape(pptx.ShapeType.rect, { x:0.28, y:3.15, w:0.1, h:1.9, fill:{color:C.orange}, line:noBorder });
     s5.addText('Core Insight', { x:0.48, y:3.23, w:W-0.88, h:0.33, fontSize:12, bold:true, color:C.navy, fontFace:'Calibri' });
     s5.addText(insightTxt, { x:0.48, y:3.56, w:W-0.88, h:1.42, fontSize:10.5, color:C.darkNav, wrap:true, fontFace:'Calibri' });
 
     // ── SLIDE 6 — Development Roadmap ────────────────────────────────────────────
     const s6 = pptx.addSlide();
     s6.background = { color: C.navy };
-    s6.addShape(pptx.ShapeType.RECT, { x:0, y:0, w:0.18, h:H, fill:{color:C.mint}, line:noBorder });
+    s6.addShape(pptx.ShapeType.rect, { x:0, y:0, w:0.18, h:H, fill:{color:C.mint}, line:noBorder });
     s6.addText('🚀  Development Roadmap', { x:0.28, y:0.08, w:W-0.5, h:0.5, fontSize:22, bold:true, color:C.white, fontFace:'Calibri' });
 
     const steps = buildRoadmapSteps(name, scores, details, marks);
@@ -2524,14 +2535,14 @@ window.Admin = (() => {
 
     steps.forEach((step, i) => {
       const sy = stepY0 + i*(stepH+stepGap);
-      s6.addShape(pptx.ShapeType.RECT, { x:0.18, y:sy, w:W-0.18, h:stepH, fill:{color:C.sidebar}, line:noBorder });
-      s6.addShape(pptx.ShapeType.RECT, { x:0.18, y:sy, w:leftW, h:stepH, fill:{color:C.teal}, line:noBorder });
+      s6.addShape(pptx.ShapeType.rect, { x:0.18, y:sy, w:W-0.18, h:stepH, fill:{color:C.sidebar}, line:noBorder });
+      s6.addShape(pptx.ShapeType.rect, { x:0.18, y:sy, w:leftW, h:stepH, fill:{color:C.teal}, line:noBorder });
       s6.addText(`Step ${i+1}`, { x:0.22, y:sy+0.04, w:leftW-0.1, h:0.28, fontSize:10, bold:true, color:C.white, fontFace:'Calibri' });
       s6.addText(step.focus, { x:0.22, y:sy+0.3, w:leftW-0.1, h:stepH-0.36, fontSize:8.5, color:'CCDDEE', wrap:true, fontFace:'Calibri', valign:'top' });
       s6.addText(step.content, { x:0.18+leftW+0.1, y:sy+0.06, w:W-0.18-leftW-0.2, h:stepH-0.12, fontSize:9.5, color:C.white, wrap:true, fontFace:'Calibri', valign:'top' });
     });
 
-    s6.addShape(pptx.ShapeType.RECT, { x:0, y:H-0.45, w:W, h:0.45, fill:{color:C.teal}, line:noBorder });
+    s6.addShape(pptx.ShapeType.rect, { x:0, y:H-0.45, w:W, h:0.45, fill:{color:C.teal}, line:noBorder });
     s6.addText(`Consistent practice is the key. You've got this, ${name}! 💪`, { x:0.3, y:H-0.42, w:W-0.6, h:0.38, fontSize:11, bold:true, color:C.white, align:'center', valign:'middle', fontFace:'Calibri' });
 
     const filename = `${name.replace(/\s+/g,'_')}_Performance_Report.pptx`;
