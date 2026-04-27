@@ -59,6 +59,7 @@ window.Admin = (() => {
   let _assessmentsFilter = { module: 'all', status: 'all', team: 'all' };
   let _currentFilteredSessions = [];
   let _teamAssignments = {};   // { traineeId: 'Team Name' }
+  let _currentReportData = null; // { trainee, marks, scores, details }
 
   // Convert legacy overall scores stored as raw /5 to /100
   function normalizeOverall(overall) {
@@ -2146,6 +2147,7 @@ window.Admin = (() => {
     card.innerHTML = `
       <div class="lrc-print-btn-wrap">
         <button id="lrc-copy-btn" class="btn-secondary" style="font-size:0.8rem;padding:0.4rem 0.9rem" onclick="Admin.copyLetter()">📋 Copy to Clipboard</button>
+        <button id="lrc-ppt-btn" class="btn-primary" style="font-size:0.8rem;padding:0.4rem 0.9rem;margin-left:0.5rem" onclick="Admin.downloadTraineePPT()">⬇ Download PPT</button>
       </div>
 
       <div id="lrc-letter-body">
@@ -2176,6 +2178,379 @@ window.Admin = (() => {
       <p style="margin-top:0.5rem"><strong>${closing2}</strong></p>
       </div>
     `;
+  }
+
+  // ================================================================
+  //  PPT REPORT GENERATION (PptxGenJS)
+  // ================================================================
+
+  function buildRoadmapSteps(name, scores, details, marks) {
+    const steps = [];
+    const { psMark, lisMark, gaMark, mcMark } = marks;
+
+    // ── P&S weaknesses ──
+    const psSessions = details['pick-speak'] || [];
+    const bestPS = psSessions.reduce((b, s) => {
+      const e = effScore(s), be = b ? effScore(b) : -1;
+      return (e !== null && e > (be ?? -1)) ? s : b;
+    }, null);
+    const psAI = bestPS?.aiScores || {};
+    const PS_LABELS = { fluency:'Fluency', pace:'Pace & Delivery', logicalFlow:'Logical Flow',
+      clarity:'Clarity of Expression', confidence:'Confidence', fillerControl:'Filler Word Control',
+      vocabulary:'Vocabulary', professionalism:'Professionalism' };
+    const PS_TIPS = {
+      fluency:        'Practice speaking on random topics for 1 minute without stopping — keep going even when stuck.',
+      pace:           'Record yourself and listen back. Target 100–150 WPM. Use a stopwatch to self-check.',
+      logicalFlow:    'Use "first / then / finally" to structure every response. Practice structured 2-minute talks.',
+      clarity:        'Use short sentences (10–20 words), one idea per sentence. Avoid complex clauses.',
+      confidence:     'Replace hedge phrases ("I think", "sort of") with confident statements. Pause instead of filling.',
+      fillerControl:  'Replace "um / uh / like" with a deliberate pause. Silence signals confidence.',
+      vocabulary:     'Introduce one new professional term per response. Read financial content daily.',
+      professionalism:'Use formal language throughout. Open and close responses with structured, courteous phrases.'
+    };
+    const weakPS = Object.entries(psAI)
+      .filter(([k, v]) => PS_LABELS[k] && typeof v === 'number' && v < 4)
+      .sort(([,a],[,b]) => a - b).slice(0, 2);
+    if (weakPS.length) {
+      const [k0] = weakPS[0];
+      steps.push({
+        focus: `Pick & Speak\n${PS_LABELS[k0]}`,
+        content: (PS_TIPS[k0] || 'Focus on structured daily practice.') +
+          (weakPS[1] ? `\n\nAlso work on: ${PS_LABELS[weakPS[1][0]]} — ${PS_TIPS[weakPS[1][0]] || 'Practice regularly.'}` : '')
+      });
+    } else if (psMark != null && psMark < 15) {
+      steps.push({ focus: 'Pick & Speak\nDelivery', content: 'Build structure: clear opening, developed middle, strong close. Record a 2-minute talk daily on a financial topic and self-review.' });
+    }
+
+    // ── Mock Call weaknesses ──
+    const mcSess = details['mock-call'] || [];
+    const latestMC = mcSess.sort((a,b) => new Date(b.submittedAt) - new Date(a.submittedAt))[0];
+    const mcCom = { ...(latestMC?.aiScores||{}), ...(latestMC?.adminScores||{}) };
+    const MC_LABELS = { callOpening:'Call Opening', acknowledgment:'Acknowledgment & Empathy',
+      communicationClarity:'Communication Clarity', callEssence:'Call Essence',
+      holdProcedure:'Hold Procedure', extraMile:'Going the Extra Mile', callClosing:'Call Closing' };
+    const MC_TIPS = {
+      callOpening:          '"Good morning/afternoon, thank you for calling [Company], this is [Name], how may I assist you?" — all four elements every time.',
+      acknowledgment:       '"I completely understand how frustrating this must be" — always acknowledge before solving. Practice empathy statements daily.',
+      communicationClarity: 'Speak at 120–140 WPM, use simple language, confirm understanding at key points: "Does that make sense?"',
+      callEssence:          'Use "certainly", "happy to help", "absolutely" throughout. Build rapport with a warm, genuine tone.',
+      holdProcedure:        '"May I place you on hold for 2 minutes while I check?" — permission + reason + time. Thank them on return.',
+      extraMile:            'After solving the query: "Also, I noticed… you might benefit from…" — add one proactive tip per call.',
+      callClosing:          '"Is there anything else I can help you with?" then "Thank you for calling, have a great day!" — every call, every time.'
+    };
+    const weakMC = Object.entries(mcCom)
+      .filter(([k, v]) => MC_LABELS[k] && typeof v === 'number' && v < 4)
+      .sort(([,a],[,b]) => a - b).slice(0, 2);
+    if (weakMC.length) {
+      const [k0] = weakMC[0];
+      steps.push({
+        focus: `Mock Call\n${MC_LABELS[k0]}`,
+        content: (MC_TIPS[k0] || 'Practice mock call scenarios regularly.') +
+          (weakMC[1] ? `\n\nAlso address: ${MC_LABELS[weakMC[1][0]]}.` : '')
+      });
+    } else if (mcMark != null && mcMark < 15) {
+      steps.push({ focus: 'Mock Call\nCall Handling', content: 'Role-play 3 full mock calls per week. Record them and identify missed protocol steps. Focus on opening, empathy, and closing.' });
+    }
+
+    // ── Listening weaknesses ──
+    const laSess = details['listening-assessment'] || [];
+    const latestLA = laSess.sort((a,b) => new Date(b.submittedAt) - new Date(a.submittedAt))[0];
+    const laSecs  = latestLA?.aiScores?.sections || [];
+    const weakLA  = laSecs.filter(s => s.pct < 60);
+    if (lisMark != null && lisMark < 15) {
+      const focus = weakLA.length ? weakLA.map(s => s.title).join(', ') : 'Detail Retention';
+      steps.push({
+        focus: `Listening\n${focus.split('—')[0].trim()}`,
+        content: (weakLA.length ? `Focus on accuracy in: ${weakLA.map(s => s.title).join(', ')}.` : 'Focus on capturing finer details while listening.') +
+          '\n\nListen to a 5-min financial podcast daily. Pause after, write 5 key points without replaying, then re-listen and close the gap.'
+      });
+    }
+
+    // ── Grammar weaknesses — mention specific topics ──
+    const GRAM_TOPICS = {
+      'A': { short: 'Grammar Rules (MCQ)',           detail: 'Multiple Choice — Tense, Articles, Basic Grammar Rules',                                            practice: 'Complete 10 MCQ grammar exercises daily. Review tense rules and article usage.' },
+      'B': { short: 'Prepositions & Conjunctions',   detail: 'Fill in the Blanks — Articles (a/an/the), Prepositions (in/on/at/to/for), Conjunctions (and/but/so)', practice: 'Practice fill-in-the-blank exercises daily. Focus on preposition collocations and conjunction choice. Use Grammarly to review written work.' },
+      'C': { short: 'Sentence Rewriting',             detail: 'Rewrite the Sentence — Tense Correction, Subject-Verb Agreement, Modal Verbs (should/could/would)',   practice: 'Rewrite 5 incorrect sentences daily. Read the corrected version aloud to internalise the pattern.' }
+    };
+    const gaSess = details['grammar-assessment'] || [];
+    const latestGA = gaSess.sort((a,b) => new Date(b.submittedAt) - new Date(a.submittedAt))[0];
+    const gaSecs = latestGA?.aiScores?.sections || [];
+    const weakGA = gaSecs.filter(s => s.pct < 65).sort((a,b) => a.pct - b.pct);
+
+    if (weakGA.length) {
+      const topicLines = [], practiceLines = [];
+      weakGA.slice(0, 2).forEach(s => {
+        const letter = (s.title || '').match(/Section\s+([A-C])/i)?.[1]?.toUpperCase() || '';
+        const t = GRAM_TOPICS[letter];
+        if (t) { topicLines.push(`• ${t.detail}`); practiceLines.push(t.practice); }
+        else     { topicLines.push(`• ${s.title}`); practiceLines.push('Practice exercises on this topic daily.'); }
+      });
+      steps.push({
+        focus: `Grammar\n${GRAM_TOPICS[((weakGA[0]?.title||'').match(/Section\s+([A-C])/i)?.[1]?.toUpperCase())]?.short || 'Mixed Topics'}`,
+        content: `Work specifically on:\n${topicLines.join('\n')}\n\n${practiceLines[0]}${practiceLines[1] ? '\n' + practiceLines[1] : ''}\n\n📖 Read aloud daily  🎙 Record & self-correct  ✍ Keep an error notebook`
+      });
+    } else if (gaMark != null && gaMark < 18) {
+      steps.push({
+        focus: 'Grammar\nMixed Topics',
+        content: 'Focus on:\n• Articles (a/an/the) and Prepositions (in/on/at/to)\n• Conjunctions (and/but/so/because)\n• Tense consistency in sentences\n\n📖 Read aloud daily  🎙 Record & self-correct  ✍ Keep an error notebook'
+      });
+    }
+
+    // Pad to minimum 3 steps
+    while (steps.length < 3) {
+      steps.push({ focus: 'Daily Practice\nConsistency', content: 'Dedicate 20 minutes daily: 5 min listening drill, 5 min grammar exercise, 10 min speaking / mock call practice. Consistency over intensity.' });
+    }
+    return steps.slice(0, 4);
+  }
+
+  async function generateTraineePPT(trainee, marks, scores, details) {
+    if (typeof PptxGenJS === 'undefined') { toast('PptxGenJS library not loaded', 'error'); return; }
+
+    const C = { navy:'14195A', teal:'028090', mint:'02C39A', lightBg:'F0F4F8', darkNav:'1E2761',
+      amber:'F39C12', green:'27AE60', red:'E74C3C', orange:'E67E22', white:'FFFFFF',
+      muted:'64748B', light:'A0B4C8', label:'CCDDEE', denom:'9BB0C8', divider:'E2E8F0', sidebar:'1E2D6B' };
+
+    const { lisMark, psMark, gaMark, mcMark, totalMark } = marks;
+    const W = 10, H = 5.625, name = trainee.name;
+
+    const sColor = (v, max) => { if (v==null) return C.muted; const p=(v/max)*100; return p>=75?C.green:p>=50?C.amber:C.red; };
+    const fmt2  = v => v != null ? v.toFixed(2) : '—';
+    const noBorder = { type: 'none' };
+
+    const pptx = new PptxGenJS();
+    pptx.layout = 'LAYOUT_16x9';
+
+    // ── SLIDE 1 — Cover ─────────────────────────────────────────────────────────
+    const s1 = pptx.addSlide();
+    s1.background = { color: C.navy };
+    // Left mint stripe
+    s1.addShape(pptx.ShapeType.RECT, { x:0, y:0, w:0.18, h:H, fill:{color:C.mint}, line:noBorder });
+    // Top-right teal circle (decorative)
+    s1.addShape(pptx.ShapeType.ELLIPSE, { x:6.4, y:-0.55, w:4.3, h:4.3, fill:{color:C.mint}, line:noBorder });
+    // Navy overlay square (creates window-in-circle effect)
+    s1.addShape(pptx.ShapeType.RECT, { x:7.25, y:0.82, w:2.5, h:2.5, fill:{color:C.navy}, line:noBorder });
+    // Total score circle
+    s1.addShape(pptx.ShapeType.ELLIPSE, { x:7.55, y:0.92, w:1.9, h:1.9, fill:{color:C.darkNav}, line:noBorder });
+    // Total score text
+    s1.addText('Total Score',         { x:7.55, y:1.02, w:1.9, h:0.28, fontSize:9,  bold:true, color:C.label, align:'center', fontFace:'Calibri' });
+    s1.addText(fmt2(totalMark),        { x:7.55, y:1.28, w:1.9, h:0.62, fontSize:30, bold:true, color:C.white, align:'center', fontFace:'Calibri' });
+    s1.addText('/ 100',                { x:7.55, y:1.9,  w:1.9, h:0.28, fontSize:11, color:C.denom, align:'center', fontFace:'Calibri' });
+    // Main text
+    s1.addText('Performance Assessment Report', { x:0.45, y:0.55, w:6.6, h:0.32, fontSize:13, color:C.light, fontFace:'Calibri' });
+    s1.addText(name,                            { x:0.45, y:0.88, w:6.5, h:1.1,  fontSize:name.length > 18 ? 34 : 42, bold:true, color:C.white, fontFace:'Calibri', breakLine:true });
+    s1.addText('Communication & Call Centre Skills Evaluation', { x:0.45, y:2.55, w:6.5, h:0.38, fontSize:13, color:C.light, fontFace:'Calibri' });
+    // 4 score cards
+    const cards = [
+      { label:'Pick & Speak', score:psMark, max:20 },
+      { label:'Listening',    score:lisMark, max:20 },
+      { label:'Mock Call',    score:mcMark,  max:20 },
+      { label:'Grammar',      score:gaMark,  max:25 }
+    ];
+    const cXs = [0.3, 2.58, 4.86, 7.14], cW=2.1, cH=1.55, cY=3.55;
+    cards.forEach((c, i) => {
+      s1.addShape(pptx.ShapeType.RECT, { x:cXs[i], y:cY, w:cW, h:cH, fill:{color:C.darkNav}, line:noBorder });
+      s1.addText(c.label, { x:cXs[i]+0.1, y:cY+0.12, w:cW-0.2, h:0.26, fontSize:9, bold:true, color:C.label, align:'center', fontFace:'Calibri' });
+      s1.addText(c.score!=null ? c.score.toFixed(2) : 'N/A', { x:cXs[i]+0.1, y:cY+0.36, w:cW-0.2, h:0.68, fontSize:26, bold:true, color:sColor(c.score,c.max), align:'center', fontFace:'Calibri' });
+      s1.addText(`/ ${c.max}`, { x:cXs[i]+0.1, y:cY+1.08, w:cW-0.2, h:0.32, fontSize:12, color:C.denom, align:'center', fontFace:'Calibri' });
+    });
+    // Footer
+    s1.addShape(pptx.ShapeType.RECT, { x:0, y:H-0.42, w:W, h:0.42, fill:{color:C.teal}, line:noBorder });
+    s1.addText('Confidential  |  Individual Coaching Report', { x:0.3, y:H-0.4, w:W-0.6, h:0.36, fontSize:10, color:C.white, align:'center', fontFace:'Calibri', valign:'middle' });
+
+    // ── SLIDE 2 — Pick & Speak ───────────────────────────────────────────────────
+    const s2 = pptx.addSlide();
+    s2.background = { color: C.lightBg };
+    s2.addShape(pptx.ShapeType.RECT, { x:0, y:0, w:W, h:0.82, fill:{color:C.teal}, line:noBorder });
+    s2.addText('🎤  Pick & Speak Feedback', { x:0.25, y:0.08, w:7.6, h:0.66, fontSize:20, bold:true, color:C.white, fontFace:'Calibri', valign:'middle' });
+    s2.addShape(pptx.ShapeType.RECT, { x:8.08, y:0.1, w:1.72, h:0.62, fill:{color:C.darkNav}, line:noBorder });
+    s2.addText(`${fmt2(psMark)} / 20`, { x:8.08, y:0.1, w:1.72, h:0.62, fontSize:13, bold:true, color:C.mint, align:'center', valign:'middle', fontFace:'Calibri' });
+
+    const psSessions = details['pick-speak'] || [];
+    const bestPS = psSessions.reduce((b,s) => { const e=effScore(s),be=b?effScore(b):-1; return (e!==null&&e>(be??-1))?s:b; }, null);
+    const psAI = bestPS?.aiScores || {};
+    const PS_CRIT = [
+      { key:'fluency',        label:'Fluency',              tip:'Practice speaking on random topics for 1 minute non-stop. Focus on flow, not perfection.' },
+      { key:'pace',           label:'Pace & Delivery',       tip:'Record yourself. Target 100–150 WPM for clear conversational delivery.' },
+      { key:'logicalFlow',    label:'Logical Flow',          tip:'Use "first / then / finally" to structure responses. Open, develop, close clearly.' },
+      { key:'clarity',        label:'Clarity of Expression', tip:'Use short sentences (10–20 words) with a single idea per sentence.' },
+      { key:'confidence',     label:'Confidence',            tip:'Replace "I think" / "sort of" with confident statements. Pause instead of using fillers.' },
+      { key:'fillerControl',  label:'Filler Word Control',   tip:'Replace "um / uh / like" with a deliberate pause — silence sounds more confident.' },
+      { key:'vocabulary',     label:'Vocabulary',            tip:'Introduce one new professional term per response. Read industry content daily.' },
+      { key:'professionalism',label:'Professionalism',       tip:'Avoid slang. Use formal language and close with structured, courteous phrases.' }
+    ];
+    const sortedPS = [...PS_CRIT].filter(c => typeof psAI[c.key]==='number').sort((a,b)=>(psAI[a.key]??5)-(psAI[b.key]??5));
+    const unknownPS = PS_CRIT.filter(c => typeof psAI[c.key]!=='number');
+    const displayPS = [...sortedPS, ...unknownPS].slice(0, 6);
+    const priorityPS = sortedPS[0]?.label || 'Communication Delivery';
+
+    s2.addShape(pptx.ShapeType.RECT, { x:0, y:0.82, w:W, h:0.5, fill:{color:C.amber}, line:noBorder });
+    s2.addText(`🎯  Priority Action: Start with '${priorityPS}' — highest-impact area to address first`, { x:0.25, y:0.82, w:W-0.5, h:0.5, fontSize:12, bold:true, color:C.white, fontFace:'Calibri', valign:'middle' });
+
+    const psCardW=4.68, psCardH=0.76, psGap=0.07, psStartY=1.41;
+    displayPS.forEach((c, idx) => {
+      const col=idx%2, row=Math.floor(idx/2);
+      const cx=(col===0)?0.22:5.1, cy=psStartY+row*(psCardH+psGap);
+      const score=typeof psAI[c.key]==='number'?psAI[c.key]:null;
+      const sc=score!=null?(score>=4?C.teal:C.amber):C.muted;
+      s2.addShape(pptx.ShapeType.RECT, { x:cx, y:cy, w:psCardW, h:psCardH, fill:{color:C.white}, line:{color:C.divider,pt:0.75} });
+      s2.addShape(pptx.ShapeType.RECT, { x:cx, y:cy, w:0.08, h:psCardH, fill:{color:sc}, line:noBorder });
+      s2.addText(c.label,                                { x:cx+0.15, y:cy+0.06, w:psCardW-0.9, h:0.3, fontSize:11, bold:true, color:C.darkNav, fontFace:'Calibri' });
+      s2.addText(score!=null?`${score}/5`:'N/A',         { x:cx+psCardW-0.78, y:cy+0.06, w:0.65, h:0.3, fontSize:11, bold:true, color:sc, align:'right', fontFace:'Calibri' });
+      s2.addText(c.tip,                                  { x:cx+0.15, y:cy+0.35, w:psCardW-0.28, h:0.35, fontSize:8.5, color:C.muted, wrap:true, fontFace:'Calibri' });
+    });
+
+    // ── SLIDE 3 — Mock Call ──────────────────────────────────────────────────────
+    const s3 = pptx.addSlide();
+    s3.background = { color: C.lightBg };
+    s3.addShape(pptx.ShapeType.RECT, { x:0, y:0, w:W, h:0.82, fill:{color:C.darkNav}, line:noBorder });
+    s3.addText('📞  Mock Call Feedback', { x:0.25, y:0.08, w:7.6, h:0.66, fontSize:20, bold:true, color:C.white, fontFace:'Calibri', valign:'middle' });
+    s3.addShape(pptx.ShapeType.RECT, { x:8.08, y:0.1, w:1.72, h:0.62, fill:{color:C.teal}, line:noBorder });
+    s3.addText(`${fmt2(mcMark)} / 20`, { x:8.08, y:0.1, w:1.72, h:0.62, fontSize:13, bold:true, color:C.white, align:'center', valign:'middle', fontFace:'Calibri' });
+
+    const mcSess = details['mock-call'] || [];
+    const latestMC = mcSess.sort((a,b)=>new Date(b.submittedAt)-new Date(a.submittedAt))[0];
+    const mcCom = { ...(latestMC?.aiScores||{}), ...(latestMC?.adminScores||{}) };
+    const MC_CRIT2 = [
+      { key:'callOpening',          label:'Call Opening',          tip:'Greet warmly, state your name & company, invite the customer\'s concern — all 4 elements.' },
+      { key:'acknowledgment',       label:'Acknowledgment',        tip:'"I completely understand how frustrating this must be" — empathy always comes first.' },
+      { key:'communicationClarity', label:'Communication Clarity', tip:'Short sentences, professional tone, zero fillers. Confirm understanding at key points.' },
+      { key:'callEssence',          label:'Call Essence',          tip:'Use "certainly", "happy to help", "absolutely" throughout to build genuine warmth.' },
+      { key:'holdProcedure',        label:'Hold Procedure',        tip:'Ask permission, state expected wait time, thank them on return — every time.' },
+      { key:'extraMile',            label:'Extra Mile',            tip:'Proactively share a useful tip or related info beyond the specific query asked.' },
+      { key:'callClosing',          label:'Call Closing',          tip:'"Is there anything else I can help you with?" + warm sign-off — every call.' }
+    ];
+    const sortedMC = [...MC_CRIT2].filter(c=>typeof mcCom[c.key]==='number').sort((a,b)=>(mcCom[a.key]??5)-(mcCom[b.key]??5));
+    const unknownMC = MC_CRIT2.filter(c=>typeof mcCom[c.key]!=='number');
+    const displayMC = [...sortedMC,...unknownMC].slice(0,6);
+    const priorityMC = sortedMC[0]?.label || 'Call Handling';
+
+    s3.addShape(pptx.ShapeType.RECT, { x:0, y:0.82, w:W/2, h:0.5, fill:{color:C.green}, line:noBorder });
+    s3.addText('✨  Development Areas (prioritised):', { x:0.1, y:0.82, w:W/2-0.15, h:0.5, fontSize:10, bold:true, color:C.white, fontFace:'Calibri', valign:'middle' });
+    s3.addShape(pptx.ShapeType.RECT, { x:W/2, y:0.82, w:W/2, h:0.5, fill:{color:C.amber}, line:noBorder });
+    s3.addText(`🎯  Priority: '${priorityMC}' — highest-impact area`, { x:W/2+0.1, y:0.82, w:W/2-0.2, h:0.5, fontSize:10, bold:true, color:C.white, fontFace:'Calibri', valign:'middle' });
+
+    const mcCols=[0.15,3.42,6.69], mcCW=3.08, mcCH=0.84, mcCGap=0.08, mcStartY=1.42;
+    displayMC.forEach((c,idx)=>{
+      const col=idx%3, row=Math.floor(idx/3);
+      const cx=mcCols[col], cy=mcStartY+row*(mcCH+mcCGap);
+      const score=typeof mcCom[c.key]==='number'?mcCom[c.key]:null;
+      const sc=score!=null?(score>=4?C.teal:C.amber):C.muted;
+      s3.addShape(pptx.ShapeType.RECT, { x:cx, y:cy, w:mcCW, h:mcCH, fill:{color:C.white}, line:{color:C.divider,pt:0.75} });
+      s3.addShape(pptx.ShapeType.RECT, { x:cx, y:cy, w:0.08, h:mcCH, fill:{color:sc}, line:noBorder });
+      s3.addText(c.label,                            { x:cx+0.15, y:cy+0.07, w:mcCW-0.85, h:0.3, fontSize:10.5, bold:true, color:C.darkNav, fontFace:'Calibri' });
+      s3.addText(score!=null?`${score}/5`:'N/A',     { x:cx+mcCW-0.72, y:cy+0.07, w:0.6, h:0.3, fontSize:10.5, bold:true, color:sc, align:'right', fontFace:'Calibri' });
+      s3.addText(c.tip,                              { x:cx+0.15, y:cy+0.37, w:mcCW-0.25, h:0.42, fontSize:8, color:C.muted, wrap:true, fontFace:'Calibri' });
+    });
+
+    // ── SLIDE 4 — Listening & Grammar ────────────────────────────────────────────
+    const s4 = pptx.addSlide();
+    s4.background = { color: C.lightBg };
+    s4.addShape(pptx.ShapeType.RECT, { x:0, y:0, w:W, h:0.82, fill:{color:C.navy}, line:noBorder });
+    s4.addText('👂  Listening & Grammar Feedback', { x:0.25, y:0.08, w:W-0.5, h:0.66, fontSize:20, bold:true, color:C.white, fontFace:'Calibri', valign:'middle' });
+    s4.addShape(pptx.ShapeType.RECT, { x:4.87, y:0.9, w:0.06, h:H-1.05, fill:{color:C.divider}, line:noBorder });
+
+    // LEFT — Listening
+    const laSess2 = details['listening-assessment'] || [];
+    const latestLA = laSess2.sort((a,b)=>new Date(b.submittedAt)-new Date(a.submittedAt))[0];
+    const laSecs   = latestLA?.aiScores?.sections || [];
+    const laStrong = laSecs.filter(s=>s.pct>=60).map(s=>`✓ Good performance in ${s.title}`);
+    const laWeak   = laSecs.filter(s=>s.pct<60).map(s=>`→ ${s.title} — needs focused practice`);
+    if (!laSecs.length) { laStrong.push('✓ Demonstrates ability to follow spoken instructions'); laWeak.push('→ Focus on capturing finer details while listening'); laWeak.push('→ Avoid assumptions; verify before responding'); }
+
+    s4.addShape(pptx.ShapeType.RECT, { x:0.18, y:0.9, w:4.55, h:0.42, fill:{color:C.teal}, line:noBorder });
+    s4.addText(`👂  Listening · ${fmt2(lisMark)} / 20`, { x:0.22, y:0.9, w:4.5, h:0.42, fontSize:12, bold:true, color:C.white, valign:'middle', fontFace:'Calibri' });
+    let laY=1.38;
+    laStrong.slice(0,2).forEach(txt=>{ s4.addShape(pptx.ShapeType.RECT,{x:0.18,y:laY,w:4.55,h:0.37,fill:{color:C.white},line:{color:C.divider,pt:0.5}}); s4.addShape(pptx.ShapeType.RECT,{x:0.18,y:laY,w:0.08,h:0.37,fill:{color:C.green},line:noBorder}); s4.addText(txt,{x:0.32,y:laY+0.04,w:4.3,h:0.29,fontSize:9.5,color:C.darkNav,fontFace:'Calibri'}); laY+=0.42; });
+    s4.addShape(pptx.ShapeType.RECT, { x:0.18, y:laY, w:4.55, h:0.29, fill:{color:C.amber}, line:noBorder });
+    s4.addText('Areas of Improvement', { x:0.22, y:laY, w:4.5, h:0.29, fontSize:9.5, bold:true, color:C.white, valign:'middle', fontFace:'Calibri' });
+    laY+=0.33;
+    laWeak.slice(0,3).forEach(txt=>{ s4.addShape(pptx.ShapeType.RECT,{x:0.18,y:laY,w:4.55,h:0.37,fill:{color:C.white},line:{color:C.divider,pt:0.5}}); s4.addShape(pptx.ShapeType.RECT,{x:0.18,y:laY,w:0.08,h:0.37,fill:{color:C.amber},line:noBorder}); s4.addText(txt,{x:0.32,y:laY+0.04,w:4.3,h:0.29,fontSize:9.5,color:C.darkNav,fontFace:'Calibri',wrap:true}); laY+=0.42; });
+
+    // RIGHT — Grammar
+    const GRAM_TOPICS2 = { 'A':'Multiple Choice — Tense, Articles, Basic Grammar Rules', 'B':'Fill in the Blanks — Articles (a/an/the), Prepositions, Conjunctions', 'C':'Sentence Rewriting — Tense Correction, Subject-Verb Agreement' };
+    const gaSess2 = details['grammar-assessment'] || [];
+    const latestGA2 = gaSess2.sort((a,b)=>new Date(b.submittedAt)-new Date(a.submittedAt))[0];
+    const gaSecs2   = latestGA2?.aiScores?.sections || [];
+    const gaStrong  = gaSecs2.filter(s=>s.pct>=60).map(s=>`✓ Good performance in ${s.title}`);
+    const gaWeak    = gaSecs2.filter(s=>s.pct<60).map(s=>{const l=(s.title||'').match(/Section\s+([A-C])/i)?.[1]?.toUpperCase()||'';return `→ ${GRAM_TOPICS2[l]||s.title}`;});
+    if (!gaSecs2.length) { gaStrong.push('✓ Shows understanding of basic grammar concepts'); gaWeak.push('→ Articles (a/an/the) and Prepositions (in/on/at)'); gaWeak.push('→ Sentence rewriting and tense correction'); }
+
+    s4.addShape(pptx.ShapeType.RECT, { x:5.05, y:0.9, w:4.75, h:0.42, fill:{color:C.darkNav}, line:noBorder });
+    s4.addText(`📝  Grammar · ${fmt2(gaMark)} / 25`, { x:5.09, y:0.9, w:4.7, h:0.42, fontSize:12, bold:true, color:C.white, valign:'middle', fontFace:'Calibri' });
+    let gaY=1.38;
+    gaStrong.slice(0,2).forEach(txt=>{ s4.addShape(pptx.ShapeType.RECT,{x:5.05,y:gaY,w:4.75,h:0.37,fill:{color:C.white},line:{color:C.divider,pt:0.5}}); s4.addShape(pptx.ShapeType.RECT,{x:5.05,y:gaY,w:0.08,h:0.37,fill:{color:C.green},line:noBorder}); s4.addText(txt,{x:5.19,y:gaY+0.04,w:4.5,h:0.29,fontSize:9.5,color:C.darkNav,fontFace:'Calibri'}); gaY+=0.42; });
+    s4.addShape(pptx.ShapeType.RECT, { x:5.05, y:gaY, w:4.75, h:0.29, fill:{color:C.amber}, line:noBorder });
+    s4.addText('Areas of Improvement', { x:5.09, y:gaY, w:4.7, h:0.29, fontSize:9.5, bold:true, color:C.white, valign:'middle', fontFace:'Calibri' });
+    gaY+=0.33;
+    gaWeak.slice(0,3).forEach(txt=>{ s4.addShape(pptx.ShapeType.RECT,{x:5.05,y:gaY,w:4.75,h:0.37,fill:{color:C.white},line:{color:C.divider,pt:0.5}}); s4.addShape(pptx.ShapeType.RECT,{x:5.05,y:gaY,w:0.08,h:0.37,fill:{color:C.amber},line:noBorder}); s4.addText(txt,{x:5.19,y:gaY+0.04,w:4.5,h:0.29,fontSize:9.5,color:C.darkNav,fontFace:'Calibri',wrap:true}); gaY+=0.42; });
+
+    // ── SLIDE 5 — Overall Diagnosis ──────────────────────────────────────────────
+    const s5 = pptx.addSlide();
+    s5.background = { color: C.lightBg };
+    s5.addShape(pptx.ShapeType.RECT, { x:0, y:0, w:W, h:0.82, fill:{color:C.navy}, line:noBorder });
+    s5.addText('Overall Diagnosis', { x:0.25, y:0.08, w:W-0.5, h:0.66, fontSize:20, bold:true, color:C.white, fontFace:'Calibri', valign:'middle' });
+
+    const tot = totalMark ?? 0;
+    const modMap = [['Pick & Speak',(psMark??0)/20*100],['Listening',(lisMark??0)/20*100],['Grammar',(gaMark??0)/25*100],['Mock Call',(mcMark??0)/20*100]];
+    const bestMod = modMap.sort(([,a],[,b])=>b-a)[0]?.[0];
+    const weakMod = modMap.sort(([,a],[,b])=>a-b)[0]?.[0];
+    let level, overallTxt, insightTxt;
+    if (tot>=70){level='Strong Performer';overallTxt=`${name} demonstrates a high standard of professional communication${bestMod?`, with particular strength in ${bestMod}`:''}.  The consistent performance reflects strong preparation and commitment.`;insightTxt=`The foundation is solid. To reach the next level, focus on converting good scores into excellent ones — especially in ${weakMod||'the weaker module'}, where targeted practice can make the biggest impact.`;}
+    else if (tot>=55){level='Developing Performer';overallTxt=`${name} shows a solid foundation across the communication assessment${bestMod?`, with ${bestMod} as the standout area`:''}.  There is clear capability that can grow into consistent excellence with targeted effort.`;insightTxt=`The gap between current performance and the next level is bridgeable.  Prioritise ${weakMod||'the lower-scoring module'} — structured daily practice of 15–20 minutes will show measurable improvement within two weeks.`;}
+    else{level='Needs Focused Improvement';overallTxt=`${name} has actively engaged with the Communicate 360 program${bestMod?` and shows early promise in ${bestMod}`:''}.  Current scores highlight areas needing dedicated practice before they become consistent strengths.`;insightTxt=`Start with fundamentals: active listening, structured speaking (opening-middle-close), and daily grammar review.  A consistent 20-minute daily routine focused on core weaknesses will accelerate progress significantly.`;}
+
+    s5.addShape(pptx.ShapeType.RECT, { x:0.28, y:1.05, w:W-0.56, h:1.9, fill:{color:C.white}, line:{color:C.divider,pt:1} });
+    s5.addShape(pptx.ShapeType.RECT, { x:0.28, y:1.05, w:0.1, h:1.9, fill:{color:C.green}, line:noBorder });
+    s5.addText('Overall Assessment', { x:0.48, y:1.13, w:W-0.88, h:0.33, fontSize:12, bold:true, color:C.navy, fontFace:'Calibri' });
+    s5.addText(`${level}  ·  Total Score: ${fmt2(totalMark)} / 100`, { x:0.48, y:1.43, w:W-0.88, h:0.28, fontSize:10.5, bold:true, color:C.teal, fontFace:'Calibri' });
+    s5.addText(overallTxt, { x:0.48, y:1.71, w:W-0.88, h:1.18, fontSize:10.5, color:C.darkNav, wrap:true, fontFace:'Calibri' });
+
+    s5.addShape(pptx.ShapeType.RECT, { x:0.28, y:3.15, w:W-0.56, h:1.9, fill:{color:C.white}, line:{color:C.divider,pt:1} });
+    s5.addShape(pptx.ShapeType.RECT, { x:0.28, y:3.15, w:0.1, h:1.9, fill:{color:C.orange}, line:noBorder });
+    s5.addText('Core Insight', { x:0.48, y:3.23, w:W-0.88, h:0.33, fontSize:12, bold:true, color:C.navy, fontFace:'Calibri' });
+    s5.addText(insightTxt, { x:0.48, y:3.56, w:W-0.88, h:1.42, fontSize:10.5, color:C.darkNav, wrap:true, fontFace:'Calibri' });
+
+    // ── SLIDE 6 — Development Roadmap ────────────────────────────────────────────
+    const s6 = pptx.addSlide();
+    s6.background = { color: C.navy };
+    s6.addShape(pptx.ShapeType.RECT, { x:0, y:0, w:0.18, h:H, fill:{color:C.mint}, line:noBorder });
+    s6.addText('🚀  Development Roadmap', { x:0.28, y:0.08, w:W-0.5, h:0.5, fontSize:22, bold:true, color:C.white, fontFace:'Calibri' });
+
+    const steps = buildRoadmapSteps(name, scores, details, marks);
+    const leftW=1.5, stepGap=0.06;
+    const availH = H - 0.65 - 0.48;
+    const stepH  = (availH - stepGap*(steps.length-1)) / steps.length;
+    const stepY0 = 0.62;
+
+    steps.forEach((step, i) => {
+      const sy = stepY0 + i*(stepH+stepGap);
+      s6.addShape(pptx.ShapeType.RECT, { x:0.18, y:sy, w:W-0.18, h:stepH, fill:{color:C.sidebar}, line:noBorder });
+      s6.addShape(pptx.ShapeType.RECT, { x:0.18, y:sy, w:leftW, h:stepH, fill:{color:C.teal}, line:noBorder });
+      s6.addText(`Step ${i+1}`, { x:0.22, y:sy+0.04, w:leftW-0.1, h:0.28, fontSize:10, bold:true, color:C.white, fontFace:'Calibri' });
+      s6.addText(step.focus, { x:0.22, y:sy+0.3, w:leftW-0.1, h:stepH-0.36, fontSize:8.5, color:'CCDDEE', wrap:true, fontFace:'Calibri', valign:'top' });
+      s6.addText(step.content, { x:0.18+leftW+0.1, y:sy+0.06, w:W-0.18-leftW-0.2, h:stepH-0.12, fontSize:9.5, color:C.white, wrap:true, fontFace:'Calibri', valign:'top' });
+    });
+
+    s6.addShape(pptx.ShapeType.RECT, { x:0, y:H-0.45, w:W, h:0.45, fill:{color:C.teal}, line:noBorder });
+    s6.addText(`Consistent practice is the key. You've got this, ${name}! 💪`, { x:0.3, y:H-0.42, w:W-0.6, h:0.38, fontSize:11, bold:true, color:C.white, align:'center', valign:'middle', fontFace:'Calibri' });
+
+    const filename = `${name.replace(/\s+/g,'_')}_Performance_Report.pptx`;
+    await pptx.writeFile({ fileName: filename });
+  }
+
+  async function downloadTraineePPT() {
+    if (!_currentReportData) { toast('Please select a trainee first', 'error'); return; }
+    const btn = document.getElementById('lrc-ppt-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '⌛ Generating…'; }
+    try {
+      const { trainee, marks, scores, details } = _currentReportData;
+      await generateTraineePPT(trainee, marks, scores, details);
+    } catch (e) {
+      console.error('PPT generation failed:', e);
+      toast('PPT generation failed: ' + e.message, 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '⬇ Download PPT'; }
+    }
   }
 
   async function copyLetter() {
@@ -2242,6 +2617,7 @@ window.Admin = (() => {
     // ── Render letter ──
     const insights = buildLetterInsights(scores, details, totalMark);
     renderTraineeLetter(trainee, { lisMark, psMark, gaMark, mcMark, totalMark }, insights);
+    _currentReportData = { trainee, marks: { lisMark, psMark, gaMark, mcMark, totalMark }, scores, details };
 
     // ── Session history table ── (same P&S avg logic as before)
     const PS_MODS = new Set(['pick-speak', 'pick-speak-general', 'pick-speak-stock']);
@@ -2820,7 +3196,8 @@ window.Admin = (() => {
     deleteSession,
     deleteAllSessions,
     generateAllAgentsReport,
-    copyLetter
+    copyLetter,
+    downloadTraineePPT
   };
 })();
 
