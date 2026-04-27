@@ -2503,23 +2503,55 @@ window.Admin = (() => {
 
     const tot = totalMark ?? 0;
     const modMap = [['Pick & Speak',(psMark??0)/20*100],['Listening',(lisMark??0)/20*100],['Grammar',(gaMark??0)/25*100],['Mock Call',(mcMark??0)/20*100]];
-    const bestMod = modMap.sort(([,a],[,b])=>b-a)[0]?.[0];
-    const weakMod = modMap.sort(([,a],[,b])=>a-b)[0]?.[0];
-    let level, overallTxt, insightTxt;
-    if (tot>=70){level='Strong Performer';overallTxt=`${name} demonstrates a high standard of professional communication${bestMod?`, with particular strength in ${bestMod}`:''}.  The consistent performance reflects strong preparation and commitment.`;insightTxt=`The foundation is solid. To reach the next level, focus on converting good scores into excellent ones — especially in ${weakMod||'the weaker module'}, where targeted practice can make the biggest impact.`;}
-    else if (tot>=55){level='Developing Performer';overallTxt=`${name} shows a solid foundation across the communication assessment${bestMod?`, with ${bestMod} as the standout area`:''}.  There is clear capability that can grow into consistent excellence with targeted effort.`;insightTxt=`The gap between current performance and the next level is bridgeable.  Prioritise ${weakMod||'the lower-scoring module'} — structured daily practice of 15–20 minutes will show measurable improvement within two weeks.`;}
-    else{level='Needs Focused Improvement';overallTxt=`${name} has actively engaged with the Communicate 360 program${bestMod?` and shows early promise in ${bestMod}`:''}.  Current scores highlight areas needing dedicated practice before they become consistent strengths.`;insightTxt=`Start with fundamentals: active listening, structured speaking (opening-middle-close), and daily grammar review.  A consistent 20-minute daily routine focused on core weaknesses will accelerate progress significantly.`;}
+    const bestMod = [...modMap].sort(([,a],[,b])=>b-a)[0]?.[0];
+    const weakMod = [...modMap].sort(([,a],[,b])=>a-b)[0]?.[0];
+    let overallLines, insightLines;
+    if (tot >= 70) {
+      overallLines = [
+        `${name} demonstrates consistently high communication standards across all assessment modules.`,
+        `${bestMod} stands out as the strongest area, reflecting strong preparation and professional delivery.`,
+        `Overall performance is above average and ready for advanced client-facing responsibilities.`
+      ];
+      insightLines = [
+        `The foundation is solid — focus now on converting good scores into excellent ones.`,
+        `${weakMod} offers the biggest opportunity for improvement with targeted daily practice.`,
+        `Schedule weekly self-review sessions to catch and correct micro-patterns early.`
+      ];
+    } else if (tot >= 55) {
+      overallLines = [
+        `${name} shows a solid foundation across the Communicate 360 assessment modules.`,
+        `${bestMod ? `${bestMod} stands out as the strongest area, indicating clear natural aptitude.` : 'Active participation has laid the groundwork for measurable improvement.'}`,
+        `With structured and consistent effort, the gap to high performance is well within reach.`
+      ];
+      insightLines = [
+        `${weakMod} is the highest-priority area — targeted practice here will yield the fastest gains.`,
+        `A consistent 15–20 minute daily routine covering grammar, listening and speaking will compound quickly.`,
+        `Focus on quality of practice, not just quantity — self-correct every error and track weekly progress.`
+      ];
+    } else {
+      overallLines = [
+        `${name} has actively engaged with the Communicate 360 program across all assessment modules.`,
+        `${bestMod ? `Early promise is visible in ${bestMod} — this is the foundation to build on.` : 'The foundation is being built — consistency now will accelerate future progress.'}`,
+        `Dedicated daily practice is needed to convert participation into consistent, measurable skill.`
+      ];
+      insightLines = [
+        `Start with the fundamentals: active listening, structured speaking and daily grammar review.`,
+        `${weakMod} needs the most immediate attention — commit to focused 20-minute daily practice sessions.`,
+        `Track weekly progress and celebrate small wins — every consistent session builds real momentum.`
+      ];
+    }
+    const overallTxt = overallLines.join('\n');
+    const insightTxt = insightLines.join('\n');
 
     s5.addShape(pptx.ShapeType.rect, { x:0.28, y:1.05, w:W-0.56, h:1.9, fill:{color:C.white}, line:{color:C.divider,pt:1} });
-    s5.addShape(pptx.ShapeType.rect, { x:0.28, y:1.05, w:0.1, h:1.9, fill:{color:C.green}, line:noBorder });
-    s5.addText('Overall Assessment', { x:0.48, y:1.13, w:W-0.88, h:0.33, fontSize:12, bold:true, color:C.navy, fontFace:'Calibri' });
-    s5.addText(`${level}  ·  Total Score: ${fmt2(totalMark)} / 100  (incl. AI & Manager scores — 15% weightage)`, { x:0.48, y:1.43, w:W-0.88, h:0.28, fontSize:9.5, bold:true, color:C.teal, fontFace:'Calibri' });
-    s5.addText(overallTxt, { x:0.48, y:1.71, w:W-0.88, h:1.18, fontSize:10.5, color:C.darkNav, wrap:true, fontFace:'Calibri' });
+    s5.addShape(pptx.ShapeType.rect, { x:0.28, y:1.05, w:0.1,   h:1.9, fill:{color:C.green},  line:noBorder });
+    s5.addText('Overall Assessment', { x:0.48, y:1.1, w:W-0.88, h:0.34, fontSize:12, bold:true, color:C.navy, fontFace:'Calibri' });
+    s5.addText(overallTxt, { x:0.48, y:1.48, w:W-0.88, h:1.4, fontSize:11, color:C.darkNav, wrap:true, fontFace:'Calibri', valign:'top', lineSpacingMultiple:1.35 });
 
-    s5.addShape(pptx.ShapeType.rect, { x:0.28, y:3.15, w:W-0.56, h:1.9, fill:{color:C.white}, line:{color:C.divider,pt:1} });
-    s5.addShape(pptx.ShapeType.rect, { x:0.28, y:3.15, w:0.1, h:1.9, fill:{color:C.orange}, line:noBorder });
-    s5.addText('Core Insight', { x:0.48, y:3.23, w:W-0.88, h:0.33, fontSize:12, bold:true, color:C.navy, fontFace:'Calibri' });
-    s5.addText(insightTxt, { x:0.48, y:3.56, w:W-0.88, h:1.42, fontSize:10.5, color:C.darkNav, wrap:true, fontFace:'Calibri' });
+    s5.addShape(pptx.ShapeType.rect, { x:0.28, y:3.12, w:W-0.56, h:1.93, fill:{color:C.white}, line:{color:C.divider,pt:1} });
+    s5.addShape(pptx.ShapeType.rect, { x:0.28, y:3.12, w:0.1,    h:1.93, fill:{color:C.orange}, line:noBorder });
+    s5.addText('Core Insight', { x:0.48, y:3.17, w:W-0.88, h:0.34, fontSize:12, bold:true, color:C.navy, fontFace:'Calibri' });
+    s5.addText(insightTxt, { x:0.48, y:3.55, w:W-0.88, h:1.44, fontSize:11, color:C.darkNav, wrap:true, fontFace:'Calibri', valign:'top', lineSpacingMultiple:1.35 });
 
     // ── SLIDE 6 — Development Roadmap ────────────────────────────────────────────
     const s6 = pptx.addSlide();
