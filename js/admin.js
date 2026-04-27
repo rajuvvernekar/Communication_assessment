@@ -65,6 +65,8 @@ window.Admin = (() => {
   let _currentFilteredSessions = [];
   let _teamAssignments = {};   // { traineeId: 'Team Name' }
   let _currentReportData = null; // { trainee, marks, scores, details }
+  let _cachedSessions  = [];   // all sessions from last loadAssessments call
+  let _cachedTopicMap  = {};   // topicId → topic from last loadAssessments call
 
   // Convert legacy overall scores stored as raw /5 to /100
   function normalizeOverall(overall) {
@@ -1150,6 +1152,10 @@ window.Admin = (() => {
     const topicMap = {};
     topics.forEach(t => { topicMap[t.id] = t; });
 
+    // Cache so saveScore can re-apply filters without a full reload
+    _cachedSessions = sessions;
+    _cachedTopicMap = topicMap;
+
     let filtered = sessions;
     if (filterTraineeId) {
       filtered = sessions.filter(s => s.traineeId === filterTraineeId);
@@ -1941,10 +1947,17 @@ window.Admin = (() => {
     await DB.put('sessions', session);
     toast('Scores saved!', 'success');
     await updatePendingBadge();
-    loadAssessments();
 
-    // Refresh the scoring modal in-place so the admin sees the coaching summary immediately
-    await openScoring(session.id);
+    // Update the cached session entry so the table reflects new scores
+    const idx = _cachedSessions.findIndex(s => s.id === session.id);
+    if (idx !== -1) _cachedSessions[idx] = session;
+    else _cachedSessions.push(session);
+
+    // Re-render using the current filter — list stays exactly as the admin left it
+    applyAssessmentFilters(_cachedSessions, _cachedTopicMap);
+
+    // Close the modal automatically
+    closeScoringModal();
   }
 
   function closeScoringModal() {
