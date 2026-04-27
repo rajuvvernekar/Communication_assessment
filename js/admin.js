@@ -927,7 +927,11 @@ window.Admin = (() => {
   // Returns true if a topic/session module matches the active filter
   function matchesModuleFilter(recordModule, filter) {
     if (filter === 'all') return true;
+    // Assessments filter dropdown: 'pick-speak' = show all P&S sub-types together
     if (filter === 'pick-speak') return recordModule === 'pick-speak' || recordModule === 'pick-speak-general' || recordModule === 'pick-speak-stock';
+    // Topics tab: split view
+    if (filter === 'pick-speak-stock') return recordModule === 'pick-speak-stock';
+    if (filter === 'pick-speak-general') return recordModule === 'pick-speak-general' || recordModule === 'pick-speak';
     if (filter === 'grammar-assessment') return recordModule === 'grammar-assessment';
     return recordModule === filter;
   }
