@@ -69,6 +69,10 @@ window.Admin = (() => {
   let _cachedTopicMap  = {};   // topicId → topic from last loadAssessments call
   let _selectedTraineeIds = new Set(); // trainee ids checked in the trainees table
   let _allFilteredTrainees = [];       // trainees currently rendered in the table
+  // Assessments multi-select + archive
+  let _selectedSessionIds    = new Set(); // checked session ids
+  let _allRenderedSessions   = [];        // sessions currently in the table
+  let _viewArchive           = false;     // false = Active tab, true = Archive tab
   // AI Audit Scores section
   let _allAuditRecords    = [];        // full list from DB
   let _filteredAuditRecs  = [];        // after search filter
@@ -1248,8 +1252,16 @@ window.Admin = (() => {
     _cachedSessions = sessions;
     _cachedTopicMap = topicMap;
 
+    // Reset selection state on fresh load
+    _selectedSessionIds.clear();
+    _updateSessionActionBtns();
+
+    // Update tab counts
+    _refreshArchiveCounts(sessions);
+
     let filtered = sessions;
     if (filterTraineeId) {
+      // When navigating from trainee view, show all their sessions regardless of archive
       filtered = sessions.filter(s => s.traineeId === filterTraineeId);
     }
 
@@ -1408,7 +1420,11 @@ window.Admin = (() => {
   }
 
   function applyAssessmentFilters(sessions, topicMap) {
-    let filtered = sessions;
+    // First split by archive status (this is the primary partition)
+    let filtered = _viewArchive
+      ? sessions.filter(s => s.archived === true)
+      : sessions.filter(s => !s.archived);
+
     filtered = filtered.filter(s => matchesModuleFilter(s.module, _assessmentsFilter.module));
     if (_assessmentsFilter.status !== 'all') {
       filtered = filtered.filter(s => s.status === _assessmentsFilter.status);
@@ -1423,9 +1439,16 @@ window.Admin = (() => {
     const tbody = $('assessments-tbody');
     const sorted = [...sessions].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
     _currentFilteredSessions = sorted; // track for Download All
+    _allRenderedSessions = sorted;     // track for select-all
+    _selectedSessionIds.clear();
+    _updateSessionActionBtns();
+
+    // Reset select-all checkbox
+    const allCb = $('select-all-sessions');
+    if (allCb) { allCb.checked = false; allCb.indeterminate = false; }
 
     if (sorted.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="9" class="empty-state">No assessments found.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="10" class="empty-state">${_viewArchive ? 'No archived assessments.' : 'No assessments found.'}</td></tr>`;
       return;
     }
 
@@ -1475,8 +1498,16 @@ window.Admin = (() => {
         ? `<button class="btn-small" onclick="Admin.downloadRecording('${s.recordingUrl}', '${dlFilename}')">⬇ Recording</button>`
         : '';
 
+      const archiveBtn = _viewArchive
+        ? `<button class="btn-small" onclick="Admin.restoreSingleSession('${s.id}', '${(s.traineeName || '').replace(/'/g, "\\'")}')">↩ Restore</button>`
+        : `<button class="btn-small" onclick="Admin.archiveSingleSession('${s.id}', '${(s.traineeName || '').replace(/'/g, "\\'")}')">📁 Archive</button>`;
+
       return `
-        <tr>
+        <tr class="${s.archived ? 'session-archived' : ''}">
+          <td style="width:36px;text-align:center">
+            <input type="checkbox" class="session-cb" data-id="${s.id}"
+              onchange="Admin.toggleSessionCheckbox('${s.id}', this.checked)" />
+          </td>
           <td><strong>${s.traineeName || '—'}</strong></td>
           <td>${moduleBadge(s.module)}</td>
           <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.topicTitle || '—'}</td>
@@ -1490,6 +1521,7 @@ window.Admin = (() => {
               ${isScored ? 'Review' : 'Score'}
             </button>
             ${dlBtn}
+            ${archiveBtn}
             <button class="btn-small danger" onclick="Admin.deleteSession('${s.id}', '${(s.traineeName || '').replace(/'/g, "\\'")}')">
               🗑 Delete
             </button>
@@ -3371,6 +3403,123 @@ window.Admin = (() => {
   }
 
   // ================================================================
+  //  ASSESSMENTS — ARCHIVE / MULTI-SELECT
+  // ================================================================
+
+  function _refreshArchiveCounts(sessions) {
+    const activeCount   = sessions.filter(s => !s.archived).length;
+    const archiveCount  = sessions.filter(s => s.archived === true).length;
+    const activeSpan    = $('count-active-sessions');
+    const archiveSpan   = $('count-archive-sessions');
+    if (activeSpan)  activeSpan.textContent  = activeCount  ? `(${activeCount})`  : '';
+    if (archiveSpan) archiveSpan.textContent = archiveCount ? `(${archiveCount})` : '';
+  }
+
+  function _updateSessionActionBtns() {
+    const n       = _selectedSessionIds.size;
+    const archBtn = $('btn-archive-selected');
+    const restBtn = $('btn-restore-selected');
+    if (!archBtn || !restBtn) return;
+    if (_viewArchive) {
+      archBtn.style.display = 'none';
+      restBtn.style.display = '';
+      restBtn.disabled      = n === 0;
+      restBtn.textContent   = n > 0 ? `↩ Restore Selected (${n})` : '↩ Restore Selected';
+    } else {
+      restBtn.style.display = 'none';
+      archBtn.style.display = '';
+      archBtn.disabled      = n === 0;
+      archBtn.textContent   = n > 0 ? `📁 Archive Selected (${n})` : '📁 Archive Selected';
+    }
+  }
+
+  function switchAssessmentView(showArchive) {
+    _viewArchive = showArchive;
+    _selectedSessionIds.clear();
+    // Update tab styling
+    const activeTab   = $('tab-active-sessions');
+    const archiveTab  = $('tab-archive-sessions');
+    if (activeTab)  activeTab.classList.toggle('active',  !showArchive);
+    if (archiveTab) archiveTab.classList.toggle('active',  showArchive);
+    _updateSessionActionBtns();
+    applyAssessmentFilters(_cachedSessions, _cachedTopicMap);
+  }
+
+  function toggleSessionCheckbox(id, checked) {
+    if (checked) _selectedSessionIds.add(id);
+    else         _selectedSessionIds.delete(id);
+    _updateSessionActionBtns();
+    const allCb = $('select-all-sessions');
+    if (allCb && _allRenderedSessions.length > 0) {
+      const n = _selectedSessionIds.size;
+      allCb.indeterminate = n > 0 && n < _allRenderedSessions.length;
+      allCb.checked       = n === _allRenderedSessions.length;
+    }
+  }
+
+  function toggleAllSessions(checked) {
+    _selectedSessionIds.clear();
+    if (checked) _allRenderedSessions.forEach(s => _selectedSessionIds.add(s.id));
+    document.querySelectorAll('.session-cb').forEach(cb => { cb.checked = checked; });
+    _updateSessionActionBtns();
+  }
+
+  async function _setSessionsArchived(ids, archived) {
+    await Promise.all(ids.map(id => DB.patch('sessions', id, { archived })));
+    // Update cache
+    ids.forEach(id => {
+      const s = _cachedSessions.find(s => s.id === id);
+      if (s) s.archived = archived;
+    });
+    _refreshArchiveCounts(_cachedSessions);
+    _selectedSessionIds.clear();
+    applyAssessmentFilters(_cachedSessions, _cachedTopicMap);
+    await updatePendingBadge();
+  }
+
+  async function archiveSelectedSessions() {
+    const ids = [..._selectedSessionIds];
+    if (!ids.length) return;
+    if (!confirm(`Move ${ids.length} assessment${ids.length !== 1 ? 's' : ''} to Archive?\n\nYou can restore them at any time from the Archive tab.`)) return;
+    try {
+      await _setSessionsArchived(ids, true);
+      toast(`${ids.length} assessment${ids.length !== 1 ? 's' : ''} moved to Archive.`, 'success');
+    } catch (e) {
+      toast('Archive failed: ' + e.message, 'error');
+    }
+  }
+
+  async function restoreSelectedSessions() {
+    const ids = [..._selectedSessionIds];
+    if (!ids.length) return;
+    if (!confirm(`Restore ${ids.length} assessment${ids.length !== 1 ? 's' : ''} back to Active?`)) return;
+    try {
+      await _setSessionsArchived(ids, false);
+      toast(`${ids.length} assessment${ids.length !== 1 ? 's' : ''} restored to Active.`, 'success');
+    } catch (e) {
+      toast('Restore failed: ' + e.message, 'error');
+    }
+  }
+
+  async function archiveSingleSession(id, name) {
+    try {
+      await _setSessionsArchived([id], true);
+      toast(`Archived assessment for ${name}.`, 'success');
+    } catch (e) {
+      toast('Archive failed: ' + e.message, 'error');
+    }
+  }
+
+  async function restoreSingleSession(id, name) {
+    try {
+      await _setSessionsArchived([id], false);
+      toast(`Restored assessment for ${name}.`, 'success');
+    } catch (e) {
+      toast('Restore failed: ' + e.message, 'error');
+    }
+  }
+
+  // ================================================================
   //  AI AUDIT SCORES SECTION
   // ================================================================
 
@@ -3591,6 +3740,14 @@ window.Admin = (() => {
     generateAllAgentsReport,
     copyLetter,
     downloadTraineePPT,
+    // Assessments archive / multi-select
+    switchAssessmentView,
+    toggleSessionCheckbox,
+    toggleAllSessions,
+    archiveSelectedSessions,
+    restoreSelectedSessions,
+    archiveSingleSession,
+    restoreSingleSession,
     // AI Audit Scores
     filterAiAudit,
     toggleAuditCheckbox,

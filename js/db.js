@@ -216,6 +216,13 @@ const DB = (() => {
     return (data || []).map(r => _fromDB(store, r));
   }
 
+  // ---- patch: partial update (only specified columns) ----
+  async function patch(store, id, data) {
+    const dbData = _toDB(store, data);
+    const { error } = await _sb.from(store).update(dbData).eq('id', id);
+    if (error) throw error;
+  }
+
   // ---- del: delete a record by id ----
   async function del(store, id) {
     const { error } = await _sb.from(store).delete().eq('id', id);
@@ -239,5 +246,5 @@ const DB = (() => {
   // ---- expose Supabase client (for Auth in auth.js) ----
   function getClient() { return _sb; }
 
-  return { init, put, get, getAll, del, getByIndex, getClient };
+  return { init, put, patch, get, getAll, del, getByIndex, getClient };
 })();
