@@ -1323,6 +1323,21 @@ window.Admin = (() => {
       applyAssessmentFilters(sessions, topicMap);
     }
 
+    // Populate manager filter dropdown
+    const mgrSel = $('filter-manager');
+    if (mgrSel) {
+      mgrSel.innerHTML = '<option value="">All Managers</option>';
+      Object.keys(_MANAGER_AGENT_MAP).sort().forEach(m => {
+        mgrSel.innerHTML += `<option value="${m}">${m}</option>`;
+      });
+      mgrSel.value = _currentManagerDrill || '';
+      mgrSel.onchange = () => {
+        const m = mgrSel.value;
+        if (m) drillIntoManager(m);
+        else    backToManagers();
+      };
+    }
+
     $('filter-module').onchange = () => {
       _assessmentsFilter.module = $('filter-module').value;
       applyAssessmentFilters(sessions, topicMap);
@@ -1606,6 +1621,8 @@ window.Admin = (() => {
       backBtn.style.display = '';
       backBtn.querySelector('button').textContent = `← Back to Managers  (${managerName})`;
     }
+    const mgrSel = $('filter-manager');
+    if (mgrSel) mgrSel.value = managerName;
     applyAssessmentFilters(_cachedSessions, _cachedTopicMap);
   }
 
@@ -1613,6 +1630,8 @@ window.Admin = (() => {
     _currentManagerDrill = null;
     const backBtn = $('btn-back-to-managers');
     if (backBtn) backBtn.style.display = 'none';
+    const mgrSel = $('filter-manager');
+    if (mgrSel) mgrSel.value = '';
     applyAssessmentFilters(_cachedSessions, _cachedTopicMap);
   }
 
@@ -2305,15 +2324,44 @@ window.Admin = (() => {
 
   // ---- Reports ----
   async function loadReportsDropdown() {
-    const trainees = await DB.getAll('trainees');
-    const select = $('report-trainee-select');
-    select.innerHTML = '<option value="">— Choose a trainee —</option>';
-    trainees.forEach(t => {
-      select.innerHTML += `<option value="${t.id}">${t.name}</option>`;
+    const trainees     = await DB.getAll('trainees');
+    const mgrSelect    = $('report-manager-select');
+    const agentSelect  = $('report-trainee-select');
+    if (!mgrSelect || !agentSelect) return;
+
+    // Populate manager list from the full map (all 28 managers, regardless of sessions)
+    mgrSelect.innerHTML = '<option value="">— Choose a manager —</option>';
+    Object.keys(_MANAGER_AGENT_MAP).sort().forEach(mgr => {
+      mgrSelect.innerHTML += `<option value="${mgr}">${mgr}</option>`;
     });
 
-    select.onchange = async () => {
-      const id = select.value;
+    agentSelect.disabled = true;
+    agentSelect.innerHTML = '<option value="">— Choose an agent —</option>';
+
+    mgrSelect.onchange = () => {
+      const mgr = mgrSelect.value;
+      $('report-content').classList.add('hidden');
+      agentSelect.innerHTML = '<option value="">— Choose an agent —</option>';
+
+      if (!mgr) { agentSelect.disabled = true; return; }
+      agentSelect.disabled = false;
+
+      // Show all agents under this manager; match against DB trainees
+      const agentNames = (_MANAGER_AGENT_MAP[mgr] || []).slice().sort();
+      agentNames.forEach(agentName => {
+        // Case-insensitive name match (collapse whitespace too)
+        const norm = n => n.trim().toLowerCase().replace(/\s+/g, ' ');
+        const trainee = trainees.find(t => norm(t.name) === norm(agentName));
+        if (trainee) {
+          agentSelect.innerHTML += `<option value="${trainee.id}">${agentName}</option>`;
+        } else {
+          agentSelect.innerHTML += `<option value="" disabled style="color:#94a3b8">${agentName} (no sessions yet)</option>`;
+        }
+      });
+    };
+
+    agentSelect.onchange = async () => {
+      const id = agentSelect.value;
       if (!id) { $('report-content').classList.add('hidden'); return; }
       await loadTraineeReport(id);
     };
@@ -3679,6 +3727,8 @@ window.Admin = (() => {
     _selectedSessionIds.clear();
     const backBtn = $('btn-back-to-managers');
     if (backBtn) backBtn.style.display = 'none';
+    const mgrSel = $('filter-manager');
+    if (mgrSel) mgrSel.value = '';
     // Update tab styling
     const activeTab   = $('tab-active-sessions');
     const archiveTab  = $('tab-archive-sessions');
@@ -4113,7 +4163,6 @@ window.Admin = (() => {
     downloadAllRecordings,
     deleteSession,
     deleteAllSessions,
-    generateAllAgentsReport,
     copyLetter,
     downloadTraineePPT,
     // Assessments archive / multi-select / manager view

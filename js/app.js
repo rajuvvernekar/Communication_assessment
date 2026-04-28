@@ -320,10 +320,9 @@ const App = (() => {
     const confirmBtn = $('modal-team-confirm');
     const skipBtn    = $('modal-team-skip');
 
-    // Pre-fill with previously saved team name if available
+    // Pre-select previously saved manager if available
     input.value = (_trainee && _trainee.team) || '';
     overlay.classList.remove('hidden');
-    setTimeout(() => input.focus(), 50);
 
     const proceed = async () => {
       const team = input.value.trim();
@@ -352,7 +351,6 @@ const App = (() => {
 
     confirmBtn.onclick = proceed;
     skipBtn.onclick    = dismiss;
-    input.onkeydown    = (e) => { if (e.key === 'Enter') proceed(); };
 
     // Click outside the card to skip
     overlay.onclick = (e) => { if (e.target === overlay) dismiss(); };

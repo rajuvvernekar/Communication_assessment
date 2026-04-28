@@ -225,6 +225,9 @@
       </div>
 
       <div class="filter-bar">
+        <select id="filter-manager" class="filter-select">
+          <option value="">All Managers</option>
+        </select>
         <select id="filter-team" class="filter-select">
           <option value="all">All Teams</option>
         </select>
@@ -287,25 +290,15 @@
         </div>
       </div>
 
-      <!-- All Agents Report -->
-      <div class="card" style="margin-bottom:1.75rem;padding:1.25rem">
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.75rem">
-          <div>
-            <h3 style="margin:0 0 0.2rem;font-size:0.95rem;font-weight:700">📊 All Agents Communication Report</h3>
-            <p style="margin:0;font-size:0.8rem;color:var(--text-muted)">Covers Pick &amp; Speak · Mock Call · Grammar · Listening — with strengths, priorities &amp; action plans</p>
-          </div>
-          <button id="btn-all-agents-report" class="btn-primary" onclick="Admin.generateAllAgentsReport()" style="white-space:nowrap">
-            Generate Report
-          </button>
-        </div>
-        <div id="all-agents-report" class="hidden"></div>
-      </div>
-
-      <!-- Per-trainee report -->
-      <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem">
-        <label style="font-size:0.9rem;font-weight:600">Select Trainee:</label>
-        <select id="report-trainee-select" class="filter-select" style="min-width:220px">
-          <option value="">— Choose a trainee —</option>
+      <!-- Two-level Manager → Agent selector -->
+      <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;flex-wrap:wrap">
+        <label style="font-size:0.9rem;font-weight:600">Manager:</label>
+        <select id="report-manager-select" class="filter-select" style="min-width:210px">
+          <option value="">— Choose a manager —</option>
+        </select>
+        <label style="font-size:0.9rem;font-weight:600">Agent:</label>
+        <select id="report-trainee-select" class="filter-select" style="min-width:210px" disabled>
+          <option value="">— Choose an agent —</option>
         </select>
       </div>
 
@@ -594,6 +587,6 @@
 <script src="js/recorder.js?v=6"></script>
 <script src="js/speech.js?v=6"></script>
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
-<script src="js/admin.js?v=27"></script>
+<script src="js/admin.js?v=28"></script>
 </body>
 </html>
