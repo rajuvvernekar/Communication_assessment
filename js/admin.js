@@ -64,6 +64,7 @@ window.Admin = (() => {
   let _assessmentsFilter = { module: 'all', status: 'all', team: 'all' };
   let _currentFilteredSessions = [];
   let _teamAssignments = {};   // { traineeId: 'Team Name' }
+  let _activeTraineeIds = new Set(); // IDs of trainees currently in the DB
   let _currentReportData = null; // { trainee, marks, scores, details }
   let _cachedSessions  = [];   // all sessions from last loadAssessments call
   let _cachedTopicMap  = {};   // topicId → topic from last loadAssessments call
@@ -486,7 +487,11 @@ window.Admin = (() => {
   function populateTeamFilter() {
     const sel = $('filter-team');
     if (!sel) return;
-    const teams = [...new Set(Object.values(_teamAssignments))].sort();
+    // Only show teams for trainees that still exist — ignore stale deleted-trainee entries
+    const activeEntries = _activeTraineeIds.size > 0
+      ? Object.entries(_teamAssignments).filter(([id]) => _activeTraineeIds.has(id))
+      : Object.entries(_teamAssignments);
+    const teams = [...new Set(activeEntries.map(([, t]) => t))].sort();
     const current = sel.value;
     sel.innerHTML = '<option value="all">All Teams</option>' +
       teams.map(t => `<option value="${t}"${t === current ? ' selected' : ''}>${t}</option>`).join('');
@@ -495,6 +500,7 @@ window.Admin = (() => {
   async function loadTrainees() {
     await loadTeamAssignments();
     const [trainees, sessions] = await Promise.all([DB.getAll('trainees'), DB.getAll('sessions')]);
+    _activeTraineeIds = new Set(trainees.map(t => t.id));
     renderTraineesTable(trainees, sessions, '');
     $('trainee-search').oninput = (e) => renderTraineesTable(trainees, sessions, e.target.value);
   }
@@ -598,6 +604,14 @@ window.Admin = (() => {
     // Cascade delete sessions then trainees
     await Promise.all(sessionIds.map(sid => DB.del('sessions', sid)));
     await Promise.all(ids.map(id => DB.del('trainees', id)));
+
+    // Clean up team assignments for deleted trainees so they don't ghost in the filter
+    let changed = false;
+    ids.forEach(id => {
+      if (_teamAssignments[id]) { delete _teamAssignments[id]; changed = true; }
+      _activeTraineeIds.delete(id);
+    });
+    if (changed) await saveTeamAssignments();
 
     _selectedTraineeIds.clear();
     _updateTraineeDeleteBtn();
@@ -1244,6 +1258,12 @@ window.Admin = (() => {
     }
 
     await loadTeamAssignments();
+    // Derive active trainee IDs from sessions (trainees who have submitted assessments)
+    // Cross-reference with actual trainees for accuracy when possible
+    if (_activeTraineeIds.size === 0) {
+      const trainees = await DB.getAll('trainees');
+      _activeTraineeIds = new Set(trainees.map(t => t.id));
+    }
     populateTeamFilter();
 
     const topicMap = {};
