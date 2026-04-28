@@ -79,6 +79,9 @@ window.Admin = (() => {
   let _allAuditRecords    = [];        // full list from DB
   let _filteredAuditRecs  = [];        // after search filter
   let _selectedAuditIds   = new Set(); // checked rows
+  // Manager-wise view state
+  let _currentManagerDrill = null;     // null = manager summary, string = drill into that manager
+  let _agentManagerIndex   = null;     // built lazily from _MANAGER_AGENT_MAP
 
   // Convert legacy overall scores stored as raw /5 to /100
   function normalizeOverall(overall) {
@@ -1283,13 +1286,19 @@ window.Admin = (() => {
     // Update tab counts
     _refreshArchiveCounts(sessions);
 
-    let filtered = sessions;
     if (filterTraineeId) {
-      // When navigating from trainee view, show all their sessions regardless of archive
-      filtered = sessions.filter(s => s.traineeId === filterTraineeId);
+      // Navigating from trainee view: show individual sessions, bypass manager summary
+      _currentManagerDrill = null;
+      _restoreIndividualSessionsHeader();
+      const filtered = sessions.filter(s => s.traineeId === filterTraineeId);
+      renderAssessmentsTable(filtered, topicMap);
+    } else {
+      // Normal load: reset drill state and show manager summary view
+      _currentManagerDrill = null;
+      const backBtn = $('btn-back-to-managers');
+      if (backBtn) backBtn.style.display = 'none';
+      applyAssessmentFilters(sessions, topicMap);
     }
-
-    renderAssessmentsTable(filtered, topicMap);
 
     $('filter-module').onchange = () => {
       _assessmentsFilter.module = $('filter-module').value;
@@ -1456,7 +1465,165 @@ window.Admin = (() => {
     if (_assessmentsFilter.team !== 'all') {
       filtered = filtered.filter(s => _teamAssignments[s.traineeId] === _assessmentsFilter.team);
     }
-    renderAssessmentsTable(filtered, topicMap);
+
+    if (_currentManagerDrill) {
+      // Drill-in view: show only this manager's agents' individual sessions
+      const agentNamesLower = (_MANAGER_AGENT_MAP[_currentManagerDrill] || []).map(n => n.toLowerCase());
+      filtered = filtered.filter(s => agentNamesLower.includes((s.traineeName || '').trim().toLowerCase()));
+      _restoreIndividualSessionsHeader();
+      renderAssessmentsTable(filtered, topicMap);
+    } else {
+      // Default: manager summary view
+      renderManagerSummaryTable(filtered, topicMap);
+    }
+  }
+
+  // ---- Restore thead to individual-session columns ----
+  function _restoreIndividualSessionsHeader() {
+    const theadTr = $('assessments-thead-tr');
+    if (!theadTr) return;
+    theadTr.innerHTML = `
+      <th style="width:36px;text-align:center">
+        <input type="checkbox" id="select-all-sessions" onchange="Admin.toggleAllSessions(this.checked)" />
+      </th>
+      <th>Trainee</th>
+      <th>Module</th>
+      <th>Topic</th>
+      <th>Submitted</th>
+      <th>Status</th>
+      <th>AI Score</th>
+      <th>Admin Score</th>
+      <th>Avg Score</th>
+      <th>Actions</th>`;
+  }
+
+  // ---- Manager summary table (default assessments view) ----
+  function renderManagerSummaryTable(sessions, topicMap) {
+    const theadTr = $('assessments-thead-tr');
+    const tbody   = $('assessments-tbody');
+
+    // Switch to manager-summary columns
+    if (theadTr) {
+      theadTr.innerHTML = `
+        <th></th>
+        <th>Manager</th>
+        <th style="text-align:center">Agents (with sessions / total)</th>
+        <th style="text-align:center">Sessions</th>
+        <th style="text-align:right">Avg AI Score</th>
+        <th style="text-align:right">Avg Admin Score</th>
+        <th>Actions</th>`;
+    }
+
+    _allRenderedSessions = sessions;
+    _selectedSessionIds.clear();
+    _updateSessionActionBtns();
+
+    if (!sessions.length) {
+      tbody.innerHTML = `<tr><td colspan="7" class="empty-state">${_viewArchive ? 'No archived assessments.' : 'No assessments found.'}</td></tr>`;
+      return;
+    }
+
+    // Group sessions by manager
+    const managerGroups = {};
+    const unassigned    = [];
+    sessions.forEach(s => {
+      const mgr = _getAgentManager(s.traineeName);
+      if (mgr) {
+        if (!managerGroups[mgr]) managerGroups[mgr] = [];
+        managerGroups[mgr].push(s);
+      } else {
+        unassigned.push(s);
+      }
+    });
+
+    const makeRow = (mgr, mgrSessions, isUnassigned) => {
+      const totalAgents        = isUnassigned ? '?' : ((_MANAGER_AGENT_MAP[mgr] || []).length);
+      const agentsWithSessions = new Set(mgrSessions.map(s => (s.traineeName || '').trim().toLowerCase())).size;
+      const agentsLabel        = isUnassigned ? agentsWithSessions : `${agentsWithSessions} / ${totalAgents}`;
+
+      const aiNums    = mgrSessions.map(s => s.aiScores    ? normalizeOverall(s.aiScores.overall) : null).filter(x => x !== null);
+      const adminNums = mgrSessions.map(s => s.adminScores ? calcAdminAvg(s.adminScores)           : null).filter(x => x !== null);
+      const avgAI    = aiNums.length    ? (aiNums.reduce((a, b) => a + b, 0)    / aiNums.length).toFixed(1)    : '—';
+      const avgAdmin = adminNums.length ? (adminNums.reduce((a, b) => a + b, 0) / adminNums.length).toFixed(1) : '—';
+
+      const safeMgr    = mgr.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      const archiveBtn = _viewArchive
+        ? `<button class="btn-small" onclick="event.stopPropagation();Admin.restoreAllManagerSessions('${safeMgr}')">↩ Restore All</button>`
+        : `<button class="btn-small" onclick="event.stopPropagation();Admin.archiveAllManagerSessions('${safeMgr}')">📁 Archive All</button>`;
+
+      return `<tr style="cursor:pointer" onclick="Admin.drillIntoManager('${safeMgr}')">
+        <td></td>
+        <td><strong style="color:var(--primary)">${mgr}</strong></td>
+        <td style="text-align:center">${agentsLabel}</td>
+        <td style="text-align:center;font-weight:600">${mgrSessions.length}</td>
+        <td style="text-align:right">${avgAI !== '—' ? avgAI + '/100' : '—'}</td>
+        <td style="text-align:right;font-weight:600;color:${avgAdmin !== '—' ? '#1d4ed8' : 'var(--text-muted)'}">${avgAdmin !== '—' ? avgAdmin + '/100' : '—'}</td>
+        <td style="display:flex;gap:0.4rem;flex-wrap:wrap">
+          <button class="btn-small primary" onclick="event.stopPropagation();Admin.drillIntoManager('${safeMgr}')">View Sessions</button>
+          ${!isUnassigned ? archiveBtn : ''}
+        </td>
+      </tr>`;
+    };
+
+    const rows = Object.entries(managerGroups)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([mgr, mgrSessions]) => makeRow(mgr, mgrSessions, false))
+      .join('');
+
+    const unassignedRow = unassigned.length ? makeRow('(No Manager Assigned)', unassigned, true) : '';
+
+    tbody.innerHTML = rows + unassignedRow;
+  }
+
+  // ---- Drill into a specific manager's sessions ----
+  function drillIntoManager(managerName) {
+    _currentManagerDrill = managerName;
+    const backBtn = $('btn-back-to-managers');
+    if (backBtn) {
+      backBtn.style.display = '';
+      backBtn.querySelector('button').textContent = `← Back to Managers  (${managerName})`;
+    }
+    applyAssessmentFilters(_cachedSessions, _cachedTopicMap);
+  }
+
+  function backToManagers() {
+    _currentManagerDrill = null;
+    const backBtn = $('btn-back-to-managers');
+    if (backBtn) backBtn.style.display = 'none';
+    applyAssessmentFilters(_cachedSessions, _cachedTopicMap);
+  }
+
+  // ---- Archive / Restore all sessions for a manager ----
+  async function archiveAllManagerSessions(managerName) {
+    const agentNamesLower = (_MANAGER_AGENT_MAP[managerName] || []).map(n => n.toLowerCase());
+    const ids = _cachedSessions
+      .filter(s => agentNamesLower.includes((s.traineeName || '').trim().toLowerCase()))
+      .filter(s => !_archivedIds.has(s.id))
+      .map(s => s.id);
+    if (!ids.length) { toast('No active sessions to archive for this manager.', ''); return; }
+    if (!confirm(`Archive all ${ids.length} active session${ids.length !== 1 ? 's' : ''} for ${managerName}?\n\nYou can restore them at any time from the Archive tab.`)) return;
+    try {
+      await _setSessionsArchived(ids, true);
+      toast(`Archived ${ids.length} session${ids.length !== 1 ? 's' : ''} for ${managerName}.`, 'success');
+    } catch (e) {
+      toast('Archive failed: ' + e.message, 'error');
+    }
+  }
+
+  async function restoreAllManagerSessions(managerName) {
+    const agentNamesLower = (_MANAGER_AGENT_MAP[managerName] || []).map(n => n.toLowerCase());
+    const ids = _cachedSessions
+      .filter(s => agentNamesLower.includes((s.traineeName || '').trim().toLowerCase()))
+      .filter(s => _archivedIds.has(s.id))
+      .map(s => s.id);
+    if (!ids.length) { toast('No archived sessions to restore for this manager.', ''); return; }
+    if (!confirm(`Restore all ${ids.length} archived session${ids.length !== 1 ? 's' : ''} for ${managerName}?`)) return;
+    try {
+      await _setSessionsArchived(ids, false);
+      toast(`Restored ${ids.length} session${ids.length !== 1 ? 's' : ''} for ${managerName}.`, 'success');
+    } catch (e) {
+      toast('Restore failed: ' + e.message, 'error');
+    }
   }
 
   function renderAssessmentsTable(sessions, topicMap) {
@@ -3427,6 +3594,32 @@ window.Admin = (() => {
   }
 
   // ================================================================
+  // ================================================================
+  //  MANAGER → AGENT MAP  (28 managers, 326 agents from Excel)
+  // ================================================================
+  const _MANAGER_AGENT_MAP = {"Shalini H S":["Manigandan","Swati Sharma","Himanshu Singh Rawat","Aldrich Frewin Dsouza","Surya Hendry","Mohd Altaf Bhutta","Ashish Yadav","Jayanthi Maniram","Tulsi Shankar Solanki","Adwait Keshavraj Gondkar","Javed Umar Masute"],"Sadique Raza":["Israel Jaisingh","Priya Singh","Rashid Firoz Ahmed Ansari","Salman Batliwala","Amit Sharma Rajeshwar","Naved Abdul Latif Qureshi","Vishal Shivsahay Singh","Shweta Anil Tiwari","Chitra Mulchand Raghani","Irfan Mustafa Shaikh","Pragya Agrawal"],"Vignesh Baliga":["Abdul Razak","Himanshu Narula","Ankit","Love Preet Singh","Shivanagoud Huvanagoud Ninganagoudar","Nivedita Mukherjee","Mohit Sharma","Avinash Bhagwanrao Pawde","Diksha U Rane","Prashant Tiwari","Vijay Kumar N","K G Saroj","Ayachi Mishra"],"Harish V":["Naveenkumar Ayyangoudar","Indranil Bose","Seema K S","D Karthik","Anupama H","Ankita Das","Stavan Bhardwaj","Ankit Raj","N S Sindhu","Shefali Tyagi"],"Sandhya N R":["Saneeth T S","Aditya Anil Korde","Shahrukh Shaikh","Gorak Vani","Rajat Gupta","Bhagesh paithankar","Akash Kumar Singh","Bhavna Deepak Porwal","Bana Gari Naresh Kumar","Sritam Prusty","Mahesh Mohan Prabhu"],"Shashin Birha":["Haritha K","Umang Jain","Rahul Ranjan Roy","Vansh Arora","Deepika S","Muthu Anusuya P","Aman Sharma","Vickey Sharma","Sahib Singh","M Sunny","Nishikant Tiwari","Chetan Patil"],"Ritesh S":["Nikhil V Durgude","Swetha A","Shruthi K B","Sachita G Harihar","Adnan Sahil S","Mohammed Jabeer Khan","Mutyala Dinesh","Heeral Sonagare","Aryaman M Math","Srusti Vishnukant Ladda","Maddu Vidya"],"Prabhu M R":["Ankit Gupta","Rohit Anand","Ashish Pandey","Devanand Harinarayan Gupta","Jerril Rajan","Jayanth Prasad B S","Arun P P","Sudhir Kumar Mishra"],"Priyanka Sahani":["Priyanshu Gupta","Vinayak Kini","Benjamin Anand Mitra","Namreen I Bombaywale","Deva Sahaya Rubia","Geetha Bhandari","Shaheen Ismail Dhaliet","Sourav Basotia","Pratik Poddar","Ashok Sunar","Anjali Gupta"],"Nandish S":["M Keshava Naik","Shankar Kumar","Alihussain Basha Hyatkhan","Suma Manjunath Tumbraguddi","Suresh Kumar Sahoo","Abhishek Tenginkai","Ambaldhage Vinay Kumar","Lilesh Bhaskar Sapaliga","Anand Jaiswal","Kamalpreet Kour"],"Roopashri S":["Ashish Thakur","B H Srinivas Pai","Sougata Das","Arun Kumar M","Rohit Basavaraj Uppin","Malay Pathak","Ananth Sai Sharma","Madhusudan R","Mrinal Sarkar","Apurva Tyagi","Anirudh","Dev","Deepak Kumar"],"Harish Bhat D":["Anchal Ratan Isaac","Irfan Pasha S","Akilkumar","Ashish Jyoti Bora","Koushik C","Tabassum Sharieff","Govind Goel","Neha Chugh","Anubhav Nepal","Sanjay S","Shashidhara L","Abhimanyu","Deepak B Nair","Shruti Jain","Joel K Joy"],"Pradeep Kumar V":["Anil kumara M","Sourabh Singha","Amit Khatri","Yadhu Raman","Premkumar Shivappa Kumbar","Prasidhi Kamal Rathi","Supriti Sinha","Sushree Sangita Santi","Syeda Tayaba","Soumya Das","Chandru B","Ankita Bharat Kabra"],"Ankit Singh":["Priyanka Singh","Bhanuprakash","Mohan Bhumayya Sabban","MD Tahur","Vaishali B","Shekhar Suman","Ranjitha K","Harsh Mahesh Upadhyay","Naheet Parwin","Bhagyashree","Jatin Sharma","Megham Sai Srinivas","Pawan Rajesh Bohra","Sakshi Suryakant Pawar","Vipul Devendra Manek"],"Harsha Kumar":["Vikram R","Nikhil Raveendran","Mahesh H","Charitha N","Subhashree Das","Nishant Pareek","Krupa N","Amrita Meher","Aryasomayajula Lakshmi Tejaswi","Renuka Devi C","Tapasi Gayen","Praveen Kumar J H","Raghu R","Rashmi Sachin Desai","Amritpal Singh","Rugved Sambhajirao Yadav"],"Munish Kumar":["Sweta Soni","Aswin Prasad","Nitesh Kumar","Neeti Toppo","Suman Adithya Rao","Vilas L","Venkatesh Barad","Simran Gabrial Masih","Vipul Jain","Dipanwita Saha","Sayantan Bhattacharyya","Ganesh T","Sweta Jugran","Chittimani Bhaviteja","Riya Goyal"],"Shweta":["Kumar M G","Ishan Dhadwal","K Prakash Rao","Akhil M A","Sharique Shahid Ansari","Shridhar","Shweta Chauhan","Ajmal Rahim","Jyoti Umesh Sulgekar","Ravishankar Mohan Cherukupalli","Tanish Kumar Sahoo","Jaideep Singh","Neethu Paulose","Arpitha L K","M Nikhil"],"Anoop Bharat Japtap":["Rajashekharayya Salimath","Nayan Hosur","Aditya Karnad","Ashwinkumar A Shet","Rohan Ajit Kokane","Amit Mahantesh Baligar","Vikas Koti","Adnan Parvezahmed Darga","Sujay Sanjeev Satpute","Amardeep Narayan Baswa","Ankush Ajay Chougule","Abdulsamad Riyazahmed Jamadar","Rakesh Guddadmani","Prajwal","Prathamesh Kakatikar D"],"Sharuq Fayaz Shaikh":["S Raju","Rakesh Naik","Shabaaz Babajan Shaikh","Yalleshi Mareppa Holennavar","Faisal Javed Shaikh","Nauseen Asif Nargund","Vaibhavi Vinod Balse","Nisha Shankar Kurubar","Anupam Premanand Vernekar","Vishal Vijay Chavan","Nitin Namdev Ningannavar","Uday Satish Devakar","Faizan Mohammed Ismail Rangrez","Shubham Oza","Rohit Rajeshkumar Patil","Nehal Ravindra Kallimani","Juned Peerjade","Wagesh Gopal Jadhav","Taha Shaikh","Shubham Sambhaji Bhadavankar"],"Viraj Raikar":["Mohammed Younus C A","Nikhil Subhash Chavan","Gautam Shah","Sneahaal Mulaawadmath","Saivishal Vinod Balse","Nitin Nagoji Chikke","Gajanan Ternikar","Nagaratna Mahantesh Marihal","Aaqib Beerwala","Nagesh Pednekar","Suraj Praveen Motimath","Amit Goudadi","Anuj Ajay Chougule"],"Nikita Sachin Desai":["Sumanth Kumar Sahu","Amulya K","Anup Sadanandan","Maya M Pillai","Rohan Jain","Mehul Harihar Dhande","Vivek Kumar Verma","Prathvik Saldanha","Jay Prakash Singh","Hunny","Ravikumar Mangilal Shah"],"Priyanka Dash":["Sadiya Banu","Sangeetha P","Regan Lobo","Sarfaraj Najeer Kudachee","Naman Prakash Awasthi","Prateek Manvi","Amar Vishwakarma","Shivanjali Kumari","M Vinod","Shaktiprasad Bentur","Vivek G K","Rakesh S Sankangoudar"],"Renuka Mishra":["Gonegondla Karanam Venkata Karthik","Adarsh Singh Gautam","Shalini Y S","Girish A","Saqlain Khalique Shaikh","M Kiran","Keyur P Shah","Aimen Nasardi"],"Basavaraj Gurav":["Shrikanth K","Srawani Deka Basumatary","Vishvajeet Singh","Harshvardhan Singh Rathore","Pratik P Bontra","Rajan Kiran Wagh","Vipul Prakash Sande"],"Ratanjeet Maharaj":["Roshan KM","Shashank Verma","Martin Davis","Shrutika Sumit Jain","Fiza Kouser","Tejas K Madeval","Khushpreet Kaur","Priyank Sharma"],"Gopi Kiran":["Masooma Yousuf","Nitin Tanajirao Pimpalpalle","S Mohammed Akhil","Ankit Agarwal","Murgendra Rajashekhar Patil","Sneha Shrikar","Mary Salins"],"Shwethayini":["Sridevi K V","Suman Janghel","Chandan Kumar","Rahul Kumar","Ravi Kumar Deo","Vishal Bhattar","Rohini Kumari","Uma Bohra","Nikhil Murlidhar Bhatkar"],"Swanand Dixit":["Deepanshi Lalwani","Roshni","Mayank Lodha","Alamgir Haque","Karthik R","Sachinkumar Ghanti B","Bharat Halagalimath"]};
+
+  // Reverse index: agentName.toLowerCase() → managerName (built lazily)
+  function _buildAgentManagerIndex() {
+    const idx = {};
+    for (const [mgr, agents] of Object.entries(_MANAGER_AGENT_MAP)) {
+      for (const agent of agents) {
+        idx[agent.toLowerCase()] = mgr;
+      }
+    }
+    return idx;
+  }
+  function _getAgentManager(name) {
+    if (!_agentManagerIndex) _agentManagerIndex = _buildAgentManagerIndex();
+    if (!name) return null;
+    const key = name.trim().toLowerCase();
+    if (_agentManagerIndex[key]) return _agentManagerIndex[key];
+    // Collapse whitespace: "KG Saroj" → "kgsaroj" matches "k g saroj" → "kgsaroj"
+    const compact = key.replace(/\s+/g, '');
+    return Object.entries(_agentManagerIndex).find(([k]) => k.replace(/\s+/g, '') === compact)?.[1] || null;
+  }
+
+  // ================================================================
   //  ASSESSMENTS — ARCHIVE / MULTI-SELECT
   // ================================================================
 
@@ -3459,7 +3652,10 @@ window.Admin = (() => {
 
   function switchAssessmentView(showArchive) {
     _viewArchive = showArchive;
+    _currentManagerDrill = null; // always reset drill when switching tabs
     _selectedSessionIds.clear();
+    const backBtn = $('btn-back-to-managers');
+    if (backBtn) backBtn.style.display = 'none';
     // Update tab styling
     const activeTab   = $('tab-active-sessions');
     const archiveTab  = $('tab-archive-sessions');
@@ -3605,28 +3801,15 @@ window.Admin = (() => {
     _renderAuditTable();
   }
 
-  function _renderAuditTable() {
-    const tbody = $('ai-audit-tbody');
-    const count = $('ai-audit-count');
-    const allCb = $('select-all-audit');
-    if (!tbody) return;
-
-    if (allCb) { allCb.checked = false; allCb.indeterminate = false; }
-    _updateAuditDeleteBtn();
-
-    if (!_filteredAuditRecs.length) {
-      tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No records found.</td></tr>';
-      if (count) count.textContent = '';
-      return;
-    }
-
-    tbody.innerHTML = _filteredAuditRecs.map((r, idx) => `
+  // Build a single audit row's HTML (shared by flat + grouped render)
+  function _auditRowHtml(r, idx) {
+    return `
       <tr id="audit-row-${r.id}">
         <td style="width:36px;text-align:center">
           <input type="checkbox" class="audit-cb" data-id="${r.id}"
             onchange="Admin.toggleAuditCheckbox('${r.id}', this.checked)" />
         </td>
-        <td style="color:var(--text-muted);font-size:0.8rem">${idx + 1}</td>
+        <td style="color:var(--text-muted);font-size:0.8rem">${idx}</td>
         <td style="font-weight:500">${r.name}</td>
         <td style="text-align:right" id="self-score-cell-${r.id}">
           <span id="self-score-display-${r.id}" style="color:var(--text-muted)">
@@ -3655,15 +3838,77 @@ window.Admin = (() => {
         <td style="text-align:center">
           <div style="display:flex;gap:0.3rem;justify-content:center">
             <button onclick="Admin.editSelfScore('${r.id}')" title="Edit Self Assessment Score"
-              style="background:none;border:none;cursor:pointer;font-size:1rem;padding:0.2rem" title="Edit Self Assessment Score">✏️</button>
+              style="background:none;border:none;cursor:pointer;font-size:1rem;padding:0.2rem">✏️</button>
             <button onclick="Admin.editAuditScore('${r.id}')" title="Edit AI Audit Score"
               style="background:none;border:none;cursor:pointer;font-size:1rem;padding:0.2rem">🎯</button>
             <button onclick="Admin.deleteSingleAuditScore('${r.id}', '${r.name.replace(/'/g,"&#39;")}')" title="Delete"
               style="background:none;border:none;cursor:pointer;font-size:1rem;padding:0.2rem">🗑</button>
           </div>
         </td>
-      </tr>`).join('');
+      </tr>`;
+  }
 
+  function _renderAuditTable() {
+    const tbody = $('ai-audit-tbody');
+    const count = $('ai-audit-count');
+    const allCb = $('select-all-audit');
+    if (!tbody) return;
+
+    if (allCb) { allCb.checked = false; allCb.indeterminate = false; }
+    _updateAuditDeleteBtn();
+
+    if (!_filteredAuditRecs.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No records found.</td></tr>';
+      if (count) count.textContent = '';
+      return;
+    }
+
+    // Group records by manager
+    const managerGroups = {};
+    const unassigned    = [];
+    _filteredAuditRecs.forEach(r => {
+      const mgr = _getAgentManager(r.name);
+      if (mgr) {
+        if (!managerGroups[mgr]) managerGroups[mgr] = [];
+        managerGroups[mgr].push(r);
+      } else {
+        unassigned.push(r);
+      }
+    });
+
+    let html = '';
+    let globalIdx = 0;
+
+    const renderSection = (managerName, records) => {
+      const selfVals = records.map(r => r.selfAssessmentScore).filter(v => v != null && !isNaN(v) && v !== 0);
+      const aiVals   = records.map(r => r.aiAuditScore).filter(v => v != null && !isNaN(v) && v !== 0);
+      const avgSelf  = selfVals.length ? (selfVals.reduce((a, b) => a + b, 0) / selfVals.length).toFixed(3) : '—';
+      const avgAI    = aiVals.length   ? (aiVals.reduce((a, b) => a + b, 0)   / aiVals.length).toFixed(3)   : '—';
+
+      html += `<tr style="background:#eef2ff;border-top:2px solid #c7d2fe">
+        <td colspan="3" style="font-weight:700;color:#3730a3;font-size:0.88rem;padding:0.45rem 0.75rem">
+          👤 ${managerName}
+          <span style="font-weight:400;color:var(--text-muted);font-size:0.78rem;margin-left:0.5rem">(${records.length} agent${records.length !== 1 ? 's' : ''})</span>
+        </td>
+        <td style="text-align:right;font-size:0.78rem;color:var(--text-muted);font-weight:600;background:#eef2ff">Avg: ${avgSelf}</td>
+        <td style="text-align:right;font-size:0.78rem;color:#3730a3;font-weight:600;background:#eef2ff">Avg: ${avgAI}</td>
+        <td style="background:#eef2ff"></td>
+      </tr>`;
+
+      records.forEach(r => {
+        globalIdx++;
+        html += _auditRowHtml(r, globalIdx);
+      });
+    };
+
+    Object.entries(managerGroups).sort(([a], [b]) => a.localeCompare(b)).forEach(([mgr, recs]) => {
+      renderSection(mgr, recs);
+    });
+    if (unassigned.length) {
+      renderSection('(No Manager Assigned)', unassigned);
+    }
+
+    tbody.innerHTML = html;
     if (count) count.textContent = `Showing ${_filteredAuditRecs.length} of ${_allAuditRecords.length} record${_allAuditRecords.length !== 1 ? 's' : ''}`;
   }
 
@@ -3846,7 +4091,7 @@ window.Admin = (() => {
     generateAllAgentsReport,
     copyLetter,
     downloadTraineePPT,
-    // Assessments archive / multi-select
+    // Assessments archive / multi-select / manager view
     switchAssessmentView,
     toggleSessionCheckbox,
     toggleAllSessions,
@@ -3854,6 +4099,10 @@ window.Admin = (() => {
     restoreSelectedSessions,
     archiveSingleSession,
     restoreSingleSession,
+    drillIntoManager,
+    backToManagers,
+    archiveAllManagerSessions,
+    restoreAllManagerSessions,
     // AI Audit Scores
     filterAiAudit,
     toggleAuditCheckbox,
