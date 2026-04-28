@@ -69,6 +69,10 @@ window.Admin = (() => {
   let _cachedTopicMap  = {};   // topicId → topic from last loadAssessments call
   let _selectedTraineeIds = new Set(); // trainee ids checked in the trainees table
   let _allFilteredTrainees = [];       // trainees currently rendered in the table
+  // AI Audit Scores section
+  let _allAuditRecords    = [];        // full list from DB
+  let _filteredAuditRecs  = [];        // after search filter
+  let _selectedAuditIds   = new Set(); // checked rows
 
   // Convert legacy overall scores stored as raw /5 to /100
   function normalizeOverall(overall) {
@@ -379,6 +383,7 @@ window.Admin = (() => {
         else if (sec === 'topics') await loadTopics();
         else if (sec === 'assessments') await loadAssessments();
         else if (sec === 'reports') await loadReportsDropdown();
+        else if (sec === 'ai-audit') await loadAiAuditScores();
         else if (sec === 'settings') initSettings();
       });
     });
@@ -3365,6 +3370,203 @@ window.Admin = (() => {
     }
   }
 
+  // ================================================================
+  //  AI AUDIT SCORES SECTION
+  // ================================================================
+
+  async function loadAiAuditScores() {
+    const tbody = $('ai-audit-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Loading…</td></tr>';
+    try {
+      _allAuditRecords = await DB.getAll('ai_audit_scores');
+      _filteredAuditRecs = [..._allAuditRecords];
+      _selectedAuditIds.clear();
+      _renderAuditTable();
+    } catch (e) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty-state" style="color:var(--danger)">Could not load data. Ensure the ai_audit_scores table exists in Supabase.</td></tr>';
+      console.error('loadAiAuditScores:', e);
+    }
+  }
+
+  function filterAiAudit(query) {
+    const q = (query || '').trim().toLowerCase();
+    _filteredAuditRecs = q
+      ? _allAuditRecords.filter(r => r.name.toLowerCase().includes(q))
+      : [..._allAuditRecords];
+    _selectedAuditIds.clear();
+    _renderAuditTable();
+  }
+
+  function _renderAuditTable() {
+    const tbody = $('ai-audit-tbody');
+    const count = $('ai-audit-count');
+    const allCb = $('select-all-audit');
+    if (!tbody) return;
+
+    if (allCb) { allCb.checked = false; allCb.indeterminate = false; }
+    _updateAuditDeleteBtn();
+
+    if (!_filteredAuditRecs.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No records found.</td></tr>';
+      if (count) count.textContent = '';
+      return;
+    }
+
+    tbody.innerHTML = _filteredAuditRecs.map((r, idx) => `
+      <tr id="audit-row-${r.id}">
+        <td style="width:36px;text-align:center">
+          <input type="checkbox" class="audit-cb" data-id="${r.id}"
+            onchange="Admin.toggleAuditCheckbox('${r.id}', this.checked)" />
+        </td>
+        <td style="color:var(--text-muted);font-size:0.8rem">${idx + 1}</td>
+        <td style="font-weight:500">${r.name}</td>
+        <td style="text-align:right;color:var(--text-muted)">
+          ${r.selfAssessmentScore != null ? Number(r.selfAssessmentScore).toFixed(4) : '—'}
+        </td>
+        <td style="text-align:right" id="audit-score-cell-${r.id}">
+          <span id="audit-score-display-${r.id}" style="font-weight:600;color:var(--primary)">
+            ${r.aiAuditScore != null ? Number(r.aiAuditScore).toFixed(4) : '—'}
+          </span>
+          <span id="audit-score-edit-${r.id}" style="display:none;align-items:center;gap:0.4rem;justify-content:flex-end">
+            <input type="number" id="audit-score-input-${r.id}" step="0.0001" min="0" max="100"
+              value="${r.aiAuditScore != null ? r.aiAuditScore : ''}"
+              style="width:90px;padding:0.2rem 0.4rem;border:1px solid var(--primary);border-radius:4px;font-size:0.875rem;text-align:right" />
+            <button onclick="Admin.saveAuditScore('${r.id}')" class="btn-primary" style="padding:0.2rem 0.6rem;font-size:0.8rem">Save</button>
+            <button onclick="Admin.cancelAuditEdit('${r.id}')" class="btn-ghost" style="padding:0.2rem 0.5rem;font-size:0.8rem">✕</button>
+          </span>
+        </td>
+        <td style="text-align:center">
+          <div style="display:flex;gap:0.3rem;justify-content:center">
+            <button onclick="Admin.editAuditScore('${r.id}')" title="Edit AI Audit Score"
+              style="background:none;border:none;cursor:pointer;font-size:1rem;padding:0.2rem">✏️</button>
+            <button onclick="Admin.deleteSingleAuditScore('${r.id}', '${r.name.replace(/'/g,"&#39;")}')" title="Delete"
+              style="background:none;border:none;cursor:pointer;font-size:1rem;padding:0.2rem">🗑</button>
+          </div>
+        </td>
+      </tr>`).join('');
+
+    if (count) count.textContent = `Showing ${_filteredAuditRecs.length} of ${_allAuditRecords.length} record${_allAuditRecords.length !== 1 ? 's' : ''}`;
+  }
+
+  function _updateAuditDeleteBtn() {
+    const btn = $('btn-delete-selected-audit');
+    if (!btn) return;
+    const n = _selectedAuditIds.size;
+    btn.disabled = n === 0;
+    btn.textContent = n > 0 ? `🗑 Delete Selected (${n})` : '🗑 Delete Selected';
+  }
+
+  function toggleAuditCheckbox(id, checked) {
+    if (checked) _selectedAuditIds.add(id);
+    else         _selectedAuditIds.delete(id);
+    _updateAuditDeleteBtn();
+    const allCb = $('select-all-audit');
+    if (allCb && _filteredAuditRecs.length > 0) {
+      const n = _selectedAuditIds.size;
+      allCb.indeterminate = n > 0 && n < _filteredAuditRecs.length;
+      allCb.checked = n === _filteredAuditRecs.length;
+    }
+  }
+
+  function toggleAllAudit(checked) {
+    _selectedAuditIds.clear();
+    if (checked) _filteredAuditRecs.forEach(r => _selectedAuditIds.add(r.id));
+    document.querySelectorAll('.audit-cb').forEach(cb => { cb.checked = checked; });
+    _updateAuditDeleteBtn();
+  }
+
+  function editAuditScore(id) {
+    const display = $(`audit-score-display-${id}`);
+    const editEl  = $(`audit-score-edit-${id}`);
+    if (!display || !editEl) return;
+    display.style.display = 'none';
+    editEl.style.display  = 'inline-flex';
+    const input = $(`audit-score-input-${id}`);
+    if (input) { input.focus(); input.select(); }
+  }
+
+  function cancelAuditEdit(id) {
+    const display = $(`audit-score-display-${id}`);
+    const editEl  = $(`audit-score-edit-${id}`);
+    if (!display || !editEl) return;
+    display.style.display = '';
+    editEl.style.display  = 'none';
+  }
+
+  async function saveAuditScore(id) {
+    const input = $(`audit-score-input-${id}`);
+    if (!input) return;
+    const val = parseFloat(input.value);
+    if (isNaN(val)) { toast('Please enter a valid number.', 'error'); return; }
+
+    try {
+      await DB.put('ai_audit_scores', { id, aiAuditScore: val });
+      // Update local cache
+      const rec = _allAuditRecords.find(r => r.id === id);
+      if (rec) rec.aiAuditScore = val;
+      const recF = _filteredAuditRecs.find(r => r.id === id);
+      if (recF) recF.aiAuditScore = val;
+
+      // Update display in-place without full re-render
+      const display = $(`audit-score-display-${id}`);
+      if (display) display.textContent = val.toFixed(4);
+      cancelAuditEdit(id);
+      toast('AI Audit Score updated.', 'success');
+    } catch (e) {
+      console.error('saveAuditScore:', e);
+      toast('Failed to save: ' + e.message, 'error');
+    }
+  }
+
+  async function deleteSingleAuditScore(id, name) {
+    if (!confirm(`Delete entry for "${name}"?\n\nThis action cannot be undone.`)) return;
+    try {
+      await DB.del('ai_audit_scores', id);
+      _allAuditRecords   = _allAuditRecords.filter(r => r.id !== id);
+      _filteredAuditRecs = _filteredAuditRecs.filter(r => r.id !== id);
+      _selectedAuditIds.delete(id);
+      _renderAuditTable();
+      toast(`Deleted entry for ${name}.`, 'success');
+    } catch (e) {
+      toast('Delete failed: ' + e.message, 'error');
+    }
+  }
+
+  async function deleteSelectedAuditScores() {
+    const ids = [..._selectedAuditIds];
+    if (!ids.length) return;
+    if (!confirm(`Delete ${ids.length} selected record${ids.length !== 1 ? 's' : ''}?\n\nThis action cannot be undone.`)) return;
+    try {
+      await Promise.all(ids.map(id => DB.del('ai_audit_scores', id)));
+      _allAuditRecords   = _allAuditRecords.filter(r => !ids.includes(r.id));
+      _filteredAuditRecs = _filteredAuditRecs.filter(r => !ids.includes(r.id));
+      _selectedAuditIds.clear();
+      _renderAuditTable();
+      toast(`Deleted ${ids.length} record${ids.length !== 1 ? 's' : ''}.`, 'success');
+    } catch (e) {
+      toast('Delete failed: ' + e.message, 'error');
+    }
+  }
+
+  async function deleteAllAuditScores() {
+    if (!_allAuditRecords.length) { toast('No records to delete.', ''); return; }
+    const step1 = confirm(`⚠️ Delete ALL ${_allAuditRecords.length} AI Audit Score records?\n\nThis action cannot be undone.`);
+    if (!step1) return;
+    const step2 = confirm(`Are you absolutely sure? All ${_allAuditRecords.length} records will be permanently removed.`);
+    if (!step2) return;
+    try {
+      await Promise.all(_allAuditRecords.map(r => DB.del('ai_audit_scores', r.id)));
+      _allAuditRecords   = [];
+      _filteredAuditRecs = [];
+      _selectedAuditIds.clear();
+      _renderAuditTable();
+      toast('All AI Audit Score records deleted.', 'success');
+    } catch (e) {
+      toast('Delete failed: ' + e.message, 'error');
+    }
+  }
+
   // ---- Public API (called from inline onclick) ----
   return {
     init,
@@ -3388,7 +3590,17 @@ window.Admin = (() => {
     deleteAllSessions,
     generateAllAgentsReport,
     copyLetter,
-    downloadTraineePPT
+    downloadTraineePPT,
+    // AI Audit Scores
+    filterAiAudit,
+    toggleAuditCheckbox,
+    toggleAllAudit,
+    editAuditScore,
+    cancelAuditEdit,
+    saveAuditScore,
+    deleteSingleAuditScore,
+    deleteSelectedAuditScores,
+    deleteAllAuditScores
   };
 })();
 

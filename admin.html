@@ -65,6 +65,10 @@
         <span class="nav-icon">📈</span>
         <span>Reports</span>
       </a>
+      <a href="#" class="nav-item" data-section="ai-audit">
+        <span class="nav-icon">🎯</span>
+        <span>AI Audit Scores</span>
+      </a>
       <a href="#" class="nav-item" data-section="settings">
         <span class="nav-icon">⚙️</span>
         <span>Settings</span>
@@ -306,6 +310,49 @@
       </div>
     </section>
 
+    <!-- ==================== AI AUDIT SCORES ==================== -->
+    <section id="admin-ai-audit" class="admin-section">
+      <div class="section-header">
+        <div>
+          <h1>AI Audit Scores</h1>
+          <p>View and manage agent AI audit scores — edit individual scores or remove entries</p>
+        </div>
+      </div>
+
+      <!-- Toolbar -->
+      <div class="table-toolbar" style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-bottom:1rem">
+        <input type="text" id="ai-audit-search" placeholder="🔍 Search by name…"
+          oninput="Admin.filterAiAudit(this.value)"
+          style="flex:1;min-width:180px;padding:0.5rem 0.75rem;border:1px solid var(--border);border-radius:6px;font-size:0.875rem" />
+        <button id="btn-delete-selected-audit" class="btn-ghost btn-ghost-danger"
+          onclick="Admin.deleteSelectedAuditScores()" disabled>🗑 Delete Selected</button>
+        <button class="btn-ghost btn-ghost-danger"
+          onclick="Admin.deleteAllAuditScores()">🗑 Delete All</button>
+      </div>
+
+      <!-- Table -->
+      <div class="card" style="padding:0;overflow:hidden">
+        <table class="data-table" id="ai-audit-table">
+          <thead>
+            <tr>
+              <th style="width:36px;text-align:center">
+                <input type="checkbox" id="select-all-audit" onchange="Admin.toggleAllAudit(this.checked)" />
+              </th>
+              <th style="width:48px">#</th>
+              <th>Name</th>
+              <th style="width:180px;text-align:right">Self Assessment Score</th>
+              <th style="width:200px;text-align:right">AI Audit Score</th>
+              <th style="width:80px;text-align:center">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="ai-audit-tbody">
+            <tr><td colspan="6" class="empty-state">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="ai-audit-count" style="margin-top:0.5rem;font-size:0.8rem;color:var(--text-muted)"></div>
+    </section>
+
     <!-- ==================== SETTINGS ==================== -->
     <section id="admin-settings" class="admin-section">
       <div class="section-header">
@@ -522,6 +569,6 @@
 <script src="js/recorder.js?v=6"></script>
 <script src="js/speech.js?v=6"></script>
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
-<script src="js/admin.js?v=23"></script>
+<script src="js/admin.js?v=24"></script>
 </body>
 </html>

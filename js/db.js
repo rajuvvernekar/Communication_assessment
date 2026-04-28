@@ -30,11 +30,17 @@ const DB = (() => {
     botScript:      'bot_script',
     createdAt:      'created_at',
   };
+  const AI_AUDIT_MAP = {
+    selfAssessmentScore: 'self_assessment_score',
+    aiAuditScore:        'ai_audit_score',
+    createdAt:           'created_at',
+  };
 
   // Convert app camelCase → DB snake_case (for saves)
   function _toDB(store, data) {
-    const map = store === 'sessions' ? SESSION_MAP
-              : store === 'topics'   ? TOPIC_MAP
+    const map = store === 'sessions'        ? SESSION_MAP
+              : store === 'topics'           ? TOPIC_MAP
+              : store === 'ai_audit_scores' ? AI_AUDIT_MAP
               : {};
     const out = {};
     for (const [k, v] of Object.entries(data)) {
@@ -52,7 +58,9 @@ const DB = (() => {
       ? Object.fromEntries(Object.entries(SESSION_MAP).map(([c, s]) => [s, c]))
       : store === 'topics'
         ? Object.fromEntries(Object.entries(TOPIC_MAP).map(([c, s]) => [s, c]))
-        : {};
+        : store === 'ai_audit_scores'
+          ? Object.fromEntries(Object.entries(AI_AUDIT_MAP).map(([c, s]) => [s, c]))
+          : {};
     const out = {};
     for (const [k, v] of Object.entries(row)) {
       out[reverseMap[k] || k] = v;
