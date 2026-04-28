@@ -3608,8 +3608,17 @@ window.Admin = (() => {
         </td>
         <td style="color:var(--text-muted);font-size:0.8rem">${idx + 1}</td>
         <td style="font-weight:500">${r.name}</td>
-        <td style="text-align:right;color:var(--text-muted)">
-          ${r.selfAssessmentScore != null ? Number(r.selfAssessmentScore).toFixed(4) : '—'}
+        <td style="text-align:right" id="self-score-cell-${r.id}">
+          <span id="self-score-display-${r.id}" style="color:var(--text-muted)">
+            ${r.selfAssessmentScore != null ? Number(r.selfAssessmentScore).toFixed(4) : '—'}
+          </span>
+          <span id="self-score-edit-${r.id}" style="display:none;align-items:center;gap:0.4rem;justify-content:flex-end">
+            <input type="number" id="self-score-input-${r.id}" step="0.0001" min="0" max="100"
+              value="${r.selfAssessmentScore != null ? r.selfAssessmentScore : ''}"
+              style="width:90px;padding:0.2rem 0.4rem;border:1px solid var(--text-muted);border-radius:4px;font-size:0.875rem;text-align:right" />
+            <button onclick="Admin.saveSelfScore('${r.id}')" class="btn-primary" style="padding:0.2rem 0.6rem;font-size:0.8rem">Save</button>
+            <button onclick="Admin.cancelSelfScoreEdit('${r.id}')" class="btn-ghost" style="padding:0.2rem 0.5rem;font-size:0.8rem">✕</button>
+          </span>
         </td>
         <td style="text-align:right" id="audit-score-cell-${r.id}">
           <span id="audit-score-display-${r.id}" style="font-weight:600;color:var(--primary)">
@@ -3625,8 +3634,10 @@ window.Admin = (() => {
         </td>
         <td style="text-align:center">
           <div style="display:flex;gap:0.3rem;justify-content:center">
+            <button onclick="Admin.editSelfScore('${r.id}')" title="Edit Self Assessment Score"
+              style="background:none;border:none;cursor:pointer;font-size:1rem;padding:0.2rem" title="Edit Self Assessment Score">✏️</button>
             <button onclick="Admin.editAuditScore('${r.id}')" title="Edit AI Audit Score"
-              style="background:none;border:none;cursor:pointer;font-size:1rem;padding:0.2rem">✏️</button>
+              style="background:none;border:none;cursor:pointer;font-size:1rem;padding:0.2rem">🎯</button>
             <button onclick="Admin.deleteSingleAuditScore('${r.id}', '${r.name.replace(/'/g,"&#39;")}')" title="Delete"
               style="background:none;border:none;cursor:pointer;font-size:1rem;padding:0.2rem">🗑</button>
           </div>
@@ -3679,6 +3690,46 @@ window.Admin = (() => {
     if (!display || !editEl) return;
     display.style.display = '';
     editEl.style.display  = 'none';
+  }
+
+  // ---- Self Assessment Score inline edit ----
+  function editSelfScore(id) {
+    const display = $(`self-score-display-${id}`);
+    const editEl  = $(`self-score-edit-${id}`);
+    if (!display || !editEl) return;
+    display.style.display = 'none';
+    editEl.style.display  = 'inline-flex';
+    const input = $(`self-score-input-${id}`);
+    if (input) { input.focus(); input.select(); }
+  }
+
+  function cancelSelfScoreEdit(id) {
+    const display = $(`self-score-display-${id}`);
+    const editEl  = $(`self-score-edit-${id}`);
+    if (!display || !editEl) return;
+    display.style.display = '';
+    editEl.style.display  = 'none';
+  }
+
+  async function saveSelfScore(id) {
+    const input = $(`self-score-input-${id}`);
+    if (!input) return;
+    const val = parseFloat(input.value);
+    if (isNaN(val)) { toast('Please enter a valid number.', 'error'); return; }
+    try {
+      const rec  = _allAuditRecords.find(r => r.id === id);
+      const recF = _filteredAuditRecs.find(r => r.id === id);
+      if (rec)  rec.selfAssessmentScore  = val;
+      if (recF) recF.selfAssessmentScore = val;
+      await _aiAuditSave(_allAuditRecords);
+      const display = $(`self-score-display-${id}`);
+      if (display) display.textContent = val.toFixed(4);
+      cancelSelfScoreEdit(id);
+      toast('Self Assessment Score updated.', 'success');
+    } catch (e) {
+      console.error('saveSelfScore:', e);
+      toast('Failed to save: ' + e.message, 'error');
+    }
   }
 
   async function saveAuditScore(id) {
@@ -3787,6 +3838,9 @@ window.Admin = (() => {
     filterAiAudit,
     toggleAuditCheckbox,
     toggleAllAudit,
+    editSelfScore,
+    cancelSelfScoreEdit,
+    saveSelfScore,
     editAuditScore,
     cancelAuditEdit,
     saveAuditScore,
