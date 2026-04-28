@@ -1243,6 +1243,29 @@ window.Admin = (() => {
     renderTopicsList();
   }
 
+  // ---- Enable / Disable all topics in the current tab filter ----
+  async function _setAllTopicsEnabled(enable) {
+    try {
+      const topics  = await DB.getAll('topics');
+      const targets = topics.filter(t => matchesModuleFilter(t.module, _topicsFilter));
+      if (!targets.length) { toast('No topics in the current view.', ''); return; }
+
+      const label = _topicsFilter === 'all' ? 'all topics' : `all ${_topicsFilter} topics`;
+      if (!confirm(`${enable ? 'Enable' : 'Disable'} ${label} (${targets.length} topic${targets.length !== 1 ? 's' : ''})?`)) return;
+
+      await Promise.all(targets.map(t =>
+        DB.getClient().from('topics').update({ enabled: enable }).eq('id', t.id)
+      ));
+      toast(`${enable ? '✅ Enabled' : '⏸ Disabled'} ${targets.length} topic${targets.length !== 1 ? 's' : ''}.`, 'success');
+      renderTopicsList();
+    } catch (e) {
+      toast('Failed: ' + e.message, 'error');
+    }
+  }
+
+  function enableAllTopics()  { _setAllTopicsEnabled(true);  }
+  function disableAllTopics() { _setAllTopicsEnabled(false); }
+
   // ---- Assessments ----
   async function loadAssessments(filterTraineeId = null) {
     const tbody = $('assessments-tbody');
@@ -4074,6 +4097,8 @@ window.Admin = (() => {
     deleteTopic,
     toggleTopicEnabled,
     toggleGrammarSet,
+    enableAllTopics,
+    disableAllTopics,
     openScoring,
     updateCriterionDisplay,
     selectScale135,
