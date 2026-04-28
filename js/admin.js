@@ -73,6 +73,7 @@ window.Admin = (() => {
   let _selectedSessionIds    = new Set(); // checked session ids
   let _allRenderedSessions   = [];        // sessions currently in the table
   let _viewArchive           = false;     // false = Active tab, true = Archive tab
+  let _archivedIds           = new Set(); // session IDs stored as archived (loaded from settings)
   // AI Audit Scores section
   let _allAuditRecords    = [];        // full list from DB
   let _filteredAuditRecs  = [];        // after search filter
@@ -1252,6 +1253,9 @@ window.Admin = (() => {
     _cachedSessions = sessions;
     _cachedTopicMap = topicMap;
 
+    // Load archived session IDs from settings (no schema change required)
+    await _loadArchivedIds();
+
     // Reset selection state on fresh load
     _selectedSessionIds.clear();
     _updateSessionActionBtns();
@@ -1420,10 +1424,10 @@ window.Admin = (() => {
   }
 
   function applyAssessmentFilters(sessions, topicMap) {
-    // First split by archive status (this is the primary partition)
+    // First split by archive status (stored in settings, not a DB column)
     let filtered = _viewArchive
-      ? sessions.filter(s => s.archived === true)
-      : sessions.filter(s => !s.archived);
+      ? sessions.filter(s => _archivedIds.has(s.id))
+      : sessions.filter(s => !_archivedIds.has(s.id));
 
     filtered = filtered.filter(s => matchesModuleFilter(s.module, _assessmentsFilter.module));
     if (_assessmentsFilter.status !== 'all') {
@@ -1503,7 +1507,7 @@ window.Admin = (() => {
         : `<button class="btn-small" onclick="Admin.archiveSingleSession('${s.id}', '${(s.traineeName || '').replace(/'/g, "\\'")}')">📁 Archive</button>`;
 
       return `
-        <tr class="${s.archived ? 'session-archived' : ''}">
+        <tr class="${_archivedIds.has(s.id) ? 'session-archived' : ''}">
           <td style="width:36px;text-align:center">
             <input type="checkbox" class="session-cb" data-id="${s.id}"
               onchange="Admin.toggleSessionCheckbox('${s.id}', this.checked)" />
@@ -3407,8 +3411,8 @@ window.Admin = (() => {
   // ================================================================
 
   function _refreshArchiveCounts(sessions) {
-    const activeCount   = sessions.filter(s => !s.archived).length;
-    const archiveCount  = sessions.filter(s => s.archived === true).length;
+    const activeCount   = sessions.filter(s => !_archivedIds.has(s.id)).length;
+    const archiveCount  = sessions.filter(s =>  _archivedIds.has(s.id)).length;
     const activeSpan    = $('count-active-sessions');
     const archiveSpan   = $('count-archive-sessions');
     if (activeSpan)  activeSpan.textContent  = activeCount  ? `(${activeCount})`  : '';
@@ -3464,13 +3468,27 @@ window.Admin = (() => {
     _updateSessionActionBtns();
   }
 
-  async function _setSessionsArchived(ids, archived) {
-    await Promise.all(ids.map(id => DB.patch('sessions', id, { archived })));
-    // Update cache
-    ids.forEach(id => {
-      const s = _cachedSessions.find(s => s.id === id);
-      if (s) s.archived = archived;
-    });
+  // Load archived session IDs from the settings table (no schema change required)
+  async function _loadArchivedIds() {
+    try {
+      const rec = await DB.get('settings', 'archivedSessionIds');
+      _archivedIds = new Set(rec ? JSON.parse(rec.value) : []);
+    } catch (e) {
+      _archivedIds = new Set();
+    }
+  }
+
+  async function _saveArchivedIds() {
+    await DB.put('settings', { key: 'archivedSessionIds', value: JSON.stringify([..._archivedIds]) });
+  }
+
+  async function _setSessionsArchived(ids, archive) {
+    if (archive) {
+      ids.forEach(id => _archivedIds.add(id));
+    } else {
+      ids.forEach(id => _archivedIds.delete(id));
+    }
+    await _saveArchivedIds();
     _refreshArchiveCounts(_cachedSessions);
     _selectedSessionIds.clear();
     applyAssessmentFilters(_cachedSessions, _cachedTopicMap);
