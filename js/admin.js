@@ -3,6 +3,7 @@
 // ── Master score lookup — Source: "Master total (1).xlsx" ──
 // Col Q (Self Assessment Score) + Col R (AI Audit Score) + Col W (Grand Total, all components)
 // Grand Total (W) = Self Assess + AI Audit + P&S + Listening + Mock Call + Grammar (all weighted)
+// v34: alias names baked into _agentManagerIndex at build time; simplified drill-in filter
 // totalScore is used directly as the report total; selfAssessment+aiAudit kept for reference.
 // Matched case-insensitively by trainee name. Returns null if not found.
 const MASTER_SCORES = {
@@ -39,19 +40,99 @@ const MASTER_SCORES = {
   "abhishek tenginkai":              { selfAssessment: 8.000,  aiAudit: 3.580,  totalScore: 56.44 },
   "ambaldhage vinay kumar":          { selfAssessment: 7.351,  aiAudit: 4.080,  totalScore: 56.25 },
   "lilesh bhaskar sapaliga":         { selfAssessment: 9.514,  aiAudit: 3.795,  totalScore: 68.03 },
-  "anand jaiswal":                   { selfAssessment: 8.432,  aiAudit: 3.765,  totalScore: 52.81 }
+  "anand jaiswal":                   { selfAssessment: 8.432,  aiAudit: 3.765,  totalScore: 52.81 },
+  // Shalini H S
+  "manigandan":                      { selfAssessment: 7.027,  aiAudit: 3.910,  totalScore: 57.48 },
+  "swati sharma":                    { selfAssessment: 8.108,  aiAudit: 3.870,  totalScore: 63.43 },
+  "himanshu singh rawat":            { selfAssessment: 9.081,  aiAudit: 3.865,  totalScore: 57.26 },
+  "aldrich frewin dsouza":           { selfAssessment: 8.649,  aiAudit: 3.800,  totalScore: 12.45 },
+  "surya hendry":                    { selfAssessment: 8.324,  aiAudit: 0.360,  totalScore: 56.98 },
+  "mohd altaf bhutta":               { selfAssessment: 7.297,  aiAudit: 3.945,  totalScore: 11.24 },
+  "ashish yadav":                    { selfAssessment: 7.297,  aiAudit: 3.890,  totalScore: 59.96 },
+  "jayanthi maniram":                { selfAssessment: 7.676,  aiAudit: 3.965,  totalScore: 54.00 },
+  "tulsi shankar solanki":           { selfAssessment: 8.973,  aiAudit: 3.925,  totalScore: 62.70 },
+  "adwait keshavraj gondkar":        { selfAssessment: 6.757,  aiAudit: 4.050,  totalScore: 65.65 },
+  "javed umar masute":               { selfAssessment: 7.622,  aiAudit: 4.060,  totalScore: 49.73 },
+  // Sandhya N R (additional agents)
+  "aditya anil korde":               { selfAssessment: 15.800, aiAudit: 3.805,  totalScore: 66.84 },
+  "shahrukh shaikh":                 { selfAssessment: 14.700, aiAudit: 3.885,  totalScore: 58.05 },
+  "gorak vani":                      { selfAssessment: 14.400, aiAudit: 3.710,  totalScore: 18.11 },
+  "rajat gupta":                     { selfAssessment: 15.400, aiAudit: 3.760,  totalScore: 66.86 },
+  "bhagesh paithankar":              { selfAssessment: 14.100, aiAudit: 3.690,  totalScore: 64.54 },
+  "bhavna deepak porwal":            { selfAssessment: 8.800,  aiAudit: 3.685,  totalScore: 62.28 },
+  "bana gari naresh kumar":          { selfAssessment: 15.900, aiAudit: 3.660,  totalScore: 61.56 },
+  "mahesh mohan prabhu":             { selfAssessment: 13.900, aiAudit: 3.940,  totalScore: 71.98 },
+  // Shashin Birha
+  "haritha k":                       { selfAssessment: 9.081,  aiAudit: 4.100,  totalScore: 60.53 },
+  "umang jain":                      { selfAssessment: 8.973,  aiAudit: 3.920,  totalScore: 65.85 },
+  "rahul ranjan roy":                { selfAssessment: 8.270,  aiAudit: 3.970,  totalScore: 60.84 },
+  "vansh arora":                     { selfAssessment: 8.486,  aiAudit: 3.895,  totalScore: 57.30 },
+  "deepika s":                       { selfAssessment: 9.027,  aiAudit: 3.825,  totalScore: 65.65 },
+  "muthu anusuya p":                 { selfAssessment: 7.730,  aiAudit: 3.660,  totalScore: 57.55 },
+  "aman sharma":                     { selfAssessment: 8.162,  aiAudit: 3.585,  totalScore: 57.19 },
+  "vickey sharma":                   { selfAssessment: 8.541,  aiAudit: 4.030,  totalScore: 59.38 },
+  "sahib singh":                     { selfAssessment: 8.973,  aiAudit: 3.860,  totalScore: 51.56 },
+  "m sunny":                         { selfAssessment: 8.486,  aiAudit: 3.890,  totalScore: 54.19 },
+  "nishikant tiwari":                { selfAssessment: 8.432,  aiAudit: 3.855,  totalScore: 58.96 },
+  "chetan patil":                    { selfAssessment: 8.703,  aiAudit: 3.980,  totalScore: 63.73 },
+  // Priyanka Sahani
+  "priyanshu gupta":                 { selfAssessment: 8.649,  aiAudit: 4.020,  totalScore: 12.67 },
+  "vinayak kini":                    { selfAssessment: 9.568,  aiAudit: 3.930,  totalScore: 57.65 },
+  "benjamin anand mitra":            { selfAssessment: 6.216,  aiAudit: 3.980,  totalScore: 66.08 },
+  "namreen i bombaywale":            { selfAssessment: 7.676,  aiAudit: 3.820,  totalScore: 11.50 },
+  "deva sahaya rubia":               { selfAssessment: 8.595,  aiAudit: 4.080,  totalScore: 72.42 },
+  "geetha bhandari":                 { selfAssessment: 9.243,  aiAudit: 3.900,  totalScore: 51.01 },
+  "shaheen ismail dhaliet":          { selfAssessment: 8.919,  aiAudit: 3.910,  totalScore: 59.05 },
+  "sourav basotia":                  { selfAssessment: 8.595,  aiAudit: 3.775,  totalScore: 12.37 },
+  "pratik poddar":                   { selfAssessment: 8.541,  aiAudit: 3.820,  totalScore: 12.36 },
+  "ashok sunar":                     { selfAssessment: 8.432,  aiAudit: 3.960,  totalScore: 62.08 },
+  "anjali gupta":                    { selfAssessment: 8.432,  aiAudit: 3.735,  totalScore: 12.17 },
+  // Roopashri S
+  "ashish thakur":                   { selfAssessment: 8.595,  aiAudit: 3.910,  totalScore: 59.20 },
+  "sougata das":                     { selfAssessment: 7.027,  aiAudit: 3.900,  totalScore: 66.34 },
+  "arun kumar m":                    { selfAssessment: 8.757,  aiAudit: 3.935,  totalScore: 59.51 },
+  "malay pathak":                    { selfAssessment: 8.378,  aiAudit: 4.875,  totalScore: 68.64 },
+  "ananth sai sharma":               { selfAssessment: 8.054,  aiAudit: 3.825,  totalScore: 58.65 },
+  "mrinal sarkar":                   { selfAssessment: 8.811,  aiAudit: 3.970,  totalScore: 69.88 },
+  "apurva tyagi":                    { selfAssessment: 8.973,  aiAudit: 3.290,  totalScore: 12.26 },
+  "anirudh":                         { selfAssessment: 0.000,  aiAudit: 0.000,  totalScore: 57.45 },
+  "dev":                             { selfAssessment: 0.000,  aiAudit: 0.000,  totalScore: 47.88 },
+  "deepak kumar":                    { selfAssessment: 8.432,  aiAudit: 3.270,  totalScore: 55.85 }
 };
 
-// Look up master scores by trainee name (case-insensitive, trimmed).
-// Also tries stripping all internal whitespace so "KG Saroj" → "kgsaroj" matches "k g saroj" → "kgsaroj".
-// Returns null if not found.
+// Maps the name as stored in the DB (trainee.name) → canonical name used in _MANAGER_AGENT_MAP.
+// Keys are lowercase. Value is the correct canonical name (mixed-case, matching the map).
+const _TRAINEE_ALIASES = {
+  "alihussain basha hayatkhan": "Alihussain Basha Hyatkhan", // HAYAT → HYAT
+  "shankar kumar jha":          "Shankar Kumar",             // extra surname
+  "lovepreet singh":            "Love Preet Singh",          // no space
+  "heeral sonegare":            "Heeral Sonagare",           // Sonegare → Sonagare
+  "swetha":                     "Swetha A",                  // missing surname initial
+  "nikhil vijay durgude":       "Nikhil V Durgude",         // full middle name vs initial
+  "naveenkumar":                "Naveenkumar Ayyangoudar",  // missing surname
+  "akash":                      "Akash Kumar Singh",         // first name only
+  "kg saroj":                   "K G Saroj"                  // no space in initials
+};
+
+// Resolve a raw DB/session name to its canonical map name (if an alias exists).
+function _resolveAlias(name) {
+  if (!name) return name;
+  return _TRAINEE_ALIASES[name.trim().toLowerCase()] || name;
+}
+
+// Look up master scores by trainee name (case-insensitive; resolves aliases automatically).
 function getMasterScores(name) {
   if (!name) return null;
-  const key = name.trim().toLowerCase();
+  const resolved = _resolveAlias(name);
+  const key = resolved.trim().toLowerCase();
   if (MASTER_SCORES[key]) return MASTER_SCORES[key];
-  // Collapse all whitespace and try again (handles "KG Saroj" vs "K G Saroj")
   const compact = key.replace(/\s+/g, '');
-  return Object.entries(MASTER_SCORES).find(([k]) => k.replace(/\s+/g, '') === compact)?.[1] || null;
+  const hit2 = Object.entries(MASTER_SCORES).find(([k]) => k.replace(/\s+/g, '') === compact)?.[1];
+  if (hit2) return hit2;
+  const alnum = s => s.replace(/[^a-z0-9]/g, '');
+  const normKey = alnum(key);
+  if (!normKey) return null;
+  return Object.entries(MASTER_SCORES).find(([k]) => alnum(k) === normKey)?.[1] || null;
 }
 
 window.Admin = (() => {
@@ -1269,9 +1350,15 @@ window.Admin = (() => {
   // ---- Assessments ----
   async function loadAssessments(filterTraineeId = null) {
     const tbody = $('assessments-tbody');
-    let sessions, topics;
+    let sessions, topics, teamRec, archivedRec, traineesData;
     try {
-      [sessions, topics] = await Promise.all([DB.getAll('sessions'), DB.getAll('topics')]);
+      [sessions, topics, teamRec, archivedRec, traineesData] = await Promise.all([
+        DB.getAll('sessions'),
+        DB.getAll('topics'),
+        DB.get('settings', 'team_assignments'),
+        DB.get('settings', 'archivedSessionIds'),
+        _activeTraineeIds.size === 0 ? DB.getAll('trainees') : Promise.resolve([])
+      ]);
     } catch (e) {
       console.error('loadAssessments DB error:', e);
       if (tbody) {
@@ -1283,13 +1370,10 @@ window.Admin = (() => {
       return;
     }
 
-    await loadTeamAssignments();
-    // Derive active trainee IDs from sessions (trainees who have submitted assessments)
-    // Cross-reference with actual trainees for accuracy when possible
-    if (_activeTraineeIds.size === 0) {
-      const trainees = await DB.getAll('trainees');
-      _activeTraineeIds = new Set(trainees.map(t => t.id));
-    }
+    _teamAssignments = (teamRec && teamRec.value) ? JSON.parse(teamRec.value) : {};
+    if (traineesData.length) _activeTraineeIds = new Set(traineesData.map(t => t.id));
+    _archivedIds = new Set(archivedRec ? JSON.parse(archivedRec.value) : []);
+
     populateTeamFilter();
 
     const topicMap = {};
@@ -1298,9 +1382,6 @@ window.Admin = (() => {
     // Cache so saveScore can re-apply filters without a full reload
     _cachedSessions = sessions;
     _cachedTopicMap = topicMap;
-
-    // Load archived session IDs from settings (no schema change required)
-    await _loadArchivedIds();
 
     // Reset selection state on fresh load
     _selectedSessionIds.clear();
@@ -1505,10 +1586,18 @@ window.Admin = (() => {
     }
 
     if (_currentManagerDrill) {
-      // Drill-in view: show only this manager's agents' individual sessions
-      const agentNamesLower = (_MANAGER_AGENT_MAP[_currentManagerDrill] || []).map(n => n.toLowerCase());
-      filtered = filtered.filter(s => agentNamesLower.includes((s.traineeName || '').trim().toLowerCase()));
       _restoreIndividualSessionsHeader();
+      const drill = _currentManagerDrill;
+      // Resolve each session's manager using team-assignment (primary) or baked index (fallback)
+      const resolveSessionMgr = s => {
+        const assigned = _teamAssignments[s.traineeId];
+        return (assigned && _MANAGER_AGENT_MAP[assigned]) ? assigned : _getAgentManager(s.traineeName);
+      };
+      if (drill === '(No Manager Assigned)') {
+        filtered = filtered.filter(s => !resolveSessionMgr(s));
+      } else {
+        filtered = filtered.filter(s => resolveSessionMgr(s) === drill);
+      }
       renderAssessmentsTable(filtered, topicMap);
     } else {
       // Default: manager summary view
@@ -1562,10 +1651,16 @@ window.Admin = (() => {
     }
 
     // Group sessions by manager
+    // Primary: team assignment stored in settings (traineeId → managerName)
+    // Fallback: name-based lookup from _MANAGER_AGENT_MAP
     const managerGroups = {};
     const unassigned    = [];
     sessions.forEach(s => {
-      const mgr = _getAgentManager(s.traineeName);
+      const assigned = _teamAssignments[s.traineeId];
+      // Use team assignment if it's a known manager, else name-match (with alias resolution)
+      const mgr = (assigned && _MANAGER_AGENT_MAP[assigned])
+                ? assigned
+                : _getAgentManager(s.traineeName);
       if (mgr) {
         if (!managerGroups[mgr]) managerGroups[mgr] = [];
         managerGroups[mgr].push(s);
@@ -2324,7 +2419,15 @@ window.Admin = (() => {
 
   // ---- Reports ----
   async function loadReportsDropdown() {
-    const trainees     = await DB.getAll('trainees');
+    // Load both trainees and team assignments (Reports may open before Assessments)
+    const [trainees, teamRec] = await Promise.all([
+      DB.getAll('trainees'),
+      DB.get('settings', 'team_assignments')
+    ]);
+    if (teamRec && teamRec.value) {
+      try { _teamAssignments = JSON.parse(teamRec.value); } catch (_) {}
+    }
+
     const mgrSelect    = $('report-manager-select');
     const agentSelect  = $('report-trainee-select');
     if (!mgrSelect || !agentSelect) return;
@@ -2346,24 +2449,56 @@ window.Admin = (() => {
       if (!mgr) { agentSelect.disabled = true; return; }
       agentSelect.disabled = false;
 
-      // Show all agents under this manager; match against DB trainees
+      const norm    = n => n.trim().toLowerCase().replace(/\s+/g, ' ');
+      const alnum   = n => n.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+
+      // Trainees explicitly assigned to this manager (their own choice during registration)
+      const assignedToMgr = trainees.filter(t => _teamAssignments[t.id] === mgr);
+      const usedTraineeIds = new Set();
+
       const agentNames = (_MANAGER_AGENT_MAP[mgr] || []).slice().sort();
       agentNames.forEach(agentName => {
-        // Case-insensitive name match (collapse whitespace too)
-        const norm = n => n.trim().toLowerCase().replace(/\s+/g, ' ');
-        const trainee = trainees.find(t => norm(t.name) === norm(agentName));
-        if (trainee) {
+        const agentAlnum = alnum(agentName);
+        // Match t.name against agentName — try DB name directly, then via alias resolution
+        const matchFn = t => {
+          if (alnum(t.name)                 === agentAlnum) return true; // direct or near match
+          if (alnum(_resolveAlias(t.name))  === agentAlnum) return true; // alias → canonical
+          return false;
+        };
+        // Pass 1: match across all trainees
+        let trainee = trainees.find(t => !usedTraineeIds.has(t.id) && matchFn(t));
+        // Pass 2: widen to assigned-manager trainees (catches wrong-but-close registrations)
+        if (!trainee) {
+          trainee = assignedToMgr.find(t => !usedTraineeIds.has(t.id) && matchFn(t));
+        }
+        if (trainee && !usedTraineeIds.has(trainee.id)) {
+          usedTraineeIds.add(trainee.id);
           agentSelect.innerHTML += `<option value="${trainee.id}">${agentName}</option>`;
         } else {
-          agentSelect.innerHTML += `<option value="" disabled style="color:#94a3b8">${agentName} (no sessions yet)</option>`;
+          // No match — use master scores if available (previous-batch agent)
+          const ms = getMasterScores(agentName);
+          if (ms && ms.totalScore > 0) {
+            agentSelect.innerHTML += `<option value="__ms__${agentName}" style="color:#6366f1">${agentName} ★ (prev. batch)</option>`;
+          } else {
+            agentSelect.innerHTML += `<option value="" disabled style="color:#94a3b8">${agentName} (no sessions yet)</option>`;
+          }
         }
+      });
+
+      // Show any assigned trainees whose name didn't match any map agent (name typos, etc.)
+      assignedToMgr.filter(t => !usedTraineeIds.has(t.id)).forEach(t => {
+        agentSelect.innerHTML += `<option value="${t.id}">${t.name}</option>`;
       });
     };
 
     agentSelect.onchange = async () => {
       const id = agentSelect.value;
       if (!id) { $('report-content').classList.add('hidden'); return; }
-      await loadTraineeReport(id);
+      if (id.startsWith('__ms__')) {
+        await loadSyntheticReport(id.slice(6));
+      } else {
+        await loadTraineeReport(id);
+      }
     };
   }
 
@@ -3088,7 +3223,7 @@ window.Admin = (() => {
     // Falls back to sum of module marks if trainee not found in master sheet.
     let totalMark = null;
     try {
-      const ms = getMasterScores(trainee.name);
+      const ms = getMasterScores(_resolveAlias(trainee.name));
       if (ms && typeof ms.totalScore === 'number' && ms.totalScore > 0) {
         totalMark = r2(ms.totalScore);  // use pre-computed Excel grand total
       }
@@ -3144,6 +3279,26 @@ window.Admin = (() => {
             <td style="font-weight:600;color:${rAvg === 'N/A' || rAvg === '—' ? 'var(--text-muted)' : '#1d4ed8'}">${rAvg !== '—' && rAvg !== 'N/A' ? rAvg + '/100' : rAvg}</td>
           </tr>`;
         }).join('');
+  }
+
+  async function loadSyntheticReport(agentName) {
+    const ms = getMasterScores(agentName);
+    if (!ms) { toast('No score data found for ' + agentName, 'error'); return; }
+    $('report-content').classList.remove('hidden');
+
+    const r2 = v => v != null ? parseFloat(v.toFixed(2)) : null;
+    const totalMark = r2(ms.totalScore);
+    const insights  = buildLetterInsights({}, {}, totalMark);
+
+    const syntheticTrainee = { name: agentName };
+    renderTraineeLetter(syntheticTrainee, { lisMark: null, psMark: null, gaMark: null, mcMark: null, totalMark }, insights);
+    _currentReportData = { trainee: syntheticTrainee, marks: { lisMark: null, psMark: null, gaMark: null, mcMark: null, totalMark }, scores: {}, details: {} };
+
+    const tbody = $('report-sessions-tbody');
+    tbody.innerHTML = `<tr><td colspan="6" class="empty-state" style="color:var(--text-muted)">
+      Previous batch data — session recordings were not retained.<br>
+      <small>Total score: <strong>${totalMark ?? '—'} / 100</strong> (from master sheet)</small>
+    </td></tr>`;
   }
 
   function drawRadarChart(trainee, sessions, modAvgs) {
@@ -3668,26 +3823,46 @@ window.Admin = (() => {
   // ================================================================
   //  MANAGER → AGENT MAP  (28 managers, 326 agents from Excel)
   // ================================================================
-  const _MANAGER_AGENT_MAP = {"Shalini H S":["Manigandan","Swati Sharma","Himanshu Singh Rawat","Aldrich Frewin Dsouza","Surya Hendry","Mohd Altaf Bhutta","Ashish Yadav","Jayanthi Maniram","Tulsi Shankar Solanki","Adwait Keshavraj Gondkar","Javed Umar Masute"],"Sadique Raza":["Israel Jaisingh","Priya Singh","Rashid Firoz Ahmed Ansari","Salman Batliwala","Amit Sharma Rajeshwar","Naved Abdul Latif Qureshi","Vishal Shivsahay Singh","Shweta Anil Tiwari","Chitra Mulchand Raghani","Irfan Mustafa Shaikh","Pragya Agrawal"],"Vignesh Baliga":["Abdul Razak","Himanshu Narula","Ankit","Love Preet Singh","Shivanagoud Huvanagoud Ninganagoudar","Nivedita Mukherjee","Mohit Sharma","Avinash Bhagwanrao Pawde","Diksha U Rane","Prashant Tiwari","Vijay Kumar N","K G Saroj","Ayachi Mishra"],"Harish V":["Naveenkumar Ayyangoudar","Indranil Bose","Seema K S","D Karthik","Anupama H","Ankita Das","Stavan Bhardwaj","Ankit Raj","N S Sindhu","Shefali Tyagi"],"Sandhya N R":["Saneeth T S","Aditya Anil Korde","Shahrukh Shaikh","Gorak Vani","Rajat Gupta","Bhagesh paithankar","Akash Kumar Singh","Bhavna Deepak Porwal","Bana Gari Naresh Kumar","Sritam Prusty","Mahesh Mohan Prabhu"],"Shashin Birha":["Haritha K","Umang Jain","Rahul Ranjan Roy","Vansh Arora","Deepika S","Muthu Anusuya P","Aman Sharma","Vickey Sharma","Sahib Singh","M Sunny","Nishikant Tiwari","Chetan Patil"],"Ritesh S":["Nikhil V Durgude","Swetha A","Shruthi K B","Sachita G Harihar","Adnan Sahil S","Mohammed Jabeer Khan","Mutyala Dinesh","Heeral Sonagare","Aryaman M Math","Srusti Vishnukant Ladda","Maddu Vidya"],"Prabhu M R":["Ankit Gupta","Rohit Anand","Ashish Pandey","Devanand Harinarayan Gupta","Jerril Rajan","Jayanth Prasad B S","Arun P P","Sudhir Kumar Mishra"],"Priyanka Sahani":["Priyanshu Gupta","Vinayak Kini","Benjamin Anand Mitra","Namreen I Bombaywale","Deva Sahaya Rubia","Geetha Bhandari","Shaheen Ismail Dhaliet","Sourav Basotia","Pratik Poddar","Ashok Sunar","Anjali Gupta"],"Nandish S":["M Keshava Naik","Shankar Kumar","Alihussain Basha Hyatkhan","Suma Manjunath Tumbraguddi","Suresh Kumar Sahoo","Abhishek Tenginkai","Ambaldhage Vinay Kumar","Lilesh Bhaskar Sapaliga","Anand Jaiswal","Kamalpreet Kour"],"Roopashri S":["Ashish Thakur","B H Srinivas Pai","Sougata Das","Arun Kumar M","Rohit Basavaraj Uppin","Malay Pathak","Ananth Sai Sharma","Madhusudan R","Mrinal Sarkar","Apurva Tyagi","Anirudh","Dev","Deepak Kumar"],"Harish Bhat D":["Anchal Ratan Isaac","Irfan Pasha S","Akilkumar","Ashish Jyoti Bora","Koushik C","Tabassum Sharieff","Govind Goel","Neha Chugh","Anubhav Nepal","Sanjay S","Shashidhara L","Abhimanyu","Deepak B Nair","Shruti Jain","Joel K Joy"],"Pradeep Kumar V":["Anil kumara M","Sourabh Singha","Amit Khatri","Yadhu Raman","Premkumar Shivappa Kumbar","Prasidhi Kamal Rathi","Supriti Sinha","Sushree Sangita Santi","Syeda Tayaba","Soumya Das","Chandru B","Ankita Bharat Kabra"],"Ankit Singh":["Priyanka Singh","Bhanuprakash","Mohan Bhumayya Sabban","MD Tahur","Vaishali B","Shekhar Suman","Ranjitha K","Harsh Mahesh Upadhyay","Naheet Parwin","Bhagyashree","Jatin Sharma","Megham Sai Srinivas","Pawan Rajesh Bohra","Sakshi Suryakant Pawar","Vipul Devendra Manek"],"Harsha Kumar":["Vikram R","Nikhil Raveendran","Mahesh H","Charitha N","Subhashree Das","Nishant Pareek","Krupa N","Amrita Meher","Aryasomayajula Lakshmi Tejaswi","Renuka Devi C","Tapasi Gayen","Praveen Kumar J H","Raghu R","Rashmi Sachin Desai","Amritpal Singh","Rugved Sambhajirao Yadav"],"Munish Kumar":["Sweta Soni","Aswin Prasad","Nitesh Kumar","Neeti Toppo","Suman Adithya Rao","Vilas L","Venkatesh Barad","Simran Gabrial Masih","Vipul Jain","Dipanwita Saha","Sayantan Bhattacharyya","Ganesh T","Sweta Jugran","Chittimani Bhaviteja","Riya Goyal"],"Shweta":["Kumar M G","Ishan Dhadwal","K Prakash Rao","Akhil M A","Sharique Shahid Ansari","Shridhar","Shweta Chauhan","Ajmal Rahim","Jyoti Umesh Sulgekar","Ravishankar Mohan Cherukupalli","Tanish Kumar Sahoo","Jaideep Singh","Neethu Paulose","Arpitha L K","M Nikhil"],"Anoop Bharat Japtap":["Rajashekharayya Salimath","Nayan Hosur","Aditya Karnad","Ashwinkumar A Shet","Rohan Ajit Kokane","Amit Mahantesh Baligar","Vikas Koti","Adnan Parvezahmed Darga","Sujay Sanjeev Satpute","Amardeep Narayan Baswa","Ankush Ajay Chougule","Abdulsamad Riyazahmed Jamadar","Rakesh Guddadmani","Prajwal","Prathamesh Kakatikar D"],"Sharuq Fayaz Shaikh":["S Raju","Rakesh Naik","Shabaaz Babajan Shaikh","Yalleshi Mareppa Holennavar","Faisal Javed Shaikh","Nauseen Asif Nargund","Vaibhavi Vinod Balse","Nisha Shankar Kurubar","Anupam Premanand Vernekar","Vishal Vijay Chavan","Nitin Namdev Ningannavar","Uday Satish Devakar","Faizan Mohammed Ismail Rangrez","Shubham Oza","Rohit Rajeshkumar Patil","Nehal Ravindra Kallimani","Juned Peerjade","Wagesh Gopal Jadhav","Taha Shaikh","Shubham Sambhaji Bhadavankar"],"Viraj Raikar":["Mohammed Younus C A","Nikhil Subhash Chavan","Gautam Shah","Sneahaal Mulaawadmath","Saivishal Vinod Balse","Nitin Nagoji Chikke","Gajanan Ternikar","Nagaratna Mahantesh Marihal","Aaqib Beerwala","Nagesh Pednekar","Suraj Praveen Motimath","Amit Goudadi","Anuj Ajay Chougule"],"Nikita Sachin Desai":["Sumanth Kumar Sahu","Amulya K","Anup Sadanandan","Maya M Pillai","Rohan Jain","Mehul Harihar Dhande","Vivek Kumar Verma","Prathvik Saldanha","Jay Prakash Singh","Hunny","Ravikumar Mangilal Shah"],"Priyanka Dash":["Sadiya Banu","Sangeetha P","Regan Lobo","Sarfaraj Najeer Kudachee","Naman Prakash Awasthi","Prateek Manvi","Amar Vishwakarma","Shivanjali Kumari","M Vinod","Shaktiprasad Bentur","Vivek G K","Rakesh S Sankangoudar"],"Renuka Mishra":["Gonegondla Karanam Venkata Karthik","Adarsh Singh Gautam","Shalini Y S","Girish A","Saqlain Khalique Shaikh","M Kiran","Keyur P Shah","Aimen Nasardi"],"Basavaraj Gurav":["Shrikanth K","Srawani Deka Basumatary","Vishvajeet Singh","Harshvardhan Singh Rathore","Pratik P Bontra","Rajan Kiran Wagh","Vipul Prakash Sande"],"Ratanjeet Maharaj":["Roshan KM","Shashank Verma","Martin Davis","Shrutika Sumit Jain","Fiza Kouser","Tejas K Madeval","Khushpreet Kaur","Priyank Sharma"],"Gopi Kiran":["Masooma Yousuf","Nitin Tanajirao Pimpalpalle","S Mohammed Akhil","Ankit Agarwal","Murgendra Rajashekhar Patil","Sneha Shrikar","Mary Salins"],"Shwethayini":["Sridevi K V","Suman Janghel","Chandan Kumar","Rahul Kumar","Ravi Kumar Deo","Vishal Bhattar","Rohini Kumari","Uma Bohra","Nikhil Murlidhar Bhatkar"],"Swanand Dixit":["Deepanshi Lalwani","Roshni","Mayank Lodha","Alamgir Haque","Karthik R","Sachinkumar Ghanti B","Bharat Halagalimath"]};
+  const _MANAGER_AGENT_MAP = {"Shalini H S":["Manigandan","Swati Sharma","Himanshu Singh Rawat","Aldrich Frewin Dsouza","Surya Hendry","Mohd Altaf Bhutta","Ashish Yadav","Jayanthi Maniram","Tulsi Shankar Solanki","Adwait Keshavraj Gondkar","Javed Umar Masute"],"Sadique Raza":["Israel Jaisingh","Priya Singh","Rashid Firoz Ahmed Ansari","Salman Batliwala","Amit Sharma Rajeshwar","Naved Abdul Latif Qureshi","Vishal Shivsahay Singh","Shweta Anil Tiwari","Chitra Mulchand Raghani","Irfan Mustafa Shaikh","Pragya Agrawal"],"Vignesh Baliga":["Abdul Razak","Himanshu Narula","Ankit","Love Preet Singh","Shivanagoud Huvanagoud Ninganagoudar","Nivedita Mukherjee","Mohit Sharma","Avinash Bhagwanrao Pawde","Diksha U Rane","Prashant Tiwari","Vijay Kumar N","K G Saroj","Ayachi Mishra"],"Harish V":["Naveenkumar Ayyangoudar","Indranil Bose","Seema K S","D Karthik","Anupama H","Ankita Das","Stavan Bhardwaj","Ankit Raj","N S Sindhu","Shefali Tyagi"],"Sandhya N R":["Saneeth T S","Aditya Anil Korde","Shahrukh Shaikh","Gorak Vani","Rajat Gupta","Bhagesh paithankar","Akash Kumar Singh","Bhavna Deepak Porwal","Bana Gari Naresh Kumar","Sritam Prusty","Mahesh Mohan Prabhu"],"Shashin Birha":["Haritha K","Umang Jain","Rahul Ranjan Roy","Vansh Arora","Deepika S","Muthu Anusuya P","Aman Sharma","Vickey Sharma","Sahib Singh","M Sunny","Nishikant Tiwari","Chetan Patil"],"Ritesh S":["Nikhil V Durgude","Swetha A","Shruthi K B","Sachita G Harihar","Adnan Sahil S","Mohammed Jabeer Khan","Mutyala Dinesh","Aryaman M Math","Srusti Vishnukant Ladda","Maddu Vidya"],"Prabhu M R":["Ankit Gupta","Rohit Anand","Ashish Pandey","Devanand Harinarayan Gupta","Jerril Rajan","Jayanth Prasad B S","Arun P P","Sudhir Kumar Mishra"],"Priyanka Sahani":["Priyanshu Gupta","Vinayak Kini","Benjamin Anand Mitra","Namreen I Bombaywale","Deva Sahaya Rubia","Geetha Bhandari","Shaheen Ismail Dhaliet","Sourav Basotia","Pratik Poddar","Ashok Sunar","Anjali Gupta"],"Nandish S":["M Keshava Naik","Shankar Kumar","Alihussain Basha Hyatkhan","Heeral Sonagare","Suma Manjunath Tumbraguddi","Suresh Kumar Sahoo","Abhishek Tenginkai","Ambaldhage Vinay Kumar","Lilesh Bhaskar Sapaliga","Anand Jaiswal","Kamalpreet Kour"],"Roopashri S":["Ashish Thakur","B H Srinivas Pai","Sougata Das","Arun Kumar M","Rohit Basavaraj Uppin","Malay Pathak","Ananth Sai Sharma","Madhusudan R","Mrinal Sarkar","Apurva Tyagi","Anirudh","Dev","Deepak Kumar"],"Harish Bhat D":["Anchal Ratan Isaac","Irfan Pasha S","Akilkumar","Ashish Jyoti Bora","Koushik C","Tabassum Sharieff","Govind Goel","Neha Chugh","Anubhav Nepal","Sanjay S","Shashidhara L","Abhimanyu","Deepak B Nair","Shruti Jain","Joel K Joy"],"Pradeep Kumar V":["Anil kumara M","Sourabh Singha","Amit Khatri","Yadhu Raman","Premkumar Shivappa Kumbar","Prasidhi Kamal Rathi","Supriti Sinha","Sushree Sangita Santi","Syeda Tayaba","Soumya Das","Chandru B","Ankita Bharat Kabra"],"Ankit Singh":["Priyanka Singh","Bhanuprakash","Mohan Bhumayya Sabban","MD Tahur","Vaishali B","Shekhar Suman","Ranjitha K","Harsh Mahesh Upadhyay","Naheet Parwin","Bhagyashree","Jatin Sharma","Megham Sai Srinivas","Pawan Rajesh Bohra","Sakshi Suryakant Pawar","Vipul Devendra Manek"],"Harsha Kumar":["Vikram R","Nikhil Raveendran","Mahesh H","Charitha N","Subhashree Das","Nishant Pareek","Krupa N","Amrita Meher","Aryasomayajula Lakshmi Tejaswi","Renuka Devi C","Tapasi Gayen","Praveen Kumar J H","Raghu R","Rashmi Sachin Desai","Amritpal Singh","Rugved Sambhajirao Yadav"],"Munish Kumar":["Sweta Soni","Aswin Prasad","Nitesh Kumar","Neeti Toppo","Suman Adithya Rao","Vilas L","Venkatesh Barad","Simran Gabrial Masih","Vipul Jain","Dipanwita Saha","Sayantan Bhattacharyya","Ganesh T","Sweta Jugran","Chittimani Bhaviteja","Riya Goyal"],"Shweta":["Kumar M G","Ishan Dhadwal","K Prakash Rao","Akhil M A","Sharique Shahid Ansari","Shridhar","Shweta Chauhan","Ajmal Rahim","Jyoti Umesh Sulgekar","Ravishankar Mohan Cherukupalli","Tanish Kumar Sahoo","Jaideep Singh","Neethu Paulose","Arpitha L K","M Nikhil"],"Anoop Bharat Japtap":["Rajashekharayya Salimath","Nayan Hosur","Aditya Karnad","Ashwinkumar A Shet","Rohan Ajit Kokane","Amit Mahantesh Baligar","Vikas Koti","Adnan Parvezahmed Darga","Sujay Sanjeev Satpute","Amardeep Narayan Baswa","Ankush Ajay Chougule","Abdulsamad Riyazahmed Jamadar","Rakesh Guddadmani","Prajwal","Prathamesh Kakatikar D"],"Sharuq Fayaz Shaikh":["S Raju","Rakesh Naik","Shabaaz Babajan Shaikh","Yalleshi Mareppa Holennavar","Faisal Javed Shaikh","Nauseen Asif Nargund","Vaibhavi Vinod Balse","Nisha Shankar Kurubar","Anupam Premanand Vernekar","Vishal Vijay Chavan","Nitin Namdev Ningannavar","Uday Satish Devakar","Faizan Mohammed Ismail Rangrez","Shubham Oza","Rohit Rajeshkumar Patil","Nehal Ravindra Kallimani","Juned Peerjade","Wagesh Gopal Jadhav","Taha Shaikh","Shubham Sambhaji Bhadavankar"],"Viraj Raikar":["Mohammed Younus C A","Nikhil Subhash Chavan","Gautam Shah","Sneahaal Mulaawadmath","Saivishal Vinod Balse","Nitin Nagoji Chikke","Gajanan Ternikar","Nagaratna Mahantesh Marihal","Aaqib Beerwala","Nagesh Pednekar","Suraj Praveen Motimath","Amit Goudadi","Anuj Ajay Chougule"],"Nikita Sachin Desai":["Sumanth Kumar Sahu","Amulya K","Anup Sadanandan","Maya M Pillai","Rohan Jain","Mehul Harihar Dhande","Vivek Kumar Verma","Prathvik Saldanha","Jay Prakash Singh","Hunny","Ravikumar Mangilal Shah"],"Priyanka Dash":["Sadiya Banu","Sangeetha P","Regan Lobo","Sarfaraj Najeer Kudachee","Naman Prakash Awasthi","Prateek Manvi","Amar Vishwakarma","Shivanjali Kumari","M Vinod","Shaktiprasad Bentur","Vivek G K","Rakesh S Sankangoudar"],"Renuka Mishra":["Gonegondla Karanam Venkata Karthik","Adarsh Singh Gautam","Shalini Y S","Girish A","Saqlain Khalique Shaikh","M Kiran","Keyur P Shah","Aimen Nasardi"],"Basavaraj Gurav":["Shrikanth K","Srawani Deka Basumatary","Vishvajeet Singh","Harshvardhan Singh Rathore","Pratik P Bontra","Rajan Kiran Wagh","Vipul Prakash Sande"],"Ratanjeet Maharaj":["Roshan KM","Shashank Verma","Martin Davis","Shrutika Sumit Jain","Fiza Kouser","Tejas K Madeval","Khushpreet Kaur","Priyank Sharma"],"Gopi Kiran":["Masooma Yousuf","Nitin Tanajirao Pimpalpalle","S Mohammed Akhil","Ankit Agarwal","Murgendra Rajashekhar Patil","Sneha Shrikar","Mary Salins"],"Shwethayini":["Sridevi K V","Suman Janghel","Chandan Kumar","Rahul Kumar","Ravi Kumar Deo","Vishal Bhattar","Rohini Kumari","Uma Bohra","Nikhil Murlidhar Bhatkar"],"Swanand Dixit":["Deepanshi Lalwani","Roshni","Mayank Lodha","Alamgir Haque","Karthik R","Sachinkumar Ghanti B","Bharat Halagalimath"]};
 
   // Reverse index: agentName.toLowerCase() → managerName (built lazily)
+  // Alias variants (e.g. "naveenkumar") are baked in at build time so lookups are direct O(1) hits.
   function _buildAgentManagerIndex() {
     const idx = {};
+    const alnum = s => s.replace(/[^a-z0-9]/g, '');
+
+    // Primary: all canonical names from the map
     for (const [mgr, agents] of Object.entries(_MANAGER_AGENT_MAP)) {
       for (const agent of agents) {
-        idx[agent.toLowerCase()] = mgr;
+        const k = agent.toLowerCase();
+        idx[k] = mgr;
+        idx[k.replace(/\s+/g, '')] = mgr;   // compact variant
+        idx[alnum(k)]               = mgr;   // alnum variant
+      }
+    }
+
+    // Aliases: bake every DB-name variant directly into the index
+    for (const [aliasLower, canonical] of Object.entries(_TRAINEE_ALIASES)) {
+      const canonicalKey = canonical.toLowerCase();
+      const mgr = idx[canonicalKey] || idx[canonicalKey.replace(/\s+/g,'')] || idx[alnum(canonicalKey)];
+      if (mgr) {
+        idx[aliasLower] = mgr;
+        idx[aliasLower.replace(/\s+/g, '')] = mgr;
+        idx[alnum(aliasLower)]               = mgr;
       }
     }
     return idx;
   }
+
   function _getAgentManager(name) {
     if (!_agentManagerIndex) _agentManagerIndex = _buildAgentManagerIndex();
     if (!name) return null;
-    const key = name.trim().toLowerCase();
-    if (_agentManagerIndex[key]) return _agentManagerIndex[key];
-    // Collapse whitespace: "KG Saroj" → "kgsaroj" matches "k g saroj" → "kgsaroj"
-    const compact = key.replace(/\s+/g, '');
-    return Object.entries(_agentManagerIndex).find(([k]) => k.replace(/\s+/g, '') === compact)?.[1] || null;
+    const key   = name.trim().toLowerCase();
+    const alnum = s => s.replace(/[^a-z0-9]/g, '');
+    return _agentManagerIndex[key]
+        || _agentManagerIndex[key.replace(/\s+/g, '')]
+        || _agentManagerIndex[alnum(key)]
+        || null;
   }
 
   // ================================================================
