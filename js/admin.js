@@ -1,103 +1,107 @@
 'use strict';
 
-// ── Master score lookup — Source: "Master total (1).xlsx" ──
-// Col Q (Self Assessment Score) + Col R (AI Audit Score) + Col W (Grand Total, all components)
-// Grand Total (W) = Self Assess + AI Audit + P&S + Listening + Mock Call + Grammar (all weighted)
-// v34: alias names baked into _agentManagerIndex at build time; simplified drill-in filter
-// totalScore is used directly as the report total; selfAssessment+aiAudit kept for reference.
-// Matched case-insensitively by trainee name. Returns null if not found.
+// ── Master score lookup — Source: "Communicate 360 Master Sheet (1).xlsx" ──
+// selfAssessment / aiAudit = weighted component scores
+// psScore=Pick&Speak/20, lisScore=Listening/20, mcScore=MockCall/20, gramScore=Grammar/25
+// totalScore = grand total out of 100 (all components weighted and summed)
+// v35: added individual module scores + 2 new aliases (suma manjunath, saneeth)
 const MASTER_SCORES = {
-  "abdul razak":                     { selfAssessment: 9.243,  aiAudit: 3.945,  totalScore: 57.65 },
-  "love preet singh":                { selfAssessment: 7.892,  aiAudit: 3.705,  totalScore: 43.97 },
-  "mohit sharma":                    { selfAssessment: 8.324,  aiAudit: 4.005,  totalScore: 56.01 },
-  "avinash bhagwanrao pawde":        { selfAssessment: 6.541,  aiAudit: 3.665,  totalScore: 56.94 },
-  "vijay kumar n":                   { selfAssessment: 7.459,  aiAudit: 3.765,  totalScore: 54.16 },
-  "k g saroj":                       { selfAssessment: 6.541,  aiAudit: 3.825,  totalScore: 63.23 },
-  "ayachi mishra":                   { selfAssessment: 8.703,  aiAudit: 3.885,  totalScore: 64.11 },
-  "naveenkumar ayyangoudar":         { selfAssessment: 7.459,  aiAudit: 3.945,  totalScore: 55.03 },
-  "indranil bose":                   { selfAssessment: 8.649,  aiAudit: 3.965,  totalScore: 67.00 },
-  "seema k s":                       { selfAssessment: 9.351,  aiAudit: 4.020,  totalScore: 55.58 },
-  "d karthik":                       { selfAssessment: 9.405,  aiAudit: 3.810,  totalScore: 63.94 },
-  "anupama h":                       { selfAssessment: 9.514,  aiAudit: 4.005,  totalScore: 66.76 },
-  "stavan bhardwaj":                 { selfAssessment: 9.189,  aiAudit: 4.140,  totalScore: 72.49 },
-  "n s sindhu":                      { selfAssessment: 8.865,  aiAudit: 3.855,  totalScore: 57.40 },
-  "shefali tyagi":                   { selfAssessment: 18.500, aiAudit: 3.725,  totalScore: 71.52 },
-  "saneeth t s":                     { selfAssessment: 0.000,  aiAudit: 0.000,  totalScore: 48.31 },
-  "akash kumar singh":               { selfAssessment: 16.000, aiAudit: 3.905,  totalScore: 62.92 },
-  "nikhil v durgude":                { selfAssessment: 9.459,  aiAudit: 3.920,  totalScore: 55.01 },
-  "swetha a":                        { selfAssessment: 9.946,  aiAudit: 3.715,  totalScore: 53.33 },
-  "shruthi k b":                     { selfAssessment: 9.297,  aiAudit: 3.975,  totalScore: 41.39 },
-  "sachita g harihar":               { selfAssessment: 9.676,  aiAudit: 3.770,  totalScore: 60.14 },
-  "adnan sahil s":                   { selfAssessment: 9.568,  aiAudit: 4.100,  totalScore: 68.91 },
-  "mohammed jabeer khan":            { selfAssessment: 9.784,  aiAudit: 3.930,  totalScore: 57.13 },
-  "heeral sonagare":                 { selfAssessment: 7.568,  aiAudit: 3.720,  totalScore: 59.65 },
-  "aryaman m math":                  { selfAssessment: 7.027,  aiAudit: 3.605,  totalScore: 64.29 },
-  "srusti vishnukant ladda":         { selfAssessment: 9.730,  aiAudit: 3.910,  totalScore: 66.22 },
-  "m keshava naik":                  { selfAssessment: 9.189,  aiAudit: 3.845,  totalScore: 54.84 },
-  "shankar kumar":                   { selfAssessment: 8.054,  aiAudit: 3.705,  totalScore: 51.77 },
-  "alihussain basha hyatkhan":       { selfAssessment: 7.622,  aiAudit: 3.925,  totalScore: 54.40 },
-  "suma manjunath tumbraguddi":      { selfAssessment: 9.081,  aiAudit: 3.965,  totalScore: 51.57 },
-  "abhishek tenginkai":              { selfAssessment: 8.000,  aiAudit: 3.580,  totalScore: 56.44 },
-  "ambaldhage vinay kumar":          { selfAssessment: 7.351,  aiAudit: 4.080,  totalScore: 56.25 },
-  "lilesh bhaskar sapaliga":         { selfAssessment: 9.514,  aiAudit: 3.795,  totalScore: 68.03 },
-  "anand jaiswal":                   { selfAssessment: 8.432,  aiAudit: 3.765,  totalScore: 52.81 },
-  // Shalini H S
-  "manigandan":                      { selfAssessment: 7.027,  aiAudit: 3.910,  totalScore: 57.48 },
-  "swati sharma":                    { selfAssessment: 8.108,  aiAudit: 3.870,  totalScore: 63.43 },
-  "himanshu singh rawat":            { selfAssessment: 9.081,  aiAudit: 3.865,  totalScore: 57.26 },
-  "aldrich frewin dsouza":           { selfAssessment: 8.649,  aiAudit: 3.800,  totalScore: 12.45 },
-  "surya hendry":                    { selfAssessment: 8.324,  aiAudit: 0.360,  totalScore: 56.98 },
-  "mohd altaf bhutta":               { selfAssessment: 7.297,  aiAudit: 3.945,  totalScore: 11.24 },
-  "ashish yadav":                    { selfAssessment: 7.297,  aiAudit: 3.890,  totalScore: 59.96 },
-  "jayanthi maniram":                { selfAssessment: 7.676,  aiAudit: 3.965,  totalScore: 54.00 },
-  "tulsi shankar solanki":           { selfAssessment: 8.973,  aiAudit: 3.925,  totalScore: 62.70 },
-  "adwait keshavraj gondkar":        { selfAssessment: 6.757,  aiAudit: 4.050,  totalScore: 65.65 },
-  "javed umar masute":               { selfAssessment: 7.622,  aiAudit: 4.060,  totalScore: 49.73 },
-  // Sandhya N R (additional agents)
-  "aditya anil korde":               { selfAssessment: 15.800, aiAudit: 3.805,  totalScore: 66.84 },
-  "shahrukh shaikh":                 { selfAssessment: 14.700, aiAudit: 3.885,  totalScore: 58.05 },
-  "gorak vani":                      { selfAssessment: 14.400, aiAudit: 3.710,  totalScore: 18.11 },
-  "rajat gupta":                     { selfAssessment: 15.400, aiAudit: 3.760,  totalScore: 66.86 },
-  "bhagesh paithankar":              { selfAssessment: 14.100, aiAudit: 3.690,  totalScore: 64.54 },
-  "bhavna deepak porwal":            { selfAssessment: 8.800,  aiAudit: 3.685,  totalScore: 62.28 },
-  "bana gari naresh kumar":          { selfAssessment: 15.900, aiAudit: 3.660,  totalScore: 61.56 },
-  "mahesh mohan prabhu":             { selfAssessment: 13.900, aiAudit: 3.940,  totalScore: 71.98 },
-  // Shashin Birha
-  "haritha k":                       { selfAssessment: 9.081,  aiAudit: 4.100,  totalScore: 60.53 },
-  "umang jain":                      { selfAssessment: 8.973,  aiAudit: 3.920,  totalScore: 65.85 },
-  "rahul ranjan roy":                { selfAssessment: 8.270,  aiAudit: 3.970,  totalScore: 60.84 },
-  "vansh arora":                     { selfAssessment: 8.486,  aiAudit: 3.895,  totalScore: 57.30 },
-  "deepika s":                       { selfAssessment: 9.027,  aiAudit: 3.825,  totalScore: 65.65 },
-  "muthu anusuya p":                 { selfAssessment: 7.730,  aiAudit: 3.660,  totalScore: 57.55 },
-  "aman sharma":                     { selfAssessment: 8.162,  aiAudit: 3.585,  totalScore: 57.19 },
-  "vickey sharma":                   { selfAssessment: 8.541,  aiAudit: 4.030,  totalScore: 59.38 },
-  "sahib singh":                     { selfAssessment: 8.973,  aiAudit: 3.860,  totalScore: 51.56 },
-  "m sunny":                         { selfAssessment: 8.486,  aiAudit: 3.890,  totalScore: 54.19 },
-  "nishikant tiwari":                { selfAssessment: 8.432,  aiAudit: 3.855,  totalScore: 58.96 },
-  "chetan patil":                    { selfAssessment: 8.703,  aiAudit: 3.980,  totalScore: 63.73 },
-  // Priyanka Sahani
-  "priyanshu gupta":                 { selfAssessment: 8.649,  aiAudit: 4.020,  totalScore: 12.67 },
-  "vinayak kini":                    { selfAssessment: 9.568,  aiAudit: 3.930,  totalScore: 57.65 },
-  "benjamin anand mitra":            { selfAssessment: 6.216,  aiAudit: 3.980,  totalScore: 66.08 },
-  "namreen i bombaywale":            { selfAssessment: 7.676,  aiAudit: 3.820,  totalScore: 11.50 },
-  "deva sahaya rubia":               { selfAssessment: 8.595,  aiAudit: 4.080,  totalScore: 72.42 },
-  "geetha bhandari":                 { selfAssessment: 9.243,  aiAudit: 3.900,  totalScore: 51.01 },
-  "shaheen ismail dhaliet":          { selfAssessment: 8.919,  aiAudit: 3.910,  totalScore: 59.05 },
-  "sourav basotia":                  { selfAssessment: 8.595,  aiAudit: 3.775,  totalScore: 12.37 },
-  "pratik poddar":                   { selfAssessment: 8.541,  aiAudit: 3.820,  totalScore: 12.36 },
-  "ashok sunar":                     { selfAssessment: 8.432,  aiAudit: 3.960,  totalScore: 62.08 },
-  "anjali gupta":                    { selfAssessment: 8.432,  aiAudit: 3.735,  totalScore: 12.17 },
-  // Roopashri S
-  "ashish thakur":                   { selfAssessment: 8.595,  aiAudit: 3.910,  totalScore: 59.20 },
-  "sougata das":                     { selfAssessment: 7.027,  aiAudit: 3.900,  totalScore: 66.34 },
-  "arun kumar m":                    { selfAssessment: 8.757,  aiAudit: 3.935,  totalScore: 59.51 },
-  "malay pathak":                    { selfAssessment: 8.378,  aiAudit: 4.875,  totalScore: 68.64 },
-  "ananth sai sharma":               { selfAssessment: 8.054,  aiAudit: 3.825,  totalScore: 58.65 },
-  "mrinal sarkar":                   { selfAssessment: 8.811,  aiAudit: 3.970,  totalScore: 69.88 },
-  "apurva tyagi":                    { selfAssessment: 8.973,  aiAudit: 3.290,  totalScore: 12.26 },
-  "anirudh":                         { selfAssessment: 0.000,  aiAudit: 0.000,  totalScore: 57.45 },
-  "dev":                             { selfAssessment: 0.000,  aiAudit: 0.000,  totalScore: 47.88 },
-  "deepak kumar":                    { selfAssessment: 8.432,  aiAudit: 3.270,  totalScore: 55.85 }
+  // ── Vignesh Baliga ──
+  "abdul razak":                     { selfAssessment: 9.243,  aiAudit: 3.945,  psScore: 12.68, lisScore: 16.20, mcScore:  8.58, gramScore:  7.00, totalScore: 57.65 },
+  "love preet singh":                { selfAssessment: 7.892,  aiAudit: 3.705,  psScore: 11.72, lisScore: 14.40, mcScore:  null, gramScore:  6.25, totalScore: 43.97 },
+  "mohit sharma":                    { selfAssessment: 8.324,  aiAudit: 4.005,  psScore: 12.00, lisScore: 15.60, mcScore:  8.58, gramScore:  7.50, totalScore: 56.01 },
+  "avinash bhagwanrao pawde":        { selfAssessment: 6.541,  aiAudit: 3.665,  psScore: 13.34, lisScore: 14.00, mcScore:  9.14, gramScore: 10.25, totalScore: 56.94 },
+  "vijay kumar n":                   { selfAssessment: 7.459,  aiAudit: 3.765,  psScore: 12.10, lisScore: 14.20, mcScore:  9.14, gramScore:  7.50, totalScore: 54.16 },
+  "k g saroj":                       { selfAssessment: 6.541,  aiAudit: 3.825,  psScore: 12.78, lisScore: 17.00, mcScore:  8.58, gramScore: 14.50, totalScore: 63.23 },
+  "ayachi mishra":                   { selfAssessment: 8.703,  aiAudit: 3.885,  psScore: 11.30, lisScore: 17.00, mcScore:  9.72, gramScore: 13.50, totalScore: 64.11 },
+  // ── Harish V ──
+  "naveenkumar ayyangoudar":         { selfAssessment: 7.459,  aiAudit: 3.945,  psScore: 11.92, lisScore: 12.80, mcScore:  8.66, gramScore: 10.25, totalScore: 55.03 },
+  "indranil bose":                   { selfAssessment: 8.649,  aiAudit: 3.965,  psScore: 14.74, lisScore: 16.40, mcScore: 12.00, gramScore: 11.25, totalScore: 67.00 },
+  "seema k s":                       { selfAssessment: 9.351,  aiAudit: 4.020,  psScore: 11.46, lisScore: 13.00, mcScore: 10.00, gramScore:  7.75, totalScore: 55.58 },
+  "d karthik":                       { selfAssessment: 9.405,  aiAudit: 3.810,  psScore: 13.66, lisScore: 17.40, mcScore:  6.66, gramScore: 13.00, totalScore: 63.94 },
+  "anupama h":                       { selfAssessment: 9.514,  aiAudit: 4.005,  psScore: 11.74, lisScore: 17.00, mcScore: 12.00, gramScore: 12.50, totalScore: 66.76 },
+  "stavan bhardwaj":                 { selfAssessment: 9.189,  aiAudit: 4.140,  psScore: 14.00, lisScore: 19.00, mcScore: 10.66, gramScore: 15.50, totalScore: 72.49 },
+  "n s sindhu":                      { selfAssessment: 8.865,  aiAudit: 3.855,  psScore: 12.84, lisScore: 15.00, mcScore: 11.34, gramScore:  5.50, totalScore: 57.40 },
+  "shefali tyagi":                   { selfAssessment: 18.500, aiAudit: 3.725,  psScore: 11.20, lisScore: 16.00, mcScore: 11.34, gramScore: 10.75, totalScore: 71.52 },
+  // ── Sandhya N R ──
+  "saneeth t s":                     { selfAssessment: 0.000,  aiAudit: 0.000,  psScore: 11.68, lisScore: 12.60, mcScore: 10.28, gramScore: 13.75, totalScore: 48.31 },
+  "akash kumar singh":               { selfAssessment: 16.000, aiAudit: 3.905,  psScore: 11.60, lisScore: 12.20, mcScore:  9.72, gramScore:  9.50, totalScore: 62.92 },
+  // ── Ritesh S ──
+  "nikhil v durgude":                { selfAssessment: 9.459,  aiAudit: 3.920,  psScore: 12.52, lisScore: 12.20, mcScore:  8.66, gramScore:  8.25, totalScore: 55.01 },
+  "swetha a":                        { selfAssessment: 9.946,  aiAudit: 3.715,  psScore: 12.52, lisScore: 12.40, mcScore: 10.00, gramScore:  4.75, totalScore: 53.33 },
+  "shruthi k b":                     { selfAssessment: 9.297,  aiAudit: 3.975,  psScore: 10.28, lisScore:  null, mcScore:  9.34, gramScore:  8.50, totalScore: 41.39 },
+  "sachita g harihar":               { selfAssessment: 9.676,  aiAudit: 3.770,  psScore: 13.20, lisScore: 15.40, mcScore:  9.34, gramScore:  8.75, totalScore: 60.14 },
+  "adnan sahil s":                   { selfAssessment: 9.568,  aiAudit: 4.100,  psScore: 14.00, lisScore: 17.40, mcScore:  9.34, gramScore: 14.50, totalScore: 68.91 },
+  "mohammed jabeer khan":            { selfAssessment: 9.784,  aiAudit: 3.930,  psScore: 10.68, lisScore: 16.40, mcScore:  9.34, gramScore:  7.00, totalScore: 57.13 },
+  "heeral sonagare":                 { selfAssessment: 7.568,  aiAudit: 3.720,  psScore: 11.42, lisScore: 14.60, mcScore: 11.34, gramScore: 11.00, totalScore: 59.65 },
+  "aryaman m math":                  { selfAssessment: 7.027,  aiAudit: 3.605,  psScore: 14.26, lisScore: 16.40, mcScore: 10.00, gramScore: 13.00, totalScore: 64.29 },
+  "srusti vishnukant ladda":         { selfAssessment: 9.730,  aiAudit: 3.910,  psScore: 11.88, lisScore: 17.40, mcScore:  8.80, gramScore: 14.50, totalScore: 66.22 },
+  // ── Nandish S ──
+  "m keshava naik":                  { selfAssessment: 9.189,  aiAudit: 3.845,  psScore: 12.52, lisScore: 13.40, mcScore:  9.14, gramScore:  6.75, totalScore: 54.84 },
+  "shankar kumar":                   { selfAssessment: 8.054,  aiAudit: 3.705,  psScore:  8.92, lisScore: 14.20, mcScore:  9.14, gramScore:  7.75, totalScore: 51.77 },
+  "alihussain basha hyatkhan":       { selfAssessment: 7.622,  aiAudit: 3.925,  psScore: 10.52, lisScore: 12.80, mcScore: 10.28, gramScore:  9.25, totalScore: 54.40 },
+  "suma manjunath tumbraguddi":      { selfAssessment: 9.081,  aiAudit: 3.965,  psScore: 10.40, lisScore: 14.20, mcScore:  7.42, gramScore:  6.50, totalScore: 51.57 },
+  "abhishek tenginkai":              { selfAssessment: 8.000,  aiAudit: 3.580,  psScore: 10.66, lisScore: 11.20, mcScore: 12.00, gramScore: 11.00, totalScore: 56.44 },
+  "ambaldhage vinay kumar":          { selfAssessment: 7.351,  aiAudit: 4.080,  psScore:  9.48, lisScore: 15.20, mcScore:  9.14, gramScore: 11.00, totalScore: 56.25 },
+  "lilesh bhaskar sapaliga":         { selfAssessment: 9.514,  aiAudit: 3.795,  psScore: 10.68, lisScore: 17.20, mcScore: 11.34, gramScore: 15.50, totalScore: 68.03 },
+  "anand jaiswal":                   { selfAssessment: 8.432,  aiAudit: 3.765,  psScore:  8.66, lisScore: 12.20, mcScore: 12.00, gramScore:  7.75, totalScore: 52.81 },
+  // ── Shalini H S ──
+  "manigandan":                      { selfAssessment: 7.027,  aiAudit: 3.910,  psScore: 14.14, lisScore: 14.40, mcScore:  9.00, gramScore:  9.00, totalScore: 57.48 },
+  "swati sharma":                    { selfAssessment: 8.108,  aiAudit: 3.870,  psScore: 14.80, lisScore: 17.40, mcScore:  7.50, gramScore: 11.75, totalScore: 63.43 },
+  "himanshu singh rawat":            { selfAssessment: 9.081,  aiAudit: 3.865,  psScore:  9.86, lisScore: 14.20, mcScore: 11.00, gramScore:  9.25, totalScore: 57.26 },
+  "aldrich frewin dsouza":           { selfAssessment: 8.649,  aiAudit: 3.800,  psScore:  null, lisScore:  null, mcScore:  null, gramScore:  null, totalScore: 12.45 },
+  "surya hendry":                    { selfAssessment: 8.324,  aiAudit: 0.360,  psScore: 14.00, lisScore: 13.80, mcScore: 11.00, gramScore:  9.50, totalScore: 56.98 },
+  "mohd altaf bhutta":               { selfAssessment: 7.297,  aiAudit: 3.945,  psScore:  null, lisScore:  null, mcScore:  null, gramScore:  null, totalScore: 11.24 },
+  "ashish yadav":                    { selfAssessment: 7.297,  aiAudit: 3.890,  psScore: 12.67, lisScore: 15.60, mcScore: 10.50, gramScore: 10.00, totalScore: 59.96 },
+  "jayanthi maniram":                { selfAssessment: 7.676,  aiAudit: 3.965,  psScore: 12.66, lisScore: 14.20, mcScore:  8.50, gramScore:  7.00, totalScore: 54.00 },
+  "tulsi shankar solanki":           { selfAssessment: 8.973,  aiAudit: 3.925,  psScore: 11.20, lisScore: 16.60, mcScore: 12.00, gramScore: 10.00, totalScore: 62.70 },
+  "adwait keshavraj gondkar":        { selfAssessment: 6.757,  aiAudit: 4.050,  psScore: 13.34, lisScore: 15.00, mcScore: 11.00, gramScore: 15.50, totalScore: 65.65 },
+  "javed umar masute":               { selfAssessment: 7.622,  aiAudit: 4.060,  psScore:  9.60, lisScore: 12.20, mcScore: 10.00, gramScore:  6.25, totalScore: 49.73 },
+  // ── Sandhya N R (additional agents) ──
+  "aditya anil korde":               { selfAssessment: 15.800, aiAudit: 3.805,  psScore: 13.44, lisScore: 13.80, mcScore: 10.50, gramScore:  9.50, totalScore: 66.84 },
+  "shahrukh shaikh":                 { selfAssessment: 14.700, aiAudit: 3.885,  psScore: 10.67, lisScore: 12.80, mcScore:  8.00, gramScore:  8.00, totalScore: 58.05 },
+  "gorak vani":                      { selfAssessment: 14.400, aiAudit: 3.710,  psScore:  null, lisScore:  null, mcScore:  null, gramScore:  null, totalScore: 18.11 },
+  "rajat gupta":                     { selfAssessment: 15.400, aiAudit: 3.760,  psScore: 14.00, lisScore: 14.20, mcScore: 11.50, gramScore:  8.00, totalScore: 66.86 },
+  "bhagesh paithankar":              { selfAssessment: 14.100, aiAudit: 3.690,  psScore: 12.00, lisScore: 15.00, mcScore: 12.50, gramScore:  7.25, totalScore: 64.54 },
+  "bhavna deepak porwal":            { selfAssessment: 8.800,  aiAudit: 3.685,  psScore: 14.40, lisScore: 13.40, mcScore: 10.00, gramScore: 12.00, totalScore: 62.28 },
+  "bana gari naresh kumar":          { selfAssessment: 15.900, aiAudit: 3.660,  psScore: 13.20, lisScore: 11.80, mcScore: 11.00, gramScore:  6.00, totalScore: 61.56 },
+  "mahesh mohan prabhu":             { selfAssessment: 13.900, aiAudit: 3.940,  psScore: 11.60, lisScore: 16.00, mcScore: 10.54, gramScore: 16.00, totalScore: 71.98 },
+  // ── Shashin Birha ──
+  "haritha k":                       { selfAssessment: 9.081,  aiAudit: 4.100,  psScore: 14.34, lisScore: 14.60, mcScore: 10.66, gramScore:  7.75, totalScore: 60.53 },
+  "umang jain":                      { selfAssessment: 8.973,  aiAudit: 3.920,  psScore: 14.00, lisScore: 15.80, mcScore: 10.66, gramScore: 12.50, totalScore: 65.85 },
+  "rahul ranjan roy":                { selfAssessment: 8.270,  aiAudit: 3.970,  psScore: 14.00, lisScore: 15.80, mcScore:  8.80, gramScore: 10.00, totalScore: 60.84 },
+  "vansh arora":                     { selfAssessment: 8.486,  aiAudit: 3.895,  psScore: 12.66, lisScore: 14.60, mcScore:  8.66, gramScore:  9.00, totalScore: 57.30 },
+  "deepika s":                       { selfAssessment: 9.027,  aiAudit: 3.825,  psScore: 14.40, lisScore: 16.40, mcScore: 12.50, gramScore:  9.50, totalScore: 65.65 },
+  "muthu anusuya p":                 { selfAssessment: 7.730,  aiAudit: 3.660,  psScore: 10.66, lisScore: 15.00, mcScore:  8.00, gramScore: 12.50, totalScore: 57.55 },
+  "aman sharma":                     { selfAssessment: 8.162,  aiAudit: 3.585,  psScore: 12.54, lisScore: 12.40, mcScore:  8.50, gramScore: 12.00, totalScore: 57.19 },
+  "vickey sharma":                   { selfAssessment: 8.541,  aiAudit: 4.030,  psScore: 11.66, lisScore: 16.40, mcScore:  8.00, gramScore: 10.75, totalScore: 59.38 },
+  "sahib singh":                     { selfAssessment: 8.973,  aiAudit: 3.860,  psScore: 10.34, lisScore: 12.80, mcScore:  9.34, gramScore:  6.25, totalScore: 51.56 },
+  "m sunny":                         { selfAssessment: 8.486,  aiAudit: 3.890,  psScore: 10.66, lisScore: 14.40, mcScore:  8.00, gramScore:  8.75, totalScore: 54.19 },
+  "nishikant tiwari":                { selfAssessment: 8.432,  aiAudit: 3.855,  psScore: 12.66, lisScore: 14.60, mcScore:  8.66, gramScore: 10.75, totalScore: 58.96 },
+  "chetan patil":                    { selfAssessment: 8.703,  aiAudit: 3.980,  psScore: 14.00, lisScore: 16.80, mcScore: 10.00, gramScore: 10.25, totalScore: 63.73 },
+  // ── Priyanka Sahani ──
+  "priyanshu gupta":                 { selfAssessment: 8.649,  aiAudit: 4.020,  psScore:  null, lisScore:  null, mcScore:  null, gramScore:  null, totalScore: 12.67 },
+  "vinayak kini":                    { selfAssessment: 9.568,  aiAudit: 3.930,  psScore: 10.40, lisScore: 18.00, mcScore:  8.00, gramScore:  7.75, totalScore: 57.65 },
+  "benjamin anand mitra":            { selfAssessment: 6.216,  aiAudit: 3.980,  psScore: 12.93, lisScore: 17.20, mcScore: 11.00, gramScore: 14.75, totalScore: 66.08 },
+  "namreen i bombaywale":            { selfAssessment: 7.676,  aiAudit: 3.820,  psScore:  null, lisScore:  null, mcScore:  null, gramScore:  null, totalScore: 11.50 },
+  "deva sahaya rubia":               { selfAssessment: 8.595,  aiAudit: 4.080,  psScore: 15.60, lisScore: 18.40, mcScore: 10.50, gramScore: 15.25, totalScore: 72.42 },
+  "geetha bhandari":                 { selfAssessment: 9.243,  aiAudit: 3.900,  psScore: 10.67, lisScore: 15.20, mcScore:  6.00, gramScore:  6.00, totalScore: 51.01 },
+  "shaheen ismail dhaliet":          { selfAssessment: 8.919,  aiAudit: 3.910,  psScore: 12.27, lisScore: 17.20, mcScore:  9.50, gramScore:  7.25, totalScore: 59.05 },
+  "sourav basotia":                  { selfAssessment: 8.595,  aiAudit: 3.775,  psScore:  null, lisScore:  null, mcScore:  null, gramScore:  null, totalScore: 12.37 },
+  "pratik poddar":                   { selfAssessment: 8.541,  aiAudit: 3.820,  psScore:  null, lisScore:  null, mcScore:  null, gramScore:  null, totalScore: 12.36 },
+  "ashok sunar":                     { selfAssessment: 8.432,  aiAudit: 3.960,  psScore: 11.34, lisScore: 17.60, mcScore: 11.50, gramScore:  9.25, totalScore: 62.08 },
+  "anjali gupta":                    { selfAssessment: 8.432,  aiAudit: 3.735,  psScore:  null, lisScore:  null, mcScore:  null, gramScore:  null, totalScore: 12.17 },
+  // ── Roopashri S ──
+  "ashish thakur":                   { selfAssessment: 8.595,  aiAudit: 3.910,  psScore: 11.20, lisScore: 14.00, mcScore:  9.50, gramScore: 12.00, totalScore: 59.20 },
+  "sougata das":                     { selfAssessment: 7.027,  aiAudit: 3.900,  psScore: 11.46, lisScore: 19.20, mcScore: 10.00, gramScore: 14.75, totalScore: 66.34 },
+  "arun kumar m":                    { selfAssessment: 8.757,  aiAudit: 3.935,  psScore: 10.27, lisScore: 16.80, mcScore: 11.50, gramScore:  8.25, totalScore: 59.51 },
+  "malay pathak":                    { selfAssessment: 8.378,  aiAudit: 4.875,  psScore: 13.74, lisScore: 16.40, mcScore: 11.00, gramScore: 14.25, totalScore: 68.64 },
+  "ananth sai sharma":               { selfAssessment: 8.054,  aiAudit: 3.825,  psScore: 11.87, lisScore: 16.40, mcScore:  7.50, gramScore: 11.00, totalScore: 58.65 },
+  "mrinal sarkar":                   { selfAssessment: 8.811,  aiAudit: 3.970,  psScore: 14.00, lisScore: 17.60, mcScore: 11.50, gramScore: 14.00, totalScore: 69.88 },
+  "apurva tyagi":                    { selfAssessment: 8.973,  aiAudit: 3.290,  psScore:  null, lisScore:  null, mcScore:  null, gramScore:  null, totalScore: 12.26 },
+  "anirudh":                         { selfAssessment: 0.000,  aiAudit: 0.000,  psScore: 12.00, lisScore: 15.20, mcScore: 11.00, gramScore: 19.25, totalScore: 57.45 },
+  "dev":                             { selfAssessment: 0.000,  aiAudit: 0.000,  psScore: 11.73, lisScore: 14.40, mcScore:  9.00, gramScore: 12.75, totalScore: 47.88 },
+  "deepak kumar":                    { selfAssessment: 8.432,  aiAudit: 3.270,  psScore: 11.20, lisScore: 15.20, mcScore:  7.50, gramScore: 10.25, totalScore: 55.85 }
 };
 
 // Maps the name as stored in the DB (trainee.name) → canonical name used in _MANAGER_AGENT_MAP.
@@ -111,7 +115,9 @@ const _TRAINEE_ALIASES = {
   "nikhil vijay durgude":       "Nikhil V Durgude",         // full middle name vs initial
   "naveenkumar":                "Naveenkumar Ayyangoudar",  // missing surname
   "akash":                      "Akash Kumar Singh",         // first name only
-  "kg saroj":                   "K G Saroj"                  // no space in initials
+  "kg saroj":                   "K G Saroj",                 // no space in initials
+  "suma manjunath":             "Suma Manjunath Tumbraguddi", // missing surname
+  "saneeth":                    "Saneeth T S"                // missing initials
 };
 
 // Resolve a raw DB/session name to its canonical map name (if an alias exists).
@@ -3288,11 +3294,24 @@ window.Admin = (() => {
 
     const r2 = v => v != null ? parseFloat(v.toFixed(2)) : null;
     const totalMark = r2(ms.totalScore);
-    const insights  = buildLetterInsights({}, {}, totalMark);
 
+    // Individual module marks directly from master sheet (already weighted to out-of-max)
+    const psMark  = ms.psScore   != null ? r2(ms.psScore)   : null;
+    const lisMark = ms.lisScore  != null ? r2(ms.lisScore)  : null;
+    const mcMark  = ms.mcScore   != null ? r2(ms.mcScore)   : null;
+    const gaMark  = ms.gramScore != null ? r2(ms.gramScore) : null;
+
+    // Convert weighted marks back to 0-100 percentages for insight generation
+    const synScores = {};
+    if (psMark  != null) synScores['pick-speak']            = r2(psMark  / 20 * 100);
+    if (lisMark != null) synScores['listening-assessment']  = r2(lisMark / 20 * 100);
+    if (mcMark  != null) synScores['mock-call']             = r2(mcMark  / 20 * 100);
+    if (gaMark  != null) synScores['grammar-assessment']    = r2(gaMark  / 25 * 100);
+
+    const insights = buildLetterInsights(synScores, {}, totalMark);
     const syntheticTrainee = { name: agentName };
-    renderTraineeLetter(syntheticTrainee, { lisMark: null, psMark: null, gaMark: null, mcMark: null, totalMark }, insights);
-    _currentReportData = { trainee: syntheticTrainee, marks: { lisMark: null, psMark: null, gaMark: null, mcMark: null, totalMark }, scores: {}, details: {} };
+    renderTraineeLetter(syntheticTrainee, { lisMark, psMark, gaMark, mcMark, totalMark }, insights);
+    _currentReportData = { trainee: syntheticTrainee, marks: { lisMark, psMark, gaMark, mcMark, totalMark }, scores: synScores, details: {} };
 
     const tbody = $('report-sessions-tbody');
     tbody.innerHTML = `<tr><td colspan="6" class="empty-state" style="color:var(--text-muted)">
