@@ -3221,16 +3221,26 @@ window.Admin = (() => {
     const { scores, details } = computeAgentScores(traineeId, sessions);
     const r2 = v => v != null ? parseFloat(v.toFixed(2)) : null;
 
-    const lisMark = scores['listening-assessment'] != null ? r2(scores['listening-assessment'] / 100 * 20) : null;
-    const psMark  = scores['pick-speak']            != null ? r2(scores['pick-speak']            / 100 * 20) : null;
-    const gaMark  = scores['grammar-assessment']    != null ? r2(scores['grammar-assessment']    / 100 * 25) : null;
-    const mcMark  = scores['mock-call']             != null ? r2(scores['mock-call']             / 100 * 20) : null;
+    // Fetch master scores for fallback (modules not recorded in the DB)
+    const ms = getMasterScores(_resolveAlias(trainee.name));
+
+    const lisMark = scores['listening-assessment'] != null
+      ? r2(scores['listening-assessment'] / 100 * 20)
+      : (ms?.lisScore  != null ? r2(ms.lisScore)  : null);
+    const psMark  = scores['pick-speak'] != null
+      ? r2(scores['pick-speak']  / 100 * 20)
+      : (ms?.psScore   != null ? r2(ms.psScore)   : null);
+    const gaMark  = scores['grammar-assessment'] != null
+      ? r2(scores['grammar-assessment'] / 100 * 25)
+      : (ms?.gramScore != null ? r2(ms.gramScore) : null);
+    const mcMark  = scores['mock-call'] != null
+      ? r2(scores['mock-call']   / 100 * 20)
+      : (ms?.mcScore   != null ? r2(ms.mcScore)   : null);
 
     // ── Total score: use Excel master total (W) directly for exact match ──
     // Falls back to sum of module marks if trainee not found in master sheet.
     let totalMark = null;
     try {
-      const ms = getMasterScores(_resolveAlias(trainee.name));
       if (ms && typeof ms.totalScore === 'number' && ms.totalScore > 0) {
         totalMark = r2(ms.totalScore);  // use pre-computed Excel grand total
       }
@@ -3242,10 +3252,18 @@ window.Admin = (() => {
       totalMark = allMarks.length ? r2(allMarks.reduce((a, b) => a + b, 0)) : null;
     }
 
+    // For insight generation: supplement DB percentages with master-score percentages
+    // for any module the trainee didn't attempt in the app
+    const insightScores = { ...scores };
+    if (insightScores['listening-assessment']  == null && ms?.lisScore  != null) insightScores['listening-assessment']  = r2(ms.lisScore  / 20 * 100);
+    if (insightScores['pick-speak']            == null && ms?.psScore   != null) insightScores['pick-speak']            = r2(ms.psScore   / 20 * 100);
+    if (insightScores['grammar-assessment']    == null && ms?.gramScore != null) insightScores['grammar-assessment']    = r2(ms.gramScore / 25 * 100);
+    if (insightScores['mock-call']             == null && ms?.mcScore   != null) insightScores['mock-call']             = r2(ms.mcScore   / 20 * 100);
+
     // ── Render letter ──
-    const insights = buildLetterInsights(scores, details, totalMark);
+    const insights = buildLetterInsights(insightScores, details, totalMark);
     renderTraineeLetter(trainee, { lisMark, psMark, gaMark, mcMark, totalMark }, insights);
-    _currentReportData = { trainee, marks: { lisMark, psMark, gaMark, mcMark, totalMark }, scores, details };
+    _currentReportData = { trainee, marks: { lisMark, psMark, gaMark, mcMark, totalMark }, scores: insightScores, details };
 
     // ── Session history table ── (same P&S avg logic as before)
     const PS_MODS = new Set(['pick-speak', 'pick-speak-general', 'pick-speak-stock']);
