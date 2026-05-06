@@ -5,6 +5,7 @@
 // psScore=Pick&Speak/20, lisScore=Listening/20, mcScore=MockCall/20, gramScore=Grammar/25
 // totalScore = grand total out of 100 (all components weighted and summed)
 // v35: added individual module scores + 2 new aliases (suma manjunath, saneeth)
+// v36: replaced AI Audit nav/section with Comm360 Master Report (team filter + full scores table)
 const MASTER_SCORES = {
   // ── Vignesh Baliga ──
   "abdul razak":                     { selfAssessment: 9.243,  aiAudit: 3.945,  psScore: 12.68, lisScore: 16.20, mcScore:  8.58, gramScore:  7.00, totalScore: 57.65 },
@@ -479,7 +480,7 @@ window.Admin = (() => {
         else if (sec === 'topics') await loadTopics();
         else if (sec === 'assessments') await loadAssessments();
         else if (sec === 'reports') await loadReportsDropdown();
-        else if (sec === 'ai-audit') await loadAiAuditScores();
+        else if (sec === 'comm360') await loadComm360Report();
         else if (sec === 'settings') initSettings();
       });
     });
@@ -4334,6 +4335,165 @@ window.Admin = (() => {
   }
 
 
+  // ================================================================
+  //  COMM360 MASTER REPORT SECTION
+  // ================================================================
+
+  const _TICKET_TEAM_MANAGERS = new Set([
+    'Renuka Mishra', 'Basavaraj Gurav', 'Ratanjeet Maharaj',
+    'Gopi Kiran', 'Shwethayini', 'Swanand Dixit'
+  ]);
+
+  let _comm360AllRows    = [];
+  let _comm360Filtered   = [];
+  let _comm360TeamFilter = 'all';
+  let _comm360SearchQ    = '';
+
+  function _buildComm360Rows() {
+    const rows = [];
+    Object.entries(_MANAGER_AGENT_MAP).forEach(([manager, agents]) => {
+      const team = _TICKET_TEAM_MANAGERS.has(manager) ? 'Tickets' : 'Calls';
+      agents.forEach(agentName => {
+        const ms = MASTER_SCORES[agentName.toLowerCase()];
+        rows.push({
+          name:           agentName,
+          manager,
+          team,
+          selfAssessment: ms ? ms.selfAssessment : null,
+          aiAudit:        ms ? ms.aiAudit        : null,
+          psScore:        ms ? ms.psScore        : null,
+          lisScore:       ms ? ms.lisScore       : null,
+          mcScore:        ms ? ms.mcScore        : null,
+          gramScore:      ms ? ms.gramScore      : null,
+          totalScore:     ms ? ms.totalScore     : null,
+        });
+      });
+    });
+    rows.sort((a, b) => a.manager.localeCompare(b.manager) || a.name.localeCompare(b.name));
+    return rows;
+  }
+
+  async function loadComm360Report() {
+    const tbody = $('comm360-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="11" class="empty-state">Loading…</td></tr>';
+    _comm360TeamFilter = 'all';
+    _comm360SearchQ    = '';
+    ['all', 'calls', 'tickets'].forEach(t => {
+      const btn = $(`comm360-filter-${t}`);
+      if (btn) btn.className = t === 'all' ? 'btn-primary' : 'btn-ghost';
+    });
+    const searchEl = $('comm360-search');
+    if (searchEl) searchEl.value = '';
+    _comm360AllRows  = _buildComm360Rows();
+    _comm360Filtered = [..._comm360AllRows];
+    _renderComm360Table();
+  }
+
+  function filterComm360(team) {
+    _comm360TeamFilter = team;
+    ['all', 'calls', 'tickets'].forEach(t => {
+      const btn = $(`comm360-filter-${t}`);
+      if (btn) btn.className = t === team ? 'btn-primary' : 'btn-ghost';
+    });
+    _applyComm360Filter();
+  }
+
+  function searchComm360(query) {
+    _comm360SearchQ = (query || '').trim().toLowerCase();
+    _applyComm360Filter();
+  }
+
+  function _applyComm360Filter() {
+    let rows = _comm360AllRows;
+    if (_comm360TeamFilter !== 'all') {
+      const target = _comm360TeamFilter === 'calls' ? 'Calls' : 'Tickets';
+      rows = rows.filter(r => r.team === target);
+    }
+    if (_comm360SearchQ) {
+      rows = rows.filter(r =>
+        r.name.toLowerCase().includes(_comm360SearchQ) ||
+        r.manager.toLowerCase().includes(_comm360SearchQ)
+      );
+    }
+    _comm360Filtered = rows;
+    _renderComm360Table();
+  }
+
+  function _c360fmt(val, dec) {
+    if (val == null || isNaN(val)) return '<span style="color:var(--text-muted)">—</span>';
+    return Number(val).toFixed(dec != null ? dec : 2);
+  }
+
+  function _renderComm360Table() {
+    const tbody = $('comm360-tbody');
+    const count = $('comm360-count');
+    if (!tbody) return;
+
+    if (!_comm360Filtered.length) {
+      tbody.innerHTML = '<tr><td colspan="11" class="empty-state">No records found.</td></tr>';
+      if (count) count.textContent = '';
+      return;
+    }
+
+    const groups = {};
+    _comm360Filtered.forEach(r => {
+      if (!groups[r.manager]) groups[r.manager] = [];
+      groups[r.manager].push(r);
+    });
+
+    let html = '';
+    let idx  = 0;
+
+    Object.entries(groups).sort(([a], [b]) => a.localeCompare(b)).forEach(([manager, recs]) => {
+      const team = recs[0].team;
+      const teamBadge = team === 'Tickets'
+        ? '<span style="background:#d1fae5;color:#065f46;font-size:0.7rem;padding:0.1rem 0.4rem;border-radius:4px;margin-left:0.4rem">🎫 Tickets</span>'
+        : '<span style="background:#dbeafe;color:#1e3a8a;font-size:0.7rem;padding:0.1rem 0.4rem;border-radius:4px;margin-left:0.4rem">📞 Calls</span>';
+      const totals = recs.filter(r => r.totalScore != null && r.totalScore > 0);
+      const avgTotal = totals.length
+        ? (totals.reduce((a, r) => a + r.totalScore, 0) / totals.length).toFixed(2)
+        : '—';
+
+      html += `<tr style="background:#eef2ff;border-top:2px solid #c7d2fe">
+        <td colspan="4" style="font-weight:700;color:#3730a3;font-size:0.88rem;padding:0.45rem 0.75rem">
+          👤 ${manager}${teamBadge}
+          <span style="font-weight:400;color:var(--text-muted);font-size:0.78rem;margin-left:0.5rem">(${recs.length} agent${recs.length !== 1 ? 's' : ''})</span>
+        </td>
+        <td colspan="6" style="background:#eef2ff"></td>
+        <td style="text-align:right;font-size:0.78rem;color:#3730a3;font-weight:600;background:#eef2ff">Avg: ${avgTotal}</td>
+      </tr>`;
+
+      recs.forEach(r => {
+        idx++;
+        const teamCell = r.team === 'Tickets'
+          ? '<span style="background:#d1fae5;color:#065f46;font-size:0.7rem;padding:0.1rem 0.4rem;border-radius:4px">🎫</span>'
+          : '<span style="background:#dbeafe;color:#1e3a8a;font-size:0.7rem;padding:0.1rem 0.4rem;border-radius:4px">📞</span>';
+        const totalColor = r.totalScore == null ? 'inherit'
+          : r.totalScore >= 60 ? 'var(--success)'
+          : r.totalScore >= 40 ? 'var(--warning)'
+          : 'var(--danger)';
+        html += `<tr>
+          <td style="color:var(--text-muted);font-size:0.8rem;text-align:center">${idx}</td>
+          <td style="font-weight:500">${r.name}</td>
+          <td style="color:var(--text-muted);font-size:0.85rem">${r.manager}</td>
+          <td style="text-align:center">${teamCell}</td>
+          <td style="text-align:right">${_c360fmt(r.selfAssessment)}</td>
+          <td style="text-align:right;color:var(--primary);font-weight:600">${_c360fmt(r.aiAudit)}</td>
+          <td style="text-align:right">${_c360fmt(r.psScore)}</td>
+          <td style="text-align:right">${_c360fmt(r.lisScore)}</td>
+          <td style="text-align:right">${_c360fmt(r.mcScore)}</td>
+          <td style="text-align:right">${_c360fmt(r.gramScore)}</td>
+          <td style="text-align:right;font-weight:700;color:${totalColor}">${_c360fmt(r.totalScore)}</td>
+        </tr>`;
+      });
+    });
+
+    tbody.innerHTML = html;
+    if (count) count.textContent = `Showing ${_comm360Filtered.length} of ${_comm360AllRows.length} agent${_comm360AllRows.length !== 1 ? 's' : ''}`;
+  }
+
+
   // ---- Public API (called from inline onclick) ----
   return {
     init,
@@ -4371,7 +4531,7 @@ window.Admin = (() => {
     backToManagers,
     archiveAllManagerSessions,
     restoreAllManagerSessions,
-    // AI Audit Scores
+    // AI Audit Scores (kept for backward compatibility)
     filterAiAudit,
     toggleAuditCheckbox,
     toggleAllAudit,
@@ -4383,7 +4543,10 @@ window.Admin = (() => {
     saveAuditScore,
     deleteSingleAuditScore,
     deleteSelectedAuditScores,
-    deleteAllAuditScores
+    deleteAllAuditScores,
+    // Comm360 Master Report
+    filterComm360,
+    searchComm360
   };
 })();
 
