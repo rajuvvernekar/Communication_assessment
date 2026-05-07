@@ -1340,10 +1340,22 @@ const App = (() => {
       return;
     }
 
-    // Sort by title so Section A → B → C always loads in order
-    allTopics.sort((a, b) => a.title.localeCompare(b.title));
+    // Group enabled topics by set name, then pick ONE set randomly
+    // Title format: "Grammar Set N — Section A: MCQ (40 Questions)"
+    const setMap = {};
+    allTopics.forEach(t => {
+      const setName = (t.title.match(/^(.+?)\s+[—–-]+\s+Section/i)?.[1] || t.title).trim();
+      if (!setMap[setName]) setMap[setName] = [];
+      setMap[setName].push(t);
+    });
+    const setNames = Object.keys(setMap);
+    const chosenSet = setNames[Math.floor(Math.random() * setNames.length)];
+    const chosenTopics = setMap[chosenSet];
 
-    _gaSections = allTopics
+    // Sort sections within the chosen set (A → B → C)
+    chosenTopics.sort((a, b) => a.title.localeCompare(b.title));
+
+    _gaSections = chosenTopics
       .map(t => ({
         id:        t.id,
         title:     t.title,
@@ -1674,17 +1686,29 @@ const App = (() => {
       return;
     }
 
-    // Sort by title so Section 1 → 2 → 3 loads in order
-    allTopics.sort((a, b) => a.title.localeCompare(b.title));
+    // Group enabled topics by set name, then pick ONE set randomly
+    // Title format: "Listening Set 1 — Section 2: Audio (10 Questions)"
+    const setMap = {};
+    allTopics.forEach(t => {
+      const setName = (t.title.match(/^(.+?)\s+[—–-]+\s+Section/i)?.[1] || t.title).trim();
+      if (!setMap[setName]) setMap[setName] = [];
+      setMap[setName].push(t);
+    });
+    const setNames = Object.keys(setMap);
+    const chosenSet = setNames[Math.floor(Math.random() * setNames.length)];
+    const chosenTopics = setMap[chosenSet];
 
-    _laSections = allTopics
-      .map(t => {
+    // Sort sections within the chosen set (Section 1 → 2 → 3)
+    chosenTopics.sort((a, b) => a.title.localeCompare(b.title));
+
+    _laSections = chosenTopics
+      .map((t, i) => {
         // Extract section type label: "Listening Set 1 — Section 2: Audio (10 Questions)" → "Audio"
         const typeMatch = t.title.match(/Section\s+\d+:\s*(\w+)/i);
         return {
           id:          t.id,
           title:       t.title,
-          sectionType: typeMatch ? typeMatch[1] : `Section ${allTopics.indexOf(t) + 1}`,
+          sectionType: typeMatch ? typeMatch[1] : `Section ${i + 1}`,
           questions:   (t.checklist || []).filter(q => q && typeof q === 'object' && q.stem)
         };
       })
