@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CommAssess — Communication Assessment Tool</title>
-  <link rel="stylesheet" href="css/style.css?v=8">
+  <link rel="stylesheet" href="css/style.css?v=9">
   <!-- Supabase JS SDK (CDN) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
@@ -140,16 +140,39 @@
   <div class="step-container hidden" id="ps-step-topic">
     <div class="step-card">
       <div class="step-label">Step 1 of 3 — Your Topic</div>
-      <div class="topic-reveal" id="ps-topic-reveal">
-        <div class="topic-icon">🎲</div>
-        <h2 id="ps-topic-title">Click to reveal your topic</h2>
-        <p id="ps-topic-desc">You will have 30 seconds to prepare, then 2 minutes to speak.</p>
+
+      <!-- Stock Market mode: single reveal card, timer starts on reveal -->
+      <div id="ps-stock-reveal-wrap">
+        <div class="topic-reveal" id="ps-topic-reveal">
+          <div class="topic-icon">🎲</div>
+          <h2 id="ps-topic-title">Click to reveal your topic</h2>
+          <p id="ps-topic-desc">Your topic will be revealed and the 2-minute prep timer will start immediately.</p>
+        </div>
+        <div style="display:flex;gap:0.75rem;flex-direction:column;margin-top:1.5rem">
+          <button id="btn-ps-reveal" class="btn-primary">🎲 Reveal My Topic &amp; Start Prep</button>
+        </div>
       </div>
-      <div style="display:flex;gap:0.75rem;flex-direction:column;margin-top:1.5rem">
-        <button id="btn-ps-reveal" class="btn-primary">Reveal My Topic</button>
-        <button id="btn-ps-ready" class="btn-secondary hidden">I'm Ready → Start Prep Time</button>
-        <button id="btn-ps-skip-topic" class="btn-ghost" style="font-size:0.85rem">↩ Skip this topic <span id="ps-skip-badge" style="font-size:0.75rem;opacity:0.6">(1 skip available)</span></button>
+
+      <!-- General mode: two topic choices, clicking one starts prep timer -->
+      <div id="ps-general-topics-wrap" class="hidden">
+        <p style="text-align:center;color:var(--text-muted);margin-bottom:1.25rem;font-size:0.9rem">
+          Two topics for you — pick the one you feel more confident about.<br>
+          <strong style="color:var(--primary)">The 2-minute prep timer starts the moment you choose.</strong>
+        </p>
+        <div class="ps-topic-choice-grid">
+          <button class="ps-topic-choice-card" id="ps-topic-choice-a">
+            <div class="ps-choice-label">Option A</div>
+            <h3 id="ps-topic-choice-a-title"></h3>
+            <p id="ps-topic-choice-a-desc"></p>
+          </button>
+          <button class="ps-topic-choice-card" id="ps-topic-choice-b">
+            <div class="ps-choice-label">Option B</div>
+            <h3 id="ps-topic-choice-b-title"></h3>
+            <p id="ps-topic-choice-b-desc"></p>
+          </button>
+        </div>
       </div>
+
     </div>
   </div>
 
@@ -221,6 +244,15 @@
         <p id="ps-no-speech-note" class="no-speech-note hidden">
           ⚠️ Live transcription requires Chrome. Recording is still active.
         </p>
+      </div>
+      <!-- Notepad visible throughout the 5-minute speaking activity -->
+      <div class="ps-notes-during-rec">
+        <div class="ps-notepad-header">
+          <span>📝 Your Notes</span>
+          <span id="ps-rec-note-wc" class="ps-note-wc">0 words</span>
+        </div>
+        <textarea id="ps-notepad-rec" class="ps-notepad-area ps-notepad-compact"
+          placeholder="Your prep notes will appear here — refer to them while you speak."></textarea>
       </div>
       <div class="rec-controls">
         <button id="btn-ps-stop" class="btn-danger">⏹ Stop &amp; Submit</button>
@@ -960,6 +992,6 @@
 <script src="js/recorder.js?v=7"></script>
 <script src="js/speech.js?v=8"></script>
 <script src="js/claude.js?v=9"></script>
-<script src="js/app.js?v=8"></script>
+<script src="js/app.js?v=9"></script>
 </body>
 </html>

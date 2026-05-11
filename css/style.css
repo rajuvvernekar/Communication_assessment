@@ -374,6 +374,78 @@ body {
 }
 .ps-notepad-area::placeholder { color: #94a3b8; font-style: italic; }
 
+/* General topic: two-choice selection cards */
+.ps-topic-choice-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+.ps-topic-choice-card {
+  background: #f8fafc;
+  border: 2.5px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 1.5rem 1.25rem;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.18s, background 0.18s, transform 0.15s, box-shadow 0.15s;
+  width: 100%;
+}
+.ps-topic-choice-card:hover {
+  border-color: var(--ps-color, #10b981);
+  background: #f0fdf4;
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(16,185,129,0.13);
+}
+.ps-topic-choice-card:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+.ps-choice-label {
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 0.6rem;
+}
+.ps-topic-choice-card h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0 0 0.45rem;
+  color: #1e293b;
+  line-height: 1.35;
+}
+.ps-topic-choice-card p {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.5;
+}
+@media (max-width: 520px) {
+  .ps-topic-choice-grid { grid-template-columns: 1fr; }
+}
+
+/* Notepad during 5-minute recording — compact but always accessible */
+.ps-notes-during-rec {
+  border: 2px solid #fde68a;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fffdf5;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}
+.ps-notepad-compact {
+  min-height: 110px !important;
+  font-size: 0.88rem !important;
+  line-height: 1.7 !important;
+  background-image: repeating-linear-gradient(
+    transparent,
+    transparent 26px,
+    #e0f2fe 26px,
+    #e0f2fe 27px
+  ) !important;
+}
+
 /* ---- Mock Call Topic Selection ---- */
 .mc-topic-grid {
   display: grid;

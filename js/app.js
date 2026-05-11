@@ -9,6 +9,8 @@ const App = (() => {
   let _psSkipUsed = false;          // only one topic skip allowed per session
   let _psCategory = null;           // 'pick-speak-stock' | 'pick-speak-general'
   let _psTopicsPool = [];           // all fetched topics for current category
+  let _psTopicChoiceA = null;       // first general topic choice shown to agent
+  let _psTopicChoiceB = null;       // second general topic choice shown to agent
   let _wcStartTime = null;
   let _wcTimerInterval = null;
 
@@ -414,7 +416,19 @@ const App = (() => {
     }
     _psCategory   = category;
     _psTopicsPool = topics;
-    _currentTopic = topics[Math.floor(Math.random() * topics.length)];
+
+    if (category === 'pick-speak-general') {
+      // General: pick two distinct topics for the agent to choose from
+      const shuffled = [...topics].sort(() => Math.random() - 0.5);
+      _psTopicChoiceA = shuffled[0];
+      _psTopicChoiceB = shuffled.length > 1 ? shuffled[1] : shuffled[0];
+      _currentTopic   = null; // will be set when agent picks one
+    } else {
+      // Stock Market: single random topic revealed by agent
+      _currentTopic   = topics[Math.floor(Math.random() * topics.length)];
+      _psTopicChoiceA = null;
+      _psTopicChoiceB = null;
+    }
     initPickSpeak(false);
   }
 
@@ -423,66 +437,62 @@ const App = (() => {
 
     showStep('pick-speak', 'ps-step-topic');
 
-    const revealEl  = $('ps-topic-reveal');
-    const skipBtn   = $('btn-ps-skip-topic');
-    const skipBadge = $('ps-skip-badge');
+    const stockWrap   = $('ps-stock-reveal-wrap');
+    const generalWrap = $('ps-general-topics-wrap');
 
-    // Always start in un-revealed state
-    revealEl.classList.remove('revealed');
-    $('ps-topic-title').textContent = 'Click to reveal your topic';
-    $('ps-topic-desc').textContent  = 'Your topic will be revealed and the 2-minute prep timer will start immediately.';
-    $('btn-ps-ready').classList.add('hidden');
-    $('btn-ps-reveal').style.display = '';
+    if (_psCategory === 'pick-speak-general') {
+      // ── General mode: show two topic choices ──
+      stockWrap.classList.add('hidden');
+      generalWrap.classList.remove('hidden');
 
-    // Skip button hidden until topic is revealed
-    skipBtn.style.display = 'none';
+      const aTitleEl = $('ps-topic-choice-a-title');
+      const aDescEl  = $('ps-topic-choice-a-desc');
+      const bTitleEl = $('ps-topic-choice-b-title');
+      const bDescEl  = $('ps-topic-choice-b-desc');
 
-    $('btn-ps-reveal').onclick = () => {
-      revealEl.classList.add('revealed');
-      $('ps-topic-title').textContent = _currentTopic.title;
-      $('ps-topic-desc').textContent  = _currentTopic.description || '';
-      $('btn-ps-reveal').style.display = 'none';
+      if (aTitleEl) aTitleEl.textContent = _psTopicChoiceA ? _psTopicChoiceA.title : '';
+      if (aDescEl)  aDescEl.textContent  = _psTopicChoiceA ? (_psTopicChoiceA.description || '') : '';
+      if (bTitleEl) bTitleEl.textContent = _psTopicChoiceB ? _psTopicChoiceB.title : '';
+      if (bDescEl)  bDescEl.textContent  = _psTopicChoiceB ? (_psTopicChoiceB.description || '') : '';
 
-      // Show skip button (only if skip hasn't been used AND not Stock Market)
-      if (!_psSkipUsed && _psCategory !== 'pick-speak-stock') {
-        skipBadge.textContent = '(1 skip available)';
-        skipBtn.style.display = '';
-        skipBtn.disabled      = false;
-      }
+      const pickAndStart = async (chosen) => {
+        _currentTopic = chosen;
+        const ok = await startPickSpeakPrep();
+        if (!ok) toast('🎤 Microphone access denied. Please allow mic and try again.', 'error');
+      };
 
-      // Always show "I'm Ready" button — user decides when to start prep
-      $('btn-ps-ready').textContent = "I'm Ready → Start Prep Time";
-      $('btn-ps-ready').classList.remove('hidden');
-    };
+      $('ps-topic-choice-a').onclick = () => pickAndStart(_psTopicChoiceA);
+      $('ps-topic-choice-b').onclick = () => pickAndStart(_psTopicChoiceB);
 
-    // Skip: pick new topic from the same pool — update state so startPickSpeakPrep
-    // (which may still be awaiting mic) picks up the new topic
-    skipBtn.onclick = () => {
-      if (_psSkipUsed) return;
-      _psSkipUsed = true;
-      skipBtn.style.display = 'none';
+    } else {
+      // ── Stock Market mode: reveal → timer starts immediately ──
+      generalWrap.classList.add('hidden');
+      stockWrap.classList.remove('hidden');
 
-      const pool = _psTopicsPool;
-      if (!pool.length) return;
-      let next = pool[Math.floor(Math.random() * pool.length)];
-      if (pool.length > 1) {
-        while (next.id === _currentTopic.id) {
-          next = pool[Math.floor(Math.random() * pool.length)];
+      const revealEl = $('ps-topic-reveal');
+      revealEl.classList.remove('revealed');
+      $('ps-topic-title').textContent = 'Click to reveal your topic';
+      $('ps-topic-desc').textContent  = 'Your topic will be revealed and the 2-minute prep timer will start immediately.';
+
+      $('btn-ps-reveal').onclick = async () => {
+        // Show the topic first, then immediately start prep
+        revealEl.classList.add('revealed');
+        $('ps-topic-title').textContent = _currentTopic.title;
+        $('ps-topic-desc').textContent  = _currentTopic.description || '';
+        $('btn-ps-reveal').style.display = 'none';
+
+        const ok = await startPickSpeakPrep();
+        if (!ok) {
+          // Mic denied — restore reveal button so user can retry
+          revealEl.classList.remove('revealed');
+          $('ps-topic-title').textContent = 'Click to reveal your topic';
+          $('ps-topic-desc').textContent  = 'Your topic will be revealed and the 2-minute prep timer will start immediately.';
+          $('btn-ps-reveal').style.display = '';
+          toast('🎤 Microphone access denied. Please allow mic and try again.', 'error');
         }
-      }
-      _currentTopic = next;
-      $('ps-topic-title').textContent = _currentTopic.title;
-      $('ps-topic-desc').textContent  = _currentTopic.description || '';
-    };
+      };
+    }
 
-    $('btn-ps-ready').onclick = async () => {
-      const ok = await startPickSpeakPrep();
-      if (!ok) {
-        // Mic was denied — stay on topic step, let user try again
-        $('btn-ps-ready').textContent = '🎤 Allow Mic & Try Again';
-        $('btn-ps-ready').classList.remove('hidden');
-      }
-    };
     $('btn-ps-again').onclick = () => initPickSpeakCategory();
   }
 
@@ -532,6 +542,23 @@ const App = (() => {
     // Mic was already granted in startPickSpeakPrep (user gesture context).
     showStep('pick-speak', 'ps-step-record');
     $('ps-rec-title').textContent = _currentTopic.title;
+
+    // Copy notepad content into the recording-step notepad so it stays visible
+    const srcNotes = $('ps-notepad');
+    const recNotes = $('ps-notepad-rec');
+    const recWc    = $('ps-rec-note-wc');
+    if (srcNotes && recNotes) {
+      recNotes.value = srcNotes.value;
+      if (recWc) {
+        const words = recNotes.value.trim() ? recNotes.value.trim().split(/\s+/).length : 0;
+        recWc.textContent = `${words} word${words !== 1 ? 's' : ''}`;
+      }
+      // Keep word count live as agent edits during recording
+      recNotes.oninput = () => {
+        const words = recNotes.value.trim() ? recNotes.value.trim().split(/\s+/).length : 0;
+        if (recWc) recWc.textContent = `${words} word${words !== 1 ? 's' : ''}`;
+      };
+    }
     $('ps-final-transcript').textContent = '';
 
     const speechSupported = SpeechEngine.isSupported();
