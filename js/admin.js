@@ -6,7 +6,7 @@
 // totalScore = grand total out of 100 (all components weighted and summed)
 // v35: added individual module scores + 2 new aliases (suma manjunath, saneeth)
 // v36: replaced AI Audit nav/section with Comm360 Master Report (team filter + full scores table)
-// v37: grammar/listening set-picker fix; new Excel agent map + MASTER_SCORES; live DB scores in Comm360
+// v38: archive bug fix (proper manager resolution); manager checkboxes + bulk archive; Srusti Vishnukant Ladda → Ritesh S
 const MASTER_SCORES = {
   // ── Vignesh Baliga ──
   "abdul razak":                     { selfAssessment: 9.243,  aiAudit: 3.945,  psScore: 12.68, lisScore: 16.20, mcScore:  8.58, gramScore:  7.00, totalScore: 57.65 },
@@ -406,8 +406,9 @@ window.Admin = (() => {
   let _filteredAuditRecs  = [];        // after search filter
   let _selectedAuditIds   = new Set(); // checked rows
   // Manager-wise view state
-  let _currentManagerDrill = null;     // null = manager summary, string = drill into that manager
-  let _agentManagerIndex   = null;     // built lazily from _MANAGER_AGENT_MAP
+  let _currentManagerDrill   = null;       // null = manager summary, string = drill into that manager
+  let _agentManagerIndex     = null;       // built lazily from _MANAGER_AGENT_MAP
+  let _selectedManagerNames  = new Set();  // manager names with checkboxes checked
 
   // Convert legacy overall scores stored as raw /5 to /100
   function normalizeOverall(overall) {
@@ -1877,7 +1878,7 @@ window.Admin = (() => {
     // Switch to manager-summary columns
     if (theadTr) {
       theadTr.innerHTML = `
-        <th></th>
+        <th style="width:36px;text-align:center"><input type="checkbox" id="select-all-managers" onchange="Admin.toggleAllManagers(this.checked)" /></th>
         <th>Manager</th>
         <th style="text-align:center">Agents (with sessions / total)</th>
         <th style="text-align:center">Sessions</th>
@@ -1888,7 +1889,13 @@ window.Admin = (() => {
 
     _allRenderedSessions = sessions;
     _selectedSessionIds.clear();
-    _updateSessionActionBtns();
+    _selectedManagerNames.clear();
+    _updateManagerActionBtns();
+    // hide session-level bulk buttons when in manager summary
+    const archBtn = $('btn-archive-selected');
+    const restBtn = $('btn-restore-selected');
+    if (archBtn) archBtn.style.display = 'none';
+    if (restBtn) restBtn.style.display = 'none';
 
     if (!sessions.length) {
       tbody.innerHTML = `<tr><td colspan="7" class="empty-state">${_viewArchive ? 'No archived assessments.' : 'No assessments found.'}</td></tr>`;
@@ -1930,7 +1937,9 @@ window.Admin = (() => {
         : `<button class="btn-small" onclick="event.stopPropagation();Admin.archiveAllManagerSessions('${safeMgr}')">📁 Archive All</button>`;
 
       return `<tr style="cursor:pointer" onclick="Admin.drillIntoManager('${safeMgr}')">
-        <td></td>
+        <td style="text-align:center" onclick="event.stopPropagation()">
+          ${!isUnassigned ? `<input type="checkbox" class="manager-cb" data-mgr="${mgr.replace(/"/g,'&quot;')}" onchange="Admin.toggleManagerCheckbox('${safeMgr}', this.checked)" />` : ''}
+        </td>
         <td><strong style="color:var(--primary)">${mgr}</strong></td>
         <td style="text-align:center">${agentsLabel}</td>
         <td style="text-align:center;font-weight:600">${mgrSessions.length}</td>
@@ -1976,10 +1985,15 @@ window.Admin = (() => {
   }
 
   // ---- Archive / Restore all sessions for a manager ----
+  // Resolve which manager a session belongs to — same logic used by renderManagerSummaryTable
+  function _resolveSessionManager(s) {
+    const assigned = _teamAssignments[s.traineeId];
+    return (assigned && _MANAGER_AGENT_MAP[assigned]) ? assigned : _getAgentManager(s.traineeName);
+  }
+
   async function archiveAllManagerSessions(managerName) {
-    const agentNamesLower = (_MANAGER_AGENT_MAP[managerName] || []).map(n => n.toLowerCase());
     const ids = _cachedSessions
-      .filter(s => agentNamesLower.includes((s.traineeName || '').trim().toLowerCase()))
+      .filter(s => _resolveSessionManager(s) === managerName)
       .filter(s => !_archivedIds.has(s.id))
       .map(s => s.id);
     if (!ids.length) { toast('No active sessions to archive for this manager.', ''); return; }
@@ -1993,9 +2007,8 @@ window.Admin = (() => {
   }
 
   async function restoreAllManagerSessions(managerName) {
-    const agentNamesLower = (_MANAGER_AGENT_MAP[managerName] || []).map(n => n.toLowerCase());
     const ids = _cachedSessions
-      .filter(s => agentNamesLower.includes((s.traineeName || '').trim().toLowerCase()))
+      .filter(s => _resolveSessionManager(s) === managerName)
       .filter(s => _archivedIds.has(s.id))
       .map(s => s.id);
     if (!ids.length) { toast('No archived sessions to restore for this manager.', ''); return; }
@@ -2008,13 +2021,96 @@ window.Admin = (() => {
     }
   }
 
+  // ---- Manager checkbox multi-select ----
+  function toggleManagerCheckbox(mgrName, checked) {
+    if (checked) _selectedManagerNames.add(mgrName);
+    else         _selectedManagerNames.delete(mgrName);
+    _updateManagerActionBtns();
+    const allCb = $('select-all-managers');
+    if (allCb) {
+      const allCbs = document.querySelectorAll('.manager-cb');
+      const n = _selectedManagerNames.size;
+      allCb.indeterminate = n > 0 && n < allCbs.length;
+      allCb.checked       = allCbs.length > 0 && n === allCbs.length;
+    }
+  }
+
+  function toggleAllManagers(checked) {
+    _selectedManagerNames.clear();
+    document.querySelectorAll('.manager-cb').forEach(cb => {
+      cb.checked = checked;
+      if (checked) _selectedManagerNames.add(cb.dataset.mgr);
+    });
+    _updateManagerActionBtns();
+  }
+
+  function _updateManagerActionBtns() {
+    const archBtn = $('btn-archive-selected-managers');
+    const restBtn = $('btn-restore-selected-managers');
+    if (!archBtn || !restBtn) return;
+    const n = _selectedManagerNames.size;
+    if (_viewArchive) {
+      archBtn.style.display = 'none';
+      restBtn.style.display = '';
+      restBtn.disabled      = n === 0;
+      restBtn.textContent   = n > 0 ? `↩ Restore Selected (${n})` : '↩ Restore Selected';
+    } else {
+      restBtn.style.display = 'none';
+      archBtn.style.display = '';
+      archBtn.disabled      = n === 0;
+      archBtn.textContent   = n > 0 ? `📁 Archive Selected (${n})` : '📁 Archive Selected';
+    }
+  }
+
+  async function archiveSelectedManagers() {
+    const managers = [..._selectedManagerNames];
+    if (!managers.length) return;
+    const ids = _cachedSessions
+      .filter(s => managers.includes(_resolveSessionManager(s)))
+      .filter(s => !_archivedIds.has(s.id))
+      .map(s => s.id);
+    if (!ids.length) { toast('No active sessions found for selected managers.', ''); return; }
+    if (!confirm(`Archive all ${ids.length} active session${ids.length !== 1 ? 's' : ''} for ${managers.length} selected manager${managers.length !== 1 ? 's' : ''}?\n\nYou can restore them at any time from the Archive tab.`)) return;
+    try {
+      await _setSessionsArchived(ids, true);
+      _selectedManagerNames.clear();
+      toast(`Archived ${ids.length} session${ids.length !== 1 ? 's' : ''}.`, 'success');
+    } catch (e) {
+      toast('Archive failed: ' + e.message, 'error');
+    }
+  }
+
+  async function restoreSelectedManagers() {
+    const managers = [..._selectedManagerNames];
+    if (!managers.length) return;
+    const ids = _cachedSessions
+      .filter(s => managers.includes(_resolveSessionManager(s)))
+      .filter(s => _archivedIds.has(s.id))
+      .map(s => s.id);
+    if (!ids.length) { toast('No archived sessions found for selected managers.', ''); return; }
+    if (!confirm(`Restore all ${ids.length} archived session${ids.length !== 1 ? 's' : ''} for ${managers.length} selected manager${managers.length !== 1 ? 's' : ''}?`)) return;
+    try {
+      await _setSessionsArchived(ids, false);
+      _selectedManagerNames.clear();
+      toast(`Restored ${ids.length} session${ids.length !== 1 ? 's' : ''}.`, 'success');
+    } catch (e) {
+      toast('Restore failed: ' + e.message, 'error');
+    }
+  }
+
   function renderAssessmentsTable(sessions, topicMap) {
     const tbody = $('assessments-tbody');
     const sorted = [...sessions].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
     _currentFilteredSessions = sorted; // track for Download All
     _allRenderedSessions = sorted;     // track for select-all
     _selectedSessionIds.clear();
+    _selectedManagerNames.clear();
     _updateSessionActionBtns();
+    // hide manager-level bulk buttons when in session drill view
+    const mgrArchBtn = $('btn-archive-selected-managers');
+    const mgrRestBtn = $('btn-restore-selected-managers');
+    if (mgrArchBtn) mgrArchBtn.style.display = 'none';
+    if (mgrRestBtn) mgrRestBtn.style.display = 'none';
 
     // Reset select-all checkbox
     const allCb = $('select-all-sessions');
@@ -4108,7 +4204,7 @@ window.Admin = (() => {
     "Harish V":           ["Naveenkumar Ayyangoudar","Indranil Bose","Seema K S","Anupama H","Stavan Bhardwaj","Ankit Raj","N S Sindhu","Shefali Tyagi","D Karthik"],
     "Sandhya N R":        ["Saneeth T S","Aditya Anil Korde","Shahrukh Shaikh","Rajat Gupta","Bhagesh paithankar","Akash Kumar Singh","Bhavna Deepak Porwal","Bana Gari Naresh Kumar","Mahesh Mohan Prabhu","Gorak Vani"],
     "Shashin Birha":      ["Haritha K","Umang Jain","Rahul Ranjan Roy","Vansh Arora","Deepika S","Muthu Anusuya P","Aman Sharma","Vickey Sharma","Sahib Singh","M Sunny","Nishikant Tiwari","Chetan Patil"],
-    "Ritesh S":           ["Nikhil V Durgude","Swetha A","Shruthi K B","Sachita G Harihar","Adnan Sahil S","Mohammed Jabeer Khan","Aryaman M Math","Heeral Sonagare","Maddu Vidya"],
+    "Ritesh S":           ["Nikhil V Durgude","Swetha A","Shruthi K B","Sachita G Harihar","Adnan Sahil S","Mohammed Jabeer Khan","Aryaman M Math","Heeral Sonagare","Maddu Vidya","Srusti Vishnukant Ladda"],
     "Priyanka Sahani":    ["Priyanshu Gupta","Vinayak Kini","Benjamin Anand Mitra","Namreen I Bombaywale","Deva Sahaya Rubia","Geetha Bhandari","Shaheen Ismail Dhaliet","Sourav Basotia","Ashok Sunar","Anjali Gupta"],
     "Nandish S":          ["M Keshava Naik","Shankar Kumar","Alihussain Basha Hyatkhan","Suma Manjunath Tumbraguddi","Suresh Kumar Sahoo","Abhishek Tenginkai","Ambaldhage Vinay Kumar","Lilesh Bhaskar Sapaliga","Anand Jaiswal","Kamalpreet Kour"],
     "Roopashri S":        ["Ashish Thakur","Sougata Das","Arun Kumar M","Malay Pathak","Ananth Sai Sharma","Mrinal Sarkar","Apurva Tyagi","Deepak Kumar","Vachhiyat Dev","Anirudh M Gokhale","Renuka P D"],
@@ -4851,6 +4947,10 @@ window.Admin = (() => {
     backToManagers,
     archiveAllManagerSessions,
     restoreAllManagerSessions,
+    toggleManagerCheckbox,
+    toggleAllManagers,
+    archiveSelectedManagers,
+    restoreSelectedManagers,
     // AI Audit Scores (kept for backward compatibility)
     filterAiAudit,
     toggleAuditCheckbox,

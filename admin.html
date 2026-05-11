@@ -248,9 +248,12 @@
           <option value="scored">Fully Scored</option>
         </select>
         <button id="btn-refresh-assessments" class="btn-ghost">↻ Refresh</button>
-        <!-- Bulk action buttons -->
+        <!-- Bulk action buttons (session-level) -->
         <button id="btn-archive-selected" class="btn-ghost" onclick="Admin.archiveSelectedSessions()" disabled style="display:none">📁 Archive Selected</button>
         <button id="btn-restore-selected" class="btn-ghost" onclick="Admin.restoreSelectedSessions()" disabled style="display:none">↩ Restore Selected</button>
+        <!-- Bulk action buttons (manager-level) -->
+        <button id="btn-archive-selected-managers" class="btn-ghost" onclick="Admin.archiveSelectedManagers()" disabled style="display:none">📁 Archive Selected</button>
+        <button id="btn-restore-selected-managers" class="btn-ghost" onclick="Admin.restoreSelectedManagers()" disabled style="display:none">↩ Restore Selected</button>
         <button id="btn-export-csv" class="btn-ghost" style="margin-left:auto">⬇ Export Excel</button>
         <button class="btn-ghost" onclick="Admin.downloadAllRecordings()">⬇ Download All Recordings</button>
         <button id="btn-delete-all-assessments" class="btn-ghost btn-ghost-danger" onclick="Admin.deleteAllSessions()">🗑 Delete All</button>
@@ -591,6 +594,6 @@
 <script src="js/recorder.js?v=6"></script>
 <script src="js/speech.js?v=6"></script>
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
-<script src="js/admin.js?v=37"></script>
+<script src="js/admin.js?v=38"></script>
 </body>
 </html>
