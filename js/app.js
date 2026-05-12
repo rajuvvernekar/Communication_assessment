@@ -54,19 +54,31 @@ const App = (() => {
   }
 
   // Ranked list of high-quality voices, best first.
-  // The first match found on the device wins.
+  // Neural / Online voices sound dramatically more natural than built-ins.
   const TTS_VOICE_PRIORITY = [
-    'Google US English',                  // Chrome – natural, widely available
-    'Microsoft Aria Online (Natural)',    // Edge – neural, excellent
-    'Microsoft Jenny Online (Natural)',   // Edge – neural female
-    'Microsoft Guy Online (Natural)',     // Edge – neural male
-    'Microsoft Aria',                     // Edge (older)
-    'Samantha',                           // macOS / iOS – clear female
-    'Alex',                               // macOS – natural male
-    'Karen',                              // macOS / iOS – clear female
-    'Moira',                              // macOS – Irish, clear
-    'Zira',                               // Windows – female
-    'David',                              // Windows – male
+    // Edge Neural voices (best quality — very human-sounding)
+    'Microsoft Ryan Online (Natural)',
+    'Microsoft Andrew Online (Natural)',
+    'Microsoft Brian Online (Natural)',
+    'Microsoft Christopher Online (Natural)',
+    'Microsoft Eric Online (Natural)',
+    'Microsoft Aria Online (Natural)',
+    'Microsoft Emma Online (Natural)',
+    'Microsoft Jenny Online (Natural)',
+    'Microsoft Guy Online (Natural)',
+    // Chrome Neural (good)
+    'Google US English',
+    'Google UK English Male',
+    'Google UK English Female',
+    // macOS / iOS built-in (acceptable)
+    'Alex',
+    'Samantha',
+    'Karen',
+    'Moira',
+    'Daniel',
+    // Windows built-in (fallback)
+    'David',
+    'Zira',
   ];
 
   // ---- Score Bands (overall scores are out of 100) ----
@@ -697,39 +709,131 @@ const App = (() => {
     return { pitch, rate, volume, emoji, label, bubbleClass };
   }
 
-  // ── TTS helper: speaks text with mood params, calls onEnd when done ──
+  // ── Split a bot line into natural speech chunks ──
+  // Splits at sentence endings first, then at commas/semicolons for long clauses.
+  // Short interjections (< 4 chars after trim) are merged into the next chunk.
+  function _splitSpeechChunks(text) {
+    if (!text || !text.trim()) return [];
+
+    // Step 1: split on sentence-ending punctuation followed by whitespace
+    const raw = text
+      .replace(/([.!?])(\s+)/g, '$1⁠$2')  // mark boundaries
+      .split('⁠')
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    const chunks = [];
+    for (const sentence of raw) {
+      const wordCount = sentence.split(/\s+/).length;
+      if (wordCount <= 9) {
+        chunks.push(sentence);
+      } else {
+        // Break longer sentences at commas/semicolons into clauses
+        const clauses = sentence
+          .split(/,\s*|;\s*/)
+          .map(c => c.trim())
+          .filter(c => c.length > 3);
+        if (clauses.length > 1) {
+          chunks.push(...clauses);
+        } else {
+          chunks.push(sentence);
+        }
+      }
+    }
+
+    // Merge stray tiny fragments (< 4 chars) into the next chunk
+    const merged = [];
+    for (let i = 0; i < chunks.length; i++) {
+      if (chunks[i].length < 4 && i + 1 < chunks.length) {
+        chunks[i + 1] = chunks[i] + ' ' + chunks[i + 1];
+      } else {
+        merged.push(chunks[i]);
+      }
+    }
+    return merged.length ? merged : [text];
+  }
+
+  // ── Resolve the best available TTS voice once ──
+  function _pickTtsVoice() {
+    const voices = _ttsVoices.length ? _ttsVoices : speechSynthesis.getVoices();
+    for (const name of TTS_VOICE_PRIORITY) {
+      const v = voices.find(v => v.name === name);
+      if (v) return v;
+    }
+    // Prefer any Neural/Natural voice name before falling back to locale
+    const neural = voices.find(v => /natural|neural|online/i.test(v.name) && v.lang.startsWith('en'));
+    return neural
+        || voices.find(v => v.lang === 'en-US')
+        || voices.find(v => v.lang.startsWith('en'))
+        || null;
+  }
+
+  // ── TTS helper: speaks text naturally with pauses + micro-variations ──
+  // text   : full bot line to speak
+  // onEnd  : callback when all chunks are done
+  // mood   : { pitch, rate, volume } base params from _botMoodParams()
   function speakBot(text, onEnd, mood = {}) {
     if (!window.speechSynthesis) { onEnd(); return; }
     window.speechSynthesis.cancel();
 
-    // Use cached voices; fall back to a live call if the cache is still empty
-    const voices = _ttsVoices.length ? _ttsVoices : speechSynthesis.getVoices();
+    const chunks      = _splitSpeechChunks(text);
+    const chosenVoice = _pickTtsVoice();
+    const basePitch   = mood.pitch  !== undefined ? mood.pitch  : 1.0;
+    const baseRate    = mood.rate   !== undefined ? mood.rate   : 0.92;
+    const baseVol     = mood.volume !== undefined ? mood.volume : 1.0;
 
-    // Walk the priority list — pick the first voice available on this device
-    let chosenVoice = null;
-    for (const name of TTS_VOICE_PRIORITY) {
-      chosenVoice = voices.find(v => v.name === name);
-      if (chosenVoice) break;
+    let done = false;
+    let chunkIdx = 0;
+
+    // Safety guard: ~200 ms per word + 250 ms per chunk + 8 s buffer
+    const wordCount   = text.split(/\s+/).length;
+    const guardMs     = wordCount * 220 + chunks.length * 250 + 8000;
+    const guard       = setTimeout(() => { if (!done) { done = true; onEnd(); } }, guardMs);
+
+    function speakChunk() {
+      if (done) return;
+      if (chunkIdx >= chunks.length) {
+        done = true;
+        clearTimeout(guard);
+        onEnd();
+        return;
+      }
+
+      const chunk = chunks[chunkIdx++];
+
+      // Per-chunk micro-variation: ±0.05 pitch, ±0.04 rate — prevents robotic monotone
+      const pitchJitter = (Math.random() - 0.5) * 0.10;
+      const rateJitter  = (Math.random() - 0.5) * 0.08;
+
+      const utt    = new SpeechSynthesisUtterance(chunk);
+      utt.lang     = 'en-US';
+      utt.pitch    = Math.max(0.5, Math.min(2.0, basePitch + pitchJitter));
+      utt.rate     = Math.max(0.5, Math.min(1.6, baseRate  + rateJitter));
+      utt.volume   = baseVol;
+      if (chosenVoice) utt.voice = chosenVoice;
+
+      utt.onend  = () => {
+        if (done) return;
+        if (chunkIdx < chunks.length) {
+          // Natural inter-phrase breath pause: 90–220 ms, longer after sentence endings
+          const lastChar   = chunk.trim().slice(-1);
+          const isSentEnd  = /[.!?]/.test(lastChar);
+          const pauseMs    = isSentEnd
+            ? 140 + Math.random() * 110   // after full stop: 140–250 ms
+            : 80  + Math.random() * 80;   // after comma/clause: 80–160 ms
+          setTimeout(speakChunk, pauseMs);
+        } else {
+          done = true;
+          clearTimeout(guard);
+          onEnd();
+        }
+      };
+      utt.onerror  = () => { if (!done) { done = true; clearTimeout(guard); onEnd(); } };
+
+      speechSynthesis.speak(utt);
     }
-    // Final fallback: any en-US voice, then any English voice
-    if (!chosenVoice) {
-      chosenVoice = voices.find(v => v.lang === 'en-US')
-                 || voices.find(v => v.lang.startsWith('en'));
-    }
 
-    const utt = new SpeechSynthesisUtterance(text);
-    utt.lang   = 'en-US';
-    utt.pitch  = mood.pitch  !== undefined ? mood.pitch  : 1.0;
-    utt.rate   = mood.rate   !== undefined ? mood.rate   : 0.92;
-    utt.volume = mood.volume !== undefined ? mood.volume : 1.0;
-    if (chosenVoice) utt.voice = chosenVoice;
-
-    // Safety guard — iOS sometimes never fires onend; advance after 20 s
-    let fired = false;
-    const guard = setTimeout(() => { if (!fired) { fired = true; onEnd(); } }, 20000);
-    utt.onend  = () => { if (!fired) { fired = true; clearTimeout(guard); onEnd(); } };
-    utt.onerror = () => { if (!fired) { fired = true; clearTimeout(guard); onEnd(); } };
-    speechSynthesis.speak(utt);
+    speakChunk();
   }
 
   function initMockCallTopicSelect(allTopics) {
