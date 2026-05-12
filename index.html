@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CommAssess — Communication Assessment Tool</title>
-  <link rel="stylesheet" href="css/style.css?v=9">
+  <link rel="stylesheet" href="css/style.css?v=10">
   <!-- Supabase JS SDK (CDN) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
@@ -400,11 +400,15 @@
         </div>
       </div>
 
-      <!-- ── Call area: turn header + chat ── -->
+      <!-- ── Call area: turn header + mood bar + chat ── -->
       <div class="mc-bot-call-inner">
         <div class="mc-turn-header">
           <div class="step-label" id="mc-turn-label">Turn 1 of 4</div>
           <div class="mc-call-rec-badge"><span class="rec-dot-pulse"></span> Recording</div>
+        </div>
+        <!-- Customer mood indicator — updates each turn -->
+        <div id="mc-mood-indicator" class="mc-mood-bar mood-irate">
+          <span class="mc-mood-emoji">😡</span> Customer is <strong>Very Upset</strong>
         </div>
         <div id="mc-chat-thread" class="mc-chat-thread"></div>
         <div id="mc-bot-status" class="mc-bot-status" style="display:none">
@@ -992,6 +996,6 @@
 <script src="js/recorder.js?v=7"></script>
 <script src="js/speech.js?v=8"></script>
 <script src="js/claude.js?v=9"></script>
-<script src="js/app.js?v=9"></script>
+<script src="js/app.js?v=10"></script>
 </body>
 </html>

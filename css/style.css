@@ -1772,15 +1772,46 @@ body {
   align-self: flex-start;
   background: #f1f5f9;
   border-bottom-left-radius: 3px;
+  border-left: 3px solid #94a3b8;
+  transition: border-color 0.3s;
 }
 .mc-bubble.bot::before {
-  content: '🤖 Customer';
+  content: '📞 Customer';
   font-weight: 700;
   display: block;
   font-size: 0.72rem;
   margin-bottom: 0.25rem;
   color: #475569;
 }
+/* Mood-based bubble border colours */
+.mc-bubble.bot.mood-irate     { border-left-color: #ef4444; background: #fff5f5; }
+.mc-bubble.bot.mood-frustrated{ border-left-color: #f97316; background: #fff7ed; }
+.mc-bubble.bot.mood-neutral   { border-left-color: #eab308; background: #fefce8; }
+.mc-bubble.bot.mood-calm      { border-left-color: #22c55e; background: #f0fdf4; }
+
+/* Emoji prefix inside the bubble */
+.mc-bubble-mood {
+  margin-right: 0.35rem;
+  font-style: normal;
+}
+
+/* Customer mood indicator bar */
+.mc-mood-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.875rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  transition: background 0.4s, color 0.4s;
+}
+.mc-mood-emoji { font-size: 1.1rem; }
+.mc-mood-bar.mood-irate      { background: #fee2e2; color: #b91c1c; }
+.mc-mood-bar.mood-frustrated { background: #ffedd5; color: #c2410c; }
+.mc-mood-bar.mood-neutral    { background: #fef9c3; color: #854d0e; }
+.mc-mood-bar.mood-calm       { background: #dcfce7; color: #166534; }
 .mc-bubble.trainee {
   align-self: flex-end;
   background: #ede9fe;

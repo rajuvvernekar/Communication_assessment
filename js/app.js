@@ -668,8 +668,37 @@ const App = (() => {
   //  MOCK CALL
   // ================================================================
 
-  // ── TTS helper: speaks text, calls onEnd when done (or on error / timeout) ──
-  function speakBot(text, onEnd) {
+  // ── Compute TTS voice params that gradually calm down across turns ──
+  // turnIndex: 0-based current turn; totalTurns: total turns in the script
+  // Returns { pitch, rate, emoji, label, bubbleClass }
+  function _botMoodParams(turnIndex, totalTurns) {
+    // progress: 0 = first turn (very irate), 1 = last turn (calm)
+    const progress = totalTurns <= 1 ? 0.5 : Math.min(1, turnIndex / (totalTurns - 1));
+
+    // Pitch: 1.55 (shouting) → 0.88 (calm)
+    const pitch = 1.55 - progress * 0.67;
+    // Rate: 1.18 (fast/agitated) → 0.86 (measured/calm)
+    const rate  = 1.18 - progress * 0.32;
+    // Volume: always 1.0 (Web Speech API caps at 1)
+    const volume = 1.0;
+
+    // Emoji + label for visual mood indicator
+    let emoji, label, bubbleClass;
+    if (progress < 0.2) {
+      emoji = '😡'; label = 'Very Upset';     bubbleClass = 'mood-irate';
+    } else if (progress < 0.45) {
+      emoji = '😤'; label = 'Frustrated';      bubbleClass = 'mood-frustrated';
+    } else if (progress < 0.7) {
+      emoji = '😐'; label = 'Calming Down';    bubbleClass = 'mood-neutral';
+    } else {
+      emoji = '😌'; label = 'Satisfied';       bubbleClass = 'mood-calm';
+    }
+
+    return { pitch, rate, volume, emoji, label, bubbleClass };
+  }
+
+  // ── TTS helper: speaks text with mood params, calls onEnd when done ──
+  function speakBot(text, onEnd, mood = {}) {
     if (!window.speechSynthesis) { onEnd(); return; }
     window.speechSynthesis.cancel();
 
@@ -689,9 +718,10 @@ const App = (() => {
     }
 
     const utt = new SpeechSynthesisUtterance(text);
-    utt.lang  = 'en-US';
-    utt.rate  = 0.92;
-    utt.pitch = 1.0;
+    utt.lang   = 'en-US';
+    utt.pitch  = mood.pitch  !== undefined ? mood.pitch  : 1.0;
+    utt.rate   = mood.rate   !== undefined ? mood.rate   : 0.92;
+    utt.volume = mood.volume !== undefined ? mood.volume : 1.0;
     if (chosenVoice) utt.voice = chosenVoice;
 
     // Safety guard — iOS sometimes never fires onend; advance after 20 s
@@ -944,11 +974,20 @@ const App = (() => {
   // Render the bot's current turn as a chat bubble, then speak via TTS
   function runBotTurn() {
     const line = _mcTurns[_mcTurnIndex];
+    const mood = _botMoodParams(_mcTurnIndex, _mcTurns.length);
+
     $('mc-turn-label').textContent = `Turn ${_mcTurnIndex + 1} of ${_mcTurns.length}`;
 
+    // Update the mood indicator bar at the top of the chat
+    const moodEl = $('mc-mood-indicator');
+    if (moodEl) {
+      moodEl.className = `mc-mood-bar ${mood.bubbleClass}`;
+      moodEl.innerHTML = `<span class="mc-mood-emoji">${mood.emoji}</span> Customer is <strong>${mood.label}</strong>`;
+    }
+
     const bubble = document.createElement('div');
-    bubble.className = 'mc-bubble bot';
-    bubble.textContent = line;
+    bubble.className = `mc-bubble bot ${mood.bubbleClass}`;
+    bubble.innerHTML = `<span class="mc-bubble-mood">${mood.emoji}</span>${line}`;
     $('mc-chat-thread').appendChild(bubble);
     $('mc-chat-thread').scrollTop = $('mc-chat-thread').scrollHeight;
 
@@ -956,7 +995,7 @@ const App = (() => {
     $('mc-rec-area').style.display   = 'none';
     $('btn-mc-finish').style.display = 'none';
 
-    speakBot(line, startTraineeTurn);
+    speakBot(line, startTraineeTurn, mood);
   }
 
   // After TTS ends: show recording area, wait for agent to click Done
