@@ -425,6 +425,31 @@ body {
   .ps-topic-choice-grid { grid-template-columns: 1fr; }
 }
 
+/* ── Topic choice countdown timer ── */
+.ps-choice-timer-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  margin-bottom: 0.75rem;
+  background: #fff7ed;
+  border: 1.5px solid #fed7aa;
+  border-radius: 10px;
+  padding: 0.55rem 1rem;
+}
+.ps-choice-timer-label {
+  font-size: 0.85rem;
+  color: #92400e;
+}
+.ps-choice-countdown {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #ea580c;
+  min-width: 2ch;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Notepad during 5-minute recording — compact but always accessible */
 .ps-notes-during-rec {
   border: 2px solid #fde68a;

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CommAssess — Communication Assessment Tool</title>
-  <link rel="stylesheet" href="css/style.css?v=12">
+  <link rel="stylesheet" href="css/style.css?v=13">
   <!-- Supabase JS SDK (CDN) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
@@ -132,7 +132,6 @@
           <p>Workplace &amp; communication topics</p>
         </button>
       </div>
-      <p style="text-align:center;color:var(--text-muted);font-size:0.85rem;margin-top:1.25rem">One topic skip is available per session.</p>
     </div>
   </div>
 
@@ -155,9 +154,13 @@
 
       <!-- General mode: two topic choices, clicking one starts prep timer -->
       <div id="ps-general-topics-wrap" class="hidden">
-        <p style="text-align:center;color:var(--text-muted);margin-bottom:1.25rem;font-size:0.9rem">
-          Two topics for you — pick the one you feel more confident about.<br>
-          <strong style="color:var(--primary)">The 2-minute prep timer starts the moment you choose.</strong>
+        <div class="ps-choice-timer-wrap">
+          <span class="ps-choice-timer-label">Choose a topic in</span>
+          <span id="ps-choice-countdown" class="ps-choice-countdown">30</span>
+          <span class="ps-choice-timer-label">sec — or one will be picked for you.</span>
+        </div>
+        <p style="text-align:center;color:var(--text-muted);margin-bottom:1rem;font-size:0.875rem">
+          Once you choose, you get <strong>2 minutes</strong> to prepare your points.
         </p>
         <div class="ps-topic-choice-grid">
           <button class="ps-topic-choice-card" id="ps-topic-choice-a">
@@ -265,25 +268,12 @@
     <div class="results-card">
       <div class="results-header">
         <div class="results-icon">✅</div>
-        <h2>Assessment Submitted!</h2>
-        <p>Your assessment is being evaluated by the Training Team</p>
+        <h2>Thank You for Submitting!</h2>
+        <p>Your recording has been saved successfully.</p>
       </div>
-
-      <!-- Performance band — most prominent result -->
-      <div id="ps-band-display"></div>
-
-      <!-- Per-criterion scores -->
-      <div class="ai-scores" id="ps-ai-scores"></div>
-      <div class="analysis-pills" id="ps-analysis-pills"></div>
-
-      <div class="transcript-section">
-        <h3>Your Transcript</h3>
-        <div id="ps-final-transcript" class="transcript-box">No transcript available.</div>
-      </div>
-      <div id="ps-coaching-summary" class="coaching-summary hidden"></div>
       <div class="admin-note">
         <span>📋</span>
-        <span>Your admin will review this recording and may add a final score and written feedback.</span>
+        <span>Your admin will review this recording and add a final score and written feedback.</span>
       </div>
       <div class="results-actions">
         <button class="btn-secondary" data-back="modules">← Back to Modules</button>
@@ -996,6 +986,6 @@
 <script src="js/recorder.js?v=7"></script>
 <script src="js/speech.js?v=8"></script>
 <script src="js/claude.js?v=9"></script>
-<script src="js/app.js?v=13"></script>
+<script src="js/app.js?v=14"></script>
 </body>
 </html>

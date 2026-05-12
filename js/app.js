@@ -11,6 +11,8 @@ const App = (() => {
   let _psTopicsPool = [];           // all fetched topics for current category
   let _psTopicChoiceA = null;       // first general topic choice shown to agent
   let _psTopicChoiceB = null;       // second general topic choice shown to agent
+  let _psChoiceTimerId = null;      // 30s countdown interval for general topic selection
+  let _psMicPregranted = false;     // mic was pre-requested during category click (for auto-advance)
   let _wcStartTime = null;
   let _wcTimerInterval = null;
 
@@ -407,10 +409,16 @@ const App = (() => {
   // ================================================================
   //  PICK & SPEAK
   // ================================================================
+  function _clearPsChoiceTimer() {
+    if (_psChoiceTimerId) { clearInterval(_psChoiceTimerId); _psChoiceTimerId = null; }
+  }
+
   function initPickSpeakCategory() {
     _psSkipUsed   = false;
     _psCategory   = null;
     _psTopicsPool = [];
+    _psMicPregranted = false;
+    _clearPsChoiceTimer();
     showStep('pick-speak', 'ps-step-category');
 
     $('btn-ps-cat-stock').onclick   = () => selectPsCategory('pick-speak-stock');
@@ -431,6 +439,14 @@ const App = (() => {
     _psTopicsPool = topics;
 
     if (category === 'pick-speak-general') {
+      // Pre-request mic during user gesture so the 30s auto-advance can proceed without a popup
+      const micOk = await Recorder.requestMic();
+      if (!micOk) {
+        toast('🎤 Microphone access denied. Please allow mic access and try again.', 'error');
+        return;
+      }
+      _psMicPregranted = true;
+
       // General: pick two distinct topics for the agent to choose from
       const shuffled = [...topics].sort(() => Math.random() - 0.5);
       _psTopicChoiceA = shuffled[0];
@@ -469,6 +485,7 @@ const App = (() => {
       if (bDescEl)  bDescEl.textContent  = _psTopicChoiceB ? (_psTopicChoiceB.description || '') : '';
 
       const pickAndStart = async (chosen) => {
+        _clearPsChoiceTimer(); // stop countdown when topic chosen
         _currentTopic = chosen;
         const ok = await startPickSpeakPrep();
         if (!ok) toast('🎤 Microphone access denied. Please allow mic and try again.', 'error');
@@ -476,6 +493,24 @@ const App = (() => {
 
       $('ps-topic-choice-a').onclick = () => pickAndStart(_psTopicChoiceA);
       $('ps-topic-choice-b').onclick = () => pickAndStart(_psTopicChoiceB);
+
+      // 30-second countdown — auto-select if agent doesn't choose in time
+      let choiceRemaining = 30;
+      const countdownEl = $('ps-choice-countdown');
+      if (countdownEl) countdownEl.textContent = choiceRemaining;
+      _clearPsChoiceTimer();
+      _psChoiceTimerId = setInterval(() => {
+        choiceRemaining--;
+        if (countdownEl) countdownEl.textContent = choiceRemaining;
+        if (choiceRemaining <= 0) {
+          clearInterval(_psChoiceTimerId);
+          _psChoiceTimerId = null;
+          // Guard: only auto-advance if still on the topic step
+          const topicStep = $('ps-step-topic');
+          if (!topicStep || topicStep.classList.contains('hidden')) return;
+          pickAndStart(Math.random() < 0.5 ? _psTopicChoiceA : _psTopicChoiceB);
+        }
+      }, 1000);
 
     } else {
       // ── Stock Market mode: reveal → timer starts immediately ──
@@ -510,12 +545,16 @@ const App = (() => {
   }
 
   async function startPickSpeakPrep() {
-    // Request mic here — called directly from user click, so browser allows the prompt.
-    const micOk = await Recorder.requestMic();
-    if (!micOk) {
-      toast('⚠ Microphone access denied. Please allow mic access in your browser and try again.', 'error');
-      return false;
+    // Mic was pre-requested in selectPsCategory for general mode (user gesture).
+    // For stock mode (or any other path), request it now.
+    if (!_psMicPregranted) {
+      const micOk = await Recorder.requestMic();
+      if (!micOk) {
+        toast('⚠ Microphone access denied. Please allow mic access in your browser and try again.', 'error');
+        return false;
+      }
     }
+    _psMicPregranted = false; // consume the flag
 
     showStep('pick-speak', 'ps-step-prep');
     $('ps-prep-title').textContent = _currentTopic.title;
@@ -572,8 +611,6 @@ const App = (() => {
         if (recWc) recWc.textContent = `${words} word${words !== 1 ? 's' : ''}`;
       };
     }
-    $('ps-final-transcript').textContent = '';
-
     const speechSupported = SpeechEngine.isSupported();
     if (!speechSupported) {
       $('ps-no-speech-note').classList.remove('hidden');
@@ -650,30 +687,13 @@ const App = (() => {
       console.error('Session save failed:', e.message);
       toast('⚠ Could not save session: ' + e.message, 'error');
     }
-    showPickSpeakResults(aiScores, finalTranscript, analysis, duration);
+    showPickSpeakResults();
   }
 
-  function showPickSpeakResults(scores, transcript, analysis, duration) {
+  function showPickSpeakResults() {
+    _clearPsChoiceTimer(); // stop any remaining choice countdown
     showStep('pick-speak', 'ps-step-results');
-
-    // Scores are for admin only — clear any previously rendered content
-    $('ps-band-display').innerHTML  = '';
-    $('ps-ai-scores').innerHTML     = '';
-    $('ps-analysis-pills').innerHTML = '';
-
-    $('ps-final-transcript').textContent = transcript || 'No transcript captured. Your recording has been saved for admin review.';
     $('btn-ps-stop').disabled = false;
-
-    const summaryEl = $('ps-coaching-summary');
-    if (summaryEl) {
-      if (scores && scores._summary) {
-        summaryEl.textContent = scores._summary;
-        summaryEl.classList.remove('hidden');
-      } else {
-        summaryEl.classList.add('hidden');
-      }
-    }
-
     toast('Assessment submitted!', 'success');
   }
 
