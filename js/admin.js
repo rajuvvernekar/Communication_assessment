@@ -6,7 +6,7 @@
 // totalScore = grand total out of 100 (all components weighted and summed)
 // v35: added individual module scores + 2 new aliases (suma manjunath, saneeth)
 // v36: replaced AI Audit nav/section with Comm360 Master Report (team filter + full scores table)
-// v38: archive bug fix (proper manager resolution); manager checkboxes + bulk archive; Srusti Vishnukant Ladda → Ritesh S
+// v38b: Vishal Shivsahay Singh gramScore updated (39.25/100 → 9.8125/25, total 22.09)
 const MASTER_SCORES = {
   // ── Vignesh Baliga ──
   "abdul razak":                     { selfAssessment: 9.243,  aiAudit: 3.945,  psScore: 12.68, lisScore: 16.20, mcScore:  8.58, gramScore:  7.00, totalScore: 57.65 },
@@ -267,7 +267,7 @@ const MASTER_SCORES = {
   "rashid firoz ahmed ansari":       { selfAssessment: 7.513514, aiAudit: 3.55,  psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 11.06 },
   "salman batliwala":                { selfAssessment: 6.810811, aiAudit: 3.89,  psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 10.70 },
   "shweta anil tiwari":              { selfAssessment: 6.108108, aiAudit: 3.66,  psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 9.77 },
-  "vishal shivsahay singh":          { selfAssessment: 8.27027,  aiAudit: 4.005, psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 12.28 },
+  "vishal shivsahay singh":          { selfAssessment: 8.27027,  aiAudit: 4.005, psScore: null, lisScore: null, mcScore: null, gramScore: 9.8125, totalScore: 22.09 },
   // ── Shalini H S ──
   "aimen nasardi":                   { selfAssessment: 8.216216, aiAudit: 3.515, psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 11.73 },
   // ── Sharuq Fayaz Shaikh ──
