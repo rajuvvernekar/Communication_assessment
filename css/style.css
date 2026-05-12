@@ -1550,6 +1550,10 @@ body {
   color: var(--danger);
   font-weight: 600;
 }
+.bst-turn-last {
+  color: #d97706 !important;
+  font-weight: 700;
+}
 
 /* Caller audio recorder in modal */
 .caller-audio-section { display: flex; flex-direction: column; gap: 0.5rem; }

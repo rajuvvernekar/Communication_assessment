@@ -1166,7 +1166,15 @@ const App = (() => {
     const line = _mcTurns[_mcTurnIndex];
     const mood = _botMoodParams(_mcTurnIndex, _mcTurns.length);
 
-    $('mc-turn-label').textContent = `Turn ${_mcTurnIndex + 1} of ${_mcTurns.length}`;
+    const isLastTurn = _mcTurnIndex === _mcTurns.length - 1;
+    const turnLabel = $('mc-turn-label');
+    if (turnLabel) {
+      turnLabel.textContent = isLastTurn
+        ? `Turn ${_mcTurnIndex + 1} of ${_mcTurns.length} — 🏁 Final Question`
+        : `Turn ${_mcTurnIndex + 1} of ${_mcTurns.length}`;
+      turnLabel.style.color  = isLastTurn ? '#d97706' : '';
+      turnLabel.style.fontWeight = isLastTurn ? '700' : '';
+    }
 
     // Update the mood indicator bar at the top of the chat
     const moodEl = $('mc-mood-indicator');

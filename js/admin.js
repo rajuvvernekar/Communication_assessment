@@ -1364,13 +1364,15 @@ window.Admin = (() => {
   function renderBotScriptItems(lines = [], audioBlobs = []) {
     _botScriptAudioBlobs = lines.map((_, i) => audioBlobs[i] || null);
     const container = $('bot-script-items');
+    const total = lines.length;
     container.innerHTML = lines.map((line, i) => {
       const safe     = line.replace(/"/g, '&quot;');
       const hasAudio = !!_botScriptAudioBlobs[i];
       const audioSrc = hasAudio ? URL.createObjectURL(_botScriptAudioBlobs[i]) : '';
+      const isLast   = i === total - 1 && total > 1;
       return `<div class="bot-script-turn-row">
         <div class="bst-top">
-          <span class="bst-turn-num">Turn ${i + 1}</span>
+          <span class="bst-turn-num${isLast ? ' bst-turn-last' : ''}">Turn ${i + 1}${isLast ? ' — Last' : ''}</span>
           <button class="btn-remove-item bst-remove" title="Remove" onclick="Admin.removeBotScriptRow(this)">✕</button>
         </div>
         <input type="text" class="bst-input" placeholder="e.g. I've been charged twice this month!" value="${safe}">
@@ -1402,6 +1404,7 @@ window.Admin = (() => {
             <span class="bst-rec-status"></span>
           </div>
         </div>`);
+      _renumberBotRows(); // refresh "Last" badge on all rows
     };
   }
 
@@ -1417,9 +1420,14 @@ window.Admin = (() => {
   }
 
   function _renumberBotRows() {
-    document.querySelectorAll('#bot-script-items .bot-script-turn-row').forEach((r, i) => {
-      const num = r.querySelector('.bst-turn-num');
-      if (num) num.textContent = `Turn ${i + 1}`;
+    const rows = document.querySelectorAll('#bot-script-items .bot-script-turn-row');
+    rows.forEach((r, i) => {
+      const num    = r.querySelector('.bst-turn-num');
+      const isLast = i === rows.length - 1 && rows.length > 1;
+      if (num) {
+        num.textContent = `Turn ${i + 1}${isLast ? ' — Last' : ''}`;
+        num.classList.toggle('bst-turn-last', isLast);
+      }
     });
   }
 
