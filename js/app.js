@@ -680,130 +680,158 @@ const App = (() => {
   //  MOCK CALL
   // ================================================================
 
-  // ── Compute TTS voice params that gradually calm down across turns ──
-  // turnIndex: 0-based current turn; totalTurns: total turns in the script
-  // Returns { pitch, rate, emoji, label, bubbleClass }
+  // ── Mood params: irate → calm arc across turns ──
   function _botMoodParams(turnIndex, totalTurns) {
-    // progress: 0 = first turn (very irate), 1 = last turn (calm)
     const progress = totalTurns <= 1 ? 0.5 : Math.min(1, turnIndex / (totalTurns - 1));
-
-    // Pitch: 1.55 (shouting) → 0.88 (calm)
-    const pitch = 1.55 - progress * 0.67;
-    // Rate: 1.18 (fast/agitated) → 0.86 (measured/calm)
-    const rate  = 1.18 - progress * 0.32;
-    // Volume: always 1.0 (Web Speech API caps at 1)
+    // Pitch 1.52 → 0.90, Rate 1.16 → 0.84
+    const pitch  = 1.52 - progress * 0.62;
+    const rate   = 1.16 - progress * 0.32;
     const volume = 1.0;
-
-    // Emoji + label for visual mood indicator
     let emoji, label, bubbleClass;
-    if (progress < 0.2) {
-      emoji = '😡'; label = 'Very Upset';     bubbleClass = 'mood-irate';
-    } else if (progress < 0.45) {
-      emoji = '😤'; label = 'Frustrated';      bubbleClass = 'mood-frustrated';
-    } else if (progress < 0.7) {
-      emoji = '😐'; label = 'Calming Down';    bubbleClass = 'mood-neutral';
-    } else {
-      emoji = '😌'; label = 'Satisfied';       bubbleClass = 'mood-calm';
-    }
-
-    return { pitch, rate, volume, emoji, label, bubbleClass };
+    if      (progress < 0.20) { emoji = '😡'; label = 'Very Upset';  bubbleClass = 'mood-irate';      }
+    else if (progress < 0.45) { emoji = '😤'; label = 'Frustrated';  bubbleClass = 'mood-frustrated'; }
+    else if (progress < 0.70) { emoji = '😐'; label = 'Calming Down';bubbleClass = 'mood-neutral';    }
+    else                      { emoji = '😌'; label = 'Satisfied';   bubbleClass = 'mood-calm';       }
+    return { pitch, rate, volume, progress, emoji, label, bubbleClass };
   }
 
-  // ── Split a bot line into natural speech chunks ──
-  // Splits at sentence endings first, then at commas/semicolons for long clauses.
-  // Short interjections (< 4 chars after trim) are merged into the next chunk.
-  function _splitSpeechChunks(text) {
-    if (!text || !text.trim()) return [];
+  // ── Audible breath sound via Web Audio API ──
+  // progress 0 = angry (short sharp inhale), 1 = calm (long soft breath)
+  // Returns a Promise that resolves when the breath finishes playing.
+  function _playBreath(progress) {
+    return new Promise(resolve => {
+      try {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) { resolve(); return; }
+        const ctx = new Ctx();
 
-    // Step 1: split on sentence-ending punctuation followed by whitespace
+        // Angry = 95ms sharp, calm = 260ms gentle
+        const durationMs  = Math.round(95 + progress * 165);
+        const gainLevel   = 0.055 - progress * 0.018;   // louder when agitated
+        const sr  = ctx.sampleRate;
+        const len = Math.round(sr * durationMs / 1000);
+        const buf = ctx.createBuffer(1, len, sr);
+        const pcm = buf.getChannelData(0);
+
+        // Envelope: fast attack then exponential decay (sounds like real breath-in)
+        const attackEnd = 0.08 + progress * 0.12;       // 0.08→0.20 of duration
+        for (let i = 0; i < len; i++) {
+          const t   = i / len;
+          const env = t < attackEnd
+            ? t / attackEnd
+            : Math.pow(1 - (t - attackEnd) / (1 - attackEnd + 1e-6), 0.6);
+          pcm[i] = (Math.random() * 2 - 1) * env * gainLevel;
+        }
+
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+
+        // Low-pass: real breath is all low-frequency air turbulence
+        const lpf = ctx.createBiquadFilter();
+        lpf.type             = 'lowpass';
+        lpf.frequency.value  = 580 + progress * 200;   // slightly brighter when calm
+        lpf.Q.value          = 0.5;
+
+        src.connect(lpf);
+        lpf.connect(ctx.destination);
+        src.start(0);
+
+        let fired = false;
+        const fin = () => { if (!fired) { fired = true; try { ctx.close(); } catch(e){} resolve(); } };
+        src.onended = fin;
+        setTimeout(fin, durationMs + 150);
+      } catch (e) { resolve(); }  // AudioContext blocked — skip silently
+    });
+  }
+
+  // ── Split bot text into natural speaking chunks ──
+  // Sentence-level first, then long clauses at comma/semicolon boundaries.
+  function _splitSpeechChunks(text) {
+    if (!text || !text.trim()) return [text];
+    const MARKER = '⁠';
     const raw = text
-      .replace(/([.!?])(\s+)/g, '$1⁠$2')  // mark boundaries
-      .split('⁠')
+      .replace(/([.!?])(\s+)/g, `$1${MARKER}$2`)
+      .split(MARKER)
       .map(s => s.trim())
       .filter(Boolean);
 
-    const chunks = [];
+    const out = [];
     for (const sentence of raw) {
-      const wordCount = sentence.split(/\s+/).length;
-      if (wordCount <= 9) {
-        chunks.push(sentence);
+      if (sentence.split(/\s+/).length <= 9) {
+        out.push(sentence);
       } else {
-        // Break longer sentences at commas/semicolons into clauses
-        const clauses = sentence
-          .split(/,\s*|;\s*/)
-          .map(c => c.trim())
-          .filter(c => c.length > 3);
-        if (clauses.length > 1) {
-          chunks.push(...clauses);
-        } else {
-          chunks.push(sentence);
-        }
+        const clauses = sentence.split(/,\s*|;\s*/).map(c => c.trim()).filter(c => c.length > 3);
+        out.push(...(clauses.length > 1 ? clauses : [sentence]));
       }
     }
-
-    // Merge stray tiny fragments (< 4 chars) into the next chunk
+    // Merge stray tiny fragments into next chunk
     const merged = [];
-    for (let i = 0; i < chunks.length; i++) {
-      if (chunks[i].length < 4 && i + 1 < chunks.length) {
-        chunks[i + 1] = chunks[i] + ' ' + chunks[i + 1];
-      } else {
-        merged.push(chunks[i]);
-      }
+    for (let i = 0; i < out.length; i++) {
+      if (out[i].length < 4 && i + 1 < out.length) { out[i + 1] = out[i] + ' ' + out[i + 1]; }
+      else merged.push(out[i]);
     }
     return merged.length ? merged : [text];
   }
 
-  // ── Resolve the best available TTS voice once ──
+  // ── Pick best TTS voice — strongly prefer male ──
   function _pickTtsVoice() {
     const voices = _ttsVoices.length ? _ttsVoices : speechSynthesis.getVoices();
+    // Priority list already has male voices at the top
     for (const name of TTS_VOICE_PRIORITY) {
       const v = voices.find(v => v.name === name);
       if (v) return v;
     }
-    // Prefer any Neural/Natural voice name before falling back to locale
-    const neural = voices.find(v => /natural|neural|online/i.test(v.name) && v.lang.startsWith('en'));
-    return neural
+    // Try any male-sounding Neural voice before generic fallback
+    const maleNeural = voices.find(v =>
+      /ryan|andrew|brian|christopher|eric|guy|daniel|alex|david|james|mark|thomas/i.test(v.name)
+      && /natural|neural|online/i.test(v.name)
+      && v.lang.startsWith('en')
+    );
+    if (maleNeural) return maleNeural;
+    const anyNeural = voices.find(v => /natural|neural|online/i.test(v.name) && v.lang.startsWith('en'));
+    return anyNeural
         || voices.find(v => v.lang === 'en-US')
         || voices.find(v => v.lang.startsWith('en'))
         || null;
   }
 
-  // ── TTS helper: speaks text naturally with pauses + micro-variations ──
-  // text   : full bot line to speak
-  // onEnd  : callback when all chunks are done
-  // mood   : { pitch, rate, volume } base params from _botMoodParams()
+  // ── Core TTS: speaks with real breath sounds + per-chunk variation ──
+  // Plays an audible breath inhale → then speaks each sentence/clause
+  // chunk with slight pitch/rate jitter and natural pauses between them.
   function speakBot(text, onEnd, mood = {}) {
     if (!window.speechSynthesis) { onEnd(); return; }
     window.speechSynthesis.cancel();
 
     const chunks      = _splitSpeechChunks(text);
     const chosenVoice = _pickTtsVoice();
-    const basePitch   = mood.pitch  !== undefined ? mood.pitch  : 1.0;
-    const baseRate    = mood.rate   !== undefined ? mood.rate   : 0.92;
-    const baseVol     = mood.volume !== undefined ? mood.volume : 1.0;
+    const basePitch   = mood.pitch    !== undefined ? mood.pitch    : 1.0;
+    const baseRate    = mood.rate     !== undefined ? mood.rate     : 0.92;
+    const baseVol     = mood.volume   !== undefined ? mood.volume   : 1.0;
+    const progress    = mood.progress !== undefined ? mood.progress : 0.5;
 
     let done = false;
     let chunkIdx = 0;
 
-    // Safety guard: ~200 ms per word + 250 ms per chunk + 8 s buffer
-    const wordCount   = text.split(/\s+/).length;
-    const guardMs     = wordCount * 220 + chunks.length * 250 + 8000;
-    const guard       = setTimeout(() => { if (!done) { done = true; onEnd(); } }, guardMs);
+    // Safety guard scales with length of the text
+    const wordCount = text.split(/\s+/).length;
+    const guardMs   = wordCount * 230 + chunks.length * 300 + 10000;
+    const guard     = setTimeout(() => { if (!done) { done = true; onEnd(); } }, guardMs);
+
+    function finish() {
+      if (!done) { done = true; clearTimeout(guard); onEnd(); }
+    }
 
     function speakChunk() {
       if (done) return;
-      if (chunkIdx >= chunks.length) {
-        done = true;
-        clearTimeout(guard);
-        onEnd();
-        return;
-      }
+      if (chunkIdx >= chunks.length) { finish(); return; }
 
-      const chunk = chunks[chunkIdx++];
+      const chunk     = chunks[chunkIdx++];
+      const lastChar  = chunk.trim().slice(-1);
+      const isSentEnd = /[.!?]/.test(lastChar);
 
-      // Per-chunk micro-variation: ±0.05 pitch, ±0.04 rate — prevents robotic monotone
-      const pitchJitter = (Math.random() - 0.5) * 0.10;
-      const rateJitter  = (Math.random() - 0.5) * 0.08;
+      // Per-chunk pitch + rate jitter — stronger variation = more human
+      const pitchJitter = (Math.random() - 0.5) * 0.14;   // ±0.07
+      const rateJitter  = (Math.random() - 0.5) * 0.10;   // ±0.05
 
       const utt    = new SpeechSynthesisUtterance(chunk);
       utt.lang     = 'en-US';
@@ -812,28 +840,40 @@ const App = (() => {
       utt.volume   = baseVol;
       if (chosenVoice) utt.voice = chosenVoice;
 
-      utt.onend  = () => {
+      utt.onend = () => {
         if (done) return;
-        if (chunkIdx < chunks.length) {
-          // Natural inter-phrase breath pause: 90–220 ms, longer after sentence endings
-          const lastChar   = chunk.trim().slice(-1);
-          const isSentEnd  = /[.!?]/.test(lastChar);
-          const pauseMs    = isSentEnd
-            ? 140 + Math.random() * 110   // after full stop: 140–250 ms
-            : 80  + Math.random() * 80;   // after comma/clause: 80–160 ms
-          setTimeout(speakChunk, pauseMs);
+        if (chunkIdx >= chunks.length) { finish(); return; }
+
+        if (isSentEnd) {
+          // After a full sentence: play a breath then continue
+          // (irate = short pause before breath, calm = longer)
+          const preBreathMs = Math.round(60 + progress * 80);   // 60→140 ms
+          setTimeout(() => {
+            _playBreath(progress).then(() => {
+              if (!done) setTimeout(speakChunk, 40 + Math.random() * 60);
+            });
+          }, preBreathMs);
         } else {
-          done = true;
-          clearTimeout(guard);
-          onEnd();
+          // After a clause (comma): just a short thinking pause
+          const clausePauseMs = Math.round(70 + Math.random() * 80);  // 70–150 ms
+          setTimeout(speakChunk, clausePauseMs);
         }
       };
-      utt.onerror  = () => { if (!done) { done = true; clearTimeout(guard); onEnd(); } };
+      utt.onerror = () => { if (!done) { done = true; clearTimeout(guard); onEnd(); } };
 
       speechSynthesis.speak(utt);
     }
 
-    speakChunk();
+    // ── Start: play opening breath, then begin speaking ──
+    // First breath is slightly longer than inter-sentence breaths
+    const openBreathProgress = Math.max(0, progress - 0.1);  // slightly angrier-sounding
+    _playBreath(openBreathProgress).then(() => {
+      if (!done) {
+        // Short "thinking" pause after breath before first word
+        const thinkMs = Math.round(80 + Math.random() * 100 + (1 - progress) * 60);
+        setTimeout(speakChunk, thinkMs);
+      }
+    });
   }
 
   function initMockCallTopicSelect(allTopics) {
