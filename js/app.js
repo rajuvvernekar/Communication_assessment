@@ -41,6 +41,7 @@ const App = (() => {
   let _mcTurnTimerId   = null;  // per-turn 90s countdown setInterval
   let _mcTurnEnded     = false; // guard: prevent double-call of endTraineeTurn()
   let _mcCallFinishing = false; // guard: prevent double-call of finishBotCall()
+  let _mcBotAudioEl    = null;  // current <Audio> element for per-turn recorded voice
 
   // ── TTS voice cache — Chrome loads voices async; pre-cache on first event ──
   let _ttsVoices = [];
@@ -795,6 +796,30 @@ const App = (() => {
         || null;
   }
 
+  // ── Play admin-recorded audio blob for a bot turn ──
+  // Falls back to onEnd immediately if blob is invalid.
+  function playBotAudio(blob, onEnd) {
+    try {
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      _mcBotAudioEl = audio;
+      audio.onended = () => {
+        _mcBotAudioEl = null;
+        URL.revokeObjectURL(url);
+        onEnd();
+      };
+      audio.onerror = () => {
+        _mcBotAudioEl = null;
+        URL.revokeObjectURL(url);
+        onEnd();
+      };
+      audio.play().catch(() => { _mcBotAudioEl = null; URL.revokeObjectURL(url); onEnd(); });
+    } catch (e) {
+      _mcBotAudioEl = null;
+      onEnd();
+    }
+  }
+
   // ── Core TTS: speaks with real breath sounds + per-chunk variation ──
   // Plays an audible breath inhale → then speaks each sentence/clause
   // chunk with slight pitch/rate jitter and natural pauses between them.
@@ -1096,8 +1121,9 @@ const App = (() => {
   // in-progress trainee turn, then hand off to finishBotCall()
   function endBotCallEarly() {
     if (_mcCallFinishing) return; // already finishing — ignore duplicate clicks
-    // Cancel any ongoing TTS
+    // Cancel any ongoing TTS or recorded audio playback
     if (window.speechSynthesis) window.speechSynthesis.cancel();
+    if (_mcBotAudioEl) { try { _mcBotAudioEl.pause(); _mcBotAudioEl.src = ''; } catch(e){} _mcBotAudioEl = null; }
 
     // If currently in a trainee turn, capture whatever has been spoken so far
     const recArea = $('mc-rec-area');
@@ -1139,7 +1165,13 @@ const App = (() => {
     $('mc-rec-area').style.display   = 'none';
     $('btn-mc-finish').style.display = 'none';
 
-    speakBot(line, startTraineeTurn, mood);
+    // Use admin-recorded audio if available, otherwise fall back to TTS
+    const recordedBlob = _currentTopic.botScriptAudio && _currentTopic.botScriptAudio[_mcTurnIndex];
+    if (recordedBlob) {
+      playBotAudio(recordedBlob, startTraineeTurn);
+    } else {
+      speakBot(line, startTraineeTurn, mood);
+    }
   }
 
   // After TTS ends: show recording area, wait for agent to click Done

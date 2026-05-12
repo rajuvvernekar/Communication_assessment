@@ -7,6 +7,7 @@
 // v35: added individual module scores + 2 new aliases (suma manjunath, saneeth)
 // v36: replaced AI Audit nav/section with Comm360 Master Report (team filter + full scores table)
 // v38b: Vishal Shivsahay Singh gramScore updated (39.25/100 → 9.8125/25, total 22.09)
+// v39:  Per-turn voice recording for bot script turns in mock call topics
 const MASTER_SCORES = {
   // ── Vignesh Baliga ──
   "abdul razak":                     { selfAssessment: 9.243,  aiAudit: 3.945,  psScore: 12.68, lisScore: 16.20, mcScore:  8.58, gramScore:  7.00, totalScore: 57.65 },
@@ -385,6 +386,9 @@ window.Admin = (() => {
   let _editTopicId = null; // null = new, number = edit existing
   let _callerAudioBlob = null;
   let _callerRecording = false;
+  let _botScriptAudioBlobs = []; // per-turn audio blobs (null = use TTS)
+  let _botScriptRecording  = -1; // index of turn currently being recorded (-1 = none)
+  let _botScriptRecPromise = null;
   let _scoringSessionId = null;
   let _topicsFilter = 'all';
   let _assessmentsFilter = { module: 'all', status: 'all', team: 'all' };
@@ -1313,7 +1317,7 @@ window.Admin = (() => {
       } else {
         renderChecklistItems(topic.checklist || []);
       }
-      renderBotScriptItems(topic.botScript || []);
+      renderBotScriptItems(topic.botScript || [], topic.botScriptAudio || []);
 
       // Support both Storage URL (new) and legacy Blob
       const callerUrl = topic.callerAudioUrl
@@ -1357,22 +1361,127 @@ window.Admin = (() => {
     }
   }
 
-  function renderBotScriptItems(lines = []) {
+  function renderBotScriptItems(lines = [], audioBlobs = []) {
+    _botScriptAudioBlobs = lines.map((_, i) => audioBlobs[i] || null);
     const container = $('bot-script-items');
-    container.innerHTML = lines.map(line => {
-      const safe = line.replace(/"/g, '&quot;');
-      return `<div class="checklist-item-row">
-        <input type="text" placeholder="e.g. I've been charged twice this month!" value="${safe}">
-        <button class="btn-remove-item" title="Remove" onclick="this.parentElement.remove()">✕</button>
+    container.innerHTML = lines.map((line, i) => {
+      const safe     = line.replace(/"/g, '&quot;');
+      const hasAudio = !!_botScriptAudioBlobs[i];
+      const audioSrc = hasAudio ? URL.createObjectURL(_botScriptAudioBlobs[i]) : '';
+      return `<div class="bot-script-turn-row">
+        <div class="bst-top">
+          <span class="bst-turn-num">Turn ${i + 1}</span>
+          <button class="btn-remove-item bst-remove" title="Remove" onclick="Admin.removeBotScriptRow(this)">✕</button>
+        </div>
+        <input type="text" class="bst-input" placeholder="e.g. I've been charged twice this month!" value="${safe}">
+        <div class="bst-audio-row">
+          <button class="bst-rec-btn${hasAudio ? ' has-audio' : ''}" onclick="Admin.toggleBotTurnRec(this)">
+            ${hasAudio ? '🔴 Re-record' : '🎙 Record Voice'}
+          </button>
+          <audio class="bst-audio-preview${hasAudio ? '' : ' hidden'}" controls src="${audioSrc}"></audio>
+          <button class="bst-clear-btn${hasAudio ? '' : ' hidden'}" onclick="Admin.clearBotTurnAudio(this)">✕ Clear</button>
+          <span class="bst-rec-status"></span>
+        </div>
       </div>`;
     }).join('');
+
     $('btn-add-bot-line').onclick = () => {
+      const idx = document.querySelectorAll('#bot-script-items .bot-script-turn-row').length;
+      _botScriptAudioBlobs.push(null);
       $('bot-script-items').insertAdjacentHTML('beforeend', `
-        <div class="checklist-item-row">
-          <input type="text" placeholder="Customer line...">
-          <button class="btn-remove-item" title="Remove" onclick="this.parentElement.remove()">✕</button>
+        <div class="bot-script-turn-row">
+          <div class="bst-top">
+            <span class="bst-turn-num">Turn ${idx + 1}</span>
+            <button class="btn-remove-item bst-remove" title="Remove" onclick="Admin.removeBotScriptRow(this)">✕</button>
+          </div>
+          <input type="text" class="bst-input" placeholder="Customer line...">
+          <div class="bst-audio-row">
+            <button class="bst-rec-btn" onclick="Admin.toggleBotTurnRec(this)">🎙 Record Voice</button>
+            <audio class="bst-audio-preview hidden" controls></audio>
+            <button class="bst-clear-btn hidden" onclick="Admin.clearBotTurnAudio(this)">✕ Clear</button>
+            <span class="bst-rec-status"></span>
+          </div>
         </div>`);
     };
+  }
+
+  function removeBotScriptRow(btn) {
+    const row  = btn.closest('.bot-script-turn-row');
+    const rows = Array.from(document.querySelectorAll('#bot-script-items .bot-script-turn-row'));
+    const idx  = rows.indexOf(row);
+    if (idx >= 0) _botScriptAudioBlobs.splice(idx, 1);
+    if (_botScriptRecording === idx) { Recorder.stop(); _botScriptRecording = -1; }
+    else if (_botScriptRecording > idx) _botScriptRecording--;
+    row.remove();
+    _renumberBotRows();
+  }
+
+  function _renumberBotRows() {
+    document.querySelectorAll('#bot-script-items .bot-script-turn-row').forEach((r, i) => {
+      const num = r.querySelector('.bst-turn-num');
+      if (num) num.textContent = `Turn ${i + 1}`;
+    });
+  }
+
+  async function toggleBotTurnRec(btn) {
+    const row  = btn.closest('.bot-script-turn-row');
+    const rows = Array.from(document.querySelectorAll('#bot-script-items .bot-script-turn-row'));
+    const idx  = rows.indexOf(row);
+    const statusEl = row.querySelector('.bst-rec-status');
+
+    if (_botScriptRecording === idx) {
+      // Stop this recording
+      _botScriptRecording = -1;
+      Recorder.stop();
+      let blob = null;
+      try { blob = await _botScriptRecPromise; } catch (e) {}
+      _botScriptAudioBlobs[idx] = blob;
+
+      btn.textContent = blob ? '🔴 Re-record' : '🎙 Record Voice';
+      btn.style.background = '';
+      btn.classList.toggle('has-audio', !!blob);
+      if (statusEl) { statusEl.textContent = blob ? '✓ Recorded' : ''; statusEl.className = 'bst-rec-status'; }
+
+      const audio   = row.querySelector('.bst-audio-preview');
+      const clrBtn  = row.querySelector('.bst-clear-btn');
+      if (blob) {
+        audio.src = URL.createObjectURL(blob);
+        audio.classList.remove('hidden');
+        if (clrBtn) clrBtn.classList.remove('hidden');
+      }
+    } else {
+      // Stop any other active bot-turn recording first
+      if (_botScriptRecording >= 0) {
+        const prevRow  = document.querySelectorAll('#bot-script-items .bot-script-turn-row')[_botScriptRecording];
+        if (prevRow) {
+          const pb = prevRow.querySelector('.bst-rec-btn');
+          const ps = prevRow.querySelector('.bst-rec-status');
+          if (pb) { pb.textContent = _botScriptAudioBlobs[_botScriptRecording] ? '🔴 Re-record' : '🎙 Record Voice'; pb.style.background = ''; }
+          if (ps) { ps.textContent = ''; ps.className = 'bst-rec-status'; }
+        }
+        Recorder.stop();
+      }
+      // Start recording
+      _botScriptRecording  = idx;
+      _botScriptRecPromise = Recorder.start();
+      Recorder.startTimer(null, 0, null, null, true);
+      btn.textContent = '⏹ Stop Recording';
+      btn.style.background = '#fef2f2';
+      if (statusEl) { statusEl.textContent = '● Recording...'; statusEl.className = 'bst-rec-status bst-recording'; }
+    }
+  }
+
+  function clearBotTurnAudio(btn) {
+    const row  = btn.closest('.bot-script-turn-row');
+    const rows = Array.from(document.querySelectorAll('#bot-script-items .bot-script-turn-row'));
+    const idx  = rows.indexOf(row);
+    if (idx >= 0) _botScriptAudioBlobs[idx] = null;
+
+    const audio  = row.querySelector('.bst-audio-preview');
+    const recBtn = row.querySelector('.bst-rec-btn');
+    if (audio)  { audio.src = ''; audio.classList.add('hidden'); }
+    if (recBtn) { recBtn.textContent = '🎙 Record Voice'; recBtn.classList.remove('has-audio'); }
+    btn.classList.add('hidden');
   }
 
   function renderChecklistItems(items) {
@@ -1500,6 +1609,9 @@ window.Admin = (() => {
     $('topic-modal').classList.add('hidden');
     _editTopicId = null;
     _callerAudioBlob = null;
+    _botScriptAudioBlobs = [];
+    _botScriptRecording  = -1;
+    _botScriptRecPromise = null;
     if (_callerRecording) { Recorder.stop(); _callerRecording = false; }
   }
 
@@ -1532,8 +1644,16 @@ window.Admin = (() => {
         .map(i => i.value.trim()).filter(v => v);
     }
 
-    const botScript = Array.from(document.querySelectorAll('#bot-script-items input'))
-      .map(i => i.value.trim()).filter(v => v);
+    const botScriptRows  = Array.from(document.querySelectorAll('#bot-script-items .bot-script-turn-row'));
+    const botScript      = [];
+    const botScriptAudio = [];
+    botScriptRows.forEach((r, i) => {
+      const text = r.querySelector('.bst-input')?.value.trim() || '';
+      if (text) {
+        botScript.push(text);
+        botScriptAudio.push(_botScriptAudioBlobs[i] || null);
+      }
+    });
 
     const data = {
       module,
@@ -1542,6 +1662,7 @@ window.Admin = (() => {
       scenario:    (module === 'grammar-assessment' || module === 'listening-assessment') ? '' : $('topic-scenario').value.trim(),
       checklist,
       botScript,
+      botScriptAudio,
       callerAudioBlob: _callerAudioBlob || null,
       createdAt: new Date().toISOString()
     };
@@ -4951,6 +5072,10 @@ window.Admin = (() => {
     toggleAllManagers,
     archiveSelectedManagers,
     restoreSelectedManagers,
+    // Bot script per-turn voice recording
+    toggleBotTurnRec,
+    clearBotTurnAudio,
+    removeBotScriptRow,
     // AI Audit Scores (kept for backward compatibility)
     filterAiAudit,
     toggleAuditCheckbox,
