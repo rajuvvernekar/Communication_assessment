@@ -208,8 +208,8 @@ const DB = (() => {
         console.warn('Caller audio blob exceeds 50 MB — skipping upload to stay within Supabase free-tier limit.');
       } else {
         try {
-          // Upload into 'caller-audio/' subfolder so bucket RLS policies cover it correctly
-          processed.callerAudioUrl = await _upload('caller-audio', data.callerAudioBlob, 'caller-audio');
+          // Upload into 'recordings' bucket (confirmed anon-insert policy) under 'caller-audio/' path
+          processed.callerAudioUrl = await _upload('recordings', data.callerAudioBlob, 'caller-audio');
         } catch (e) {
           console.warn('Caller audio upload failed, saving topic without audio URL:', e.message, e);
         }

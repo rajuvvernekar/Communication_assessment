@@ -1365,8 +1365,11 @@ window.Admin = (() => {
   function _bstAudioRow(hasAudio, audioSrc) {
     return `<div class="bst-audio-row">
           <input type="file" class="bst-file-input" accept="audio/*" style="display:none" onchange="Admin.uploadBotTurnAudio(this)">
+          <button class="bst-rec-btn${hasAudio ? ' has-audio' : ''}" onclick="Admin.toggleBotTurnRec(this)">
+            ${hasAudio ? '🔄 Re-record' : '🎙 Record'}
+          </button>
           <button class="bst-upload-btn${hasAudio ? ' has-audio' : ''}" onclick="this.closest('.bst-audio-row').querySelector('.bst-file-input').click()">
-            ${hasAudio ? '✏️ Replace Audio' : '📎 Upload Audio'}
+            ${hasAudio ? '📂 Replace' : '📎 Upload'}
           </button>
           <audio class="bst-audio-preview${hasAudio ? '' : ' hidden'}" controls src="${audioSrc}"></audio>
           <button class="bst-clear-btn${hasAudio ? '' : ' hidden'}" onclick="Admin.clearBotTurnAudio(this)">✕ Clear</button>
@@ -1432,9 +1435,101 @@ window.Admin = (() => {
     });
   }
 
-  // Stub kept so any cached admin.html that still calls toggleBotTurnRec doesn't crash
-  function toggleBotTurnRec() {}
+  // ── Per-turn voice recording ──
+  // Records via microphone and uploads the blob to the 'recordings' Supabase bucket
+  // (this bucket has confirmed anon-insert policy; 'caller-audio' bucket does not).
+  async function toggleBotTurnRec(btn) {
+    const row  = btn.closest('.bot-script-turn-row');
+    const rows = Array.from(document.querySelectorAll('#bot-script-items .bot-script-turn-row'));
+    const idx  = rows.indexOf(row);
+    if (idx < 0) return;
 
+    const statusEl  = row.querySelector('.bst-rec-status');
+    const uploadBtn = row.querySelector('.bst-upload-btn');
+
+    if (_botScriptRecording === idx) {
+      // ── STOP recording this turn ──
+      _botScriptRecording = -1;
+      Recorder.stop();
+      btn.textContent = '🎙 Record';
+      btn.classList.remove('recording');
+      btn.disabled = true;
+      if (uploadBtn) uploadBtn.disabled = true;
+      if (statusEl)  { statusEl.textContent = '⏳ Processing...'; statusEl.className = 'bst-rec-status'; }
+
+      let blob = null;
+      try { blob = await _botScriptRecPromise; } catch (e) { console.warn('Rec error:', e); }
+      _botScriptRecPromise = null;
+      btn.disabled = false;
+      if (uploadBtn) uploadBtn.disabled = false;
+
+      if (!blob || blob.size === 0) {
+        if (statusEl) { statusEl.textContent = '⚠ No audio captured — try again'; statusEl.className = 'bst-rec-status'; }
+        return;
+      }
+
+      // Upload to 'recordings' bucket (has anon-insert policy)
+      if (statusEl) { statusEl.textContent = '⏳ Uploading...'; statusEl.className = 'bst-rec-status'; }
+      try {
+        const sb       = DB.getClient();
+        const mimeType = blob.type || 'audio/webm';
+        const ext      = mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mp4') ? 'mp4' : 'webm';
+        const path     = `bot-script/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error: upErr } = await sb.storage.from('recordings').upload(path, blob, { contentType: mimeType });
+        if (upErr) throw upErr;
+        const { data: ud } = sb.storage.from('recordings').getPublicUrl(path);
+        const url = ud.publicUrl;
+
+        _botScriptAudioBlobs[idx] = url;
+
+        const audio  = row.querySelector('.bst-audio-preview');
+        const clrBtn = row.querySelector('.bst-clear-btn');
+        if (audio)   { audio.src = url; audio.classList.remove('hidden'); }
+        if (clrBtn)  clrBtn.classList.remove('hidden');
+        if (uploadBtn) { uploadBtn.textContent = '📂 Replace'; uploadBtn.classList.add('has-audio'); }
+        btn.textContent = '🔄 Re-record';
+        if (statusEl) { statusEl.textContent = '✓ Recorded'; statusEl.className = 'bst-rec-status'; }
+      } catch (e) {
+        console.error('Bot script rec upload failed:', e);
+        if (statusEl) { statusEl.textContent = '✗ Upload failed: ' + (e.message || e); statusEl.className = 'bst-rec-status'; }
+        btn.textContent = '🎙 Record';
+      }
+    } else {
+      // ── START recording this turn ──
+      // If another turn is already recording, stop and discard it
+      if (_botScriptRecording >= 0) {
+        Recorder.stop();
+        const recRows = Array.from(document.querySelectorAll('#bot-script-items .bot-script-turn-row'));
+        const prevRow = recRows[_botScriptRecording];
+        if (prevRow) {
+          const prevBtn = prevRow.querySelector('.bst-rec-btn');
+          const prevSt  = prevRow.querySelector('.bst-rec-status');
+          if (prevBtn) { prevBtn.textContent = '🎙 Record'; prevBtn.classList.remove('recording'); }
+          if (prevSt)  prevSt.textContent = '';
+        }
+        if (_botScriptRecPromise) _botScriptRecPromise.catch(() => {});
+        _botScriptRecPromise = null;
+        _botScriptRecording  = -1;
+      }
+
+      _botScriptRecording = idx;
+      btn.textContent = '⏹ Stop';
+      btn.classList.add('recording');
+      if (statusEl) { statusEl.textContent = '● Recording...'; statusEl.className = 'bst-rec-status recording'; }
+      try {
+        _botScriptRecPromise = Recorder.start();
+      } catch (e) {
+        _botScriptRecording  = -1;
+        _botScriptRecPromise = null;
+        btn.textContent = '🎙 Record';
+        btn.classList.remove('recording');
+        if (statusEl) { statusEl.textContent = '✗ Mic access denied'; statusEl.className = 'bst-rec-status'; }
+      }
+    }
+  }
+
+  // ── Per-turn file upload ──
+  // Uploads to the 'recordings' bucket (confirmed anon-insert policy).
   async function uploadBotTurnAudio(input) {
     const row  = input.closest('.bot-script-turn-row');
     const rows = Array.from(document.querySelectorAll('#bot-script-items .bot-script-turn-row'));
@@ -1451,26 +1546,30 @@ window.Admin = (() => {
     if (uploadBtn) { uploadBtn.disabled = true; uploadBtn.textContent = '⏳ Uploading...'; }
 
     try {
-      const sb  = DB.getClient();
-      const ext = (file.name.split('.').pop() || 'mp3').toLowerCase();
-      const path = `bot-script/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-      const { error } = await sb.storage.from('caller-audio').upload(path, file, { contentType: file.type || 'audio/mpeg' });
+      const sb       = DB.getClient();
+      const mimeType = file.type || 'audio/mpeg';
+      const ext      = (file.name.split('.').pop() || 'mp3').toLowerCase();
+      const path     = `bot-script/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      // Use 'recordings' bucket — this has confirmed anon-insert policy
+      const { error } = await sb.storage.from('recordings').upload(path, file, { contentType: mimeType });
       if (error) throw error;
-      const { data: ud } = sb.storage.from('caller-audio').getPublicUrl(path);
+      const { data: ud } = sb.storage.from('recordings').getPublicUrl(path);
       const url = ud.publicUrl;
 
       _botScriptAudioBlobs[idx] = url;
 
       const audio  = row.querySelector('.bst-audio-preview');
       const clrBtn = row.querySelector('.bst-clear-btn');
+      const recBtn = row.querySelector('.bst-rec-btn');
       if (audio)   { audio.src = url; audio.classList.remove('hidden'); }
       if (clrBtn)  clrBtn.classList.remove('hidden');
-      if (uploadBtn) { uploadBtn.disabled = false; uploadBtn.textContent = '✏️ Replace Audio'; uploadBtn.classList.add('has-audio'); }
+      if (recBtn)  { recBtn.textContent = '🔄 Re-record'; recBtn.classList.add('has-audio'); }
+      if (uploadBtn) { uploadBtn.disabled = false; uploadBtn.textContent = '📂 Replace'; uploadBtn.classList.add('has-audio'); }
       if (statusEl)  { statusEl.textContent = '✓ Uploaded'; statusEl.className = 'bst-rec-status'; }
     } catch (e) {
       console.error('Bot audio upload error:', e);
-      if (statusEl)  { statusEl.textContent = '✗ Upload failed — check storage bucket'; statusEl.className = 'bst-rec-status'; }
-      if (uploadBtn) { uploadBtn.disabled = false; uploadBtn.textContent = _botScriptAudioBlobs[idx] ? '✏️ Replace Audio' : '📎 Upload Audio'; }
+      if (statusEl)  { statusEl.textContent = '✗ Upload failed: ' + (e.message || e); statusEl.className = 'bst-rec-status'; }
+      if (uploadBtn) { uploadBtn.disabled = false; uploadBtn.textContent = _botScriptAudioBlobs[idx] ? '📂 Replace' : '📎 Upload'; }
     }
     input.value = ''; // reset so same file can be re-selected
   }
@@ -1482,10 +1581,12 @@ window.Admin = (() => {
     if (idx >= 0) _botScriptAudioBlobs[idx] = null;
 
     const audio     = row.querySelector('.bst-audio-preview');
+    const recBtn    = row.querySelector('.bst-rec-btn');
     const uploadBtn = row.querySelector('.bst-upload-btn');
     const statusEl  = row.querySelector('.bst-rec-status');
     if (audio)     { audio.src = ''; audio.classList.add('hidden'); }
-    if (uploadBtn) { uploadBtn.textContent = '📎 Upload Audio'; uploadBtn.classList.remove('has-audio'); }
+    if (recBtn)    { recBtn.textContent = '🎙 Record'; recBtn.classList.remove('recording', 'has-audio'); }
+    if (uploadBtn) { uploadBtn.textContent = '📎 Upload'; uploadBtn.classList.remove('has-audio'); }
     if (statusEl)  statusEl.textContent = '';
     btn.classList.add('hidden');
   }
