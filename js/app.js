@@ -711,15 +711,16 @@ const App = (() => {
   // ── Mood params: irate → calm arc across turns ──
   function _botMoodParams(turnIndex, totalTurns) {
     const progress = totalTurns <= 1 ? 0.5 : Math.min(1, turnIndex / (totalTurns - 1));
-    // Pitch 1.52 → 0.90, Rate 1.16 → 0.84
-    const pitch  = 1.52 - progress * 0.62;
-    const rate   = 1.16 - progress * 0.32;
+    // Pitch 1.10 → 0.92, Rate 1.05 → 0.88 — subtle variation, not robotic
+    const pitch  = 1.10 - progress * 0.18;
+    const rate   = 1.05 - progress * 0.17;
     const volume = 1.0;
     let emoji, label, bubbleClass;
-    if      (progress < 0.20) { emoji = '😡'; label = 'Very Upset';  bubbleClass = 'mood-irate';      }
-    else if (progress < 0.45) { emoji = '😤'; label = 'Frustrated';  bubbleClass = 'mood-frustrated'; }
-    else if (progress < 0.70) { emoji = '😐'; label = 'Calming Down';bubbleClass = 'mood-neutral';    }
-    else                      { emoji = '😌'; label = 'Satisfied';   bubbleClass = 'mood-calm';       }
+    // Realistic call arc: starts frustrated → peaks demanding mid-call → listens → warms up
+    if      (progress < 0.25) { emoji = '😤'; label = 'Frustrated';   bubbleClass = 'mood-frustrated'; }
+    else if (progress < 0.55) { emoji = '😡'; label = 'Demanding';    bubbleClass = 'mood-irate';      }
+    else if (progress < 0.80) { emoji = '😐'; label = 'Listening';    bubbleClass = 'mood-neutral';    }
+    else                      { emoji = '🙂'; label = 'Warming Up';   bubbleClass = 'mood-calm';       }
     return { pitch, rate, volume, progress, emoji, label, bubbleClass };
   }
 
@@ -858,11 +859,11 @@ const App = (() => {
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
           text,
-          model_id: 'eleven_turbo_v2_5',
+          model_id: 'eleven_multilingual_v2',  // higher quality, natural pacing
           voice_settings: {
-            stability:        0.35,   // lower = more emotional variation
-            similarity_boost: 0.80,
-            style:            0.45,   // adds expressiveness
+            stability:         0.50,  // steady, controlled investor tone
+            similarity_boost:  0.75,
+            style:             0.20,  // natural, not theatrical
             use_speaker_boost: true,
           },
         }),
