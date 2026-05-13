@@ -243,11 +243,58 @@ Return ONLY this JSON: {"pass": true} or {"pass": false}`;
     return false;
   }
 
+  // ---- Live AI customer for the Takeover topic mock call ----
+  // `messages` is the full alternating user/assistant history built by _buildAiMessages() in app.js.
+  // Returns a string — the customer's next dialogue line (2-3 sentences max).
+  async function callAiCustomer(scenario, description, messages, turnNumber, maxTurns) {
+    if (!isAvailable()) throw new Error('Claude proxy not configured');
+
+    const isLast = turnNumber >= maxTurns;
+    const system = `You are roleplaying as a frustrated but articulate customer calling Zerodha's customer support line.
+
+SCENARIO: ${scenario || description || 'A client has an issue with their trading account.'}
+
+YOUR PERSONA:
+- Long-term Zerodha investor who is knowledgeable about trading
+- Genuinely frustrated that you cannot apply for a takeover offer directly because the market price is higher than the takeover price
+- Logical and sharp — you ask pointed follow-up questions based on exactly what the agent tells you
+- You push back firmly but do not use abusive language
+- If the agent explains clearly and empathetically, soften slightly — but still probe further
+- If the agent is vague or evasive, escalate your frustration
+
+STRICT RULES:
+- You are the CUSTOMER — stay in character at all times, never break the fourth wall
+- Reply in 2–3 sentences ONLY — short, sharp, conversational
+- Ask ONE specific question or make ONE clear statement per turn
+- Reference what the agent actually said to make the conversation feel natural and live
+- Do NOT repeat what the agent said verbatim; react to it${isLast ? '\n- This is your FINAL turn (turn ' + turnNumber + ' of ' + maxTurns + '). Either express whether you are satisfied with how the agent handled this, or state you are ending the call.' : ''}
+
+Return ONLY the customer\'s spoken dialogue. No stage directions, no narration, no quotes.`;
+
+    const resp = await fetch(getProxyUrl(), {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        model:      MODEL,
+        max_tokens: 120,
+        system,
+        messages
+      })
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error?.message || `API error ${resp.status}`);
+    }
+    const data = await resp.json();
+    return data.content[0].text.trim();
+  }
+
   // ---- Get criteria for a module (for display purposes) ----
   function getCriteria(module) {
     if (module === 'mock-call') return MOCK_CALL_CRITERIA;
     return SPOKEN_CRITERIA[module] || [];
   }
 
-  return { isAvailable, evaluate, evaluateRewrite, getCriteria, MOCK_CALL_CRITERIA };
+  return { isAvailable, evaluate, evaluateRewrite, callAiCustomer, getCriteria, MOCK_CALL_CRITERIA };
 })();

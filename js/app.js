@@ -45,6 +45,13 @@ const App = (() => {
   let _mcCallFinishing = false; // guard: prevent double-call of finishBotCall()
   let _mcBotAudioEl    = null;  // current <Audio> element for per-turn recorded voice
 
+  // ── AI-driven call state (live Claude customer, Takeover topic only) ──
+  const MC_AI_TOPIC_TITLE = 'Takeover Offer – Client Insists Despite Higher Market Price';
+  const MC_AI_MAX_TURNS   = 8;   // ~5-10 min depending on agent response length
+  let _mcAiMode           = false;
+  let _mcAiHistory        = [];   // [{bot: string, agent: string}, ...]
+  let _mcAiTurnCount      = 0;
+
   // ── TTS voice cache — Chrome loads voices async; pre-cache on first event ──
   let _ttsVoices = [];
   if (window.speechSynthesis) {
@@ -1093,6 +1100,17 @@ const App = (() => {
 
   // Entry point: called when topic has a non-empty botScript
   async function startBotCall(script) {
+    // Reset AI flags regardless of path
+    _mcAiMode      = false;
+    _mcAiHistory   = [];
+    _mcAiTurnCount = 0;
+
+    // Takeover topic → live AI customer instead of scripted turns
+    if (_currentTopic && _currentTopic.title === MC_AI_TOPIC_TITLE) {
+      startAiCall();
+      return;
+    }
+
     _mcTurns         = script;
     _mcTurnIndex     = 0;
     _mcTranscripts   = [];
@@ -1130,6 +1148,134 @@ const App = (() => {
 
     runBotTurn();
   }
+
+  // ── AI-driven call (Takeover topic) ──────────────────────────────────────
+  // Replaces scripted turns with live Claude responses based on what the agent says.
+
+  function startAiCall() {
+    _mcAiMode      = true;
+    _mcAiHistory   = [];
+    _mcAiTurnCount = 0;
+    _mcTranscripts = [];
+    _mcCallFinishing = false;
+
+    showStep('mock-call', 'mc-step-bot-call');
+    $('mc-chat-thread').innerHTML = '';
+
+    // Populate scenario panel (same as scripted call)
+    $('mc-bot-sc-title').textContent = _currentTopic.title || '';
+    $('mc-bot-sc-desc').textContent  = _currentTopic.description || '';
+    $('mc-bot-sc-text').textContent  = _currentTopic.scenario || '';
+    const clEl = $('mc-bot-sc-checklist');
+    clEl.innerHTML = '';
+    (_currentTopic.checklist || []).forEach(item => { clEl.innerHTML += `<li>${item}</li>`; });
+
+    const scBody   = $('mc-bot-sc-body');
+    const scToggle = $('btn-mc-sc-toggle');
+    let scVisible  = true;
+    scToggle.onclick = () => {
+      scVisible = !scVisible;
+      scBody.classList.toggle('mc-bot-sc-collapsed', !scVisible);
+      scToggle.textContent = scVisible ? 'Hide ▲' : 'Show ▼';
+    };
+
+    _mcBlobPromise = Recorder.start();
+    Recorder.startWaveform($('mc-bot-waveform'));
+    Recorder.startTimer(null, 0, null, null, true);
+    $('btn-mc-end-call').onclick = endBotCallEarly;
+
+    // Badge in turn label so it's obvious this is AI mode
+    const turnLabel = $('mc-turn-label');
+    if (turnLabel) {
+      turnLabel.textContent  = '🤖 Live AI Customer — Starting call…';
+      turnLabel.style.color  = '#6366f1';
+      turnLabel.style.fontWeight = '700';
+    }
+
+    runAiTurn(null); // first turn — no agent response yet
+  }
+
+  // Build the alternating user/assistant message array for Claude
+  function _buildAiMessages() {
+    const msgs = [{ role: 'user', content: 'The agent has answered the call. Start as the customer with your opening complaint or question.' }];
+    for (const ex of _mcAiHistory) {
+      msgs.push({ role: 'assistant', content: ex.bot });
+      if (ex.agent) msgs.push({ role: 'user', content: ex.agent });
+    }
+    return msgs;
+  }
+
+  // Call Claude for the customer's next line, display bubble, speak it
+  async function runAiTurn(agentResponse) {
+    _mcAiTurnCount++;
+    const isLast = _mcAiTurnCount >= MC_AI_MAX_TURNS;
+
+    // If there's an agent response, store it in the last history entry
+    if (agentResponse !== null && _mcAiHistory.length > 0) {
+      _mcAiHistory[_mcAiHistory.length - 1].agent = agentResponse;
+    }
+
+    // Update turn label
+    const turnLabel = $('mc-turn-label');
+    if (turnLabel) {
+      turnLabel.textContent  = isLast
+        ? `🤖 AI Customer — Turn ${_mcAiTurnCount} — 🏁 Final Turn`
+        : `🤖 AI Customer — Turn ${_mcAiTurnCount} of ${MC_AI_MAX_TURNS}`;
+      turnLabel.style.color  = isLast ? '#d97706' : '#6366f1';
+      turnLabel.style.fontWeight = '700';
+    }
+
+    // Show "thinking" state
+    $('mc-bot-status').style.display = '';
+    $('mc-rec-area').style.display   = 'none';
+    $('btn-mc-finish').style.display = 'none';
+    const statusEl = $('mc-bot-status');
+    if (statusEl) statusEl.innerHTML = '<span style="color:#6366f1;font-style:italic">🤖 AI Customer is thinking…</span>';
+
+    let botLine = '';
+    try {
+      botLine = await ClaudeEvaluator.callAiCustomer(
+        _currentTopic.scenario || '',
+        _currentTopic.description || '',
+        _buildAiMessages(),
+        _mcAiTurnCount,
+        MC_AI_MAX_TURNS
+      );
+    } catch (e) {
+      console.warn('AI customer call failed, using fallback:', e.message);
+      botLine = _mcAiTurnCount === 1
+        ? "I'd like to apply for a takeover offer but your system is blocking me even though I'm willing to proceed. Why is that?"
+        : "I still don't understand why I can't do this directly. Can you explain the exact policy?";
+    }
+
+    // Add entry to history (agent will be filled in after agent speaks)
+    _mcAiHistory.push({ bot: botLine, agent: '' });
+
+    // Show bubble + mood
+    const mood = _botMoodParams(_mcAiTurnCount - 1, MC_AI_MAX_TURNS);
+    const moodEl = $('mc-mood-indicator');
+    if (moodEl) {
+      moodEl.className = `mc-mood-bar ${mood.bubbleClass}`;
+      moodEl.innerHTML = `<span class="mc-mood-emoji">${mood.emoji}</span> Customer is <strong>${mood.label}</strong>`;
+    }
+    const bubble = document.createElement('div');
+    bubble.className = `mc-bubble bot ${mood.bubbleClass}`;
+    bubble.innerHTML = `<span class="mc-bubble-mood">${mood.emoji}</span>${botLine}`;
+    $('mc-chat-thread').appendChild(bubble);
+    $('mc-chat-thread').scrollTop = $('mc-chat-thread').scrollHeight;
+
+    // Speak it, then hand off to trainee or finish
+    speakBot(botLine, () => {
+      if (isLast) {
+        $('mc-bot-status').style.display = 'none';
+        $('btn-mc-finish').style.display = '';
+        $('btn-mc-finish').onclick = finishBotCall;
+      } else {
+        startTraineeTurn();
+      }
+    }, mood);
+  }
+  // ─────────────────────────────────────────────────────────────────────────
 
   // Called when trainee clicks "End Call Early": cancel TTS, flush any
   // in-progress trainee turn, then hand off to finishBotCall()
@@ -1250,12 +1396,22 @@ const App = (() => {
     $('mc-chat-thread').appendChild(bubble);
     $('mc-chat-thread').scrollTop = $('mc-chat-thread').scrollHeight;
 
-    _mcTurnIndex++;
-    if (_mcTurnIndex < _mcTurns.length) {
-      runBotTurn();
+    if (_mcAiMode) {
+      // AI mode: feed agent's response to Claude for the next customer turn
+      if (_mcAiTurnCount < MC_AI_MAX_TURNS) {
+        runAiTurn(partial);
+      } else {
+        $('btn-mc-finish').style.display = '';
+        $('btn-mc-finish').onclick = finishBotCall;
+      }
     } else {
-      $('btn-mc-finish').style.display = '';
-      $('btn-mc-finish').onclick = finishBotCall;
+      _mcTurnIndex++;
+      if (_mcTurnIndex < _mcTurns.length) {
+        runBotTurn();
+      } else {
+        $('btn-mc-finish').style.display = '';
+        $('btn-mc-finish').onclick = finishBotCall;
+      }
     }
   }
 
@@ -1273,12 +1429,18 @@ const App = (() => {
     try { blob = await _mcBlobPromise; } catch (e) {}
 
     // Full transcript for storage (Customer/You labels — readable by admin)
-    const fullTranscript = _mcTurns.map((line, i) =>
-      `Customer: ${line}\nYou: ${_mcTranscripts[i] || '(no response)'}`
-    ).join('\n\n');
+    const fullTranscript = _mcAiMode
+      ? _mcAiHistory.map(ex =>
+          `Customer: ${ex.bot}\nYou: ${ex.agent || '(no response)'}`
+        ).join('\n\n')
+      : _mcTurns.map((line, i) =>
+          `Customer: ${line}\nYou: ${_mcTranscripts[i] || '(no response)'}`
+        ).join('\n\n');
 
     // Trainee-only text for AI scoring
-    const traineeOnly = _mcTranscripts.join(' ').trim();
+    const traineeOnly = _mcAiMode
+      ? _mcAiHistory.map(ex => ex.agent || '').join(' ').trim()
+      : _mcTranscripts.join(' ').trim();
 
     showStep('mock-call', 'mc-step-done');
     const statusEl = $('mc-ai-scoring-status');
