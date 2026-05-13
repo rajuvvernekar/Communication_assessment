@@ -816,24 +816,18 @@ const App = (() => {
         || null;
   }
 
-  // ── Play admin-recorded audio blob for a bot turn ──
-  // Falls back to onEnd immediately if blob is invalid.
-  function playBotAudio(blob, onEnd) {
+  // ── Play admin-recorded audio (Blob or URL string) for a bot turn ──
+  // Falls back to onEnd immediately if audio is invalid.
+  function playBotAudio(audio, onEnd) {
     try {
-      const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      _mcBotAudioEl = audio;
-      audio.onended = () => {
-        _mcBotAudioEl = null;
-        URL.revokeObjectURL(url);
-        onEnd();
-      };
-      audio.onerror = () => {
-        _mcBotAudioEl = null;
-        URL.revokeObjectURL(url);
-        onEnd();
-      };
-      audio.play().catch(() => { _mcBotAudioEl = null; URL.revokeObjectURL(url); onEnd(); });
+      const isBlob = audio instanceof Blob;
+      const url    = isBlob ? URL.createObjectURL(audio) : audio;
+      const el     = new Audio(url);
+      _mcBotAudioEl = el;
+      const cleanup = () => { _mcBotAudioEl = null; if (isBlob) URL.revokeObjectURL(url); };
+      el.onended = () => { cleanup(); onEnd(); };
+      el.onerror = () => { cleanup(); onEnd(); };
+      el.play().catch(() => { cleanup(); onEnd(); });
     } catch (e) {
       _mcBotAudioEl = null;
       onEnd();
@@ -1811,8 +1805,47 @@ const App = (() => {
       if (prevBtn) prevBtn.disabled = true;
     }
 
-    // Normalise helper: trim, lowercase, strip punctuation, collapse spaces
-    const normalise = s => (s || '').trim().toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ');
+    // Normalise helper: trim, lowercase, strip ALL punctuation, collapse spaces
+    const normalise = s => (s || '').trim().toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+
+    // Expand common contractions so "doesn't" and "does not" normalise identically
+    const expandContractions = s => s
+      .replace(/\bwon't\b/g, 'will not')
+      .replace(/\bcan't\b/g, 'cannot')
+      .replace(/\bdon't\b/g, 'do not')
+      .replace(/\bdoesn't\b/g, 'does not')
+      .replace(/\bdidn't\b/g, 'did not')
+      .replace(/\bisn't\b/g, 'is not')
+      .replace(/\baren't\b/g, 'are not')
+      .replace(/\bwasn't\b/g, 'was not')
+      .replace(/\bweren't\b/g, 'were not')
+      .replace(/\bhadn't\b/g, 'had not')
+      .replace(/\bhasn't\b/g, 'has not')
+      .replace(/\bhaven't\b/g, 'have not')
+      .replace(/\bcouldn't\b/g, 'could not')
+      .replace(/\bshouldn't\b/g, 'should not')
+      .replace(/\bwouldn't\b/g, 'would not')
+      .replace(/\bhe's\b/g, 'he is')
+      .replace(/\bshe's\b/g, 'she is')
+      .replace(/\bit's\b/g, 'it is')
+      .replace(/\bi'm\b/g, 'i am')
+      .replace(/\bthey're\b/g, 'they are')
+      .replace(/\bwe're\b/g, 'we are')
+      .replace(/\byou're\b/g, 'you are')
+      .replace(/\bi've\b/g, 'i have')
+      .replace(/\bthey've\b/g, 'they have')
+      .replace(/\bwe've\b/g, 'we have')
+      .replace(/\byou've\b/g, 'you have')
+      .replace(/\bhe'd\b/g, 'he would')
+      .replace(/\bshe'd\b/g, 'she would')
+      .replace(/\bi'd\b/g, 'i would')
+      .replace(/\bthey'd\b/g, 'they would')
+      .replace(/\bhe'll\b/g, 'he will')
+      .replace(/\bshe'll\b/g, 'she will')
+      .replace(/\bthey'll\b/g, 'they will');
+
+    // Full normalise pipeline: lowercase → expand contractions → strip punctuation → collapse spaces
+    const normFull = s => normalise(expandContractions((s || '').toLowerCase()));
 
     // Score this section
     let correct = 0;
@@ -1823,9 +1856,9 @@ const App = (() => {
       const ua = _gaUserAnswers[idx];
 
       if (q.type === 'fill-blank' || q.type === 'rewrite') {
-        // Written answer: exact-match first (case-insensitive, no punctuation)
-        const userNorm = normalise(ua);
-        let isOk = (q.acceptedAnswers || []).some(a => normalise(a) === userNorm);
+        // Written answer: exact-match first (case-insensitive, no punctuation, contractions expanded)
+        const userNorm = normFull(ua);
+        let isOk = (q.acceptedAnswers || []).some(a => normFull(a) === userNorm);
 
         // Rewrite: if not an exact match, ask Claude for semantic/grammar evaluation
         if (!isOk && q.type === 'rewrite' && userNorm) {

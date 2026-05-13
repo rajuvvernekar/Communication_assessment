@@ -1513,7 +1513,7 @@ body {
   flex-wrap: wrap;
   gap: 0.5rem;
 }
-.bst-rec-btn {
+.bst-upload-btn {
   padding: 0.35rem 0.7rem;
   font-size: 0.8rem;
   border: 1px solid var(--border);
@@ -1522,6 +1522,11 @@ body {
   cursor: pointer;
   white-space: nowrap;
 }
+.bst-upload-btn:hover:not(:disabled) { background: #e2e8f0; }
+.bst-upload-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.bst-upload-btn.has-audio { background: #fef3c7; border-color: #fcd34d; }
+/* Legacy alias — keeps any cached HTML using bst-rec-btn from looking broken */
+.bst-rec-btn { padding: 0.35rem 0.7rem; font-size: 0.8rem; border: 1px solid var(--border); border-radius: 6px; background: #f1f5f9; cursor: pointer; white-space: nowrap; }
 .bst-rec-btn:hover { background: #e2e8f0; }
 .bst-rec-btn.has-audio { background: #fef3c7; border-color: #fcd34d; }
 .bst-audio-preview {

@@ -30,6 +30,9 @@ const DB = (() => {
     botScript:      'bot_script',
     createdAt:      'created_at',
   };
+  // Exact column names that exist in the 'topics' table.
+  // ONLY these make it through to PostgREST — any other key (from stale cached JS etc.) is silently dropped.
+  const TOPIC_COLUMNS = new Set(['id', 'module', 'title', 'description', 'scenario', 'checklist', 'bot_script', 'caller_audio_url', 'created_at', 'enabled']);
   const AI_AUDIT_MAP = {
     selfAssessmentScore: 'self_assessment_score',
     aiAuditScore:        'ai_audit_score',
@@ -46,7 +49,12 @@ const DB = (() => {
     for (const [k, v] of Object.entries(data)) {
       // Skip raw blobs — handled separately via Storage upload
       if (k === 'recordingBlob' || k === 'callerAudioBlob') continue;
-      out[map[k] || k] = v;
+      const col = map[k] || k;
+      // For topics: whitelist-only — drop any key that isn't a known DB column.
+      // This protects against stale cached JS sending unknown fields (e.g. botScriptAudio)
+      // regardless of which version of admin.js the browser has loaded.
+      if (store === 'topics' && !TOPIC_COLUMNS.has(col)) continue;
+      out[col] = v;
     }
     return out;
   }
@@ -68,16 +76,35 @@ const DB = (() => {
     // Compatibility shims: old code checks .recordingBlob / .callerAudioBlob
     if (store === 'sessions') out.recordingBlob = null;
     if (store === 'topics')   out.callerAudioBlob = null;
+    // Split bot_script: detect [{text,audioUrl}] (new) vs plain strings (old)
+    if (store === 'topics' && Array.isArray(out.botScript)) {
+      const items = out.botScript;
+      if (items.length > 0 && items[0] !== null && typeof items[0] === 'object') {
+        out.botScript      = items.map(s => (s && s.text)     ? s.text     : String(s));
+        out.botScriptAudio = items.map(s => (s && s.audioUrl) ? s.audioUrl : null);
+      } else {
+        out.botScriptAudio = items.map(() => null);
+      }
+    } else if (store === 'topics') {
+      out.botScriptAudio = [];
+    }
     return out;
   }
 
   // ---- Upload a Blob to Supabase Storage → return public URL ----
-  async function _upload(bucket, blob) {
-    const ext  = blob.type.includes('webm') ? 'webm'
-               : blob.type.includes('mp4')  ? 'mp4'
-               : blob.type.includes('ogg')  ? 'ogg' : 'bin';
-    const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const { error } = await _sb.storage.from(bucket).upload(path, blob, { contentType: blob.type });
+  // `folder` is an optional subfolder prefix (e.g. 'caller-audio', 'recordings', 'bot-script')
+  async function _upload(bucket, blob, folder) {
+    // Determine best extension + content-type from blob.type
+    const mimeType  = blob.type || 'audio/webm';
+    const ext       = mimeType.includes('webm') ? 'webm'
+                    : mimeType.includes('mp4')  ? 'mp4'
+                    : mimeType.includes('ogg')  ? 'ogg'
+                    : mimeType.includes('wav')  ? 'wav'
+                    : mimeType.includes('mpeg') || mimeType.includes('mp3') ? 'mp3'
+                    : 'webm'; // always default to webm, never 'bin'
+    const filename  = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const path      = folder ? `${folder}/${filename}` : filename;
+    const { error } = await _sb.storage.from(bucket).upload(path, blob, { contentType: mimeType });
     if (error) throw error;
     const { data } = _sb.storage.from(bucket).getPublicUrl(path);
     return data.publicUrl;
@@ -166,18 +193,26 @@ const DB = (() => {
     // Upload blobs to Storage and get public URLs
     // Failures are non-fatal: session still saves with transcript + AI scores, just no playback URL
     const processed = { ...data };
+    // Hard-strip botScriptAudio — no matching DB column. _toDB whitelist is the real guard
+    // but delete here too so the 'has audio' logic in the rest of put() is clean.
+    if (store === 'topics') delete processed.botScriptAudio;
     if (store === 'sessions' && data.recordingBlob instanceof Blob) {
       try {
-        processed.recordingUrl = await _upload('recordings', data.recordingBlob);
+        processed.recordingUrl = await _upload('recordings', data.recordingBlob, 'recordings');
       } catch (e) {
         console.warn('Recording upload failed (no storage policy?), saving without URL:', e.message);
       }
     }
     if (store === 'topics' && data.callerAudioBlob instanceof Blob) {
-      try {
-        processed.callerAudioUrl = await _upload('caller-audio', data.callerAudioBlob);
-      } catch (e) {
-        console.warn('Caller audio upload failed, saving without URL:', e.message);
+      if (data.callerAudioBlob.size > 50 * 1024 * 1024) {
+        console.warn('Caller audio blob exceeds 50 MB — skipping upload to stay within Supabase free-tier limit.');
+      } else {
+        try {
+          // Upload into 'caller-audio/' subfolder so bucket RLS policies cover it correctly
+          processed.callerAudioUrl = await _upload('caller-audio', data.callerAudioBlob, 'caller-audio');
+        } catch (e) {
+          console.warn('Caller audio upload failed, saving topic without audio URL:', e.message, e);
+        }
       }
     }
 

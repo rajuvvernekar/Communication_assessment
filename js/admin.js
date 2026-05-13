@@ -8,6 +8,7 @@
 // v36: replaced AI Audit nav/section with Comm360 Master Report (team filter + full scores table)
 // v38b: Vishal Shivsahay Singh gramScore updated (39.25/100 → 9.8125/25, total 22.09)
 // v39:  Per-turn voice recording for bot script turns in mock call topics
+// v41:  Fix botScriptAudio save — upload blobs to Storage, embed URLs in bot_script jsonb
 const MASTER_SCORES = {
   // ── Vignesh Baliga ──
   "abdul razak":                     { selfAssessment: 9.243,  aiAudit: 3.945,  psScore: 12.68, lisScore: 16.20, mcScore:  8.58, gramScore:  7.00, totalScore: 57.65 },
@@ -1361,6 +1362,18 @@ window.Admin = (() => {
     }
   }
 
+  function _bstAudioRow(hasAudio, audioSrc) {
+    return `<div class="bst-audio-row">
+          <input type="file" class="bst-file-input" accept="audio/*" style="display:none" onchange="Admin.uploadBotTurnAudio(this)">
+          <button class="bst-upload-btn${hasAudio ? ' has-audio' : ''}" onclick="this.closest('.bst-audio-row').querySelector('.bst-file-input').click()">
+            ${hasAudio ? '✏️ Replace Audio' : '📎 Upload Audio'}
+          </button>
+          <audio class="bst-audio-preview${hasAudio ? '' : ' hidden'}" controls src="${audioSrc}"></audio>
+          <button class="bst-clear-btn${hasAudio ? '' : ' hidden'}" onclick="Admin.clearBotTurnAudio(this)">✕ Clear</button>
+          <span class="bst-rec-status"></span>
+        </div>`;
+  }
+
   function renderBotScriptItems(lines = [], audioBlobs = []) {
     _botScriptAudioBlobs = lines.map((_, i) => audioBlobs[i] || null);
     const container = $('bot-script-items');
@@ -1368,7 +1381,7 @@ window.Admin = (() => {
     container.innerHTML = lines.map((line, i) => {
       const safe     = line.replace(/"/g, '&quot;');
       const hasAudio = !!_botScriptAudioBlobs[i];
-      const audioSrc = hasAudio ? URL.createObjectURL(_botScriptAudioBlobs[i]) : '';
+      const audioSrc = hasAudio ? (_botScriptAudioBlobs[i] instanceof Blob ? URL.createObjectURL(_botScriptAudioBlobs[i]) : _botScriptAudioBlobs[i]) : '';
       const isLast   = i === total - 1 && total > 1;
       return `<div class="bot-script-turn-row">
         <div class="bst-top">
@@ -1376,14 +1389,7 @@ window.Admin = (() => {
           <button class="btn-remove-item bst-remove" title="Remove" onclick="Admin.removeBotScriptRow(this)">✕</button>
         </div>
         <input type="text" class="bst-input" placeholder="e.g. I've been charged twice this month!" value="${safe}">
-        <div class="bst-audio-row">
-          <button class="bst-rec-btn${hasAudio ? ' has-audio' : ''}" onclick="Admin.toggleBotTurnRec(this)">
-            ${hasAudio ? '🔴 Re-record' : '🎙 Record Voice'}
-          </button>
-          <audio class="bst-audio-preview${hasAudio ? '' : ' hidden'}" controls src="${audioSrc}"></audio>
-          <button class="bst-clear-btn${hasAudio ? '' : ' hidden'}" onclick="Admin.clearBotTurnAudio(this)">✕ Clear</button>
-          <span class="bst-rec-status"></span>
-        </div>
+        ${_bstAudioRow(hasAudio, audioSrc)}
       </div>`;
     }).join('');
 
@@ -1397,14 +1403,9 @@ window.Admin = (() => {
             <button class="btn-remove-item bst-remove" title="Remove" onclick="Admin.removeBotScriptRow(this)">✕</button>
           </div>
           <input type="text" class="bst-input" placeholder="Customer line...">
-          <div class="bst-audio-row">
-            <button class="bst-rec-btn" onclick="Admin.toggleBotTurnRec(this)">🎙 Record Voice</button>
-            <audio class="bst-audio-preview hidden" controls></audio>
-            <button class="bst-clear-btn hidden" onclick="Admin.clearBotTurnAudio(this)">✕ Clear</button>
-            <span class="bst-rec-status"></span>
-          </div>
+          ${_bstAudioRow(false, '')}
         </div>`);
-      _renumberBotRows(); // refresh "Last" badge on all rows
+      _renumberBotRows();
     };
   }
 
@@ -1431,52 +1432,47 @@ window.Admin = (() => {
     });
   }
 
-  async function toggleBotTurnRec(btn) {
-    const row  = btn.closest('.bot-script-turn-row');
+  // Stub kept so any cached admin.html that still calls toggleBotTurnRec doesn't crash
+  function toggleBotTurnRec() {}
+
+  async function uploadBotTurnAudio(input) {
+    const row  = input.closest('.bot-script-turn-row');
     const rows = Array.from(document.querySelectorAll('#bot-script-items .bot-script-turn-row'));
     const idx  = rows.indexOf(row);
-    const statusEl = row.querySelector('.bst-rec-status');
+    if (idx < 0) return;
 
-    if (_botScriptRecording === idx) {
-      // Stop this recording
-      _botScriptRecording = -1;
-      Recorder.stop();
-      let blob = null;
-      try { blob = await _botScriptRecPromise; } catch (e) {}
-      _botScriptAudioBlobs[idx] = blob;
+    const file = input.files[0];
+    if (!file) return;
 
-      btn.textContent = blob ? '🔴 Re-record' : '🎙 Record Voice';
-      btn.style.background = '';
-      btn.classList.toggle('has-audio', !!blob);
-      if (statusEl) { statusEl.textContent = blob ? '✓ Recorded' : ''; statusEl.className = 'bst-rec-status'; }
+    const statusEl  = row.querySelector('.bst-rec-status');
+    const uploadBtn = row.querySelector('.bst-upload-btn');
 
-      const audio   = row.querySelector('.bst-audio-preview');
-      const clrBtn  = row.querySelector('.bst-clear-btn');
-      if (blob) {
-        audio.src = URL.createObjectURL(blob);
-        audio.classList.remove('hidden');
-        if (clrBtn) clrBtn.classList.remove('hidden');
-      }
-    } else {
-      // Stop any other active bot-turn recording first
-      if (_botScriptRecording >= 0) {
-        const prevRow  = document.querySelectorAll('#bot-script-items .bot-script-turn-row')[_botScriptRecording];
-        if (prevRow) {
-          const pb = prevRow.querySelector('.bst-rec-btn');
-          const ps = prevRow.querySelector('.bst-rec-status');
-          if (pb) { pb.textContent = _botScriptAudioBlobs[_botScriptRecording] ? '🔴 Re-record' : '🎙 Record Voice'; pb.style.background = ''; }
-          if (ps) { ps.textContent = ''; ps.className = 'bst-rec-status'; }
-        }
-        Recorder.stop();
-      }
-      // Start recording
-      _botScriptRecording  = idx;
-      _botScriptRecPromise = Recorder.start();
-      Recorder.startTimer(null, 0, null, null, true);
-      btn.textContent = '⏹ Stop Recording';
-      btn.style.background = '#fef2f2';
-      if (statusEl) { statusEl.textContent = '● Recording...'; statusEl.className = 'bst-rec-status bst-recording'; }
+    if (statusEl)  { statusEl.textContent = '⏳ Uploading...'; statusEl.className = 'bst-rec-status'; }
+    if (uploadBtn) { uploadBtn.disabled = true; uploadBtn.textContent = '⏳ Uploading...'; }
+
+    try {
+      const sb  = DB.getClient();
+      const ext = (file.name.split('.').pop() || 'mp3').toLowerCase();
+      const path = `bot-script/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error } = await sb.storage.from('caller-audio').upload(path, file, { contentType: file.type || 'audio/mpeg' });
+      if (error) throw error;
+      const { data: ud } = sb.storage.from('caller-audio').getPublicUrl(path);
+      const url = ud.publicUrl;
+
+      _botScriptAudioBlobs[idx] = url;
+
+      const audio  = row.querySelector('.bst-audio-preview');
+      const clrBtn = row.querySelector('.bst-clear-btn');
+      if (audio)   { audio.src = url; audio.classList.remove('hidden'); }
+      if (clrBtn)  clrBtn.classList.remove('hidden');
+      if (uploadBtn) { uploadBtn.disabled = false; uploadBtn.textContent = '✏️ Replace Audio'; uploadBtn.classList.add('has-audio'); }
+      if (statusEl)  { statusEl.textContent = '✓ Uploaded'; statusEl.className = 'bst-rec-status'; }
+    } catch (e) {
+      console.error('Bot audio upload error:', e);
+      if (statusEl)  { statusEl.textContent = '✗ Upload failed — check storage bucket'; statusEl.className = 'bst-rec-status'; }
+      if (uploadBtn) { uploadBtn.disabled = false; uploadBtn.textContent = _botScriptAudioBlobs[idx] ? '✏️ Replace Audio' : '📎 Upload Audio'; }
     }
+    input.value = ''; // reset so same file can be re-selected
   }
 
   function clearBotTurnAudio(btn) {
@@ -1485,10 +1481,12 @@ window.Admin = (() => {
     const idx  = rows.indexOf(row);
     if (idx >= 0) _botScriptAudioBlobs[idx] = null;
 
-    const audio  = row.querySelector('.bst-audio-preview');
-    const recBtn = row.querySelector('.bst-rec-btn');
-    if (audio)  { audio.src = ''; audio.classList.add('hidden'); }
-    if (recBtn) { recBtn.textContent = '🎙 Record Voice'; recBtn.classList.remove('has-audio'); }
+    const audio     = row.querySelector('.bst-audio-preview');
+    const uploadBtn = row.querySelector('.bst-upload-btn');
+    const statusEl  = row.querySelector('.bst-rec-status');
+    if (audio)     { audio.src = ''; audio.classList.add('hidden'); }
+    if (uploadBtn) { uploadBtn.textContent = '📎 Upload Audio'; uploadBtn.classList.remove('has-audio'); }
+    if (statusEl)  statusEl.textContent = '';
     btn.classList.add('hidden');
   }
 
@@ -1601,13 +1599,23 @@ window.Admin = (() => {
         _callerAudioBlob = blob;
         btn.textContent = '🎙 Re-record';
         btn.style.background = '';
-        status.textContent = '✓ Recorded';
-        status.className = '';
         if (blob) {
-          const url = URL.createObjectURL(blob);
-          $('caller-preview-audio').src = url;
-          $('caller-preview-audio').classList.remove('hidden');
-          $('btn-clear-caller-audio').classList.remove('hidden');
+          const sizeMB = (blob.size / (1024 * 1024)).toFixed(1);
+          if (blob.size > 50 * 1024 * 1024) {
+            status.textContent = `⚠ Recording too large (${sizeMB} MB) — max 50 MB. Please re-record.`;
+            status.className = 'error';
+            _callerAudioBlob = null;
+          } else {
+            status.textContent = `✓ Recorded (${sizeMB} MB)`;
+            status.className = '';
+            const url = URL.createObjectURL(blob);
+            $('caller-preview-audio').src = url;
+            $('caller-preview-audio').classList.remove('hidden');
+            $('btn-clear-caller-audio').classList.remove('hidden');
+          }
+        } else {
+          status.textContent = '⚠ Recording failed — no audio captured.';
+          status.className = 'error';
         }
       }
     };
@@ -1652,16 +1660,20 @@ window.Admin = (() => {
         .map(i => i.value.trim()).filter(v => v);
     }
 
-    const botScriptRows  = Array.from(document.querySelectorAll('#bot-script-items .bot-script-turn-row'));
-    const botScript      = [];
-    const botScriptAudio = [];
+    const botScriptRows = Array.from(document.querySelectorAll('#bot-script-items .bot-script-turn-row'));
+    const rawTexts = [];
+    const rawAudio = [];
     botScriptRows.forEach((r, i) => {
       const text = r.querySelector('.bst-input')?.value.trim() || '';
-      if (text) {
-        botScript.push(text);
-        botScriptAudio.push(_botScriptAudioBlobs[i] || null);
-      }
+      if (text) { rawTexts.push(text); rawAudio.push(_botScriptAudioBlobs[i] || null); }
     });
+
+    // Audio files are already uploaded to Storage at selection time (URL strings or null).
+    // Embed directly into botScript as {text, audioUrl} objects — no botScriptAudio key ever sent to DB.
+    const hasAudio  = rawAudio.some(Boolean);
+    const botScript = hasAudio
+      ? rawTexts.map((t, i) => ({ text: t, audioUrl: rawAudio[i] || null }))
+      : rawTexts;
 
     const data = {
       module,
@@ -1669,8 +1681,7 @@ window.Admin = (() => {
       description: $('topic-description').value.trim(),
       scenario:    (module === 'grammar-assessment' || module === 'listening-assessment') ? '' : $('topic-scenario').value.trim(),
       checklist,
-      botScript,
-      botScriptAudio,
+      botScript,   // string[] when no audio, {text,audioUrl}[] when audio exists — NO botScriptAudio key
       callerAudioBlob: _callerAudioBlob || null,
       createdAt: new Date().toISOString()
     };
@@ -1688,7 +1699,9 @@ window.Admin = (() => {
       renderTopicsList();
     } catch (e) {
       console.error('Save topic failed:', e);
-      toast('Error saving topic: ' + (e.message || e), 'error');
+      // Build a helpful message: Supabase errors have .message + optional .hint / .details
+      const msg = [e.message, e.hint, e.details].filter(Boolean).join(' | ');
+      toast('Error saving topic: ' + (msg || String(e)), 'error');
     }
   }
 
@@ -5080,8 +5093,9 @@ window.Admin = (() => {
     toggleAllManagers,
     archiveSelectedManagers,
     restoreSelectedManagers,
-    // Bot script per-turn voice recording
-    toggleBotTurnRec,
+    // Bot script per-turn audio upload
+    toggleBotTurnRec,      // kept as no-op stub for cached HTML compatibility
+    uploadBotTurnAudio,
     clearBotTurnAudio,
     removeBotScriptRow,
     // AI Audit Scores (kept for backward compatibility)

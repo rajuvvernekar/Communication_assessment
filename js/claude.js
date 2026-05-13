@@ -206,24 +206,28 @@ Return ONLY a JSON: {"score": <1 or 3 or 5>, "reason": "<one sentence>"}`
   }
 
   // ---- Evaluate a rewrite-the-sentence answer ----
-  // Returns true if the student's answer is grammatically correct AND
-  // fixes the same error as the model answer (same meaning preserved).
+  // Returns true if the student's answer correctly fixes the grammatical error,
+  // regardless of minor punctuation differences (full stops, commas, etc.).
   async function evaluateRewrite(originalSentence, studentAnswer, modelAnswers) {
     if (!isAvailable()) return false;
     if (!studentAnswer || !studentAnswer.trim()) return false;
 
     const modelStr = modelAnswers.join(' OR ');
-    const system   = `You are a strict grammar examiner for an English proficiency test. Your ONLY job is to decide if a student's rewritten sentence is acceptable. Respond ONLY with valid JSON.`;
+    const system   = `You are a helpful grammar examiner for an English proficiency test. Your job is to check if a student correctly fixed a grammatical error. Respond ONLY with valid JSON.`;
     const user     = `Original (incorrect) sentence: "${originalSentence}"
 Model answer(s): "${modelStr}"
 Student's answer: "${studentAnswer}"
 
-Evaluate the student's answer:
-1. Is the student's answer grammatically correct?
-2. Does it fix the same grammatical error as the model answer?
-3. Does it preserve the original meaning?
+Evaluate whether the student's answer is acceptable:
+1. Did the student correctly fix the grammatical error present in the original sentence?
+2. Does their rewritten sentence convey the same meaning as the model answer?
 
-If ALL three conditions are true, award full marks. If any condition fails, award zero.
+IMPORTANT RULES:
+- Ignore ALL punctuation differences (missing or extra full stops, commas, apostrophes, etc.). Do NOT penalise for punctuation.
+- Both "He doesn't" and "He does not" are equivalent — accept both forms.
+- Accept any grammatically correct phrasing that fixes the same error, even if worded slightly differently from the model answer, as long as the meaning is preserved.
+- If the student fixed the error correctly and the sentence is grammatically sound, return {"pass": true}.
+
 Return ONLY this JSON: {"pass": true} or {"pass": false}`;
 
     try {
