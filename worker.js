@@ -17,7 +17,7 @@
  */
 
 const ANTHROPIC_API      = 'https://api.anthropic.com/v1/messages';
-const ELEVENLABS_VOICE   = 'pNInz6obpgDQGcFmaJgB'; // Adam — deep, professional male
+const ELEVENLABS_VOICE   = 'ErXwobaYiN019PkySvjV'; // Antoni — warm, natural male
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin':  '*',
