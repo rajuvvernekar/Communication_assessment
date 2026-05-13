@@ -1,21 +1,23 @@
 /**
- * CommAssess — Cloudflare Worker: Claude API Proxy
+ * CommAssess — Cloudflare Worker: Claude API Proxy + ElevenLabs TTS Proxy
  *
  * Deploy steps (free, ~5 minutes):
  *  1. Sign up at https://dash.cloudflare.com  (free account)
  *  2. Workers & Pages → Create → Worker → name it "commassess-claude"
  *  3. Paste this file into the editor and click Deploy
- *  4. Settings → Variables & Secrets → add Secret:
- *       Name:  CLAUDE_API_KEY
- *       Value: sk-ant-api03-...  (your Anthropic key)
+ *  4. Settings → Variables & Secrets → add Secrets:
+ *       Name:  CLAUDE_API_KEY       Value: sk-ant-api03-...  (your Anthropic key)
+ *       Name:  ELEVENLABS_API_KEY   Value: (your ElevenLabs key)
  *  5. Copy the worker URL (e.g. https://commassess-claude.YOURNAME.workers.dev)
  *     and paste it into config.js → CLAUDE_PROXY_URL
  *
- * The worker forwards POST requests to Anthropic, injecting your
- * API key server-side so it is NEVER exposed to the browser.
+ * Routes:
+ *   POST /        → Anthropic Claude API (existing)
+ *   POST /tts     → ElevenLabs TTS (returns audio/mpeg)
  */
 
-const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
+const ANTHROPIC_API      = 'https://api.anthropic.com/v1/messages';
+const ELEVENLABS_VOICE   = 'pNInz6obpgDQGcFmaJgB'; // Adam — deep, professional male
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin':  '*',
@@ -34,7 +36,49 @@ export default {
       return new Response('Method Not Allowed', { status: 405 });
     }
 
-    // ---- Validate API key is configured ----
+    const url = new URL(request.url);
+
+    // ---- ElevenLabs TTS route (/tts) ----
+    if (url.pathname.endsWith('/tts')) {
+      if (!env.ELEVENLABS_API_KEY) {
+        return new Response(
+          JSON.stringify({ error: { message: 'ELEVENLABS_API_KEY secret not set on the Worker.' } }),
+          { status: 500, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
+        );
+      }
+
+      let body;
+      try { body = await request.text(); } catch { return new Response('Bad Request', { status: 400 }); }
+
+      const upstream = await fetch(
+        `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'xi-api-key':   env.ELEVENLABS_API_KEY,
+            'Accept':        'audio/mpeg',
+          },
+          body,
+        }
+      );
+
+      if (!upstream.ok) {
+        const err = await upstream.text();
+        return new Response(err, {
+          status: upstream.status,
+          headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+        });
+      }
+
+      const audioData = await upstream.arrayBuffer();
+      return new Response(audioData, {
+        status: 200,
+        headers: { 'Content-Type': 'audio/mpeg', ...CORS_HEADERS },
+      });
+    }
+
+    // ---- Claude API route (default) ----
     if (!env.CLAUDE_API_KEY) {
       return new Response(
         JSON.stringify({ error: { message: 'CLAUDE_API_KEY secret not set on the Worker.' } }),
@@ -42,7 +86,6 @@ export default {
       );
     }
 
-    // ---- Forward request to Anthropic ----
     let body;
     try {
       body = await request.text();

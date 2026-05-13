@@ -841,6 +841,61 @@ const App = (() => {
     }
   }
 
+  // ── ElevenLabs TTS for AI customer (human-sounding voice) ──
+  // Sends text to the /tts route on the Cloudflare Worker proxy, receives
+  // audio/mpeg back, and plays it via an HTMLAudioElement stored in
+  // _mcBotAudioEl (so endBotCallEarly() can cancel it).
+  // Falls back to speakBot() if the proxy is unavailable or returns an error.
+  async function speakAiCustomer(text, onEnd, mood = {}) {
+    const proxyUrl = (typeof CONFIG !== 'undefined' && CONFIG.CLAUDE_PROXY_URL) || '';
+    if (!proxyUrl) { speakBot(text, onEnd, mood); return; }
+
+    const ttsUrl = proxyUrl.replace(/\/?$/, '/tts');
+
+    try {
+      const resp = await fetch(ttsUrl, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          text,
+          model_id: 'eleven_turbo_v2_5',
+          voice_settings: {
+            stability:        0.35,   // lower = more emotional variation
+            similarity_boost: 0.80,
+            style:            0.45,   // adds expressiveness
+            use_speaker_boost: true,
+          },
+        }),
+      });
+
+      if (!resp.ok) throw new Error(`ElevenLabs TTS error ${resp.status}`);
+
+      const blob     = await resp.blob();
+      const audioUrl = URL.createObjectURL(blob);
+      const audio    = new Audio(audioUrl);
+      _mcBotAudioEl  = audio;
+
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        URL.revokeObjectURL(audioUrl);
+        _mcBotAudioEl = null;
+        onEnd();
+      };
+
+      // Safety timeout: ~400 ms per word + 6 s buffer
+      const guard = setTimeout(finish, text.split(/\s+/).length * 400 + 6000);
+      audio.onended = () => { clearTimeout(guard); finish(); };
+      audio.onerror = () => { clearTimeout(guard); finish(); };
+
+      await audio.play();
+    } catch (e) {
+      console.warn('ElevenLabs TTS failed, using browser voice:', e.message);
+      speakBot(text, onEnd, mood);
+    }
+  }
+
   // ── Core TTS: speaks with real breath sounds + per-chunk variation ──
   // Plays an audible breath inhale → then speaks each sentence/clause
   // chunk with slight pitch/rate jitter and natural pauses between them.
@@ -1265,7 +1320,7 @@ const App = (() => {
     $('mc-chat-thread').scrollTop = $('mc-chat-thread').scrollHeight;
 
     // Speak it, then hand off to trainee or finish
-    speakBot(botLine, () => {
+    speakAiCustomer(botLine, () => {
       if (isLast) {
         $('mc-bot-status').style.display = 'none';
         $('btn-mc-finish').style.display = '';
