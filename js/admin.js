@@ -3758,6 +3758,106 @@ window.Admin = (() => {
     }
   }
 
+  // ── Comms 360 Master Report — Excel Download ─────────────────────────────
+  // Exports all agents from _MANAGER_AGENT_MAP with their master scores and
+  // any live DB scores, grouped by manager.
+  async function downloadMasterExcel() {
+    if (typeof XLSX === 'undefined') { toast('XLSX library not loaded', 'error'); return; }
+    const btn = $('btn-master-excel');
+    if (btn) { btn.disabled = true; btn.textContent = '⌛ Generating…'; }
+
+    try {
+      const r2 = v => v != null ? parseFloat(parseFloat(v).toFixed(2)) : null;
+
+      // Fetch all trainees and their sessions from DB for live scores
+      const allTrainees = await DB.getAll('trainees');
+      const traineeByName = {};
+      for (const t of allTrainees) {
+        traineeByName[t.name?.toLowerCase().trim()] = t;
+      }
+
+      const headers = [
+        'Manager', 'Agent Name',
+        'Self Assessment (/20)', 'AI Audit (/5)',
+        'Pick & Speak (/20)', 'Listening (/20)', 'Mock Call (/20)', 'Grammar (/25)',
+        'Total Score (/100)'
+      ];
+
+      const rows = [headers];
+
+      for (const [manager, agents] of Object.entries(_MANAGER_AGENT_MAP)) {
+        for (const agentName of agents) {
+          const ms  = getMasterScores(agentName);
+          const key = agentName.toLowerCase().trim();
+          const t   = traineeByName[key] ||
+                      Object.entries(traineeByName).find(([k]) => k.replace(/\s+/g,'') === key.replace(/\s+/g,''))?.[1];
+
+          // Live DB module scores
+          let livePct = {};
+          if (t) {
+            const sessions = await DB.getByIndex('sessions', 'traineeId', t.id);
+            const { scores } = computeAgentScores(t.id, sessions);
+            livePct = scores;
+          }
+
+          const saSc  = ms?.selfAssessment ?? null;
+          const aiSc  = ms?.aiAudit       ?? null;
+
+          const psMark  = livePct['pick-speak']           != null ? r2(livePct['pick-speak']           / 100 * 20) : (ms?.psScore   ?? null);
+          const lisMark = livePct['listening-assessment'] != null ? r2(livePct['listening-assessment'] / 100 * 20) : (ms?.lisScore  ?? null);
+          const mcMark  = livePct['mock-call']            != null ? r2(livePct['mock-call']            / 100 * 20) : (ms?.mcScore   ?? null);
+          const gaMark  = livePct['grammar-assessment']   != null ? r2(livePct['grammar-assessment']   / 100 * 25) : (ms?.gramScore ?? null);
+
+          // Total: always recompute from components for accuracy
+          const masterHasAll = ms?.psScore != null && ms?.lisScore != null && ms?.mcScore != null && ms?.gramScore != null;
+          const hasLive = ['pick-speak','listening-assessment','grammar-assessment','mock-call'].some(k => livePct[k] != null);
+          let total;
+          if (masterHasAll && !hasLive && ms?.totalScore > 0) {
+            total = r2(ms.totalScore);
+          } else {
+            const parts = [saSc, aiSc, psMark, lisMark, mcMark, gaMark].filter(x => x != null);
+            total = parts.length ? r2(parts.reduce((a, b) => a + b, 0)) : null;
+          }
+
+          rows.push([
+            manager, agentName,
+            r2(saSc), r2(aiSc),
+            psMark, lisMark, mcMark, gaMark,
+            total
+          ]);
+        }
+      }
+
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+
+      // Style header row
+      const range = XLSX.utils.decode_range(ws['!ref']);
+      for (let C = range.s.c; C <= range.e.c; C++) {
+        const addr = XLSX.utils.encode_cell({ r: 0, c: C });
+        if (!ws[addr]) continue;
+        ws[addr].s = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '1A3C5E' } }, alignment: { horizontal: 'center' } };
+      }
+
+      // Set column widths
+      ws['!cols'] = [
+        { wch: 22 }, { wch: 30 },
+        { wch: 22 }, { wch: 14 },
+        { wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 16 },
+        { wch: 18 }
+      ];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Comms 360 Master Report');
+      XLSX.writeFile(wb, `Comms360_Master_Report_${new Date().toISOString().slice(0,10)}.xlsx`, { cellStyles: true });
+      toast('Excel downloaded!', 'success');
+    } catch (e) {
+      console.error('Excel export failed:', e);
+      toast('Export failed: ' + e.message, 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '⬇ Download Comms 360 Excel'; }
+    }
+  }
+
   async function copyLetter() {
     const body = document.getElementById('lrc-letter-body');
     const btn  = document.getElementById('lrc-copy-btn');
@@ -3814,19 +3914,26 @@ window.Admin = (() => {
       ? r2(scores['mock-call']   / 100 * 20)
       : (ms?.mcScore   != null ? r2(ms.mcScore)   : null);
 
-    // ── Total score: use Excel master total (W) directly for exact match ──
-    // Falls back to sum of module marks if trainee not found in master sheet.
-    let totalMark = null;
-    try {
-      if (ms && typeof ms.totalScore === 'number' && ms.totalScore > 0) {
-        totalMark = r2(ms.totalScore);  // use pre-computed Excel grand total
-      }
-    } catch (_) { /* fall back gracefully */ }
+    // ── Total score ──
+    // Use ms.totalScore ONLY when master has ALL module components.
+    // Teams like Sadique Raza have psScore/lis/mc/gramScore = null in master,
+    // so their ms.totalScore is just SA+AI (~10-14). In that case we must
+    // recompute from SA + AI (master) + live module marks (DB preferred, master fallback).
+    const masterHasAllModules = ms?.psScore != null && ms?.lisScore != null &&
+                                 ms?.mcScore != null && ms?.gramScore != null;
+    const hasLiveModuleData   = ['pick-speak','listening-assessment','grammar-assessment','mock-call']
+                                  .some(k => scores[k] != null);
 
-    if (totalMark === null) {
-      // Fallback: sum of whatever module marks are available
-      const allMarks = [lisMark, psMark, gaMark, mcMark].filter(x => x != null);
-      totalMark = allMarks.length ? r2(allMarks.reduce((a, b) => a + b, 0)) : null;
+    let totalMark = null;
+    if (masterHasAllModules && !hasLiveModuleData && ms?.totalScore > 0) {
+      // Exact pre-computed Excel total — most accurate for fully-scored trainees
+      totalMark = r2(ms.totalScore);
+    } else {
+      // Recompute from all available components: SA + AI + each module mark
+      const saScore = ms?.selfAssessment ?? null;
+      const aiScore = ms?.aiAudit       ?? null;
+      const parts   = [saScore, aiScore, lisMark, psMark, gaMark, mcMark].filter(x => x != null);
+      totalMark = parts.length ? r2(parts.reduce((a, b) => a + b, 0)) : null;
     }
 
     // For insight generation: supplement DB percentages with master-score percentages
@@ -3889,13 +3996,24 @@ window.Admin = (() => {
     $('report-content').classList.remove('hidden');
 
     const r2 = v => v != null ? parseFloat(v.toFixed(2)) : null;
-    const totalMark = r2(ms.totalScore);
 
     // Individual module marks directly from master sheet (already weighted to out-of-max)
     const psMark  = ms.psScore   != null ? r2(ms.psScore)   : null;
     const lisMark = ms.lisScore  != null ? r2(ms.lisScore)  : null;
     const mcMark  = ms.mcScore   != null ? r2(ms.mcScore)   : null;
     const gaMark  = ms.gramScore != null ? r2(ms.gramScore) : null;
+
+    // Use pre-computed ms.totalScore only when master has ALL module components.
+    // Otherwise recompute from SA + AI + module marks (Sadique Raza team fix).
+    const masterHasAllMods = ms.psScore != null && ms.lisScore != null &&
+                              ms.mcScore != null && ms.gramScore != null;
+    let totalMark;
+    if (masterHasAllMods && ms.totalScore > 0) {
+      totalMark = r2(ms.totalScore);
+    } else {
+      const parts = [ms.selfAssessment, ms.aiAudit, psMark, lisMark, mcMark, gaMark].filter(x => x != null);
+      totalMark = parts.length ? r2(parts.reduce((a, b) => a + b, 0)) : null;
+    }
 
     // Convert weighted marks back to 0-100 percentages for insight generation
     const synScores = {};
@@ -5178,6 +5296,7 @@ window.Admin = (() => {
     deleteAllSessions,
     copyLetter,
     downloadTraineePPT,
+    downloadMasterExcel,
     // Assessments archive / multi-select / manager view
     switchAssessmentView,
     toggleSessionCheckbox,
