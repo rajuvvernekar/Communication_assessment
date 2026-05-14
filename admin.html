@@ -293,7 +293,7 @@
         </div>
       </div>
 
-      <!-- Two-level Manager → Agent selector + Master Excel export -->
+      <!-- Two-level Manager → Agent selector -->
       <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;flex-wrap:wrap">
         <label style="font-size:0.9rem;font-weight:600">Manager:</label>
         <select id="report-manager-select" class="filter-select" style="min-width:210px">
@@ -303,7 +303,6 @@
         <select id="report-trainee-select" class="filter-select" style="min-width:210px" disabled>
           <option value="">— Choose an agent —</option>
         </select>
-        <button id="btn-master-excel" class="btn-primary" style="margin-left:auto;font-size:0.82rem;padding:0.45rem 1rem;white-space:nowrap" onclick="Admin.downloadMasterExcel()">⬇ Download Comms 360 Excel</button>
       </div>
 
       <div id="report-content" class="hidden">
@@ -351,6 +350,7 @@
         <input type="text" id="comm360-search" placeholder="🔍 Search by name or manager…"
           oninput="Admin.searchComm360(this.value)"
           style="flex:1;min-width:180px;padding:0.5rem 0.75rem;border:1px solid var(--border);border-radius:6px;font-size:0.875rem" />
+        <button id="btn-master-excel" class="btn-primary" style="font-size:0.82rem;padding:0.45rem 1rem;white-space:nowrap" onclick="Admin.downloadMasterExcel()">⬇ Download Excel</button>
       </div>
 
       <!-- Table -->
