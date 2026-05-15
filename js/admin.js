@@ -5227,9 +5227,9 @@ window.Admin = (() => {
       const teamBadge = team === 'Tickets'
         ? '<span style="background:#d1fae5;color:#065f46;font-size:0.7rem;padding:0.1rem 0.4rem;border-radius:4px;margin-left:0.4rem">🎫 Tickets</span>'
         : '<span style="background:#dbeafe;color:#1e3a8a;font-size:0.7rem;padding:0.1rem 0.4rem;border-radius:4px;margin-left:0.4rem">📞 Calls</span>';
-      const totals = recs.filter(r => r.totalScore != null && r.totalScore > 0);
-      const avgTotal = totals.length
-        ? (totals.reduce((a, r) => a + r.totalScore, 0) / totals.length).toFixed(2)
+      const psRecs = recs.filter(r => r.psScore != null);
+      const avgPs  = psRecs.length
+        ? (psRecs.reduce((a, r) => a + r.psScore, 0) / psRecs.length).toFixed(2)
         : '—';
 
       html += `<tr style="background:#eef2ff;border-top:2px solid #c7d2fe">
@@ -5237,8 +5237,9 @@ window.Admin = (() => {
           👤 ${manager}${teamBadge}
           <span style="font-weight:400;color:var(--text-muted);font-size:0.78rem;margin-left:0.5rem">(${recs.length} agent${recs.length !== 1 ? 's' : ''})</span>
         </td>
-        <td colspan="6" style="background:#eef2ff"></td>
-        <td style="text-align:right;font-size:0.78rem;color:#3730a3;font-weight:600;background:#eef2ff">Avg: ${avgTotal}</td>
+        <td colspan="2" style="background:#eef2ff"></td>
+        <td style="text-align:right;font-size:0.78rem;color:#3730a3;font-weight:600;background:#eef2ff">Avg: ${avgPs}</td>
+        <td colspan="3" style="background:#eef2ff"></td>
       </tr>`;
 
       recs.forEach(r => {
