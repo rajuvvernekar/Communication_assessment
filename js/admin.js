@@ -9,6 +9,7 @@
 // v38b: Vishal Shivsahay Singh gramScore updated (39.25/100 → 9.8125/25, total 22.09)
 // v39:  Per-turn voice recording for bot script turns in mock call topics
 // v41:  Fix botScriptAudio save — upload blobs to Storage, embed URLs in bot_script jsonb
+// v49:  reScoreSharuqPickSpeak — fuzzy name match, pass timeTaken, handle no-transcript sessions
 const MASTER_SCORES = {
   // ── Vignesh Baliga ──
   "abdul razak":                     { selfAssessment: 9.243,  aiAudit: 3.945,  psScore: 12.68, lisScore: 16.20, mcScore:  8.58, gramScore:  7.00, totalScore: 57.65 },
@@ -5286,23 +5287,32 @@ window.Admin = (() => {
     );
     if (!SHARUQ_TEAM.size) { toast('Sharuq team not found in manager map', 'error'); return; }
 
+    // Fuzzy match: exact OR one name is a substring of the other
+    function matchesTeam(name) {
+      if (!name) return false;
+      const n = name.toLowerCase().trim();
+      if (SHARUQ_TEAM.has(n)) return true;
+      for (const m of SHARUQ_TEAM) {
+        if (m.includes(n) || n.includes(m)) return true;
+      }
+      return false;
+    }
+
     const btn = $('btn-rescore-sharuq');
     if (btn) { btn.disabled = true; btn.textContent = '⌛ Re-scoring…'; }
 
     try {
       const PS_MODULES = new Set(['pick-speak', 'pick-speak-general', 'pick-speak-stock']);
 
-      // Fetch all P&S sessions for Sharuq's team
+      // Fetch all P&S sessions for Sharuq's team (no transcript filter — handle both cases)
       const allSessions = await DB.getAll('sessions');
       const targets = allSessions.filter(s =>
         PS_MODULES.has(s.module) &&
-        s.traineeName &&
-        SHARUQ_TEAM.has(s.traineeName.toLowerCase().trim()) &&
-        s.transcript && s.transcript.trim().length > 20
+        matchesTeam(s.traineeName)
       );
 
       if (!targets.length) {
-        toast('No P&S sessions with transcripts found for Sharuq\'s team', 'warning');
+        toast('No P&S sessions found for Sharuq\'s team', 'warning');
         return;
       }
 
@@ -5310,19 +5320,39 @@ window.Admin = (() => {
       for (const session of targets) {
         if (btn) btn.textContent = `⌛ Re-scoring… ${done + 1}/${targets.length}`;
         try {
-          const result = await ClaudeEvaluator.evaluate(
-            'pick-speak',
-            session.transcript,
-            session.topicTitle || '',
-            ''
-          );
-          if (result && result.overall !== null) {
-            const newAiScores = {
-              ...result.scores,
-              overall:  result.overall,
-              _reasons: result.reasons,
-              _method:  'claude-strict'
+          const hasTranscript = session.transcript && session.transcript.trim().length > 20;
+          let newAiScores = null;
+
+          if (hasTranscript) {
+            // Full Claude evaluation + time management criterion
+            const result = await ClaudeEvaluator.evaluate(
+              'pick-speak',
+              session.transcript,
+              session.topicTitle || '',
+              '',
+              session.timeTaken || null
+            );
+            if (result && result.overall !== null) {
+              newAiScores = {
+                ...result.scores,
+                overall:  result.overall,
+                _reasons: result.reasons,
+                _method:  'claude-strict'
+              };
+            }
+          } else if (session.timeTaken) {
+            // No transcript — only apply time management score, preserve existing scores
+            const tm = ClaudeEvaluator.scoreTimeManagement(session.timeTaken);
+            const existing = session.aiScores || {};
+            newAiScores = {
+              ...existing,
+              timeManagement: tm.score,
+              _reasons: { ...(existing._reasons || {}), timeManagement: tm.reason },
+              _method: existing._method || 'time-only'
             };
+          }
+
+          if (newAiScores) {
             await DB.put('sessions', { ...session, aiScores: newAiScores });
             updated++;
           }

@@ -668,6 +668,13 @@ const App = (() => {
     if (scoreable) {
       analysis = SpeechEngine.analyze(finalTranscript, duration);
       aiScores  = SpeechEngine.scoreSpeech(analysis, duration);
+      // Add time management criterion based on actual recording duration
+      if (typeof ClaudeEvaluator !== 'undefined') {
+        const tm = ClaudeEvaluator.scoreTimeManagement(duration);
+        aiScores.timeManagement = tm.score;
+        if (!aiScores._reasons) aiScores._reasons = {};
+        aiScores._reasons.timeManagement = tm.reason;
+      }
       aiScores._summary = SpeechEngine.generateCoachingSummary('pick-speak', aiScores);
     }
 

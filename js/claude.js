@@ -163,6 +163,22 @@ Return ONLY JSON: {"score":<1-5>,"reason":"<one sentence on topic coverage and s
     ]
   };
 
+  // ---- Time Management — pure calculation, no LLM ----
+  // Scoring based on actual recording duration:
+  //   < 2:00 → 1  |  2:00–2:59 → 2  |  3:00–3:59 → 3  |  4:00–4:39 → 4  |  ≥ 4:40 → 5
+  function _fmtDur(secs) {
+    const m = Math.floor(secs / 60), s = secs % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
+  }
+  function scoreTimeManagement(durationSeconds) {
+    const s = Math.round(durationSeconds || 0);
+    if (s >= 280) return { score: 5, reason: `Spoke for ${_fmtDur(s)} — excellent time usage (target ≥ 4:40).` };
+    if (s >= 240) return { score: 4, reason: `Spoke for ${_fmtDur(s)} — good time usage (4:00–4:39).` };
+    if (s >= 180) return { score: 3, reason: `Spoke for ${_fmtDur(s)} — acceptable but under 4 minutes.` };
+    if (s >= 120) return { score: 2, reason: `Spoke for ${_fmtDur(s)} — too brief, under 3 minutes.` };
+    return         { score: 1, reason: `Spoke for only ${_fmtDur(s)} — far too short.` };
+  }
+
   // ---- API call (via Cloudflare Worker proxy — no API key in browser) ----
   async function callClaude(systemPrompt, userContent) {
     const proxyUrl = getProxyUrl();
@@ -207,7 +223,9 @@ Return ONLY JSON: {"score":<1-5>,"reason":"<one sentence on topic coverage and s
   }
 
   // ---- Main evaluate function ----
-  async function evaluate(module, transcript, topicTitle, topicScenario) {
+  // durationSeconds (optional): actual recording length in seconds — used to
+  // compute the Time Management score for pick-speak without an LLM call.
+  async function evaluate(module, transcript, topicTitle, topicScenario, durationSeconds) {
     if (!isAvailable()) return null;
 
     const results = { scores: {}, reasons: {}, overall: null };
@@ -227,13 +245,19 @@ Return ONLY JSON: {"score":<1-5>,"reason":"<one sentence on topic coverage and s
         try {
           const result = await scoreCriterion(criterion, transcript, topicTitle, topicScenario);
           if (result && typeof result.score === 'number') {
-            // Normalize 1/3/5 scale to 1-5 for display consistency
             results.scores[criterion.key] = result.score;
             results.reasons[criterion.key] = result.reason || '';
           }
         } catch (e) {
           console.warn(`Claude scoring failed for ${criterion.key}:`, e.message);
         }
+      }
+
+      // Time Management — injected for pick-speak when duration is available
+      if (module === 'pick-speak' && durationSeconds != null) {
+        const tm = scoreTimeManagement(durationSeconds);
+        results.scores['timeManagement']  = tm.score;
+        results.reasons['timeManagement'] = tm.reason;
       }
 
       // Calculate overall: average out of 5, converted to percentage out of 100
@@ -341,5 +365,5 @@ Return ONLY the customer\'s spoken dialogue. No stage directions, no narration, 
     return SPOKEN_CRITERIA[module] || [];
   }
 
-  return { isAvailable, evaluate, evaluateRewrite, callAiCustomer, getCriteria, MOCK_CALL_CRITERIA };
+  return { isAvailable, evaluate, evaluateRewrite, callAiCustomer, getCriteria, scoreTimeManagement, MOCK_CALL_CRITERIA };
 })();
