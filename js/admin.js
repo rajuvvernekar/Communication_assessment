@@ -10,6 +10,7 @@
 // v39:  Per-turn voice recording for bot script turns in mock call topics
 // v41:  Fix botScriptAudio save — upload blobs to Storage, embed URLs in bot_script jsonb
 // v49:  reScoreSharuqPickSpeak — fuzzy name match, pass timeTaken, handle no-transcript sessions
+// v50:  reScoreSharuqPickSpeak — use DB.patch (ai_scores only) to avoid Supabase column errors
 const MASTER_SCORES = {
   // ── Vignesh Baliga ──
   "abdul razak":                     { selfAssessment: 9.243,  aiAudit: 3.945,  psScore: 12.68, lisScore: 16.20, mcScore:  8.58, gramScore:  7.00, totalScore: 57.65 },
@@ -5317,6 +5318,7 @@ window.Admin = (() => {
       }
 
       let done = 0, updated = 0;
+      const errors = [];
       for (const session of targets) {
         if (btn) btn.textContent = `⌛ Re-scoring… ${done + 1}/${targets.length}`;
         try {
@@ -5341,7 +5343,7 @@ window.Admin = (() => {
               };
             }
           } else if (session.timeTaken) {
-            // No transcript — only apply time management score, preserve existing scores
+            // No transcript — only patch time management score, keep everything else untouched
             const tm = ClaudeEvaluator.scoreTimeManagement(session.timeTaken);
             const existing = session.aiScores || {};
             newAiScores = {
@@ -5352,19 +5354,29 @@ window.Admin = (() => {
             };
           }
 
-          if (newAiScores) {
-            await DB.put('sessions', { ...session, aiScores: newAiScores });
+          if (newAiScores && session.id) {
+            // Use patch — only updates ai_scores column, never touches admin_scores or other fields
+            await DB.patch('sessions', session.id, { aiScores: newAiScores });
             updated++;
+          } else if (!session.id) {
+            errors.push(`${session.traineeName}: no session ID`);
           }
         } catch (e) {
-          console.warn(`Re-score failed for ${session.traineeName}:`, e.message);
+          const msg = `${session.traineeName}: ${e.message}`;
+          errors.push(msg);
+          console.error(`Re-score failed for ${session.traineeName}:`, e);
         }
         done++;
         // Small delay to avoid rate limits
         await new Promise(r => setTimeout(r, 400));
       }
 
-      toast(`Re-scoring complete: ${updated}/${targets.length} sessions updated`, 'success');
+      if (errors.length) {
+        console.error('Re-score errors:', errors);
+        toast(`Re-scoring: ${updated} updated, ${errors.length} failed — check console`, 'warning');
+      } else {
+        toast(`Re-scoring complete: ${updated}/${targets.length} sessions updated`, 'success');
+      }
 
       // Refresh the current view
       await loadAssessments();
