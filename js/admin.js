@@ -16,6 +16,7 @@
 // v53:  reScorePickSpeak — specific agent names input; bypasses team filter when names are typed
 // v54:  resetPickSpeakScores — restore original scores from _prev backup stored inside aiScores
 // v55:  resetPickSpeakScores — balanced fallback: re-score with original criteria when no _prev exists
+// v56:  reScorePickSpeak — use SpeechEngine (all 12 params) + corrected timeManagement; no Claude API
 const MASTER_SCORES = {
   // ── Vignesh Baliga ──
   "abdul razak":                     { selfAssessment: 9.243,  aiAudit: 3.945,  psScore: 12.68, lisScore: 16.20, mcScore:  8.58, gramScore:  7.00, totalScore: 57.65 },
@@ -5293,9 +5294,11 @@ window.Admin = (() => {
   // Reads the manager from #rescore-manager-select.
   // Value "__ALL__" → score every P&S session in the DB.
   // Any other value  → score only that manager's agents.
+  // Uses SpeechEngine for all 12 parameters (same as new sessions in app.js),
+  // then overrides timeManagement with the duration-based scorer (4:40 target).
   async function reScorePickSpeak() {
-    if (typeof ClaudeEvaluator === 'undefined' || !ClaudeEvaluator.isAvailable()) {
-      toast('Claude proxy not configured — cannot re-score', 'error'); return;
+    if (typeof SpeechEngine === 'undefined') {
+      toast('SpeechEngine not loaded — cannot re-score', 'error'); return;
     }
 
     const sel         = $('rescore-manager-select');
@@ -5369,44 +5372,57 @@ window.Admin = (() => {
       for (const session of targets) {
         if (btn) btn.textContent = `⌛ ${done + 1}/${targets.length}`;
         try {
+          const duration     = session.timeTaken || 0;
           const hasTranscript = session.transcript && session.transcript.trim().length > 20;
           let newAiScores = null;
 
           if (hasTranscript) {
-            // Full strict Claude evaluation + time management
-            const result = await ClaudeEvaluator.evaluate(
-              'pick-speak',
-              session.transcript,
-              session.topicTitle || '',
-              '',
-              session.timeTaken || null
-            );
-            if (result && result.overall !== null) {
-              newAiScores = {
-                ...result.scores,
-                overall:  result.overall,
-                _reasons: result.reasons,
-                _method:  'claude-strict'
-              };
+            // SpeechEngine: produces all 12 parameters (same as new sessions in app.js)
+            const analysis  = SpeechEngine.analyze(session.transcript, duration);
+            newAiScores     = SpeechEngine.scoreSpeech(analysis, duration);
+            newAiScores._summary = SpeechEngine.generateCoachingSummary('pick-speak', newAiScores);
+
+            // Override timeManagement with the correct duration-based scorer (4:40 target, not 2-min)
+            if (duration > 0 && typeof ClaudeEvaluator !== 'undefined') {
+              const tm = ClaudeEvaluator.scoreTimeManagement(duration);
+              newAiScores.timeManagement = tm.score;
+              // Recalculate overall after override
+              const aiKeys = ['clarity','logicalFlow','relevance','grammar','vocabulary',
+                              'sentenceVariety','fluency','pace','fillerControl',
+                              'confidence','professionalism','timeManagement'];
+              const aiSum = aiKeys.reduce((s, k) => s + (newAiScores[k] || 0), 0);
+              newAiScores.overall = parseFloat(((aiSum / (aiKeys.length * 5)) * 100).toFixed(1));
             }
-          } else if (session.timeTaken) {
-            // No transcript — apply time management only, preserve other scores
-            const tm = ClaudeEvaluator.scoreTimeManagement(session.timeTaken);
+            newAiScores._method = 'js-rescore';
+
+          } else if (duration > 0) {
+            // No transcript — only fix timeManagement, preserve all other existing scores
             const existing = session.aiScores || {};
-            newAiScores = {
-              ...existing,
-              timeManagement: tm.score,
-              _reasons: { ...(existing._reasons || {}), timeManagement: tm.reason },
-              _method: existing._method || 'time-only'
-            };
+            if (typeof ClaudeEvaluator !== 'undefined') {
+              const tm = ClaudeEvaluator.scoreTimeManagement(duration);
+              newAiScores = {
+                ...existing,
+                timeManagement: tm.score,
+                _method: existing._method || 'time-only'
+              };
+              // Recalculate overall if we have enough data
+              const aiKeys = ['clarity','logicalFlow','relevance','grammar','vocabulary',
+                              'sentenceVariety','fluency','pace','fillerControl',
+                              'confidence','professionalism','timeManagement'];
+              const vals = aiKeys.filter(k => newAiScores[k] != null);
+              if (vals.length >= 6) {
+                const aiSum = aiKeys.reduce((s, k) => s + (newAiScores[k] || 0), 0);
+                newAiScores.overall = parseFloat(((aiSum / (aiKeys.length * 5)) * 100).toFixed(1));
+              }
+            }
           }
 
           if (newAiScores && session.id) {
-            // Preserve original scores as _prev (only on first re-score — don't overwrite the original)
+            // Preserve original scores as _prev (only first time — never overwrite the original)
             if (session.aiScores && !session.aiScores._prev) {
               newAiScores._prev = session.aiScores;
             } else if (session.aiScores && session.aiScores._prev) {
-              newAiScores._prev = session.aiScores._prev; // keep the original backup
+              newAiScores._prev = session.aiScores._prev;
             }
             // patch — only writes ai_scores, never touches admin_scores
             await DB.patch('sessions', session.id, { aiScores: newAiScores });
@@ -5419,7 +5435,7 @@ window.Admin = (() => {
           console.error(`Re-score failed for ${session.traineeName}:`, e);
         }
         done++;
-        await new Promise(r => setTimeout(r, 500)); // rate-limit buffer
+        await new Promise(r => setTimeout(r, 100)); // small delay for UI updates
       }
 
       if (errors.length) {
@@ -5519,22 +5535,21 @@ window.Admin = (() => {
             const { _prev, ...originalScores } = session.aiScores._prev;
             restoredScores = originalScores;
           } else if (session.transcript && session.transcript.trim().length > 20) {
-            // No backup — re-evaluate with balanced (pre-strict) criteria
-            const result = await ClaudeEvaluator.evaluateBalanced(
-              'pick-speak',
-              session.transcript,
-              session.topicTitle || '',
-              '',
-              session.timeTaken || null
-            );
-            if (result && result.overall !== null) {
-              restoredScores = {
-                ...result.scores,
-                overall:  result.overall,
-                _reasons: result.reasons,
-                _method:  'claude-balanced'
-              };
+            // No backup — re-score with SpeechEngine (all 12 params) + corrected timeManagement
+            const duration  = session.timeTaken || 0;
+            const analysis  = SpeechEngine.analyze(session.transcript, duration);
+            restoredScores  = SpeechEngine.scoreSpeech(analysis, duration);
+            restoredScores._summary = SpeechEngine.generateCoachingSummary('pick-speak', restoredScores);
+            if (duration > 0 && typeof ClaudeEvaluator !== 'undefined') {
+              const tm = ClaudeEvaluator.scoreTimeManagement(duration);
+              restoredScores.timeManagement = tm.score;
+              const aiKeys = ['clarity','logicalFlow','relevance','grammar','vocabulary',
+                              'sentenceVariety','fluency','pace','fillerControl',
+                              'confidence','professionalism','timeManagement'];
+              const aiSum = aiKeys.reduce((s, k) => s + (restoredScores[k] || 0), 0);
+              restoredScores.overall = parseFloat(((aiSum / (aiKeys.length * 5)) * 100).toFixed(1));
             }
+            restoredScores._method = 'js-reset';
           }
 
           if (restoredScores && session.id) {
@@ -5546,7 +5561,7 @@ window.Admin = (() => {
           console.error(`Reset failed for ${session.traineeName}:`, e);
         }
         done++;
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, 80)); // small UI tick
       }
 
       if (errors.length) {
