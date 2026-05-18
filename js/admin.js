@@ -15,6 +15,7 @@
 // v52:  reScorePickSpeak — generic for any manager or all teams; stricter Claude criteria in claude.js v14
 // v53:  reScorePickSpeak — specific agent names input; bypasses team filter when names are typed
 // v54:  resetPickSpeakScores — restore original scores from _prev backup stored inside aiScores
+// v55:  resetPickSpeakScores — balanced fallback: re-score with original criteria when no _prev exists
 const MASTER_SCORES = {
   // ── Vignesh Baliga ──
   "abdul razak":                     { selfAssessment: 9.243,  aiAudit: 3.945,  psScore: 12.68, lisScore: 16.20, mcScore:  8.58, gramScore:  7.00, totalScore: 57.65 },
@@ -5491,10 +5492,14 @@ window.Admin = (() => {
     try {
       const PS_MODULES  = new Set(['pick-speak', 'pick-speak-general', 'pick-speak-stock']);
       const allSessions = await DB.getAll('sessions');
-      const targets     = allSessions.filter(s =>
+
+      // Target all matching P&S sessions — those with _prev (backup exists) AND
+      // those without _prev but marked as 'claude-strict' (re-scored before backup feature)
+      const targets = allSessions.filter(s =>
         PS_MODULES.has(s.module) &&
         matchesTarget(s.traineeName) &&
-        s.aiScores && s.aiScores._prev   // only sessions that were re-scored
+        s.aiScores &&
+        (s.aiScores._prev || s.aiScores._method === 'claude-strict')
       );
 
       if (!targets.length) {
@@ -5507,23 +5512,48 @@ window.Admin = (() => {
       for (const session of targets) {
         if (btn) btn.textContent = `⌛ ${done + 1}/${targets.length}`;
         try {
-          // Strip _prev from the restored object so it's a clean original score
-          const { _prev, ...originalScores } = session.aiScores._prev;
-          await DB.patch('sessions', session.id, { aiScores: originalScores });
-          restored++;
+          let restoredScores = null;
+
+          if (session.aiScores._prev) {
+            // Backup exists — restore directly (strip _prev so it's a clean object)
+            const { _prev, ...originalScores } = session.aiScores._prev;
+            restoredScores = originalScores;
+          } else if (session.transcript && session.transcript.trim().length > 20) {
+            // No backup — re-evaluate with balanced (pre-strict) criteria
+            const result = await ClaudeEvaluator.evaluateBalanced(
+              'pick-speak',
+              session.transcript,
+              session.topicTitle || '',
+              '',
+              session.timeTaken || null
+            );
+            if (result && result.overall !== null) {
+              restoredScores = {
+                ...result.scores,
+                overall:  result.overall,
+                _reasons: result.reasons,
+                _method:  'claude-balanced'
+              };
+            }
+          }
+
+          if (restoredScores && session.id) {
+            await DB.patch('sessions', session.id, { aiScores: restoredScores });
+            restored++;
+          }
         } catch (e) {
           errors.push(`${session.traineeName}: ${e.message}`);
           console.error(`Reset failed for ${session.traineeName}:`, e);
         }
         done++;
-        await new Promise(r => setTimeout(r, 300));
+        await new Promise(r => setTimeout(r, 500));
       }
 
       if (errors.length) {
         console.error('Reset errors:', errors);
         toast(`Reset: ${restored} restored, ${errors.length} failed — see console`, 'warning');
       } else {
-        toast(`Scores reset to original — ${restored}/${targets.length} sessions restored (${label})`, 'success');
+        toast(`Scores reset — ${restored}/${targets.length} sessions restored (${label})`, 'success');
       }
 
       await loadAssessments();

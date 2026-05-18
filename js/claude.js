@@ -184,6 +184,61 @@ Return ONLY JSON: {"score":<1-5>,"reason":"<structure quality + example count in
     ]
   };
 
+  // ---- Original (balanced) P&S criteria — used when resetting strict re-scores ----
+  // These match the scoring thresholds used before today's strict overhaul.
+  const SPOKEN_CRITERIA_BALANCED = {
+    'pick-speak': [
+      {
+        key: 'fluency', label: 'Fluency',
+        prompt: `Evaluate spoken fluency on a 1-5 scale.
+
+Count ALL filler words: um, uh, like, you know, basically, actually, right (as filler), so (as filler), okay (as filler), hmm, err.
+Count unnatural pauses or dead air (shown as "..." or sudden topic breaks).
+
+Scoring rules:
+Score 5: 0–1 filler words. Smooth confident delivery. No dead air.
+Score 4: 2 fillers max. Mostly smooth with at most one brief hesitation.
+Score 3: 3–5 filler words OR noticeable pauses. Understandable but clearly hesitant.
+Score 2: 6–9 filler words OR multiple long pauses OR choppy delivery.
+Score 1: 10+ filler words OR constant hesitation OR long dead air.
+
+RULE: 3 or more filler words → score MUST be 3 or lower.
+Return ONLY JSON: {"score":<1-5>,"reason":"<one sentence stating filler count and pacing observation>"}`
+      },
+      {
+        key: 'vocabulary', label: 'Vocabulary & Grammar',
+        prompt: `Evaluate vocabulary richness AND grammatical accuracy on a 1-5 scale.
+
+Consider:
+(a) Grammar errors: subject-verb disagreement, wrong tense, missing articles, incorrect prepositions, run-on sentences.
+(b) Sentence variety: varied structures vs. repetitive patterns.
+(c) Word choice: varied and appropriate vocabulary vs. simple and repetitive.
+
+Scoring rules:
+Score 5: 0–1 grammar errors. Rich varied vocabulary. Good sentence variety.
+Score 4: 2 grammar errors max. Decent vocabulary with minor repetition.
+Score 3: 3 grammar errors. Score MUST be 3 or lower if 3 errors found. Some repetition.
+Score 2: 4–5 grammar errors. Poor vocabulary, repetitive language.
+Score 1: 6+ grammar errors. Very limited vocabulary, monotone sentences.
+
+RULE: 3+ errors → score MUST be 3 or lower. 5+ errors → score MUST be 2 or lower.
+Return ONLY JSON: {"score":<1-5>,"reason":"<one sentence on grammar and vocabulary>"}`
+      },
+      {
+        key: 'contentCoverage', label: 'Content Coverage',
+        prompt: `Evaluate content coverage and depth on a 1-5 scale.
+
+Score 5: Covers topic thoroughly with a clear opening, at least 2 specific examples or supporting points, and a conclusive close. Well-structured.
+Score 4: Good coverage with a minor gap. At least 1 clear example. Some structure evident.
+Score 3: Partial coverage only. Vague or generic points. Lacks examples or conclusion.
+Score 2: Very shallow. Barely addresses the topic. No structure or examples.
+Score 1: Off-topic or essentially no meaningful content delivered.
+
+Return ONLY JSON: {"score":<1-5>,"reason":"<one sentence on topic coverage and structure>"}`
+      }
+    ]
+  };
+
   // ---- Time Management — pure calculation, no LLM ----
   // Scoring based on actual recording duration:
   //   < 2:00 → 1  |  2:00–2:59 → 2  |  3:00–3:59 → 3  |  4:00–4:39 → 4  |  ≥ 4:40 → 5
@@ -302,6 +357,51 @@ CRITICAL EVALUATION RULES — FOLLOW EXACTLY:
     }
   }
 
+  // ---- Balanced evaluate — uses original pre-strict criteria ----
+  // Used by the reset flow when no _prev backup exists.
+  async function evaluateBalanced(module, transcript, topicTitle, topicScenario, durationSeconds) {
+    if (!isAvailable()) return null;
+
+    const criteria = SPOKEN_CRITERIA_BALANCED[module];
+    if (!criteria) return evaluate(module, transcript, topicTitle, topicScenario, durationSeconds);
+
+    const results = { scores: {}, reasons: {}, overall: null };
+    try {
+      for (const criterion of criteria) {
+        try {
+          const system = `You are a communication trainer evaluating a trainee's spoken response. Topic: "${topicTitle}". ${topicScenario ? `Scenario: ${topicScenario}` : ''}
+
+Evaluate fairly and objectively. Give credit where it is due. Apply the scoring rules as written — not more strictly, not more leniently.`;
+          const user = `Trainee's response transcript:\n"""\n${transcript || '(no transcript available)'}\n"""\n\n${criterion.prompt}`;
+          const raw  = await callClaude(system, user);
+          const res  = parseScore(raw);
+          if (res && typeof res.score === 'number') {
+            results.scores[criterion.key]  = res.score;
+            results.reasons[criterion.key] = res.reason || '';
+          }
+        } catch (e) {
+          console.warn(`Balanced scoring failed for ${criterion.key}:`, e.message);
+        }
+      }
+
+      if (module === 'pick-speak' && durationSeconds != null) {
+        const tm = scoreTimeManagement(durationSeconds);
+        results.scores['timeManagement']  = tm.score;
+        results.reasons['timeManagement'] = tm.reason;
+      }
+
+      const vals = Object.values(results.scores).filter(v => typeof v === 'number');
+      if (vals.length > 0) {
+        const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+        results.overall = parseFloat(((avg / 5) * 100).toFixed(1));
+      }
+      return results;
+    } catch (e) {
+      console.error('Balanced evaluation failed:', e.message);
+      return null;
+    }
+  }
+
   // ---- Evaluate a rewrite-the-sentence answer ----
   // Returns true if the student's answer correctly fixes the grammatical error,
   // regardless of minor punctuation differences (full stops, commas, etc.).
@@ -393,5 +493,5 @@ Return ONLY the customer\'s spoken dialogue. No stage directions, no narration, 
     return SPOKEN_CRITERIA[module] || [];
   }
 
-  return { isAvailable, evaluate, evaluateRewrite, callAiCustomer, getCriteria, scoreTimeManagement, MOCK_CALL_CRITERIA };
+  return { isAvailable, evaluate, evaluateBalanced, evaluateRewrite, callAiCustomer, getCriteria, scoreTimeManagement, MOCK_CALL_CRITERIA };
 })();
