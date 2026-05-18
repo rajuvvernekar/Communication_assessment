@@ -12,6 +12,7 @@
 // v49:  reScoreSharuqPickSpeak — fuzzy name match, pass timeTaken, handle no-transcript sessions
 // v50:  reScoreSharuqPickSpeak — use DB.patch (ai_scores only) to avoid Supabase column errors
 // v51:  Final Score column: P&S keeps avg logic; mock/grammar/listening = admin final (AI fallback, no average)
+// v52:  reScorePickSpeak — generic for any manager or all teams; stricter Claude criteria in claude.js v14
 const MASTER_SCORES = {
   // ── Vignesh Baliga ──
   "abdul razak":                     { selfAssessment: 9.243,  aiAudit: 3.945,  psScore: 12.68, lisScore: 16.20, mcScore:  8.58, gramScore:  7.00, totalScore: 57.65 },
@@ -1867,6 +1868,7 @@ window.Admin = (() => {
     _archivedIds = new Set(archivedRec ? JSON.parse(archivedRec.value) : []);
 
     populateTeamFilter();
+    _populateRescoreSelect();
 
     const topicMap = {};
     topics.forEach(t => { topicMap[t.id] = t; });
@@ -5271,38 +5273,61 @@ window.Admin = (() => {
   }
 
 
-  // ── Re-score Pick & Speak for Sharuq's team with stricter criteria ────────
-  // Fetches all P&S sessions for Sharuq Fayaz Shaikh's agents, re-runs the
-  // updated Claude evaluator (strict grammar/filler/sentence-variety prompts),
-  // and saves the new aiScores back to the DB.
-  async function reScoreSharuqPickSpeak() {
+  // ── Populate the re-score manager dropdown ────────────────────────────────
+  function _populateRescoreSelect() {
+    const sel = $('rescore-manager-select');
+    if (!sel || sel.dataset.populated) return;
+    Object.keys(_MANAGER_AGENT_MAP).sort().forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = m;
+      sel.appendChild(opt);
+    });
+    sel.dataset.populated = '1';
+  }
+
+  // ── Generic Pick & Speak re-scorer ────────────────────────────────────────
+  // Reads the manager from #rescore-manager-select.
+  // Value "__ALL__" → score every P&S session in the DB.
+  // Any other value  → score only that manager's agents.
+  async function reScorePickSpeak() {
     if (typeof ClaudeEvaluator === 'undefined' || !ClaudeEvaluator.isAvailable()) {
       toast('Claude proxy not configured — cannot re-score', 'error'); return;
     }
 
-    const SHARUQ_TEAM = new Set(
-      (_MANAGER_AGENT_MAP['Sharuq Fayaz Shaikh'] || []).map(n => n.toLowerCase().trim())
-    );
-    if (!SHARUQ_TEAM.size) { toast('Sharuq team not found in manager map', 'error'); return; }
+    const sel         = $('rescore-manager-select');
+    const managerName = sel ? sel.value : '';
+    if (!managerName) { toast('Please select a team first', 'warning'); return; }
+
+    const isAll = managerName === '__ALL__';
+
+    // Build the set of agent names to target (lowercased for matching)
+    let teamSet = null; // null = all teams
+    if (!isAll) {
+      const agents = _MANAGER_AGENT_MAP[managerName] || [];
+      if (!agents.length) { toast(`No agents found for "${managerName}"`, 'error'); return; }
+      teamSet = new Set(agents.map(n => n.toLowerCase().trim()));
+    }
 
     // Fuzzy match: exact OR one name is a substring of the other
     function matchesTeam(name) {
       if (!name) return false;
+      if (!teamSet) return true; // all teams — match everything
       const n = name.toLowerCase().trim();
-      if (SHARUQ_TEAM.has(n)) return true;
-      for (const m of SHARUQ_TEAM) {
+      if (teamSet.has(n)) return true;
+      for (const m of teamSet) {
         if (m.includes(n) || n.includes(m)) return true;
       }
       return false;
     }
 
-    const btn = $('btn-rescore-sharuq');
+    const btn = $('btn-rescore-ps');
+    const label = isAll ? 'All Teams' : managerName;
     if (btn) { btn.disabled = true; btn.textContent = '⌛ Re-scoring…'; }
+    if (sel) sel.disabled = true;
 
     try {
       const PS_MODULES = new Set(['pick-speak', 'pick-speak-general', 'pick-speak-stock']);
-
-      // Fetch all P&S sessions for Sharuq's team (no transcript filter — handle both cases)
       const allSessions = await DB.getAll('sessions');
       const targets = allSessions.filter(s =>
         PS_MODULES.has(s.module) &&
@@ -5310,20 +5335,21 @@ window.Admin = (() => {
       );
 
       if (!targets.length) {
-        toast('No P&S sessions found for Sharuq\'s team', 'warning');
+        toast(`No P&S sessions found for ${label}`, 'warning');
         return;
       }
 
       let done = 0, updated = 0;
       const errors = [];
+
       for (const session of targets) {
-        if (btn) btn.textContent = `⌛ Re-scoring… ${done + 1}/${targets.length}`;
+        if (btn) btn.textContent = `⌛ ${done + 1}/${targets.length}`;
         try {
           const hasTranscript = session.transcript && session.transcript.trim().length > 20;
           let newAiScores = null;
 
           if (hasTranscript) {
-            // Full Claude evaluation + time management criterion
+            // Full strict Claude evaluation + time management
             const result = await ClaudeEvaluator.evaluate(
               'pick-speak',
               session.transcript,
@@ -5340,7 +5366,7 @@ window.Admin = (() => {
               };
             }
           } else if (session.timeTaken) {
-            // No transcript — only patch time management score, keep everything else untouched
+            // No transcript — apply time management only, preserve other scores
             const tm = ClaudeEvaluator.scoreTimeManagement(session.timeTaken);
             const existing = session.aiScores || {};
             newAiScores = {
@@ -5352,37 +5378,35 @@ window.Admin = (() => {
           }
 
           if (newAiScores && session.id) {
-            // Use patch — only updates ai_scores column, never touches admin_scores or other fields
+            // patch — only writes ai_scores, never touches admin_scores
             await DB.patch('sessions', session.id, { aiScores: newAiScores });
             updated++;
           } else if (!session.id) {
-            errors.push(`${session.traineeName}: no session ID`);
+            errors.push(`${session.traineeName}: missing session ID`);
           }
         } catch (e) {
-          const msg = `${session.traineeName}: ${e.message}`;
-          errors.push(msg);
+          errors.push(`${session.traineeName}: ${e.message}`);
           console.error(`Re-score failed for ${session.traineeName}:`, e);
         }
         done++;
-        // Small delay to avoid rate limits
-        await new Promise(r => setTimeout(r, 400));
+        await new Promise(r => setTimeout(r, 500)); // rate-limit buffer
       }
 
       if (errors.length) {
         console.error('Re-score errors:', errors);
-        toast(`Re-scoring: ${updated} updated, ${errors.length} failed — check console`, 'warning');
+        toast(`${label}: ${updated} updated, ${errors.length} failed — see console`, 'warning');
       } else {
-        toast(`Re-scoring complete: ${updated}/${targets.length} sessions updated`, 'success');
+        toast(`Re-scoring complete — ${updated}/${targets.length} sessions updated (${label})`, 'success');
       }
 
-      // Refresh the current view
       await loadAssessments();
 
     } catch (e) {
       console.error('Re-score failed:', e);
       toast('Re-score failed: ' + e.message, 'error');
     } finally {
-      if (btn) { btn.disabled = false; btn.textContent = '🔄 Re-score P&S — Sharuq\'s Team'; }
+      if (btn) { btn.disabled = false; btn.textContent = '🔄 Re-score P&S'; }
+      if (sel)  sel.disabled = false;
     }
   }
 
@@ -5412,7 +5436,7 @@ window.Admin = (() => {
     copyLetter,
     downloadTraineePPT,
     downloadMasterExcel,
-    reScoreSharuqPickSpeak,
+    reScorePickSpeak,
     // Assessments archive / multi-select / manager view
     switchAssessmentView,
     toggleSessionCheckbox,

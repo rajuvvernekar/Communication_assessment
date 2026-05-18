@@ -102,51 +102,72 @@ Return ONLY a JSON: {"score": <1 or 3 or 5>, "reason": "<one sentence>"}`
     'pick-speak': [
       {
         key: 'fluency', label: 'Fluency',
-        prompt: `Evaluate spoken fluency on a 1-5 scale. Be STRICT — do not give benefit of the doubt.
+        prompt: `Evaluate spoken fluency on a 1-5 scale. COUNT every filler before scoring.
 
-Count ALL filler words in the transcript: um, uh, like, you know, basically, actually, right, so (as filler), okay (as filler), hmm, err.
-Count ALL unnatural pauses or dead air (shown as "..." or sudden topic breaks).
+STEP 1 — Count filler words: um, uh, like, you know, basically, actually, right (as filler), so (as filler), okay (as filler), hmm, err, sort of, kind of, I mean.
+STEP 2 — Count unnatural pauses: "..." or long mid-sentence breaks or awkward silences.
 
-Scoring rules (MANDATORY):
-Score 5: 0–1 filler words. Smooth confident delivery. No dead air.
-Score 4: 2 fillers max. Mostly smooth with one brief hesitation.
-Score 3: 3–5 filler words OR noticeable pauses. Understandable but clearly hesitant.
-Score 2: 6–9 filler words OR multiple long pauses OR choppy delivery.
-Score 1: 10+ filler words OR constant hesitation OR long dead air.
+MANDATORY SCORING RULES (apply in order — first rule that matches wins):
+Score 1: 10+ filler words OR constant hesitation throughout.
+Score 2: 6–9 filler words OR multiple long pauses OR consistently choppy delivery.
+Score 3: 3–5 filler words OR several noticeable pauses. Average delivery.
+Score 4: 1–2 filler words ONLY. Delivery is mostly smooth with at most one brief hesitation. Confident tone overall.
+Score 5: 0 filler words. Completely smooth, confident, and natural delivery throughout. No dead air. (This score requires near-perfect fluency — do not award for merely "good".)
 
-STRICT RULE: 3 or more filler words → score MUST be 3 or lower. No exceptions.
-Return ONLY JSON: {"score":<1-5>,"reason":"<one sentence stating exact filler count and pacing observation>"}`
+HARD LIMITS — non-negotiable:
+- 2+ fillers → score CANNOT be 5.
+- 3+ fillers → score CANNOT be 4 or 5.
+- 6+ fillers → score CANNOT be 3, 4 or 5.
+
+Return ONLY JSON: {"score":<1-5>,"reason":"<exact filler count found + pacing observation in one sentence>"}`
       },
       {
         key: 'vocabulary', label: 'Vocabulary & Grammar',
-        prompt: `Evaluate vocabulary richness AND grammatical accuracy on a 1-5 scale. Be STRICT.
+        prompt: `Evaluate vocabulary richness AND grammatical accuracy on a 1-5 scale. LIST errors before scoring.
 
-Count carefully:
-(a) Grammatical errors: subject-verb disagreement, wrong tense, missing articles, incorrect prepositions, run-on or incomplete sentences.
-(b) Sentence variety: does the speaker repeat the same sentence pattern, or use varied structures?
-(c) Word choice: varied and precise vocabulary vs. repetitive simple words?
+STEP 1 — List every grammar error found:
+- Subject-verb disagreement (e.g. "they was", "he don't")
+- Wrong tense (e.g. "I have went", "yesterday I go")
+- Missing or wrong article (e.g. "I went to office", "a umbrella")
+- Wrong preposition (e.g. "interested on", "depend of")
+- Run-on sentence, sentence fragment, or incomplete thought
+- Any other grammatical mistake
 
-Scoring rules (MANDATORY):
-Score 5: 0–1 grammar errors. Rich varied vocabulary. Strong sentence variety.
-Score 4: 2 grammar errors max. Good vocabulary with minor repetition.
-Score 3: 3 grammar errors. Score MUST be 3 or lower if 3 errors found. Some vocabulary repetition or limited sentence variety.
-Score 2: 4–5 grammar errors. Poor vocabulary, heavily repetitive language.
-Score 1: 6+ grammar errors. Very limited vocabulary, monotone sentence structure.
+STEP 2 — Assess vocabulary:
+- Are words varied and precise, or repetitive and basic?
+- Does the speaker use different sentence structures, or the same pattern repeatedly?
 
-STRICT RULE: 3+ grammatical errors → score MUST be 3 or lower. 5+ errors → score MUST be 2 or lower.
-Return ONLY JSON: {"score":<1-5>,"reason":"<one sentence stating grammar error count and vocabulary/variety observation>"}`
+MANDATORY SCORING RULES:
+Score 1: 7+ grammar errors OR extremely basic vocabulary with almost no variety.
+Score 2: 4–6 grammar errors OR poor vocabulary with heavy repetition.
+Score 3: 2–3 grammar errors. Some vocabulary repetition or limited sentence variety. Average overall.
+Score 4: Exactly 1 grammar error. Good vocabulary. Clear sentence variety. No major weaknesses.
+Score 5: 0 grammar errors. Rich, precise vocabulary. Multiple varied sentence structures. Genuinely impressive. (Do NOT give 5 if any grammar error exists.)
+
+HARD LIMITS — non-negotiable:
+- 1+ grammar error → score CANNOT be 5.
+- 2+ grammar errors → score CANNOT be 4 or 5.
+- 4+ grammar errors → score CANNOT be 3, 4 or 5.
+
+Return ONLY JSON: {"score":<1-5>,"reason":"<exact grammar error count + vocabulary/variety observation in one sentence>"}`
       },
       {
         key: 'contentCoverage', label: 'Content Coverage',
-        prompt: `Evaluate content coverage and depth on a 1-5 scale. Be STRICT.
+        prompt: `Evaluate content coverage and depth on a 1-5 scale. Be STRICT about structure and substance.
 
-Score 5: Covers topic thoroughly with a clear opening, at least 2 specific examples or supporting points, and a conclusive close. Well-structured.
-Score 4: Good coverage with a minor gap. At least 1 clear example. Some structure evident.
-Score 3: Partial coverage only. Vague or generic points. Lacks examples or conclusion.
-Score 2: Very shallow. Barely addresses the topic. No structure or examples.
-Score 1: Off-topic or essentially no meaningful content delivered.
+MANDATORY SCORING RULES:
+Score 5: Clear 3-part structure (opening, developed body, conclusion). At least 3 distinct specific examples or facts directly supporting the topic. No major gaps. Genuinely well-organized. (Very rare — do not award for merely "good coverage".)
+Score 4: Clear structure evident. At least 2 distinct specific examples. One minor gap acceptable. Content goes beyond surface level.
+Score 3: Main idea present but shallow. Only 1 example or vague generic points. Structure incomplete (missing opening OR conclusion). Average coverage.
+Score 2: Very shallow. Barely addresses the topic. No real structure. No examples.
+Score 1: Off-topic, incoherent, or essentially no meaningful content.
 
-Return ONLY JSON: {"score":<1-5>,"reason":"<one sentence on topic coverage and structure>"}`
+HARD LIMITS:
+- Fewer than 2 specific examples → score CANNOT be 4 or 5.
+- No clear structure → score CANNOT be 4 or 5.
+- Generic or vague responses without substance → score MUST be 3 or lower.
+
+Return ONLY JSON: {"score":<1-5>,"reason":"<structure quality + example count in one sentence>"}`
       }
     ],
     'role-play': [
@@ -215,7 +236,14 @@ Return ONLY JSON: {"score":<1-5>,"reason":"<one sentence on topic coverage and s
 
   // ---- Evaluate a single criterion ----
   async function scoreCriterion(criterion, transcript, topicTitle, topicScenario) {
-    const system = `You are an expert communication trainer evaluating a trainee's spoken response. Topic: "${topicTitle}". ${topicScenario ? `Scenario: ${topicScenario}` : ''}`;
+    const system = `You are a STRICT communication trainer evaluating a trainee's spoken response. Topic: "${topicTitle}". ${topicScenario ? `Scenario: ${topicScenario}` : ''}
+
+CRITICAL EVALUATION RULES — FOLLOW EXACTLY:
+- Score 3 is AVERAGE performance. Do NOT treat 3 as bad or give 4 to avoid seeming harsh.
+- Score 4 requires genuinely above-average delivery — not just "decent". Earn it.
+- Score 5 is exceptional and should be rare. Do NOT give 5 for a good-but-not-outstanding response.
+- When in doubt between two scores, ALWAYS choose the LOWER one.
+- Never inflate scores to encourage trainees. Accurate assessment helps them improve.`;
     const user = `Trainee's response transcript:\n"""\n${transcript || '(no transcript available)'}\n"""\n\n${criterion.prompt}`;
 
     const raw = await callClaude(system, user);

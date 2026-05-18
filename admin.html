@@ -207,9 +207,19 @@
           <h1>Assessments</h1>
           <p>Review and score submitted assessment recordings</p>
         </div>
-        <button id="btn-rescore-sharuq" class="btn-ghost" style="font-size:0.82rem;padding:0.45rem 1rem;white-space:nowrap;border-color:#f97316;color:#c2410c" onclick="Admin.reScoreSharuqPickSpeak()" title="Re-evaluate P&S sessions for Sharuq's team with stricter grammar/filler criteria">
-          🔄 Re-score P&amp;S — Sharuq's Team
-        </button>
+        <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+          <select id="rescore-manager-select"
+            style="border:1px solid #f97316;border-radius:6px;padding:0.35rem 0.6rem;font-size:0.82rem;color:#c2410c;background:#fff7ed;cursor:pointer;max-width:220px">
+            <option value="">— Select Team to Re-score —</option>
+            <option value="__ALL__">🌐 All Teams</option>
+          </select>
+          <button id="btn-rescore-ps" class="btn-ghost"
+            style="font-size:0.82rem;padding:0.45rem 1rem;white-space:nowrap;border-color:#f97316;color:#c2410c"
+            onclick="Admin.reScorePickSpeak()"
+            title="Re-evaluate P&S sessions with strict grammar/filler/time criteria">
+            🔄 Re-score P&amp;S
+          </button>
+        </div>
       </div>
 
       <!-- Active / Archive view tabs -->
@@ -599,7 +609,7 @@
 <script src="js/recorder.js?v=6"></script>
 <script src="js/speech.js?v=6"></script>
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
-<script src="js/claude.js?v=13"></script>
-<script src="js/admin.js?v=51"></script>
+<script src="js/claude.js?v=14"></script>
+<script src="js/admin.js?v=52"></script>
 </body>
 </html>
