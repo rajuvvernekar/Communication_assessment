@@ -11,6 +11,7 @@
 // v41:  Fix botScriptAudio save — upload blobs to Storage, embed URLs in bot_script jsonb
 // v49:  reScoreSharuqPickSpeak — fuzzy name match, pass timeTaken, handle no-transcript sessions
 // v50:  reScoreSharuqPickSpeak — use DB.patch (ai_scores only) to avoid Supabase column errors
+// v51:  Final Score column: P&S keeps avg logic; mock/grammar/listening = admin final (AI fallback, no average)
 const MASTER_SCORES = {
   // ── Vignesh Baliga ──
   "abdul razak":                     { selfAssessment: 9.243,  aiAudit: 3.945,  psScore: 12.68, lisScore: 16.20, mcScore:  8.58, gramScore:  7.00, totalScore: 57.65 },
@@ -1964,7 +1965,7 @@ window.Admin = (() => {
     // ── Build rows ──────────────────────────────────────────────
     const headers = [
       'Name', 'Employee ID', 'Module', 'Topic', 'Date',
-      'AI Score', 'Admin Score', 'Avg Score',
+      'AI Score', 'Admin Score', 'Final Score',
       'AI Coaching Summary', 'Admin Coaching Summary'
     ];
 
@@ -1980,15 +1981,13 @@ window.Admin = (() => {
       const csvAI    = aiScore  !== '' ? parseFloat(aiScore)  : null;
       const csvAdmin = admScore !== '' ? parseFloat(admScore) : null;
       // P&S: best session shows average of ALL sessions' effective scores; others → 'N/A'
-      // Non-P&S: (admin + AI) / 2, or whichever is available
+      // Non-P&S (mock call, grammar, listening): admin is final; if no admin, AI is final. No averaging.
       let avgScore;
       if (CSV_PS.has(s.module)) {
         const info = csvPsInfo[s.traineeId];
         avgScore = (info && s.id === info.bestId) ? info.avgOfAll : 'N/A';
       } else {
-        avgScore = (csvAI !== null && csvAdmin !== null)
-          ? parseFloat(((csvAI + csvAdmin) / 2).toFixed(1))
-          : (csvAdmin !== null ? csvAdmin : (csvAI !== null ? csvAI : ''));
+        avgScore = csvAdmin !== null ? csvAdmin : (csvAI !== null ? csvAI : '');
       }
       // Always regenerate fresh — avoids stale stored summaries with removed parameters
       // Grammar / Listening Assessment: AI summary = section-by-section breakdown
@@ -2111,7 +2110,7 @@ window.Admin = (() => {
       <th>Status</th>
       <th>AI Score</th>
       <th>Admin Score</th>
-      <th>Avg Score</th>
+      <th>Final Score</th>
       <th>Actions</th>`;
   }
 
@@ -2394,7 +2393,8 @@ window.Admin = (() => {
       const isScored   = !!s.adminScores;
 
       // For P&S: best-session row shows average of all sessions' effective scores; others → N/A
-      // For all other modules: (admin + AI) / 2, or whichever is available
+      // For all other modules (mock call, grammar, listening): admin score is final;
+      //   if no admin score, AI score is final. No averaging.
       let avgScore;
       if (PS_MODULES.has(s.module)) {
         const info = psByTrainee[s.traineeId];
@@ -2402,9 +2402,7 @@ window.Admin = (() => {
       } else {
         const aiNum    = aiScore    !== '—' ? parseFloat(aiScore)    : null;
         const adminNum = adminScore !== '—' ? parseFloat(adminScore) : null;
-        avgScore = (aiNum !== null && adminNum !== null)
-          ? parseFloat(((aiNum + adminNum) / 2).toFixed(1))
-          : (adminNum !== null ? adminNum : (aiNum !== null ? aiNum : '—'));
+        avgScore = adminNum !== null ? adminNum : (aiNum !== null ? aiNum : '—');
       }
       const ext = (s.recordingUrl || '').includes('.mp4') ? 'mp4' : (s.recordingUrl || '').includes('.ogg') ? 'ogg' : 'webm';
       const dlFilename = `${(s.traineeName || 'recording').replace(/\s+/g, '_')}-${s.module}-${(s.submittedAt || '').slice(0, 10)}.${ext}`;
@@ -3977,9 +3975,8 @@ window.Admin = (() => {
           if (PS_MODS.has(s.module)) {
             rAvg = (s.id === rPsBestId && rPsAvgOfAll !== null) ? rPsAvgOfAll : 'N/A';
           } else {
-            rAvg = (rAI !== null && rAdm !== null)
-              ? parseFloat(((rAI + rAdm) / 2).toFixed(1))
-              : (rAdm !== null ? rAdm : (rAI !== null ? rAI : '—'));
+            // Mock call, grammar, listening: admin is final; if no admin, AI is final. No averaging.
+            rAvg = rAdm !== null ? rAdm : (rAI !== null ? rAI : '—');
           }
           return `<tr>
             <td>${moduleBadge(s.module)}</td>
