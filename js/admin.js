@@ -13,6 +13,7 @@
 // v50:  reScoreSharuqPickSpeak — use DB.patch (ai_scores only) to avoid Supabase column errors
 // v51:  Final Score column: P&S keeps avg logic; mock/grammar/listening = admin final (AI fallback, no average)
 // v52:  reScorePickSpeak — generic for any manager or all teams; stricter Claude criteria in claude.js v14
+// v53:  reScorePickSpeak — specific agent names input; bypasses team filter when names are typed
 const MASTER_SCORES = {
   // ── Vignesh Baliga ──
   "abdul razak":                     { selfAssessment: 9.243,  aiAudit: 3.945,  psScore: 12.68, lisScore: 16.20, mcScore:  8.58, gramScore:  7.00, totalScore: 57.65 },
@@ -5296,24 +5297,41 @@ window.Admin = (() => {
     }
 
     const sel         = $('rescore-manager-select');
+    const agentInput  = $('rescore-agent-names');
     const managerName = sel ? sel.value : '';
-    if (!managerName) { toast('Please select a team first', 'warning'); return; }
+
+    // Parse specific agent names if provided (comma-separated)
+    const rawAgentStr = (agentInput ? agentInput.value : '').trim();
+    const specificNames = rawAgentStr
+      ? rawAgentStr.split(',').map(n => n.trim().toLowerCase()).filter(Boolean)
+      : [];
+
+    // If specific names are entered, skip team validation — target those agents directly
+    // If no specific names, a team must be selected
+    if (!specificNames.length && !managerName) {
+      toast('Select a team or enter specific agent names first', 'warning');
+      return;
+    }
 
     const isAll = managerName === '__ALL__';
 
-    // Build the set of agent names to target (lowercased for matching)
-    let teamSet = null; // null = all teams
-    if (!isAll) {
+    // Build team set when no specific names given
+    let teamSet = null; // null = match everything (All Teams mode)
+    if (!specificNames.length && !isAll) {
       const agents = _MANAGER_AGENT_MAP[managerName] || [];
       if (!agents.length) { toast(`No agents found for "${managerName}"`, 'error'); return; }
       teamSet = new Set(agents.map(n => n.toLowerCase().trim()));
     }
 
-    // Fuzzy match: exact OR one name is a substring of the other
-    function matchesTeam(name) {
+    // Fuzzy match helper — checks against specificNames first, then teamSet
+    function matchesTarget(name) {
       if (!name) return false;
-      if (!teamSet) return true; // all teams — match everything
       const n = name.toLowerCase().trim();
+      if (specificNames.length) {
+        // Specific-names mode: check if this session's trainee matches any of the given names
+        return specificNames.some(target => n.includes(target) || target.includes(n));
+      }
+      if (!teamSet) return true; // All Teams
       if (teamSet.has(n)) return true;
       for (const m of teamSet) {
         if (m.includes(n) || n.includes(m)) return true;
@@ -5321,21 +5339,25 @@ window.Admin = (() => {
       return false;
     }
 
-    const btn = $('btn-rescore-ps');
-    const label = isAll ? 'All Teams' : managerName;
+    const btn   = $('btn-rescore-ps');
+    const label = specificNames.length
+      ? specificNames.map(n => n.split(' ').map(w => w[0].toUpperCase() + w.slice(1)).join(' ')).join(', ')
+      : (isAll ? 'All Teams' : managerName);
+
     if (btn) { btn.disabled = true; btn.textContent = '⌛ Re-scoring…'; }
     if (sel) sel.disabled = true;
+    if (agentInput) agentInput.disabled = true;
 
     try {
       const PS_MODULES = new Set(['pick-speak', 'pick-speak-general', 'pick-speak-stock']);
       const allSessions = await DB.getAll('sessions');
       const targets = allSessions.filter(s =>
         PS_MODULES.has(s.module) &&
-        matchesTeam(s.traineeName)
+        matchesTarget(s.traineeName)
       );
 
       if (!targets.length) {
-        toast(`No P&S sessions found for ${label}`, 'warning');
+        toast(`No P&S sessions found for: ${label}`, 'warning');
         return;
       }
 
@@ -5405,8 +5427,9 @@ window.Admin = (() => {
       console.error('Re-score failed:', e);
       toast('Re-score failed: ' + e.message, 'error');
     } finally {
-      if (btn) { btn.disabled = false; btn.textContent = '🔄 Re-score P&S'; }
-      if (sel)  sel.disabled = false;
+      if (btn)        { btn.disabled = false; btn.textContent = '🔄 Re-score P&S'; }
+      if (sel)          sel.disabled = false;
+      if (agentInput)   agentInput.disabled = false;
     }
   }
 
