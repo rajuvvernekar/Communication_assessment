@@ -223,6 +223,12 @@
             title="Re-evaluate P&S sessions with strict grammar/filler/time criteria">
             🔄 Re-score P&amp;S
           </button>
+          <button id="btn-reset-ps" class="btn-ghost"
+            style="font-size:0.82rem;padding:0.45rem 1rem;white-space:nowrap;border-color:#6b7280;color:#374151"
+            onclick="Admin.resetPickSpeakScores()"
+            title="Restore AI scores to the original values before any re-scoring was done">
+            ↩ Reset Scores
+          </button>
         </div>
       </div>
 
@@ -614,6 +620,6 @@
 <script src="js/speech.js?v=6"></script>
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <script src="js/claude.js?v=14"></script>
-<script src="js/admin.js?v=53"></script>
+<script src="js/admin.js?v=54"></script>
 </body>
 </html>

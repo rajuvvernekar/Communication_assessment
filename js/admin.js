@@ -14,6 +14,7 @@
 // v51:  Final Score column: P&S keeps avg logic; mock/grammar/listening = admin final (AI fallback, no average)
 // v52:  reScorePickSpeak — generic for any manager or all teams; stricter Claude criteria in claude.js v14
 // v53:  reScorePickSpeak — specific agent names input; bypasses team filter when names are typed
+// v54:  resetPickSpeakScores — restore original scores from _prev backup stored inside aiScores
 const MASTER_SCORES = {
   // ── Vignesh Baliga ──
   "abdul razak":                     { selfAssessment: 9.243,  aiAudit: 3.945,  psScore: 12.68, lisScore: 16.20, mcScore:  8.58, gramScore:  7.00, totalScore: 57.65 },
@@ -5400,6 +5401,12 @@ window.Admin = (() => {
           }
 
           if (newAiScores && session.id) {
+            // Preserve original scores as _prev (only on first re-score — don't overwrite the original)
+            if (session.aiScores && !session.aiScores._prev) {
+              newAiScores._prev = session.aiScores;
+            } else if (session.aiScores && session.aiScores._prev) {
+              newAiScores._prev = session.aiScores._prev; // keep the original backup
+            }
             // patch — only writes ai_scores, never touches admin_scores
             await DB.patch('sessions', session.id, { aiScores: newAiScores });
             updated++;
@@ -5433,6 +5440,104 @@ window.Admin = (() => {
     }
   }
 
+  // ── Reset P&S scores to pre-re-score originals ────────────────────────────
+  // Reads same dropdown / agent-names input as reScorePickSpeak.
+  // For each matching session that has aiScores._prev, restores aiScores = _prev.
+  // Sessions that were never re-scored (no _prev) are skipped.
+  async function resetPickSpeakScores() {
+    const sel        = $('rescore-manager-select');
+    const agentInput = $('rescore-agent-names');
+    const managerName = sel ? sel.value : '';
+
+    const rawAgentStr  = (agentInput ? agentInput.value : '').trim();
+    const specificNames = rawAgentStr
+      ? rawAgentStr.split(',').map(n => n.trim().toLowerCase()).filter(Boolean)
+      : [];
+
+    if (!specificNames.length && !managerName) {
+      toast('Select a team or enter specific agent names first', 'warning');
+      return;
+    }
+
+    const isAll   = managerName === '__ALL__';
+    let teamSet   = null;
+    if (!specificNames.length && !isAll) {
+      const agents = _MANAGER_AGENT_MAP[managerName] || [];
+      if (!agents.length) { toast(`No agents found for "${managerName}"`, 'error'); return; }
+      teamSet = new Set(agents.map(n => n.toLowerCase().trim()));
+    }
+
+    function matchesTarget(name) {
+      if (!name) return false;
+      const n = name.toLowerCase().trim();
+      if (specificNames.length) return specificNames.some(t => n.includes(t) || t.includes(n));
+      if (!teamSet) return true;
+      if (teamSet.has(n)) return true;
+      for (const m of teamSet) { if (m.includes(n) || n.includes(m)) return true; }
+      return false;
+    }
+
+    const label = specificNames.length
+      ? specificNames.map(n => n.split(' ').map(w => w[0].toUpperCase() + w.slice(1)).join(' ')).join(', ')
+      : (isAll ? 'All Teams' : managerName);
+
+    if (!confirm(`Reset AI scores back to original (pre-re-score) values for: ${label}?\n\nThis cannot be undone.`)) return;
+
+    const btn = $('btn-reset-ps');
+    if (btn) { btn.disabled = true; btn.textContent = '⌛ Resetting…'; }
+    if (sel) sel.disabled = true;
+    if (agentInput) agentInput.disabled = true;
+
+    try {
+      const PS_MODULES  = new Set(['pick-speak', 'pick-speak-general', 'pick-speak-stock']);
+      const allSessions = await DB.getAll('sessions');
+      const targets     = allSessions.filter(s =>
+        PS_MODULES.has(s.module) &&
+        matchesTarget(s.traineeName) &&
+        s.aiScores && s.aiScores._prev   // only sessions that were re-scored
+      );
+
+      if (!targets.length) {
+        toast(`No re-scored P&S sessions found for: ${label} — nothing to reset`, 'warning');
+        return;
+      }
+
+      let done = 0, restored = 0;
+      const errors = [];
+      for (const session of targets) {
+        if (btn) btn.textContent = `⌛ ${done + 1}/${targets.length}`;
+        try {
+          // Strip _prev from the restored object so it's a clean original score
+          const { _prev, ...originalScores } = session.aiScores._prev;
+          await DB.patch('sessions', session.id, { aiScores: originalScores });
+          restored++;
+        } catch (e) {
+          errors.push(`${session.traineeName}: ${e.message}`);
+          console.error(`Reset failed for ${session.traineeName}:`, e);
+        }
+        done++;
+        await new Promise(r => setTimeout(r, 300));
+      }
+
+      if (errors.length) {
+        console.error('Reset errors:', errors);
+        toast(`Reset: ${restored} restored, ${errors.length} failed — see console`, 'warning');
+      } else {
+        toast(`Scores reset to original — ${restored}/${targets.length} sessions restored (${label})`, 'success');
+      }
+
+      await loadAssessments();
+
+    } catch (e) {
+      console.error('Reset failed:', e);
+      toast('Reset failed: ' + e.message, 'error');
+    } finally {
+      if (btn)        { btn.disabled = false; btn.textContent = '↩ Reset Scores'; }
+      if (sel)          sel.disabled = false;
+      if (agentInput)   agentInput.disabled = false;
+    }
+  }
+
   // ---- Public API (called from inline onclick) ----
   return {
     init,
@@ -5460,6 +5565,7 @@ window.Admin = (() => {
     downloadTraineePPT,
     downloadMasterExcel,
     reScorePickSpeak,
+    resetPickSpeakScores,
     // Assessments archive / multi-select / manager view
     switchAssessmentView,
     toggleSessionCheckbox,
