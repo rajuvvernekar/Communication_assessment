@@ -100,9 +100,54 @@ Return ONLY a JSON: {"score": <1 or 3 or 5>, "reason": "<one sentence>"}`
   // ---- Generic spoken module prompts ----
   const SPOKEN_CRITERIA = {
     'pick-speak': [
-      { key: 'fluency', label: 'Fluency', prompt: 'Evaluate spoken fluency on a 1-5 scale. Consider: smooth delivery, minimal hesitations, good pacing. Return ONLY JSON: {"score":<1-5>,"reason":"<one sentence>"}' },
-      { key: 'vocabulary', label: 'Vocabulary', prompt: 'Evaluate vocabulary richness on a 1-5 scale. Consider: word variety, appropriate word choice, avoiding repetition. Return ONLY JSON: {"score":<1-5>,"reason":"<one sentence>"}' },
-      { key: 'contentCoverage', label: 'Content Coverage', prompt: 'Evaluate content coverage and depth on a 1-5 scale. Consider: topic relevance, examples given, completeness of ideas. Return ONLY JSON: {"score":<1-5>,"reason":"<one sentence>"}' }
+      {
+        key: 'fluency', label: 'Fluency',
+        prompt: `Evaluate spoken fluency on a 1-5 scale. Be STRICT — do not give benefit of the doubt.
+
+Count ALL filler words in the transcript: um, uh, like, you know, basically, actually, right, so (as filler), okay (as filler), hmm, err.
+Count ALL unnatural pauses or dead air (shown as "..." or sudden topic breaks).
+
+Scoring rules (MANDATORY):
+Score 5: 0–1 filler words. Smooth confident delivery. No dead air.
+Score 4: 2 fillers max. Mostly smooth with one brief hesitation.
+Score 3: 3–5 filler words OR noticeable pauses. Understandable but clearly hesitant.
+Score 2: 6–9 filler words OR multiple long pauses OR choppy delivery.
+Score 1: 10+ filler words OR constant hesitation OR long dead air.
+
+STRICT RULE: 3 or more filler words → score MUST be 3 or lower. No exceptions.
+Return ONLY JSON: {"score":<1-5>,"reason":"<one sentence stating exact filler count and pacing observation>"}`
+      },
+      {
+        key: 'vocabulary', label: 'Vocabulary & Grammar',
+        prompt: `Evaluate vocabulary richness AND grammatical accuracy on a 1-5 scale. Be STRICT.
+
+Count carefully:
+(a) Grammatical errors: subject-verb disagreement, wrong tense, missing articles, incorrect prepositions, run-on or incomplete sentences.
+(b) Sentence variety: does the speaker repeat the same sentence pattern, or use varied structures?
+(c) Word choice: varied and precise vocabulary vs. repetitive simple words?
+
+Scoring rules (MANDATORY):
+Score 5: 0–1 grammar errors. Rich varied vocabulary. Strong sentence variety.
+Score 4: 2 grammar errors max. Good vocabulary with minor repetition.
+Score 3: 3 grammar errors. Score MUST be 3 or lower if 3 errors found. Some vocabulary repetition or limited sentence variety.
+Score 2: 4–5 grammar errors. Poor vocabulary, heavily repetitive language.
+Score 1: 6+ grammar errors. Very limited vocabulary, monotone sentence structure.
+
+STRICT RULE: 3+ grammatical errors → score MUST be 3 or lower. 5+ errors → score MUST be 2 or lower.
+Return ONLY JSON: {"score":<1-5>,"reason":"<one sentence stating grammar error count and vocabulary/variety observation>"}`
+      },
+      {
+        key: 'contentCoverage', label: 'Content Coverage',
+        prompt: `Evaluate content coverage and depth on a 1-5 scale. Be STRICT.
+
+Score 5: Covers topic thoroughly with a clear opening, at least 2 specific examples or supporting points, and a conclusive close. Well-structured.
+Score 4: Good coverage with a minor gap. At least 1 clear example. Some structure evident.
+Score 3: Partial coverage only. Vague or generic points. Lacks examples or conclusion.
+Score 2: Very shallow. Barely addresses the topic. No structure or examples.
+Score 1: Off-topic or essentially no meaningful content delivered.
+
+Return ONLY JSON: {"score":<1-5>,"reason":"<one sentence on topic coverage and structure>"}`
+      }
     ],
     'role-play': [
       { key: 'empathy', label: 'Empathy', prompt: 'Evaluate empathy shown in a role play on a 1-5 scale. Consider: acknowledgment of feelings, supportive language. Return ONLY JSON: {"score":<1-5>,"reason":"<one sentence>"}' },

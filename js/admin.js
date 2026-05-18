@@ -5272,6 +5272,81 @@ window.Admin = (() => {
   }
 
 
+  // ── Re-score Pick & Speak for Sharuq's team with stricter criteria ────────
+  // Fetches all P&S sessions for Sharuq Fayaz Shaikh's agents, re-runs the
+  // updated Claude evaluator (strict grammar/filler/sentence-variety prompts),
+  // and saves the new aiScores back to the DB.
+  async function reScoreSharuqPickSpeak() {
+    if (typeof ClaudeEvaluator === 'undefined' || !ClaudeEvaluator.isAvailable()) {
+      toast('Claude proxy not configured — cannot re-score', 'error'); return;
+    }
+
+    const SHARUQ_TEAM = new Set(
+      (_MANAGER_AGENT_MAP['Sharuq Fayaz Shaikh'] || []).map(n => n.toLowerCase().trim())
+    );
+    if (!SHARUQ_TEAM.size) { toast('Sharuq team not found in manager map', 'error'); return; }
+
+    const btn = $('btn-rescore-sharuq');
+    if (btn) { btn.disabled = true; btn.textContent = '⌛ Re-scoring…'; }
+
+    try {
+      const PS_MODULES = new Set(['pick-speak', 'pick-speak-general', 'pick-speak-stock']);
+
+      // Fetch all P&S sessions for Sharuq's team
+      const allSessions = await DB.getAll('sessions');
+      const targets = allSessions.filter(s =>
+        PS_MODULES.has(s.module) &&
+        s.traineeName &&
+        SHARUQ_TEAM.has(s.traineeName.toLowerCase().trim()) &&
+        s.transcript && s.transcript.trim().length > 20
+      );
+
+      if (!targets.length) {
+        toast('No P&S sessions with transcripts found for Sharuq\'s team', 'warning');
+        return;
+      }
+
+      let done = 0, updated = 0;
+      for (const session of targets) {
+        if (btn) btn.textContent = `⌛ Re-scoring… ${done + 1}/${targets.length}`;
+        try {
+          const result = await ClaudeEvaluator.evaluate(
+            'pick-speak',
+            session.transcript,
+            session.topicTitle || '',
+            ''
+          );
+          if (result && result.overall !== null) {
+            const newAiScores = {
+              ...result.scores,
+              overall:  result.overall,
+              _reasons: result.reasons,
+              _method:  'claude-strict'
+            };
+            await DB.put('sessions', { ...session, aiScores: newAiScores });
+            updated++;
+          }
+        } catch (e) {
+          console.warn(`Re-score failed for ${session.traineeName}:`, e.message);
+        }
+        done++;
+        // Small delay to avoid rate limits
+        await new Promise(r => setTimeout(r, 400));
+      }
+
+      toast(`Re-scoring complete: ${updated}/${targets.length} sessions updated`, 'success');
+
+      // Refresh the current view
+      await loadAssessments();
+
+    } catch (e) {
+      console.error('Re-score failed:', e);
+      toast('Re-score failed: ' + e.message, 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '🔄 Re-score P&S — Sharuq\'s Team'; }
+    }
+  }
+
   // ---- Public API (called from inline onclick) ----
   return {
     init,
@@ -5298,6 +5373,7 @@ window.Admin = (() => {
     copyLetter,
     downloadTraineePPT,
     downloadMasterExcel,
+    reScoreSharuqPickSpeak,
     // Assessments archive / multi-select / manager view
     switchAssessmentView,
     toggleSessionCheckbox,
