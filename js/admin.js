@@ -366,7 +366,15 @@ const _TRAINEE_ALIASES = {
   "dev":                        "Vachhiyat Dev",             // old "Dev" → full name
   "gajanan ternikar":           "Pravin Gajanan Ternikar",  // name corrected in new sheet
   "roshan k m":                 "Roshan KM",                 // spacing variant
-  "leepha joseph":              "Leepha Joseph"              // normalise casing
+  "leepha joseph":              "Leepha Joseph",             // normalise casing
+  // Sadique Raza team — short names registered vs. full names in master sheet
+  "amit sharma":                "Amit Sharma Rajeshwar",     // missing surname
+  "chitra raghani":             "Chitra Mulchand Raghani",  // missing middle name
+  "salman":                     "Salman Batliwala",          // first name only
+  "salman batiwala":            "Salman Batliwala",          // typo variant (one 'l')
+  "shweta tiwari":              "Shweta Anil Tiwari",        // missing middle name
+  "naved quresh":               "Naved Abdul Latif Qureshi", // truncated surname
+  "naved qureshi":              "Naved Abdul Latif Qureshi"  // common spelling variant
 };
 
 // Resolve a raw DB/session name to its canonical map name (if an alias exists).
