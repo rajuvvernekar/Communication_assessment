@@ -487,11 +487,55 @@ Return ONLY the customer\'s spoken dialogue. No stage directions, no narration, 
     return data.content[0].text.trim();
   }
 
+  // ---- AI Employee for Manager Feedback Assessment ----
+  // Plays the role of an employee receiving feedback from their manager.
+  // Responds dynamically based on how the manager delivers the feedback.
+  async function callAiEmployee(scenario, empName, empPersona, messages, turnNumber, maxTurns) {
+    if (!isAvailable()) throw new Error('Claude proxy not configured');
+
+    const isLast = turnNumber >= maxTurns;
+    const system = `You are roleplaying as ${empName}, an employee in a one-on-one feedback conversation with your manager.
+
+SITUATION: ${scenario}
+
+YOUR CHARACTER: ${empPersona}
+
+HOW TO BEHAVE:
+- React authentically based on HOW the manager delivers feedback:
+  * Empathetic + gives specific examples → gradually open up, ask a clarifying question, show some reflection
+  * Harsh or vague → get more defensive, deflect responsibility ("but the targets...", "I wasn't told...")
+  * Supportive and collaborative → become receptive but still process the feedback naturally
+- Show realistic emotional progression — don't change stance too suddenly
+- React specifically to what the manager just said — don't repeat yourself
+- Mix one emotional reaction with one response or question${isLast ? `\n- This is the FINAL turn (${turnNumber} of ${maxTurns}). Give a realistic closing line — partially accepting, resistant-but-polite, or genuinely receptive, depending on how the conversation went.` : ''}
+
+RULES:
+- Stay in character as ${empName} — never break the fourth wall
+- Reply in 2–4 sentences MAXIMUM — short, real, conversational
+- Do NOT narrate or add stage directions
+- Do NOT start with your own name
+
+Return ONLY the employee's spoken dialogue.`;
+
+    const resp = await fetch(getProxyUrl(), {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ model: MODEL, max_tokens: 160, system, messages }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error?.message || `API error ${resp.status}`);
+    }
+    const data = await resp.json();
+    return data.content[0].text.trim();
+  }
+
   // ---- Get criteria for a module (for display purposes) ----
   function getCriteria(module) {
     if (module === 'mock-call') return MOCK_CALL_CRITERIA;
     return SPOKEN_CRITERIA[module] || [];
   }
 
-  return { isAvailable, evaluate, evaluateBalanced, evaluateRewrite, callAiCustomer, getCriteria, scoreTimeManagement, MOCK_CALL_CRITERIA };
+  return { isAvailable, evaluate, evaluateBalanced, evaluateRewrite, callAiCustomer, callAiEmployee, getCriteria, scoreTimeManagement, MOCK_CALL_CRITERIA };
 })();
