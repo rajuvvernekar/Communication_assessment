@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CommAssess — Manager Portal</title>
+  <link rel="stylesheet" href="css/style.css?v=13">
+  <!-- Override primary color to purple for manager portal -->
+  <style>
+    :root {
+      --primary: #7c3aed;
+      --mgr-accent: #a855f7;
+      --mgr-bg: linear-gradient(140deg, #1e1433 0%, #2d1d5e 60%, #1a1f2e 100%);
+    }
+    #mgr-screen-welcome {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--mgr-bg);
+      min-height: 100vh;
+    }
+    #mgr-screen-welcome .auth-logo-block .logo-icon {
+      background: linear-gradient(135deg, #7c3aed, #a855f7);
+      box-shadow: 0 4px 20px rgba(124,58,237,0.4);
+    }
+    #mgr-screen-welcome .auth-field input:focus { border-color: #7c3aed; }
+    .mgr-header {
+      position: sticky;
+      top: 0;
+      height: 56px;
+      background: #fff;
+      border-bottom: 2px solid #7c3aed;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 1.5rem;
+      z-index: 100;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+    .mgr-header .header-logo {
+      font-weight: 800;
+      font-size: 1.1rem;
+      color: #7c3aed;
+      letter-spacing: -0.5px;
+    }
+    .mgr-header .header-right {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+    .mgr-header .header-right span { font-weight: 600; color: var(--text); }
+    .btn-logout {
+      background: #f5f3ff;
+      border: 1px solid #ddd6fe;
+      padding: 0.3rem 0.75rem;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      color: #7c3aed;
+      font-weight: 600;
+    }
+    .btn-logout:hover { background: #ede9fe; }
+
+    /* Module grid */
+    #mgr-screen-modules {
+      padding: 1.5rem 2rem 3rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .mgr-modules-header { text-align: center; margin-bottom: 2.5rem; }
+    .mgr-modules-header h2 { font-size: 1.6rem; font-weight: 800; }
+    .mgr-modules-header p { color: var(--text-muted); margin-top: 0.3rem; }
+    .mgr-modules-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 1.25rem;
+    }
+    .mgr-module-card {
+      background: #fff;
+      border-radius: var(--radius);
+      padding: 1.75rem 1.5rem;
+      cursor: pointer;
+      box-shadow: var(--shadow);
+      border: 2px solid transparent;
+      transition: transform 0.18s, border-color 0.18s, box-shadow 0.18s;
+      text-align: center;
+    }
+    .mgr-module-card:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-lg);
+      border-color: #7c3aed;
+    }
+    .mgr-module-card h3 { font-size: 0.95rem; font-weight: 700; margin-bottom: 0.4rem; }
+    .mgr-module-card p { font-size: 0.8rem; color: var(--text-muted); line-height: 1.5; }
+    .mgr-module-card .module-tag {
+      display: inline-block;
+      background: #f5f3ff;
+      color: #7c3aed;
+      font-size: 0.7rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      margin-top: 0.75rem;
+      font-weight: 600;
+    }
+    .mgr-module-card .module-icon {
+      background: #f5f3ff;
+    }
+
+    /* Shared assessment screen wrapper */
+    .mgr-assess-screen {
+      padding: 80px 1.5rem 3rem;
+      max-width: 720px;
+      margin: 0 auto;
+    }
+    .mgr-screen-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.875rem 1.5rem;
+      background: #fff;
+      border-bottom: 1px solid #ddd6fe;
+      position: fixed;
+      top: 56px; left: 0; right: 0;
+      z-index: 90;
+    }
+    .mgr-screen-header h2 { font-size: 1.1rem; font-weight: 700; color: #7c3aed; }
+
+    /* Scenario box */
+    .mgr-scenario-box {
+      background: #f5f3ff;
+      border-left: 4px solid #7c3aed;
+      border-radius: 0 8px 8px 0;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .mgr-scenario-box h3 { font-size: 1rem; font-weight: 700; margin-bottom: 0.75rem; color: #5b21b6; }
+    .mgr-scenario-box p {
+      font-size: 0.9rem;
+      line-height: 1.75;
+      color: var(--text);
+      white-space: pre-line;
+    }
+
+    /* Prep countdown */
+    .mgr-prep-overlay {
+      background: #fff;
+      border-radius: var(--radius);
+      padding: 2rem;
+      box-shadow: var(--shadow);
+      text-align: center;
+      margin-bottom: 1.5rem;
+    }
+    .mgr-prep-count {
+      font-size: 4rem;
+      font-weight: 900;
+      color: #7c3aed;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+    .mgr-prep-label { color: var(--text-muted); font-size: 0.9rem; margin-top: 0.5rem; }
+
+    /* Word count bar */
+    .mgr-word-count-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+    }
+    .mgr-word-count-bar strong { color: #7c3aed; }
+
+    /* Result screen */
+    .mgr-result-card {
+      background: #fff;
+      border-radius: var(--radius);
+      padding: 2.5rem 2rem;
+      box-shadow: var(--shadow);
+      text-align: center;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    .mgr-result-icon { font-size: 3.5rem; margin-bottom: 1rem; }
+    .mgr-result-card h2 { font-size: 1.6rem; font-weight: 800; margin-bottom: 0.4rem; }
+    .mgr-result-card p { color: var(--text-muted); margin-bottom: 1.5rem; }
+    .mgr-score-display {
+      background: linear-gradient(135deg, #7c3aed, #a855f7);
+      color: #fff;
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .mgr-score-display .score-num { font-size: 3rem; font-weight: 900; line-height: 1; }
+    .mgr-score-display .score-label { font-size: 0.85rem; opacity: 0.85; margin-top: 0.3rem; }
+    .mgr-score-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      text-align: left;
+      margin-bottom: 1.5rem;
+    }
+    .mgr-score-item {
+      background: #f5f3ff;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+    }
+    .mgr-score-item .label { font-size: 0.75rem; color: var(--text-muted); font-weight: 600; margin-bottom: 0.25rem; }
+    .mgr-score-item .val { font-size: 1rem; font-weight: 700; color: #5b21b6; }
+
+    /* MCQ screen */
+    .mgr-mcq-intro {
+      background: #f5f3ff;
+      border-radius: 10px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1.5rem;
+      border: 1px solid #ddd6fe;
+      font-size: 0.9rem;
+      line-height: 1.75;
+      white-space: pre-line;
+      color: var(--text);
+    }
+    .mgr-question-card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 1.5rem;
+      box-shadow: var(--shadow);
+      margin-bottom: 1rem;
+      border-left: 3px solid #7c3aed;
+    }
+    .mgr-question-card .q-num {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #7c3aed;
+      letter-spacing: 0.06em;
+      margin-bottom: 0.5rem;
+    }
+    .mgr-question-card .q-text {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      line-height: 1.5;
+    }
+    .mgr-option {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 0.625rem 0.875rem;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 0.5rem;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      font-size: 0.88rem;
+      line-height: 1.4;
+    }
+    .mgr-option:hover { border-color: #7c3aed; background: #faf5ff; }
+    .mgr-option.selected { border-color: #7c3aed; background: #f5f3ff; }
+    .mgr-option input[type="radio"] { flex-shrink: 0; margin-top: 2px; accent-color: #7c3aed; }
+
+    /* Live transcript box */
+    .mgr-live-transcript {
+      background: #faf5ff;
+      border: 1px solid #ddd6fe;
+      border-radius: 8px;
+      padding: 0.875rem 1rem;
+      min-height: 60px;
+      font-size: 0.875rem;
+      color: var(--text);
+      margin-top: 0.875rem;
+      line-height: 1.7;
+      max-height: 140px;
+      overflow-y: auto;
+    }
+    .mgr-live-transcript .placeholder { color: var(--text-muted); font-style: italic; }
+
+    /* Written textarea */
+    .mgr-written-area {
+      width: 100%;
+      min-height: 280px;
+      padding: 1rem 1.1rem;
+      border: 1.5px solid #ddd6fe;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      line-height: 1.8;
+      font-family: inherit;
+      color: var(--text);
+      outline: none;
+      resize: vertical;
+      box-sizing: border-box;
+      transition: border-color 0.2s;
+    }
+    .mgr-written-area:focus { border-color: #7c3aed; }
+
+    @media (max-width: 600px) {
+      .mgr-modules-grid { grid-template-columns: 1fr 1fr; }
+      .mgr-score-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+</head>
+<body>
+
+<!-- ================================================================
+     MANAGER HEADER (shown after login)
+     ================================================================ -->
+<header id="mgr-app-header" class="mgr-header hidden">
+  <div class="header-logo">CommAssess — Manager</div>
+  <div class="header-right">
+    <span id="mgr-header-name"></span>
+    <a href="index.html" style="font-size:0.8rem;color:var(--text-muted);text-decoration:none">Trainee Portal</a>
+    <button class="btn-logout" id="btn-mgr-logout">Sign Out</button>
+  </div>
+</header>
+
+<!-- ================================================================
+     SCREEN: Welcome / Auth
+     ================================================================ -->
+<section id="mgr-screen-welcome" class="screen active">
+  <div class="auth-page">
+    <div class="auth-logo-block">
+      <div class="logo-icon">M</div>
+      <h1>Manager Portal</h1>
+      <p>CommAssess — Leadership Assessment Platform</p>
+    </div>
+
+    <div class="auth-card" id="mgr-auth-form">
+      <h2>Welcome, Manager</h2>
+      <div class="auth-field">
+        <label for="mgr-auth-name">Full Name</label>
+        <input type="text" id="mgr-auth-name" placeholder="Your full name" autocomplete="name" />
+      </div>
+      <div class="auth-field">
+        <label for="mgr-auth-empid">Employee ID</label>
+        <input type="text" id="mgr-auth-empid" placeholder="e.g. MGR1234" autocomplete="username" />
+      </div>
+      <p id="mgr-auth-error" class="auth-msg error hidden"></p>
+      <button id="btn-mgr-start" class="btn-primary full-width">Enter Manager Portal →</button>
+      <p class="auth-toggle" style="margin-top:0.5rem">
+        <a href="index.html" style="color:rgba(255,255,255,0.35);font-size:0.8rem">← Trainee Portal</a>
+        &nbsp;&nbsp;
+        <a href="admin.html" style="color:rgba(255,255,255,0.35);font-size:0.8rem">Admin Portal ↗</a>
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================
+     SCREEN: Module Hub
+     ================================================================ -->
+<section id="mgr-screen-modules" class="screen">
+  <div class="mgr-modules-header">
+    <h2>Manager Assessment Modules</h2>
+    <p>Choose a module to begin your leadership assessment</p>
+  </div>
+  <div class="mgr-modules-grid">
+
+    <div class="mgr-module-card" data-module="mgr-situation-room">
+      <div class="module-icon">🎯</div>
+      <h3>The Situation Room</h3>
+      <p>Handle a high-stakes management crisis. Speak your response and strategy.</p>
+      <span class="module-tag">Audio · 5 min</span>
+    </div>
+
+    <div class="mgr-module-card" data-module="mgr-transcript-autopsy">
+      <div class="module-icon">📋</div>
+      <h3>Transcript Autopsy</h3>
+      <p>Analyse a real conversation transcript and write coaching notes.</p>
+      <span class="module-tag">Written</span>
+    </div>
+
+    <div class="mgr-module-card" data-module="mgr-mock-call">
+      <div class="module-icon">📞</div>
+      <h3>Mock Call</h3>
+      <p>Handle a difficult call — escalation, retention, or performance conversation.</p>
+      <span class="module-tag">Audio · 5 min</span>
+    </div>
+
+    <div class="mgr-module-card" data-module="mgr-feedback">
+      <div class="module-icon">💬</div>
+      <h3>Feedback</h3>
+      <p>Deliver structured feedback to a challenging team member scenario.</p>
+      <span class="module-tag">Audio · 5 min</span>
+    </div>
+
+    <div class="mgr-module-card" data-module="mgr-eq">
+      <div class="module-icon">🧠</div>
+      <h3>Emotional Intelligence</h3>
+      <p>Respond to emotionally charged team scenarios with empathy and clarity.</p>
+      <span class="module-tag">Written</span>
+    </div>
+
+    <div class="mgr-module-card" data-module="mgr-listening-tone">
+      <div class="module-icon">🎧</div>
+      <h3>Listening &amp; Tone</h3>
+      <p>Analyse a manager communication sample. Answer 5 diagnostic MCQs.</p>
+      <span class="module-tag">MCQ · Auto Scored</span>
+    </div>
+
+    <div class="mgr-module-card" data-module="mgr-management-skills">
+      <div class="module-icon">📊</div>
+      <h3>Management Skills</h3>
+      <p>Write a structured response to a people management challenge.</p>
+      <span class="module-tag">Written</span>
+    </div>
+
+  </div>
+</section>
+
+<!-- ================================================================
+     SCREEN: Audio Assessment
+     ================================================================ -->
+<section id="mgr-screen-audio" class="screen">
+  <header class="mgr-screen-header">
+    <button class="btn-back" id="btn-mgr-audio-back">← Back</button>
+    <h2 id="mgr-audio-module-title">Assessment</h2>
+  </header>
+
+  <div class="mgr-assess-screen">
+    <!-- Scenario card -->
+    <div class="step-card" style="margin-bottom:1.5rem">
+      <div class="step-label" id="mgr-audio-scenario-label">Scenario</div>
+      <div class="mgr-scenario-box">
+        <h3 id="mgr-audio-topic-title">Loading...</h3>
+        <p id="mgr-audio-scenario-text"></p>
+      </div>
+    </div>
+
+    <!-- Prep countdown (shown before recording) -->
+    <div id="mgr-prep-phase" class="mgr-prep-overlay">
+      <div class="mgr-prep-count" id="mgr-prep-count">60</div>
+      <div class="mgr-prep-label">seconds to prepare — recording will start automatically</div>
+      <button id="btn-mgr-skip-prep" class="btn-ghost" style="margin-top:1.25rem">Skip Prep &amp; Start Now →</button>
+    </div>
+
+    <!-- Recording phase (hidden until prep done) -->
+    <div id="mgr-record-phase" class="step-card hidden">
+      <div class="step-label">Recording in Progress</div>
+      <div class="recording-ui">
+        <div class="rec-timer">
+          <div class="rec-dot"></div>
+          <span id="mgr-rec-time">0:00</span>
+          <small>recording...</small>
+        </div>
+        <canvas id="mgr-waveform" class="waveform-canvas" width="600" height="70"></canvas>
+      </div>
+      <div class="mgr-live-transcript" id="mgr-live-transcript">
+        <span class="placeholder">Your speech will appear here in real time...</span>
+      </div>
+      <div class="rec-controls" style="margin-top:1.25rem">
+        <button id="btn-mgr-stop-record" class="btn-danger" style="background:#7c3aed">
+          ⏹ Stop &amp; Submit
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================
+     SCREEN: Written Assessment
+     ================================================================ -->
+<section id="mgr-screen-written" class="screen">
+  <header class="mgr-screen-header">
+    <button class="btn-back" id="btn-mgr-written-back">← Back</button>
+    <h2 id="mgr-written-module-title">Written Assessment</h2>
+  </header>
+
+  <div class="mgr-assess-screen">
+    <div class="step-card" style="margin-bottom:1.5rem">
+      <div class="step-label" id="mgr-written-scenario-label">Your Task</div>
+      <div class="mgr-scenario-box">
+        <h3 id="mgr-written-topic-title">Loading...</h3>
+        <p id="mgr-written-scenario-text"></p>
+      </div>
+    </div>
+
+    <div class="step-card">
+      <div class="mgr-word-count-bar">
+        <span>Word count:</span>
+        <strong id="mgr-written-word-count">0</strong>
+        <span id="mgr-written-min-hint" style="margin-left:auto;font-size:0.75rem;color:var(--text-muted)"></span>
+      </div>
+      <textarea
+        id="mgr-written-textarea"
+        class="mgr-written-area"
+        placeholder="Write your detailed response here. Use structure, specific examples, and actionable recommendations..."></textarea>
+      <div style="margin-top:1rem;text-align:right">
+        <button id="btn-mgr-submit-written" class="btn-primary" style="background:#7c3aed">
+          Submit Response ✓
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================
+     SCREEN: MCQ Assessment (Listening & Tone)
+     ================================================================ -->
+<section id="mgr-screen-mcq" class="screen">
+  <header class="mgr-screen-header">
+    <button class="btn-back" id="btn-mgr-mcq-back">← Back</button>
+    <h2>Listening &amp; Tone Assessment</h2>
+  </header>
+
+  <div class="mgr-assess-screen">
+    <div class="step-card" style="margin-bottom:1.5rem">
+      <div class="step-label">Read the Following Email</div>
+      <div class="mgr-mcq-intro" id="mgr-mcq-scenario-text"></div>
+    </div>
+
+    <div id="mgr-mcq-questions"></div>
+
+    <div style="text-align:right;margin-top:1rem">
+      <button id="btn-mgr-submit-mcq" class="btn-primary" style="background:#7c3aed">
+        Submit Answers ✓
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================
+     SCREEN: Result / Confirmation
+     ================================================================ -->
+<section id="mgr-screen-result" class="screen">
+  <header class="mgr-screen-header" style="border-bottom-color:#7c3aed">
+    <span></span>
+    <h2>Assessment Complete</h2>
+  </header>
+
+  <div class="mgr-assess-screen" style="padding-top:88px">
+    <div class="mgr-result-card">
+      <div class="mgr-result-icon">✅</div>
+      <h2>Submitted!</h2>
+      <p id="mgr-result-subtitle">Your assessment has been saved and will be reviewed.</p>
+
+      <div class="mgr-score-display" id="mgr-score-display">
+        <div class="score-num" id="mgr-result-score">—</div>
+        <div class="score-label">AI Score</div>
+      </div>
+
+      <div class="mgr-score-grid" id="mgr-score-grid"></div>
+
+      <div class="admin-note" style="text-align:left">
+        <span>📋</span>
+        <span>Your assessment will be reviewed by your admin who may add a final score and written feedback.</span>
+      </div>
+
+      <button id="btn-mgr-back-to-modules" class="btn-primary full-width" style="background:#7c3aed;margin-top:1rem">
+        ← Back to Modules
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- Toast Notifications -->
+<div id="toast-container"></div>
+
+<script src="config.js?v=7"></script>
+<script src="js/db.js?v=9"></script>
+<script src="js/auth.js?v=7"></script>
+<script src="js/recorder.js?v=7"></script>
+<script src="js/speech.js?v=8"></script>
+<script src="js/manager-app.js?v=1"></script>
+</body>
+</html>

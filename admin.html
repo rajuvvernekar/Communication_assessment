@@ -65,6 +65,11 @@
         <span class="nav-icon">📈</span>
         <span>Reports</span>
       </a>
+      <a href="#" class="nav-item" data-section="mgr-assessments">
+        <span class="nav-icon">👔</span>
+        <span>Manager Assessments</span>
+        <span class="nav-badge" id="mgr-pending-badge">0</span>
+      </a>
       <a href="#" class="nav-item" data-section="comm360">
         <span class="nav-icon">📑</span>
         <span>Comm360 Master Report</span>
@@ -402,6 +407,61 @@
       <div id="comm360-count" style="margin-top:0.5rem;font-size:0.8rem;color:var(--text-muted)"></div>
     </section>
 
+    <!-- ==================== MANAGER ASSESSMENTS ==================== -->
+    <section id="admin-mgr-assessments" class="admin-section">
+      <div class="section-header">
+        <div>
+          <h1>Manager Assessments</h1>
+          <p>Review and score manager leadership assessment submissions</p>
+        </div>
+        <div style="display:flex;gap:0.5rem;align-items:center">
+          <a href="manager.html" target="_blank" class="btn-ghost" style="font-size:0.82rem;padding:0.45rem 1rem">
+            Open Manager Portal ↗
+          </a>
+        </div>
+      </div>
+
+      <!-- Filter bar -->
+      <div class="filter-bar">
+        <select id="mgr-filter-module" class="filter-select" onchange="Admin.renderMgrAssessments()">
+          <option value="all">All Modules</option>
+          <option value="mgr-situation-room">🎯 Situation Room</option>
+          <option value="mgr-transcript-autopsy">📋 Transcript Autopsy</option>
+          <option value="mgr-mock-call">📞 Mock Call</option>
+          <option value="mgr-feedback">💬 Feedback</option>
+          <option value="mgr-eq">🧠 Emotional Intelligence</option>
+          <option value="mgr-listening-tone">🎧 Listening &amp; Tone</option>
+          <option value="mgr-management-skills">📊 Management Skills</option>
+        </select>
+        <select id="mgr-filter-status" class="filter-select" onchange="Admin.renderMgrAssessments()">
+          <option value="all">All Status</option>
+          <option value="pending">Pending</option>
+          <option value="scored">Scored</option>
+        </select>
+        <button class="btn-ghost" onclick="Admin.loadMgrAssessments()">↻ Refresh</button>
+      </div>
+
+      <div class="card" style="padding:0;overflow:hidden">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Manager Name</th>
+              <th>Module</th>
+              <th>Topic</th>
+              <th>Submitted</th>
+              <th>Status</th>
+              <th>AI Score</th>
+              <th>Admin Score</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="mgr-assessments-tbody">
+            <tr><td colspan="8" class="empty-state">No manager assessments yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <!-- ==================== SETTINGS ==================== -->
     <section id="admin-settings" class="admin-section">
       <div class="section-header">
@@ -610,6 +670,66 @@
   </div>
 </div>
 
+<!-- ============================================================
+     MANAGER SCORING MODAL
+     ============================================================ -->
+<div id="mgr-score-modal" class="modal-overlay hidden">
+  <div class="modal-card large-modal">
+    <div class="modal-header">
+      <h2>Score Manager Assessment</h2>
+      <button class="btn-close" onclick="document.getElementById('mgr-score-modal').classList.add('hidden')">✕</button>
+    </div>
+    <div class="modal-body scoring-body" style="padding:0">
+
+      <!-- Left: session details -->
+      <div class="scoring-left">
+        <div class="scoring-info">
+          <div class="scoring-meta">
+            <span id="mgr-modal-name" style="font-size:0.95rem;font-weight:700"></span>
+          </div>
+          <div style="font-size:0.8rem;color:var(--text-muted);margin-top:0.2rem">
+            Module: <strong id="mgr-modal-module"></strong>
+          </div>
+          <div class="scoring-topic" id="mgr-modal-topic" style="margin-top:0.3rem"></div>
+        </div>
+
+        <!-- Transcript / written / MCQ content -->
+        <div style="margin-bottom:1.25rem">
+          <div id="mgr-modal-transcript"
+               style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:1rem;font-size:0.875rem;line-height:1.7;max-height:280px;overflow-y:auto">
+          </div>
+        </div>
+
+        <!-- AI scores summary -->
+        <div id="mgr-modal-ai-scores" style="font-size:0.875rem;color:var(--text-muted);padding:0.5rem 0"></div>
+      </div>
+
+      <!-- Right: admin scoring -->
+      <div class="scoring-right">
+        <h4 style="margin-bottom:0.25rem;font-size:0.9rem;font-weight:700">Admin Scores (1–5)</h4>
+        <p style="font-size:0.75rem;color:var(--text-muted);margin-bottom:1rem">
+          Score each criterion on a scale of 1–5. Overall will be calculated automatically.
+        </p>
+
+        <div id="mgr-scoring-criteria" class="scoring-criteria"></div>
+
+        <div class="form-group" style="margin-top:0.75rem">
+          <label>Admin Comments</label>
+          <textarea id="mgr-admin-comment"
+            placeholder="Write coaching notes or feedback for the manager..."
+            style="min-height:100px"></textarea>
+        </div>
+
+        <button class="btn-primary full-width" onclick="Admin.saveMgrScore()"
+          style="background:#7c3aed">
+          Save Score
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
 <!-- Toast Notifications -->
 <div id="toast-container"></div>
 
@@ -620,6 +740,6 @@
 <script src="js/speech.js?v=6"></script>
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <script src="js/claude.js?v=15"></script>
-<script src="js/admin.js?v=57"></script>
+<script src="js/admin.js?v=58"></script>
 </body>
 </html>

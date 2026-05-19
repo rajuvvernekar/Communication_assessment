@@ -17,6 +17,7 @@
 // v54:  resetPickSpeakScores — restore original scores from _prev backup stored inside aiScores
 // v55:  resetPickSpeakScores — balanced fallback: re-score with original criteria when no _prev exists
 // v56:  reScorePickSpeak — use SpeechEngine (all 12 params) + corrected timeManagement; no Claude API
+// v57:  Manager Assessments section: loadMgrAssessments, renderMgrAssessments, openMgrScoreModal, saveMgrScore
 const MASTER_SCORES = {
   // ── Vignesh Baliga ──
   "abdul razak":                     { selfAssessment: 9.243,  aiAudit: 3.945,  psScore: 12.68, lisScore: 16.20, mcScore:  8.58, gramScore:  7.00, totalScore: 57.65 },
@@ -741,6 +742,7 @@ window.Admin = (() => {
         else if (sec === 'assessments') await loadAssessments();
         else if (sec === 'reports') await loadReportsDropdown();
         else if (sec === 'comm360') await loadComm360Report();
+        else if (sec === 'mgr-assessments') await loadMgrAssessments();
         else if (sec === 'settings') initSettings();
       });
     });
@@ -5591,6 +5593,174 @@ window.Admin = (() => {
     }
   }
 
+  // ── Manager Assessments ──────────────────────────────────────────
+  let _mgrSessions = [];
+
+  async function loadMgrAssessments() {
+    try {
+      const all = await DB.getAll('sessions');
+      _mgrSessions = all.filter(s => s.module && s.module.startsWith('mgr-'));
+      renderMgrAssessments();
+      // Update badge
+      const pending = _mgrSessions.filter(s => !s.adminScores).length;
+      const badge = document.getElementById('mgr-pending-badge');
+      if (badge) badge.textContent = pending > 0 ? pending : '0';
+    } catch (e) {
+      console.error('loadMgrAssessments error:', e);
+    }
+  }
+
+  function renderMgrAssessments() {
+    const moduleFilter = document.getElementById('mgr-filter-module') ? document.getElementById('mgr-filter-module').value : 'all';
+    const statusFilter = document.getElementById('mgr-filter-status') ? document.getElementById('mgr-filter-status').value : 'all';
+
+    let sessions = _mgrSessions;
+    if (moduleFilter !== 'all') sessions = sessions.filter(s => s.module === moduleFilter);
+    if (statusFilter === 'pending') sessions = sessions.filter(s => !s.adminScores);
+    if (statusFilter === 'scored')  sessions = sessions.filter(s =>  s.adminScores);
+
+    const tbody = document.getElementById('mgr-assessments-tbody');
+    if (!tbody) return;
+
+    if (!sessions.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No manager assessments yet.</td></tr>';
+      return;
+    }
+
+    const MGR_MODULE_LABELS = {
+      'mgr-situation-room':     '🎯 Situation Room',
+      'mgr-transcript-autopsy': '📋 Transcript Autopsy',
+      'mgr-mock-call':          '📞 Mock Call',
+      'mgr-feedback':           '💬 Feedback',
+      'mgr-eq':                 '🧠 Emotional Intelligence',
+      'mgr-listening-tone':     '🎧 Listening & Tone',
+      'mgr-management-skills':  '📊 Management Skills',
+    };
+
+    // Sort newest first
+    const sorted = [...sessions].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+
+    tbody.innerHTML = sorted.map(s => {
+      const aiScore    = s.aiScores    && s.aiScores.overall    != null ? s.aiScores.overall    + '%' : '—';
+      const adminScore = s.adminScores && s.adminScores.overall != null ? s.adminScores.overall + '%' : '—';
+      const status     = s.adminScores
+        ? '<span class="badge badge-scored">Scored</span>'
+        : '<span class="badge badge-pending">Pending</span>';
+      const date = s.submittedAt
+        ? new Date(s.submittedAt).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })
+        : '—';
+      const topicDisplay = (s.topicTitle || '—').replace(/'/g, '&#39;');
+      return `<tr>
+        <td><strong>${s.traineeName || '—'}</strong></td>
+        <td>${MGR_MODULE_LABELS[s.module] || s.module}</td>
+        <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${topicDisplay}">${s.topicTitle || '—'}</td>
+        <td>${date}</td>
+        <td>${status}</td>
+        <td>${aiScore}</td>
+        <td>${adminScore}</td>
+        <td><button class="btn-ghost" style="font-size:0.8rem;padding:0.35rem 0.75rem"
+          onclick="Admin.openMgrScoreModal('${s.id}')">Score</button></td>
+      </tr>`;
+    }).join('');
+  }
+
+  async function openMgrScoreModal(sessionId) {
+    const session = _mgrSessions.find(s => s.id === sessionId);
+    if (!session) return;
+
+    const modal = document.getElementById('mgr-score-modal');
+    if (!modal) return;
+
+    modal.querySelector('#mgr-modal-name').textContent    = session.traineeName || '—';
+    modal.querySelector('#mgr-modal-module').textContent  = (session.module || '').replace('mgr-','').replace(/-/g,' ');
+    modal.querySelector('#mgr-modal-topic').textContent   = session.topicTitle  || '—';
+
+    const isMcq     = session.module === 'mgr-listening-tone';
+    const isWritten = ['mgr-transcript-autopsy','mgr-eq','mgr-management-skills'].includes(session.module);
+
+    const transcriptBox = modal.querySelector('#mgr-modal-transcript');
+    if (isWritten) {
+      transcriptBox.innerHTML = '<strong>Written Response:</strong><div style="white-space:pre-wrap;margin-top:0.5rem;font-size:0.9rem">' +
+        (session.writtenText || '(no text)').replace(/</g,'&lt;') + '</div>';
+    } else if (isMcq) {
+      const ai = session.aiScores || {};
+      transcriptBox.innerHTML = '<strong>Auto-Score:</strong> ' + (ai.correct || 0) + '/' + (ai.total || 5) + ' correct — ' + (ai.overall || 0) + '%';
+    } else {
+      transcriptBox.innerHTML = '<strong>Transcript:</strong><div style="white-space:pre-wrap;margin-top:0.5rem;font-size:0.9rem;max-height:200px;overflow-y:auto">' +
+        (session.transcript || '(no transcript)').replace(/</g,'&lt;') + '</div>';
+    }
+
+    const aiBox = modal.querySelector('#mgr-modal-ai-scores');
+    if (session.aiScores && session.aiScores.overall != null) {
+      aiBox.innerHTML = '<strong>AI Score: ' + session.aiScores.overall + '%</strong>';
+    } else {
+      aiBox.innerHTML = '';
+    }
+
+    const criteriaEl = modal.querySelector('#mgr-scoring-criteria');
+    const audioLabels   = ['Leadership Presence','Decision Quality','Communication Clarity','Empathy & EQ','Professionalism'];
+    const writtenLabels = ['Content Quality','Critical Thinking','Communication Clarity','Empathy & Insight','Action Orientation'];
+    const labels = isWritten ? writtenLabels : audioLabels;
+    const existing = session.adminScores || {};
+
+    if (isMcq) {
+      criteriaEl.innerHTML = '<p style="color:var(--text-muted);font-size:0.9rem">This is an auto-scored MCQ assessment. You may add a comment below.</p>';
+    } else {
+      criteriaEl.innerHTML = labels.map((label, i) => {
+        const key = label.toLowerCase().replace(/[^a-z]/g, '');
+        const val = existing[key] != null ? existing[key] : (existing['score' + (i+1)] != null ? existing['score' + (i+1)] : '');
+        return '<div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem">' +
+          '<label style="min-width:200px;font-size:0.88rem">' + label + '</label>' +
+          '<input type="number" min="1" max="5" step="0.5" value="' + val + '" class="mgr-criteria-input" data-key="' + key + '" style="width:70px;border:1px solid var(--border);border-radius:6px;padding:0.35rem 0.5rem;font-size:0.9rem" />' +
+          '<span style="font-size:0.8rem;color:var(--text-muted)">(1–5)</span>' +
+          '</div>';
+      }).join('');
+    }
+
+    modal.querySelector('#mgr-admin-comment').value = session.adminComment || '';
+    modal.dataset.sessionId = sessionId;
+    modal.classList.remove('hidden');
+  }
+
+  async function saveMgrScore() {
+    const modal = document.getElementById('mgr-score-modal');
+    if (!modal) return;
+    const sessionId = modal.dataset.sessionId;
+    const session = _mgrSessions.find(s => s.id === sessionId);
+    if (!session) return;
+
+    const isMcq = session.module === 'mgr-listening-tone';
+    let adminScores = {};
+
+    if (!isMcq) {
+      const inputs = modal.querySelectorAll('.mgr-criteria-input');
+      let sum = 0, count = 0;
+      inputs.forEach(inp => {
+        const val = parseFloat(inp.value);
+        if (!isNaN(val)) { adminScores[inp.dataset.key] = val; sum += val; count++; }
+      });
+      adminScores.overall = count > 0 ? parseFloat(((sum / (count * 5)) * 100).toFixed(1)) : null;
+    } else {
+      adminScores = Object.assign({}, session.aiScores); // MCQ: admin score = AI score
+    }
+
+    const comment = modal.querySelector('#mgr-admin-comment').value.trim();
+
+    try {
+      await DB.patch('sessions', sessionId, { adminScores, adminComment: comment });
+      const idx = _mgrSessions.findIndex(s => s.id === sessionId);
+      if (idx >= 0) {
+        _mgrSessions[idx].adminScores  = adminScores;
+        _mgrSessions[idx].adminComment = comment;
+      }
+      renderMgrAssessments();
+      modal.classList.add('hidden');
+      toast('Manager score saved!', 'success');
+    } catch (e) {
+      alert('Error saving score: ' + e.message);
+    }
+  }
+
   // ---- Public API (called from inline onclick) ----
   return {
     init,
@@ -5655,7 +5825,12 @@ window.Admin = (() => {
     deleteAllAuditScores,
     // Comm360 Master Report
     filterComm360,
-    searchComm360
+    searchComm360,
+    // Manager Assessments
+    loadMgrAssessments,
+    renderMgrAssessments,
+    openMgrScoreModal,
+    saveMgrScore,
   };
 })();
 
