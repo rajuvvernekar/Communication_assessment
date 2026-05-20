@@ -190,14 +190,23 @@
 
       <div class="module-tabs">
         <button class="tab-btn active" data-module="all">All</button>
-        <button class="tab-btn" data-module="pick-speak-stock">📈 P&amp;S — Stock Market</button>
-        <button class="tab-btn" data-module="pick-speak-general">💬 P&amp;S — General</button>
+        <span class="tab-separator">— Trainee —</span>
+        <button class="tab-btn" data-module="pick-speak-stock">📈 P&amp;S Stock</button>
+        <button class="tab-btn" data-module="pick-speak-general">💬 P&amp;S General</button>
         <button class="tab-btn" data-module="mock-call">Mock Call</button>
         <button class="tab-btn" data-module="role-play">Role Play</button>
-        <button class="tab-btn" data-module="group-discussion">Group Discussion</button>
-        <button class="tab-btn" data-module="written-comm">Written Comm.</button>
+        <button class="tab-btn" data-module="group-discussion">GD</button>
+        <button class="tab-btn" data-module="written-comm">Written</button>
         <button class="tab-btn" data-module="grammar-assessment">Grammar</button>
         <button class="tab-btn" data-module="listening-assessment">Listening</button>
+        <span class="tab-separator">— Manager —</span>
+        <button class="tab-btn" data-module="mgr-situation-room">🎯 Situation Room</button>
+        <button class="tab-btn" data-module="mgr-transcript-autopsy">📋 Transcript Autopsy</button>
+        <button class="tab-btn" data-module="mgr-mock-call">📞 Mock Call</button>
+        <button class="tab-btn" data-module="mgr-feedback">💬 Feedback</button>
+        <button class="tab-btn" data-module="mgr-eq">🧠 EQ</button>
+        <button class="tab-btn" data-module="mgr-listening-tone">🎧 Listening &amp; Tone</button>
+        <button class="tab-btn" data-module="mgr-management-skills">📊 Mgmt Skills</button>
       </div>
 
       <div id="topics-list" class="topics-grid">
@@ -534,6 +543,15 @@
           <option value="written-comm">Written Communication</option>
           <option value="grammar-assessment">Grammar Assessment (MCQ)</option>
           <option value="listening-assessment">Listening Assessment (MCQ)</option>
+          <optgroup label="── Manager Modules ──">
+            <option value="mgr-situation-room">🎯 Situation Room</option>
+            <option value="mgr-transcript-autopsy">📋 Transcript Autopsy</option>
+            <option value="mgr-mock-call">📞 Manager Mock Call</option>
+            <option value="mgr-feedback">💬 Feedback (AI Conversation)</option>
+            <option value="mgr-eq">🧠 Emotional Intelligence</option>
+            <option value="mgr-listening-tone">🎧 Listening &amp; Tone</option>
+            <option value="mgr-management-skills">📊 Management Skills</option>
+          </optgroup>
         </select>
       </div>
       <div class="form-group">
@@ -739,7 +757,7 @@
 <script src="js/recorder.js?v=6"></script>
 <script src="js/speech.js?v=6"></script>
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
-<script src="js/claude.js?v=15"></script>
+<script src="js/claude.js?v=16"></script>
 <script src="js/admin.js?v=58"></script>
 </body>
 </html>

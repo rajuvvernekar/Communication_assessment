@@ -1339,6 +1339,18 @@ body {
 }
 .tab-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
 .tab-btn:hover:not(.active) { background: #f1f5f9; }
+.tab-separator {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  opacity: 0.6;
+}
 
 .topics-grid {
   display: grid;

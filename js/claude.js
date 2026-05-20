@@ -537,5 +537,75 @@ Return ONLY the employee's spoken dialogue.`;
     return SPOKEN_CRITERIA[module] || [];
   }
 
-  return { isAvailable, evaluate, evaluateBalanced, evaluateRewrite, callAiCustomer, callAiEmployee, getCriteria, scoreTimeManagement, MOCK_CALL_CRITERIA };
+  // ---- Strict Manager Assessment Evaluation ----
+  // Evaluates written manager responses (EQ, Mgmt Skills, Transcript Autopsy)
+  // with strict leadership-level criteria. Returns {scores, overall, reasons}.
+  async function evaluateManagerAssessment(moduleKey, responseText, scenarioContext) {
+    if (!isAvailable()) throw new Error('Claude proxy not configured');
+
+    const MODULE_LABELS = {
+      'mgr-eq':                 'Emotional Intelligence',
+      'mgr-management-skills':  'Management Skills',
+      'mgr-transcript-autopsy': 'Transcript Autopsy / Coaching Analysis',
+      'mgr-situation-room':     'Situation Room Leadership Response',
+      'mgr-feedback':           'Feedback Delivery',
+    };
+
+    const moduleLabel = MODULE_LABELS[moduleKey] || 'Management Assessment';
+
+    const systemPrompt = `You are a senior leadership assessor evaluating a manager's written response to a ${moduleLabel} exercise.
+
+SCENARIO: ${scenarioContext}
+
+SCORING STANDARDS (this is the most important part):
+- You are evaluating at MANAGEMENT level, not trainee level
+- Score 3 is AVERAGE — something a mediocre manager might write
+- Score 4 requires genuine insight and specificity that goes beyond the obvious
+- Score 5 is RARE — only for responses that would impress a VP or C-suite leader
+- Score 2 = below what is expected; Score 1 = critical gap in management competency
+- NEVER inflate scores. Be honest, be strict, be developmental.
+
+Evaluate the response on each criterion. Return ONLY a JSON object:
+{"leadershipMaturity": <1-5>, "empathyAndPeople": <1-5>, "specificity": <1-5>, "communicationQuality": <1-5>, "accountability": <1-5>, "reasons": {"leadershipMaturity": "<sentence>", "empathyAndPeople": "<sentence>", "specificity": "<sentence>", "communicationQuality": "<sentence>", "accountability": "<sentence>"}}`;
+
+    const resp = await fetch(getProxyUrl(), {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        model:      MODEL,
+        max_tokens: 400,
+        system:     systemPrompt,
+        messages:   [{ role: 'user', content: `MANAGER\'S RESPONSE:\n\n${responseText}` }],
+      }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error?.message || `API error ${resp.status}`);
+    }
+
+    const data  = await resp.json();
+    const text  = data.content[0].text.trim();
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('No JSON in response');
+
+    const parsed = JSON.parse(match[0]);
+    const keys   = ['leadershipMaturity','empathyAndPeople','specificity','communicationQuality','accountability'];
+    const sum    = keys.reduce((s, k) => s + (parsed[k] || 0), 0);
+    const overall = parseFloat(((sum / (keys.length * 5)) * 100).toFixed(1));
+
+    return {
+      scores: {
+        leadershipMaturity:   parsed.leadershipMaturity,
+        empathyAndPeople:     parsed.empathyAndPeople,
+        specificity:          parsed.specificity,
+        communicationQuality: parsed.communicationQuality,
+        accountability:       parsed.accountability,
+      },
+      overall,
+      reasons: parsed.reasons || {},
+    };
+  }
+
+  return { isAvailable, evaluate, evaluateBalanced, evaluateRewrite, callAiCustomer, callAiEmployee, evaluateManagerAssessment, getCriteria, scoreTimeManagement, MOCK_CALL_CRITERIA };
 })();
