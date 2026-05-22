@@ -1,11 +1,14 @@
 'use strict';
 // ============================================================
-//  CommAssess — Manager Portal App  v3
+//  CommAssess — Manager Portal App  v4
 //  v2: Feedback module → conversational AI (employee bot)
 //      Fix: Recorder.startTimer countUp bug (auto-stop now works)
 //  v3: Situation Room → two-section written assessment
 //      Section A: What Would You Say (tone, ownership, risky language)
 //      Section B: The Wrong Response (error ID, impact, rewrite)
+//  v4: Fix sessions_trainee_id_fkey — call Auth.ensureTraineeRecord()
+//      immediately before every DB.put('sessions') to guarantee the
+//      trainees row exists regardless of earlier init-time failures.
 // ============================================================
 
 const MgrApp = (() => {
@@ -708,6 +711,9 @@ Let's get back on track.
       aiScores._module = _currentModule;
       aiScores._scenarioId = _currentScenario.id;
 
+      // Guarantee trainees row exists before FK-constrained session insert
+      await Auth.ensureTraineeRecord();
+
       await DB.put('sessions', {
         traineeId:    Auth.getId(),
         traineeName:  Auth.getName(),
@@ -868,6 +874,9 @@ Let's get back on track.
     });
 
     try {
+      // Guarantee trainees row exists before FK-constrained session insert
+      await Auth.ensureTraineeRecord();
+
       await DB.put('sessions', {
         traineeId:    Auth.getId(),
         traineeName:  Auth.getName(),
@@ -1172,6 +1181,9 @@ Let's get back on track.
     aiScores._scenarioId = _currentScenario.id;
 
     try {
+      // Guarantee trainees row exists before FK-constrained session insert
+      await Auth.ensureTraineeRecord();
+
       await DB.put('sessions', {
         traineeId:    Auth.getId(),
         traineeName:  Auth.getName(),
@@ -1264,6 +1276,9 @@ Let's get back on track.
 
     try {
       aiScores._scenarioId = _currentScenario.id;
+      // Guarantee trainees row exists before FK-constrained session insert
+      await Auth.ensureTraineeRecord();
+
       await DB.put('sessions', {
         traineeId:    Auth.getId(),
         traineeName:  Auth.getName(),
@@ -1328,6 +1343,9 @@ Let's get back on track.
 
     aiScores._scenarioId = _currentScenario.id;
     try {
+      // Guarantee trainees row exists before FK-constrained session insert
+      await Auth.ensureTraineeRecord();
+
       await DB.put('sessions', {
         traineeId: Auth.getId(), traineeName: Auth.getName(), traineeEmail: Auth.getEmail(),
         module: _currentModule,

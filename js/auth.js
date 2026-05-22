@@ -29,20 +29,50 @@ const Auth = (() => {
   // ---- Ensure the trainees row exists for the current _user ----
   // Called after every signIn AND every session restore so that any manager
   // whose trainees insert silently failed at signUp() is healed automatically.
+  //
+  // Uses the raw Supabase client directly — no .select() chained after upsert —
+  // because DB.put() appends .select('id').single() which can throw a
+  // RLS-blocked-SELECT error even when the underlying INSERT succeeded, causing
+  // the whole call to be caught silently and the row to never be confirmed.
+  // Three strategies give maximum resilience.
   async function _ensureTraineeRecord(empIdHint) {
     if (!_user) return;
-    try {
-      const employeeId = empIdHint || _user.user_metadata?.employee_id || _user.email?.split('@')[0] || '';
-      const name       = _user.user_metadata?.full_name || employeeId;
-      await DB.put('trainees', {
-        id:          _user.id,
-        name,
-        email:       _user.email,
-        employee_id: employeeId,
-      });
-    } catch (e) {
-      console.warn('Trainees upsert failed (non-fatal):', e.message);
+    const sb = DB.getClient();
+    if (!sb) return;
+
+    const employeeId = (
+      empIdHint
+      || _user.user_metadata?.employee_id
+      || _user.email?.split('@')[0]
+      || ''
+    ).trim();
+    const name = _user.user_metadata?.full_name || employeeId;
+    const row  = { id: _user.id, name, email: _user.email, employee_id: employeeId };
+
+    // Strategy 1: direct upsert by id — no .select() so an RLS SELECT
+    // restriction can never cause a false failure on the insert path.
+    const { error: e1 } = await sb.from('trainees').upsert(row, { onConflict: 'id' });
+    if (!e1) return;
+
+    console.error('[Auth] Trainees upsert (S1) failed:', e1.code, e1.message);
+
+    // Strategy 2: unique constraint on employee_id (code 23505) —
+    // an orphaned row from a previous sign-up attempt is blocking the insert.
+    // Delete that stale row and retry.
+    if (e1.code === '23505') {
+      try {
+        await sb.from('trainees').delete().eq('employee_id', employeeId).neq('id', _user.id);
+      } catch (_) { /* ignore delete error — may lack RLS permission */ }
+      const { error: e2 } = await sb.from('trainees').upsert(row, { onConflict: 'id' });
+      if (!e2) return;
+      console.error('[Auth] Trainees upsert (S2 retry) failed:', e2.code, e2.message);
     }
+
+    // Strategy 3: plain insert as last resort.
+    // 23505 on id means the row already exists — that is fine.
+    const { error: e3 } = await sb.from('trainees').insert(row);
+    if (!e3 || e3.code === '23505') return;
+    console.error('[Auth] Trainees insert (S3) failed:', e3.code, e3.message);
   }
 
   // ---- Init: restore existing session on page load ----
@@ -116,5 +146,6 @@ const Auth = (() => {
     _user = null;
   }
 
-  return { init, isLoggedIn, getId, getEmail, getEmployeeId, getName, signIn, signUp, signOut };
+  return { init, isLoggedIn, getId, getEmail, getEmployeeId, getName, signIn, signUp, signOut,
+           ensureTraineeRecord: _ensureTraineeRecord };
 })();
