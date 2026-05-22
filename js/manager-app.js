@@ -1,8 +1,11 @@
 'use strict';
 // ============================================================
-//  CommAssess — Manager Portal App  v2
+//  CommAssess — Manager Portal App  v3
 //  v2: Feedback module → conversational AI (employee bot)
 //      Fix: Recorder.startTimer countUp bug (auto-stop now works)
+//  v3: Situation Room → two-section written assessment
+//      Section A: What Would You Say (tone, ownership, risky language)
+//      Section B: The Wrong Response (error ID, impact, rewrite)
 // ============================================================
 
 const MgrApp = (() => {
@@ -10,12 +13,34 @@ const MgrApp = (() => {
   // ── Hardcoded scenarios ──────────────────────────────────
   const SCENARIOS = {
     'mgr-situation-room': [
-      { id:'sr1', title:'The Unexpected Resignation',
-        scenario:'Your top performer — who handles 40% of your team\'s output — has just resigned with two weeks\' notice during your peak season. The team already knows. You have a team standup in 20 minutes.\n\nSpeak for 4-5 minutes: What are your immediate actions in the next 24 hours? How do you address the team, manage the transition, and maintain morale?' },
-      { id:'sr2', title:'The Compliance Breach',
-        scenario:'You have just been informed that two senior team members bypassed compliance protocols for the past 6 weeks to meet their targets, resulting in 12 customer escalations that were marked as resolved without proper documentation.\n\nSpeak for 4-5 minutes: How do you escalate this, contain the damage, address the team members, and prevent recurrence?' },
-      { id:'sr3', title:'The Recovery Plan',
-        scenario:'Your team has missed the quarterly target by 35%. The regional director has called an urgent review tomorrow. You have one evening to prepare.\n\nSpeak for 4-5 minutes: What is your root cause analysis? How do you present this to leadership and what is your 60-day recovery strategy?' },
+      {
+        id: 'sr1',
+        title: 'The Unexpected Resignation',
+        scenario: `Your top performer, Vikram, has just walked into your office and quietly resigned — effective in 2 weeks. He handles 40% of your team's output. Peak season starts in 4 days. The rest of the team doesn't know yet. Your standup is in 20 minutes.\n\nVikram is sitting across from you, resignation letter on the desk. He looks uncomfortable but resolved. He's been with the team for 3 years and has always delivered.`,
+        sectionAPrompt: 'Write the EXACT words you say to Vikram in the next 2–3 minutes — your immediate verbal response to him. Do not describe actions. Write what you actually say, word for word.',
+        wrongResponse: `"Vikram, honestly I'm shocked. The timing couldn't be worse — we're literally going into peak season in 4 days and you're leaving us in an extremely difficult position. You know how much the team relies on you. Everyone is going to struggle. I need you to give me at least 4 weeks instead of 2 — is there any way you can do that? And can you tell me what we did wrong? Is it the salary? Because I may be able to do something about that if that's the issue."`,
+      },
+      {
+        id: 'sr2',
+        title: 'The Compliance Breach',
+        scenario: `Your compliance lead has just informed you that two of your senior agents — Priya (3 years on the team) and Ravi (4 years) — bypassed the mandatory documentation protocol for 6 consecutive weeks to hit their monthly targets. This has caused 14 customer escalations that were falsely marked as resolved.\n\nYou've called them both into the meeting room. They don't know what it's about. They're both seated, looking at you.`,
+        sectionAPrompt: 'Write the EXACT words you say to open this conversation. The next 60 seconds will determine whether this becomes a productive accountability conversation or a defensive standoff.',
+        wrongResponse: `"Okay, I'll get straight to the point. What you two have done is a serious compliance violation and I am extremely disappointed in both of you. I honestly cannot believe that senior people on this team would do this. Compliance is already involved and so is HR — this could be a termination-level issue. I want both of you to tell me right now why you thought bypassing protocols for six weeks was acceptable. And I want the real reason, not excuses."`,
+      },
+      {
+        id: 'sr3',
+        title: 'The Public Recovery Presentation',
+        scenario: `Your team missed Q3 target by 35% — the only team in the region to miss by double digits. Your Regional Director has called an unscheduled all-hands. There are 15 people in the room: 3 other team managers, their leads, and your own team members.\n\nThe Regional Director has just said directly to you: "Your team is the only one that missed by double digits this quarter. Walk us through what happened and what you plan to do about it."\n\nAll eyes are on you. You have 90 seconds.`,
+        sectionAPrompt: 'Write the EXACT words of your response — what you say in the next 60–90 seconds in front of the room.',
+        wrongResponse: `"The targets this quarter were honestly set above realistic market benchmarks — I've been raising this concern since July. My team also faced significant headwinds: the product changes in August disrupted our workflow for nearly 3 weeks, and we didn't receive the resource support that was committed to us. I take responsibility in the sense that I should have escalated more aggressively earlier. But the structural issues here are systemic and beyond any individual team's control. I do have a 60-day recovery plan ready to present."`,
+      },
+      {
+        id: 'sr4',
+        title: 'The Breakdown in the Team Meeting',
+        scenario: `You are running the weekly team standup — 12 people on a video call. Mid-meeting, Kavya — a reliable, mid-level team member — suddenly says:\n\n"I'm sorry. I just can't. I can't do this anymore. I am completely overwhelmed and I feel like nothing I do is ever enough."\n\nShe looks close to tears. Everyone else has gone silent. There is a 5-second pause. The whole team is watching you.`,
+        sectionAPrompt: 'Write the EXACT words you say in the next 30 seconds — with the full team watching. What you say here determines both Kavya\'s trust in you and how safe every other team member feels.',
+        wrongResponse: `"Kavya, hey — it's okay. I think we can all relate to feeling a bit overwhelmed sometimes, it's been a tough quarter for everyone. Why don't we take a quick 5-minute break and come back? And Kavya, maybe we can connect after the call and have a chat about what's going on — I'm sure it'll look a lot better once you've had a bit of a rest. Alright team, 5-minute break, and then we'll pick up from slide 7."`,
+      },
     ],
     'mgr-transcript-autopsy': [
       { id:'ta1', title:'SIP Debit With No Unit Allotment — 22 Min Call',
@@ -385,7 +410,7 @@ Let's get back on track.
 
   // ── Module metadata ──────────────────────────────────────
   const MODULE_META = {
-    'mgr-situation-room':    { label: 'The Situation Room',    type: 'audio',       icon: '🎯' },
+    'mgr-situation-room':    { label: 'The Situation Room',    type: 'situation-room', icon: '🎯' },
     'mgr-transcript-autopsy':{ label: 'Transcript Autopsy',    type: 'written',     icon: '📋', minWords: 150 },
     'mgr-mock-call':         { label: 'Mock Call',             type: 'audio',       icon: '📞' },
     'mgr-feedback':          { label: 'Feedback',              type: 'feedback-ai', icon: '💬' },
@@ -404,6 +429,9 @@ Let's get back on track.
   let _recStartTime    = null;
   let _audioManualTimer = null; // manual count-up timer for non-feedback audio
   let _mcqAnswers      = [];
+
+  // ── Situation Room two-section state ────────────────────
+  let _sr = { phase: 'A', sectionAText: '', sectionAScores: null };
 
   // ── Feedback AI conversation state ──────────────────────
   let _fb = {
@@ -546,6 +574,11 @@ Let's get back on track.
 
     if (meta.type === 'feedback-ai') {
       _launchFeedbackAI();
+      return;
+    }
+
+    if (meta.type === 'situation-room') {
+      _launchSituationRoom();
       return;
     }
 
@@ -695,6 +728,165 @@ Let's get back on track.
     } catch (e) {
       toast('Error saving session: ' + e.message, 'error');
       console.error('_submitAudio error:', e);
+    }
+  }
+
+  // ── Situation Room — Two-section assessment ─────────────
+
+  function _launchSituationRoom() {
+    const pool = SCENARIOS['mgr-situation-room'];
+    _currentScenario = { ...pickRandom(pool), _hardcoded: true };
+    _sr = { phase: 'A', sectionAText: '', sectionAScores: null };
+
+    // Populate Section A UI
+    $('sr-topic-title-a').textContent  = _currentScenario.title;
+    $('sr-scenario-text-a').textContent = _currentScenario.scenario;
+    $('sr-a-prompt').textContent        = _currentScenario.sectionAPrompt || 'Write your exact verbal response';
+
+    // Reset fields
+    const ta = $('sr-a-textarea');
+    if (ta) ta.value = '';
+    if ($('sr-a-word-count')) $('sr-a-word-count').textContent = '0';
+
+    // Show Phase A, hide Phase B
+    $('sr-phase-a').style.display = '';
+    $('sr-phase-b').style.display = 'none';
+
+    // Reset step indicators
+    const sa = $('sr-step-a'), sb = $('sr-step-b');
+    if (sa) sa.className = 'sr-step active';
+    if (sb) sb.className = 'sr-step';
+
+    showScreen('mgr-screen-situation-room');
+  }
+
+  async function _submitSRSectionA() {
+    const text = $('sr-a-textarea').value.trim();
+    const wordCount = text.split(/\s+/).filter(Boolean).length;
+    if (wordCount < 30) {
+      toast('Please write at least 30 words before submitting.', 'error');
+      return;
+    }
+
+    const btn = $('btn-sr-submit-a');
+    if (btn) { btn.disabled = true; btn.textContent = 'Evaluating…'; }
+
+    _sr.sectionAText = text;
+
+    try {
+      if (typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
+        _sr.sectionAScores = await ClaudeEvaluator.evaluateSituationRoomA(
+          _currentScenario.scenario, text
+        );
+      } else {
+        _sr.sectionAScores = { toneEmpathy: 3, ownershipLanguage: 3, avoidedRiskyLanguage: 3, whatNotToSay: '', strength: '', improvement: '' };
+      }
+    } catch (e) {
+      console.warn('SR-A eval failed:', e.message);
+      _sr.sectionAScores = { toneEmpathy: 3, ownershipLanguage: 3, avoidedRiskyLanguage: 3, whatNotToSay: '', strength: '', improvement: '' };
+    }
+
+    if (btn) { btn.disabled = false; btn.textContent = 'Submit Section A → Proceed to Section B'; }
+    _transitionToSRSectionB();
+  }
+
+  function _transitionToSRSectionB() {
+    // Mark steps
+    const sa = $('sr-step-a'), sb = $('sr-step-b');
+    if (sa) sa.className = 'sr-step done';
+    if (sb) sb.className = 'sr-step active';
+
+    // Populate Section B
+    if ($('sr-topic-title-b')) $('sr-topic-title-b').textContent  = _currentScenario.title;
+    if ($('sr-wrong-response-text')) $('sr-wrong-response-text').textContent = _currentScenario.wrongResponse || '';
+
+    // Reset Section B fields & word counts
+    ['sr-b-errors', 'sr-b-impact', 'sr-b-rewrite'].forEach(id => {
+      const el = $(id); if (el) el.value = '';
+    });
+    ['sr-b-errors-wc', 'sr-b-impact-wc', 'sr-b-rewrite-wc'].forEach(id => {
+      const el = $(id); if (el) el.textContent = '0';
+    });
+
+    // Switch phases
+    $('sr-phase-a').style.display = 'none';
+    $('sr-phase-b').style.display = '';
+    window.scrollTo(0, 0);
+    toast('Section A complete! Now analyse the wrong response in Section B.', 'success');
+  }
+
+  async function _submitSRSectionB() {
+    const errorsText = ($('sr-b-errors').value || '').trim();
+    const impactText  = ($('sr-b-impact').value  || '').trim();
+    const rewriteText = ($('sr-b-rewrite').value || '').trim();
+
+    const minWords = (t) => t.split(/\s+/).filter(Boolean).length;
+    if (minWords(errorsText) < 15 || minWords(impactText) < 15 || minWords(rewriteText) < 20) {
+      toast('Please complete all three fields before submitting (min. 15/15/20 words).', 'error');
+      return;
+    }
+
+    const btn = $('btn-sr-submit-b');
+    if (btn) { btn.disabled = true; btn.textContent = 'Evaluating…'; }
+
+    let sectionBScores = { errorIdentification: 3, impactExplanation: 3, rewriteQuality: 3, keyMissed: '', rewriteFeedback: '' };
+    try {
+      if (typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
+        sectionBScores = await ClaudeEvaluator.evaluateSituationRoomB(
+          _currentScenario.scenario,
+          _currentScenario.wrongResponse || '',
+          errorsText, impactText, rewriteText
+        );
+      }
+    } catch (e) {
+      console.warn('SR-B eval failed:', e.message);
+    }
+
+    if (btn) { btn.disabled = false; btn.textContent = 'Submit Full Assessment ✓'; }
+
+    // Combined overall
+    const sa = _sr.sectionAScores || { toneEmpathy: 3, ownershipLanguage: 3, avoidedRiskyLanguage: 3 };
+    const allVals = [sa.toneEmpathy, sa.ownershipLanguage, sa.avoidedRiskyLanguage,
+                     sectionBScores.errorIdentification, sectionBScores.impactExplanation, sectionBScores.rewriteQuality]
+                   .filter(v => v != null);
+    const overall = allVals.length
+      ? parseFloat(((allVals.reduce((a, b) => a + b, 0) / (allVals.length * 5)) * 100).toFixed(1))
+      : 0;
+
+    const aiScores = {
+      overall,
+      sectionA: sa,
+      sectionB: sectionBScores,
+      _method: 'claude-sr',
+      _module: 'mgr-situation-room',
+      _scenarioId: _currentScenario.id,
+    };
+
+    const writtenText = JSON.stringify({
+      sectionA: { prompt: _currentScenario.sectionAPrompt, response: _sr.sectionAText },
+      sectionB: { wrongResponse: _currentScenario.wrongResponse, errors: errorsText, impact: impactText, rewrite: rewriteText },
+    });
+
+    try {
+      await DB.put('sessions', {
+        traineeId:    Auth.getId(),
+        traineeName:  Auth.getName(),
+        traineeEmail: Auth.getEmail(),
+        module:       'mgr-situation-room',
+        topicId:      null,
+        topicTitle:   _currentScenario.title,
+        transcript:   '',
+        recordingBlob: null,
+        writtenText,
+        aiScores,
+        timeTaken:    0,
+        submittedAt:  new Date().toISOString(),
+        status:       'ai-evaluated',
+      });
+      _showResult(aiScores, 'situation-room');
+    } catch (e) {
+      toast('Error saving session: ' + e.message, 'error');
+      console.error('_submitSRSectionB error:', e);
     }
   }
 
@@ -1193,8 +1385,43 @@ Let's get back on track.
       $('mgr-score-grid').innerHTML = rows.map(([label, val]) =>
         `<div class="mgr-score-item"><div class="label">${label}</div><div class="val">${typeof val === 'number' ? val+'/5' : val}</div></div>`
       ).join('');
+    } else if (type === 'situation-room') {
+      const sa = aiScores.sectionA || {};
+      const sb = aiScores.sectionB || {};
+      $('mgr-result-subtitle').textContent = `Situation Room — ${_currentScenario ? _currentScenario.title : 'Assessment complete'}`;
+      $('mgr-result-score').textContent = `${aiScores.overall}%`;
+      $('mgr-score-grid').innerHTML = `
+        <div class="mgr-score-item sr-section-a-item"><div class="label">A — Tone &amp; Empathy</div><div class="val">${sa.toneEmpathy ?? '—'}/5</div></div>
+        <div class="mgr-score-item sr-section-a-item"><div class="label">A — Ownership Language</div><div class="val">${sa.ownershipLanguage ?? '—'}/5</div></div>
+        <div class="mgr-score-item sr-section-a-item"><div class="label">A — Avoided Risky Language</div><div class="val">${sa.avoidedRiskyLanguage ?? '—'}/5</div></div>
+        <div class="mgr-score-item sr-section-b-item"><div class="label">B — Error Identification</div><div class="val">${sb.errorIdentification ?? '—'}/5</div></div>
+        <div class="mgr-score-item sr-section-b-item"><div class="label">B — Impact Explanation</div><div class="val">${sb.impactExplanation ?? '—'}/5</div></div>
+        <div class="mgr-score-item sr-section-b-item"><div class="label">B — Rewrite Quality</div><div class="val">${sb.rewriteQuality ?? '—'}/5</div></div>`;
+
+      // AI feedback panel
+      const feedbackEl = $('mgr-sr-ai-feedback');
+      if (feedbackEl) {
+        const items = [];
+        if (sa.whatNotToSay && !/clean/i.test(sa.whatNotToSay)) {
+          items.push(`<div class="sr-fb-item sr-fb-warn"><strong>⚠ What Not to Say (A):</strong> ${sa.whatNotToSay}</div>`);
+        }
+        if (sa.strength) {
+          items.push(`<div class="sr-fb-item sr-fb-good"><strong>✓ Strength (A):</strong> ${sa.strength}</div>`);
+        }
+        if (sa.improvement) {
+          items.push(`<div class="sr-fb-item sr-fb-info"><strong>💡 Priority Improvement (A):</strong> ${sa.improvement}</div>`);
+        }
+        if (sb.keyMissed && !/all key/i.test(sb.keyMissed)) {
+          items.push(`<div class="sr-fb-item sr-fb-warn"><strong>📝 Missed Error (B):</strong> ${sb.keyMissed}</div>`);
+        }
+        if (sb.rewriteFeedback && !/strong/i.test(sb.rewriteFeedback)) {
+          items.push(`<div class="sr-fb-item sr-fb-info"><strong>✍ Rewrite Feedback (B):</strong> ${sb.rewriteFeedback}</div>`);
+        }
+        feedbackEl.innerHTML = items.join('');
+        feedbackEl.classList.toggle('hidden', items.length === 0);
+      }
     } else {
-      // audio (Situation Room, Mock Call)
+      // audio (Mock Call only now — Situation Room moved to written)
       $('mgr-result-subtitle').textContent = `${meta.label} — speech evaluated`;
       $('mgr-result-score').textContent = aiScores.overall != null ? `${aiScores.overall}%` : '—';
       const rows = [
@@ -1253,6 +1480,29 @@ Let's get back on track.
       card.addEventListener('click', () => startModule(card.dataset.module));
     });
 
+    // Situation Room screen
+    const btnSRBack = $('btn-mgr-sr-back');
+    if (btnSRBack) btnSRBack.addEventListener('click', backToModules);
+    const btnSRSubmitA = $('btn-sr-submit-a');
+    if (btnSRSubmitA) btnSRSubmitA.addEventListener('click', _submitSRSectionA);
+    const btnSRSubmitB = $('btn-sr-submit-b');
+    if (btnSRSubmitB) btnSRSubmitB.addEventListener('click', _submitSRSectionB);
+
+    // SR word counts
+    const srATa = $('sr-a-textarea');
+    if (srATa) srATa.addEventListener('input', () => {
+      const w = srATa.value.trim().split(/\s+/).filter(Boolean).length;
+      if ($('sr-a-word-count')) $('sr-a-word-count').textContent = w;
+    });
+    [['sr-b-errors','sr-b-errors-wc'],['sr-b-impact','sr-b-impact-wc'],['sr-b-rewrite','sr-b-rewrite-wc']]
+      .forEach(([taId, wcId]) => {
+        const ta = $(taId);
+        if (ta) ta.addEventListener('input', () => {
+          const w = ta.value.trim().split(/\s+/).filter(Boolean).length;
+          const wc = $(wcId); if (wc) wc.textContent = w;
+        });
+      });
+
     // Audio screen (non-feedback)
     const btnSkipPrep = $('btn-mgr-skip-prep');
     if (btnSkipPrep) btnSkipPrep.addEventListener('click', startRecording);
@@ -1302,6 +1552,9 @@ Let's get back on track.
     submitWritten, submitMCQ,
     backToModules,
     selectMCQOption,
+    // SR functions exposed for inline event handlers (if needed)
+    submitSRSectionA: _submitSRSectionA,
+    submitSRSectionB: _submitSRSectionB,
   };
 
 })();

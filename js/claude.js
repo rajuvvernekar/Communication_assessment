@@ -607,5 +607,158 @@ Evaluate the response on each criterion. Return ONLY a JSON object:
     };
   }
 
-  return { isAvailable, evaluate, evaluateBalanced, evaluateRewrite, callAiCustomer, callAiEmployee, evaluateManagerAssessment, getCriteria, scoreTimeManagement, MOCK_CALL_CRITERIA };
+  // ---- Evaluate Situation Room Section A ----
+  // Evaluates the manager's verbal response for tone/empathy, ownership, and risky language.
+  async function evaluateSituationRoomA(scenarioText, responseText) {
+    if (!isAvailable()) return null;
+
+    const systemPrompt = `You are a senior leadership development expert at an executive coaching firm. Evaluate manager verbal responses with strict, expert-level standards.
+
+SCORING STANDARDS:
+- Score 3 = average — what most managers instinctively say
+- Score 4 = genuinely above average — requires real empathy/ownership, not just absence of mistakes
+- Score 5 = exceptional — rare, only for masterful leadership communication
+- Score 2 = below standard — real problems present
+- Score 1 = critical failure
+Be strict. Do NOT inflate scores.`;
+
+    const userPrompt = `SCENARIO:
+${scenarioText}
+
+MANAGER'S RESPONSE:
+"${responseText}"
+
+Evaluate on 3 criteria (1-5 each):
+
+1. toneEmpathy: Does the response lead with genuine human empathy BEFORE business concerns? Does the manager acknowledge the PERSON first?
+   - 1: Leads with business impact, blame, or demands
+   - 2: Acknowledges situation but stays transactional
+   - 3: Shows some empathy but still self-focused or hedged
+   - 4: Clear empathetic opening, person feels heard first
+   - 5: Masterfully human — person is at centre, deeply genuine
+
+2. ownershipLanguage: Does the manager use clear accountability language vs. deflection, hedging, or blame?
+   - 1: Full deflection — blames others, timing, systems, market
+   - 2: Attempts ownership but heavily qualified
+   - 3: Neutral — some ownership but inconsistent
+   - 4: Clear ownership throughout, minimal hedging
+   - 5: Exemplary — full responsibility, clean action language
+
+3. avoidedRiskyLanguage: Did they AVOID language that escalates or damages trust — guilt-tripping, immediate demands, catastrophizing, making it about the manager?
+   - 1: Multiple phrases that would make the situation significantly worse
+   - 2: One or two phrases with real damage potential
+   - 3: Mostly clean but one minor risky element
+   - 4: Clean throughout — nothing that escalates
+   - 5: Perfectly clean — every phrase de-escalates and builds trust
+
+Also provide:
+- "whatNotToSay": If they used risky language, quote the exact phrase and explain why (max 35 words). If clean, say "Response language is clean."
+- "strength": Quote one specific strong phrase from their response (under 20 words)
+- "improvement": Single highest-priority improvement (max 25 words)
+
+Return ONLY valid JSON — no markdown, no extra text:
+{"toneEmpathy":<1-5>,"ownershipLanguage":<1-5>,"avoidedRiskyLanguage":<1-5>,"whatNotToSay":"<text>","strength":"<text>","improvement":"<text>"}`;
+
+    const resp = await fetch(getProxyUrl(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: MODEL, max_tokens: 450, system: systemPrompt, messages: [{ role: 'user', content: userPrompt }] }),
+    });
+    if (!resp.ok) { const err = await resp.json().catch(() => ({})); throw new Error(err.error?.message || `API error ${resp.status}`); }
+    const data = await resp.json();
+    const text = data.content[0].text.trim();
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('No JSON in SR-A response');
+    const p = JSON.parse(match[0]);
+    return {
+      toneEmpathy:          Math.min(5, Math.max(1, Number(p.toneEmpathy)          || 3)),
+      ownershipLanguage:    Math.min(5, Math.max(1, Number(p.ownershipLanguage)    || 3)),
+      avoidedRiskyLanguage: Math.min(5, Math.max(1, Number(p.avoidedRiskyLanguage) || 3)),
+      whatNotToSay: p.whatNotToSay || '',
+      strength:     p.strength     || '',
+      improvement:  p.improvement  || '',
+    };
+  }
+
+  // ---- Evaluate Situation Room Section B ----
+  // Evaluates the manager's analysis of a flawed response.
+  async function evaluateSituationRoomB(scenarioText, wrongResponseText, errorsText, impactText, rewriteText) {
+    if (!isAvailable()) return null;
+
+    const systemPrompt = `You are a senior leadership development expert evaluating a manager's analysis of a flawed leadership response. Be strict — most responses should score 2-3.
+
+SCORING STANDARDS:
+- Score 3 = average — identifies obvious issues
+- Score 4 = sharp analysis — goes beyond surface, shows real insight
+- Score 5 = exceptional — analysis itself demonstrates advanced leadership thinking (rare)
+- Score 2 = below average, Score 1 = critical failure`;
+
+    const userPrompt = `SCENARIO (brief):
+${scenarioText.substring(0, 500)}
+
+THE FLAWED RESPONSE THEY ANALYSED:
+"${wrongResponseText}"
+
+THEIR ANALYSIS —
+
+ERRORS IDENTIFIED:
+"${errorsText}"
+
+WHY EACH ERROR MADE IT WORSE:
+"${impactText}"
+
+THEIR REWRITE:
+"${rewriteText}"
+
+Evaluate on 3 criteria (1-5 each):
+
+1. errorIdentification: Did they accurately find the real, most-damaging errors?
+   - 1: Only surface/cosmetic issues found, missed core errors
+   - 2: Found 1-2 real errors but missed the most important ones
+   - 3: Found most obvious errors
+   - 4: Identified key errors with accuracy, including subtle ones
+   - 5: Comprehensive — nothing important missed, including tone/subtext errors
+
+2. impactExplanation: Did they explain HOW each error damaged the situation? Real psychological/relational impact?
+   - 1: Superficial ("this was bad") — no real explanation
+   - 2: Restates the error rather than explaining its impact
+   - 3: Some genuine insight but inconsistent depth
+   - 4: Clear causal reasoning — shows what the error does to trust/relationship
+   - 5: Deep insight — psychology, trust, and long-term consequences
+
+3. rewriteQuality: Is their rewrite genuinely better? Does it fix all errors and model best-practice leadership?
+   - 1: Rewrite has the same or new errors, barely different
+   - 2: Somewhat better but still misses core issues
+   - 3: Fixes obvious errors but lacks empathy/ownership depth
+   - 4: Clearly better — fixes errors, empathetic, professional
+   - 5: Exceptional — something a senior leader or coach would actually say
+
+Also provide:
+- "keyMissed": One important error they didn't fully address, or "All key errors were identified" if thorough
+- "rewriteFeedback": One specific improvement to their rewrite, or "Rewrite is strong" if excellent
+
+Return ONLY valid JSON:
+{"errorIdentification":<1-5>,"impactExplanation":<1-5>,"rewriteQuality":<1-5>,"keyMissed":"<text>","rewriteFeedback":"<text>"}`;
+
+    const resp = await fetch(getProxyUrl(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: MODEL, max_tokens: 400, system: systemPrompt, messages: [{ role: 'user', content: userPrompt }] }),
+    });
+    if (!resp.ok) { const err = await resp.json().catch(() => ({})); throw new Error(err.error?.message || `API error ${resp.status}`); }
+    const data = await resp.json();
+    const text = data.content[0].text.trim();
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('No JSON in SR-B response');
+    const p = JSON.parse(match[0]);
+    return {
+      errorIdentification: Math.min(5, Math.max(1, Number(p.errorIdentification) || 3)),
+      impactExplanation:   Math.min(5, Math.max(1, Number(p.impactExplanation)   || 3)),
+      rewriteQuality:      Math.min(5, Math.max(1, Number(p.rewriteQuality)      || 3)),
+      keyMissed:        p.keyMissed        || '',
+      rewriteFeedback:  p.rewriteFeedback  || '',
+    };
+  }
+
+  return { isAvailable, evaluate, evaluateBalanced, evaluateRewrite, callAiCustomer, callAiEmployee, evaluateManagerAssessment, evaluateSituationRoomA, evaluateSituationRoomB, getCriteria, scoreTimeManagement, MOCK_CALL_CRITERIA };
 })();

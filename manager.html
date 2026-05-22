@@ -319,6 +319,140 @@
       .mgr-modules-grid { grid-template-columns: 1fr 1fr; }
       .mgr-score-grid { grid-template-columns: 1fr; }
     }
+
+    /* ── Situation Room two-section screen ──────────────── */
+    .sr-steps {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 1.75rem;
+    }
+    .sr-step {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 0.875rem;
+      border-radius: 8px;
+      border: 2px solid var(--border);
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      font-weight: 600;
+      white-space: nowrap;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .sr-step.active { border-color: #7c3aed; background: #f5f3ff; color: #5b21b6; }
+    .sr-step.done   { border-color: #10b981; background: #f0fdf4; color: #065f46; }
+    .sr-step-num {
+      width: 24px; height: 24px; border-radius: 50%;
+      background: #e2e8f0; color: #64748b;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.72rem; font-weight: 800; flex-shrink: 0;
+    }
+    .sr-step.active .sr-step-num { background: #7c3aed; color: #fff; }
+    .sr-step.done   .sr-step-num { background: #10b981; color: #fff; }
+    .sr-step-label  { font-size: 0.78rem; line-height: 1.3; }
+    .sr-step-divider { flex: 1; height: 2px; background: var(--border); min-width: 20px; }
+
+    .sr-section-badge {
+      display: inline-flex;
+      align-items: center;
+      background: #7c3aed; color: #fff;
+      font-size: 0.72rem; font-weight: 800;
+      padding: 0.35rem 0.875rem;
+      border-radius: 20px;
+      letter-spacing: 0.04em;
+      margin-bottom: 1rem;
+    }
+    .sr-section-badge.section-b { background: #dc2626; }
+
+    .sr-criteria-card {
+      background: #f5f3ff;
+      border: 1px solid #ddd6fe;
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1.25rem;
+    }
+    .sr-criteria-title {
+      font-size: 0.73rem; font-weight: 700; color: #5b21b6;
+      text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.6rem;
+    }
+    .sr-criteria-list { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .sr-criteria-pill {
+      background: #fff; border: 1px solid #ddd6fe; color: #5b21b6;
+      font-size: 0.78rem; font-weight: 600; padding: 0.28rem 0.75rem; border-radius: 20px;
+    }
+
+    .sr-a-prompt-label {
+      font-size: 0.78rem; font-weight: 700; color: #5b21b6;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      margin-bottom: 0.5rem; display: block;
+    }
+
+    .sr-scenario-reminder {
+      background: #f8fafc; border: 1px solid var(--border);
+      border-radius: 8px; padding: 0.65rem 1rem;
+      font-size: 0.85rem; margin-bottom: 1rem; line-height: 1.5;
+    }
+    .sr-reminder-label {
+      font-weight: 700; color: var(--text-muted); margin-right: 0.4rem;
+      font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;
+    }
+
+    .sr-b-instructions {
+      background: #fffbeb; border: 1px solid #fde68a;
+      border-radius: 8px; padding: 0.875rem 1rem;
+      font-size: 0.875rem; line-height: 1.6; margin-bottom: 1.25rem; color: #78350f;
+    }
+
+    .sr-wrong-response {
+      background: #fef2f2;
+      border: 2px solid #fca5a5;
+      border-left: 5px solid #dc2626;
+      border-radius: 0 10px 10px 0;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .sr-wrong-response::before {
+      content: '⚠  MANAGER\'S RESPONSE — IDENTIFY THE ERRORS';
+      display: block;
+      font-size: 0.68rem; font-weight: 800; letter-spacing: 0.08em;
+      color: #dc2626; margin-bottom: 0.75rem;
+    }
+    .sr-wrong-response p {
+      font-size: 0.9rem; line-height: 1.85;
+      color: var(--text); font-style: italic; white-space: pre-wrap;
+    }
+
+    .sr-analysis-group {
+      background: #fff; border-radius: 10px;
+      padding: 1.25rem 1.5rem;
+      box-shadow: var(--shadow); margin-bottom: 1rem;
+      border-left: 4px solid;
+    }
+    .sr-analysis-group.errors { border-left-color: #dc2626; }
+    .sr-analysis-group.impact { border-left-color: #f59e0b; }
+    .sr-analysis-group.rewrite { border-left-color: #10b981; }
+    .sr-analysis-group > label {
+      display: block; font-size: 0.875rem; font-weight: 700;
+      margin-bottom: 0.75rem; color: var(--text); line-height: 1.5;
+    }
+    .sr-step-circle {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 22px; height: 22px; border-radius: 50%;
+      font-size: 0.7rem; font-weight: 800; color: #fff;
+      margin-right: 0.4rem; vertical-align: middle;
+    }
+
+    /* Result screen — SR feedback panel */
+    .sr-fb-item {
+      padding: 0.75rem 1rem; border-radius: 8px;
+      font-size: 0.83rem; line-height: 1.6; margin-bottom: 0.5rem;
+    }
+    .sr-fb-warn  { background: #fef9c3; border-left: 3px solid #f59e0b; }
+    .sr-fb-good  { background: #f0fdf4; border-left: 3px solid #10b981; }
+    .sr-fb-info  { background: #f0f9ff; border-left: 3px solid #38bdf8; }
+    .sr-section-a-item .label::before { content: 'A  '; font-size: 0.65rem; font-weight: 800; color: #7c3aed; }
+    .sr-section-b-item .label::before { content: 'B  '; font-size: 0.65rem; font-weight: 800; color: #dc2626; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
@@ -381,8 +515,8 @@
     <div class="mgr-module-card" data-module="mgr-situation-room">
       <div class="module-icon">🎯</div>
       <h3>The Situation Room</h3>
-      <p>Handle a high-stakes management crisis. Speak your response and strategy.</p>
-      <span class="module-tag">Audio · 5 min</span>
+      <p>Section A: Write your exact verbal response. Section B: Diagnose a flawed manager response.</p>
+      <span class="module-tag">Written · 2 Sections</span>
     </div>
 
     <div class="mgr-module-card" data-module="mgr-transcript-autopsy">
@@ -426,6 +560,156 @@
       <p>Write a structured response to a people management challenge.</p>
       <span class="module-tag">Written</span>
     </div>
+
+  </div>
+</section>
+
+<!-- ================================================================
+     SCREEN: Situation Room — Two-Section Assessment
+     ================================================================ -->
+<section id="mgr-screen-situation-room" class="screen">
+  <header class="mgr-screen-header" style="border-bottom-color:#7c3aed">
+    <button class="btn-back" id="btn-mgr-sr-back">← Back</button>
+    <h2>🎯 The Situation Room</h2>
+  </header>
+
+  <div class="mgr-assess-screen">
+
+    <!-- Progress steps -->
+    <div class="sr-steps">
+      <div class="sr-step active" id="sr-step-a">
+        <div class="sr-step-num">A</div>
+        <div class="sr-step-label">What Would<br>You Say?</div>
+      </div>
+      <div class="sr-step-divider"></div>
+      <div class="sr-step" id="sr-step-b">
+        <div class="sr-step-num">B</div>
+        <div class="sr-step-label">The Wrong<br>Response</div>
+      </div>
+    </div>
+
+    <!-- ═══ PHASE A ═══ -->
+    <div id="sr-phase-a">
+
+      <div class="sr-section-badge">📝 SECTION A — WHAT WOULD YOU SAY?</div>
+
+      <!-- Criteria info -->
+      <div class="sr-criteria-card">
+        <div class="sr-criteria-title">You are being assessed on:</div>
+        <div class="sr-criteria-list">
+          <span class="sr-criteria-pill">🎯 Tone &amp; Empathy in the First 60 Seconds</span>
+          <span class="sr-criteria-pill">💪 Ownership &amp; Accountability Language</span>
+          <span class="sr-criteria-pill">🚫 What NOT to Say — and Why</span>
+        </div>
+      </div>
+
+      <!-- Scenario -->
+      <div class="mgr-scenario-box" style="margin-bottom:1.5rem">
+        <h3 id="sr-topic-title-a">Loading...</h3>
+        <p id="sr-scenario-text-a" style="white-space:pre-line"></p>
+      </div>
+
+      <!-- Response area -->
+      <div class="step-card">
+        <span class="sr-a-prompt-label" id="sr-a-prompt">Write your exact verbal response</span>
+        <div class="mgr-word-count-bar">
+          <span>Word count:</span>
+          <strong id="sr-a-word-count">0</strong>
+          <span style="margin-left:auto;font-size:0.75rem;color:var(--text-muted)">Minimum 50 words</span>
+        </div>
+        <textarea
+          id="sr-a-textarea"
+          class="mgr-written-area"
+          style="min-height:220px"
+          placeholder="Write the EXACT words you would say in this moment — not a description of what you'd do, but the actual spoken words, as if you are in the room right now..."></textarea>
+        <div style="margin-top:1.25rem;text-align:right">
+          <button id="btn-sr-submit-a" class="btn-primary" style="background:#7c3aed;padding:0.75rem 1.5rem">
+            Submit Section A &amp; Proceed to Section B →
+          </button>
+        </div>
+      </div>
+
+    </div><!-- /sr-phase-a -->
+
+    <!-- ═══ PHASE B ═══ -->
+    <div id="sr-phase-b" style="display:none">
+
+      <div class="sr-section-badge section-b">🔍 SECTION B — THE WRONG RESPONSE</div>
+
+      <!-- Brief scenario reminder -->
+      <div class="sr-scenario-reminder">
+        <span class="sr-reminder-label">Scenario:</span>
+        <span id="sr-topic-title-b" style="font-weight:600"></span>
+      </div>
+
+      <!-- Instructions -->
+      <div class="sr-b-instructions">
+        A manager responded to this situation with the response below. <strong>Your task: Analyse it completely</strong> — every error, every impact, and a full rewrite.
+      </div>
+
+      <!-- Flawed response -->
+      <div class="sr-wrong-response">
+        <p id="sr-wrong-response-text"></p>
+      </div>
+
+      <!-- Analysis field 1: Identify errors -->
+      <div class="sr-analysis-group errors">
+        <label>
+          <span class="sr-step-circle" style="background:#dc2626">1</span>
+          Identify every error in this response
+          <span style="font-weight:400;color:var(--text-muted)"> — list each mistake clearly</span>
+        </label>
+        <textarea
+          id="sr-b-errors"
+          class="mgr-written-area"
+          style="min-height:140px"
+          placeholder="• Error 1: The manager opens with personal disappointment rather than acknowledging the employee first&#10;• Error 2: ...&#10;• Error 3: ..."></textarea>
+        <div class="mgr-word-count-bar" style="margin-top:0.4rem">
+          <span>Word count:</span><strong id="sr-b-errors-wc">0</strong>
+        </div>
+      </div>
+
+      <!-- Analysis field 2: Impact -->
+      <div class="sr-analysis-group impact">
+        <label>
+          <span class="sr-step-circle" style="background:#f59e0b">2</span>
+          Explain why each error made the situation worse
+          <span style="font-weight:400;color:var(--text-muted)"> — the real-world impact on trust and outcome</span>
+        </label>
+        <textarea
+          id="sr-b-impact"
+          class="mgr-written-area"
+          style="min-height:140px"
+          placeholder="• Error 1 impact: Leading with disappointment triggers defensiveness before the conversation has started. The employee immediately feels blamed rather than heard...&#10;• Error 2 impact: ..."></textarea>
+        <div class="mgr-word-count-bar" style="margin-top:0.4rem">
+          <span>Word count:</span><strong id="sr-b-impact-wc">0</strong>
+        </div>
+      </div>
+
+      <!-- Analysis field 3: Rewrite -->
+      <div class="sr-analysis-group rewrite">
+        <label>
+          <span class="sr-step-circle" style="background:#10b981">3</span>
+          Rewrite the response correctly
+          <span style="font-weight:400;color:var(--text-muted)"> — what the manager should have actually said</span>
+        </label>
+        <textarea
+          id="sr-b-rewrite"
+          class="mgr-written-area"
+          style="min-height:200px"
+          placeholder="Write the improved version — the exact words a skilled, empathetic manager would say in this situation..."></textarea>
+        <div class="mgr-word-count-bar" style="margin-top:0.4rem">
+          <span>Word count:</span><strong id="sr-b-rewrite-wc">0</strong>
+        </div>
+      </div>
+
+      <div style="text-align:right;margin-top:1.25rem">
+        <button id="btn-sr-submit-b" class="btn-primary" style="background:#7c3aed;padding:0.75rem 1.75rem">
+          Submit Full Assessment ✓
+        </button>
+      </div>
+
+    </div><!-- /sr-phase-b -->
 
   </div>
 </section>
@@ -643,6 +927,9 @@
 
       <div class="mgr-score-grid" id="mgr-score-grid"></div>
 
+      <!-- Situation Room AI feedback (shown only for SR results) -->
+      <div id="mgr-sr-ai-feedback" class="hidden" style="margin-bottom:1rem;text-align:left"></div>
+
       <div class="admin-note" style="text-align:left">
         <span>📋</span>
         <span>Your assessment will be reviewed by your admin who may add a final score and written feedback.</span>
@@ -663,7 +950,7 @@
 <script src="js/auth.js?v=7"></script>
 <script src="js/recorder.js?v=7"></script>
 <script src="js/speech.js?v=8"></script>
-<script src="js/claude.js?v=16"></script>
-<script src="js/manager-app.js?v=2"></script>
+<script src="js/claude.js?v=17"></script>
+<script src="js/manager-app.js?v=3"></script>
 </body>
 </html>
