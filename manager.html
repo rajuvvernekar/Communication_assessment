@@ -917,22 +917,17 @@
   <div class="mgr-assess-screen" style="padding-top:88px">
     <div class="mgr-result-card">
       <div class="mgr-result-icon">✅</div>
-      <h2>Submitted!</h2>
-      <p id="mgr-result-subtitle">Your assessment has been saved and will be reviewed.</p>
+      <h2>Assessment Submitted!</h2>
+      <p id="mgr-result-subtitle">Your response has been saved successfully.</p>
 
-      <div class="mgr-score-display" id="mgr-score-display">
-        <div class="score-num" id="mgr-result-score">—</div>
-        <div class="score-label">AI Score</div>
-      </div>
-
-      <div class="mgr-score-grid" id="mgr-score-grid"></div>
-
-      <!-- Situation Room AI feedback (shown only for SR results) -->
-      <div id="mgr-sr-ai-feedback" class="hidden" style="margin-bottom:1rem;text-align:left"></div>
+      <!-- Score elements kept in DOM for JS compatibility but not shown to manager -->
+      <div id="mgr-score-display" style="display:none"><div id="mgr-result-score"></div></div>
+      <div id="mgr-score-grid" style="display:none"></div>
+      <div id="mgr-sr-ai-feedback" class="hidden"></div>
 
       <div class="admin-note" style="text-align:left">
         <span>📋</span>
-        <span>Your assessment will be reviewed by your admin who may add a final score and written feedback.</span>
+        <span>Your admin will review your submission and may add a final score and written feedback.</span>
       </div>
 
       <button id="btn-mgr-back-to-modules" class="btn-primary full-width" style="background:#7c3aed;margin-top:1rem">
