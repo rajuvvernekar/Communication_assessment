@@ -46,6 +46,25 @@ const Auth = (() => {
     const { data, error } = await DB.getClient().auth.signInWithPassword({ email, password });
     if (error) throw error;
     _user = data.user;
+
+    // Ensure the trainees row exists every sign-in.
+    // If the original signUp() silently failed to create the row (RLS, network, etc.),
+    // every session save would fail with sessions_trainee_id_fkey.
+    // DB.put uses upsert on 'id' so this is idempotent — safe to call repeatedly.
+    if (_user) {
+      try {
+        const name = _user.user_metadata?.full_name || employeeId.trim();
+        await DB.put('trainees', {
+          id:          _user.id,
+          name,
+          email:       _user.email,
+          employee_id: employeeId.trim(),
+        });
+      } catch (e) {
+        console.warn('Trainees upsert on sign-in failed (non-fatal):', e.message);
+      }
+    }
+
     return _user;
   }
 
