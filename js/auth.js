@@ -26,11 +26,34 @@ const Auth = (() => {
     return _user.user_metadata?.full_name || getEmployeeId();
   }
 
+  // ---- Ensure the trainees row exists for the current _user ----
+  // Called after every signIn AND every session restore so that any manager
+  // whose trainees insert silently failed at signUp() is healed automatically.
+  async function _ensureTraineeRecord(empIdHint) {
+    if (!_user) return;
+    try {
+      const employeeId = empIdHint || _user.user_metadata?.employee_id || _user.email?.split('@')[0] || '';
+      const name       = _user.user_metadata?.full_name || employeeId;
+      await DB.put('trainees', {
+        id:          _user.id,
+        name,
+        email:       _user.email,
+        employee_id: employeeId,
+      });
+    } catch (e) {
+      console.warn('Trainees upsert failed (non-fatal):', e.message);
+    }
+  }
+
   // ---- Init: restore existing session on page load ----
   async function init() {
     const sb = DB.getClient();
     const { data: { session } } = await sb.auth.getSession();
     _user = session?.user || null;
+
+    // Heal any manager whose trainees row was never created at signUp.
+    // This covers restored sessions — the most common case.
+    await _ensureTraineeRecord();
 
     // Keep _user in sync when the session changes (token refresh, sign-out)
     sb.auth.onAuthStateChange((_event, sess) => {
@@ -47,23 +70,8 @@ const Auth = (() => {
     if (error) throw error;
     _user = data.user;
 
-    // Ensure the trainees row exists every sign-in.
-    // If the original signUp() silently failed to create the row (RLS, network, etc.),
-    // every session save would fail with sessions_trainee_id_fkey.
-    // DB.put uses upsert on 'id' so this is idempotent — safe to call repeatedly.
-    if (_user) {
-      try {
-        const name = _user.user_metadata?.full_name || employeeId.trim();
-        await DB.put('trainees', {
-          id:          _user.id,
-          name,
-          email:       _user.email,
-          employee_id: employeeId.trim(),
-        });
-      } catch (e) {
-        console.warn('Trainees upsert on sign-in failed (non-fatal):', e.message);
-      }
-    }
+    // Ensure trainees row exists (heals any signUp that silently missed it).
+    await _ensureTraineeRecord(employeeId.trim());
 
     return _user;
   }
