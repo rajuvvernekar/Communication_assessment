@@ -19,6 +19,7 @@
 // v56:  reScorePickSpeak — use SpeechEngine (all 12 params) + corrected timeManagement; no Claude API
 // v57:  Manager Assessments section: loadMgrAssessments, renderMgrAssessments, openMgrScoreModal, saveMgrScore
 // v58: Manager topic tabs in admin Topics section
+// v59: openMgrScoreModal — Situation Room two-section display + SR-specific criteria
 const MASTER_SCORES = {
   // ── Vignesh Baliga ──
   "abdul razak":                     { selfAssessment: 9.243,  aiAudit: 3.945,  psScore: 12.68, lisScore: 16.20, mcScore:  8.58, gramScore:  7.00, totalScore: 57.65 },
@@ -5677,11 +5678,40 @@ window.Admin = (() => {
     modal.querySelector('#mgr-modal-topic').textContent   = session.topicTitle  || '—';
 
     const isMcq     = session.module === 'mgr-listening-tone';
+    const isSR      = session.module === 'mgr-situation-room';
     const isWritten = ['mgr-transcript-autopsy','mgr-eq','mgr-management-skills'].includes(session.module);
+    const isFeedback = session.module === 'mgr-feedback';
 
     const transcriptBox = modal.querySelector('#mgr-modal-transcript');
-    if (isWritten) {
-      transcriptBox.innerHTML = '<strong>Written Response:</strong><div style="white-space:pre-wrap;margin-top:0.5rem;font-size:0.9rem">' +
+
+    if (isSR) {
+      // Two-section Situation Room — writtenText is a JSON blob
+      let srData = null;
+      try { srData = JSON.parse(session.writtenText || 'null'); } catch (_) {}
+      if (srData) {
+        const secA = srData.sectionA || {};
+        const secB = srData.sectionB || {};
+        const esc  = t => (t || '').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        transcriptBox.innerHTML =
+          '<div style="margin-bottom:1rem">' +
+            '<div style="font-size:0.72rem;font-weight:800;letter-spacing:0.06em;color:#7c3aed;margin-bottom:0.4rem">SECTION A — WHAT WOULD YOU SAY?</div>' +
+            '<div style="font-size:0.8rem;color:#666;margin-bottom:0.3rem"><em>Prompt: ' + esc(secA.prompt) + '</em></div>' +
+            '<div style="white-space:pre-wrap;font-size:0.88rem;background:#f5f3ff;padding:0.75rem;border-radius:6px;border-left:3px solid #7c3aed">' + esc(secA.response || '(no response)') + '</div>' +
+          '</div>' +
+          '<div>' +
+            '<div style="font-size:0.72rem;font-weight:800;letter-spacing:0.06em;color:#dc2626;margin-bottom:0.4rem">SECTION B — THE WRONG RESPONSE ANALYSIS</div>' +
+            '<div style="font-size:0.75rem;font-weight:700;color:#666;margin:0.5rem 0 0.2rem">Errors Identified:</div>' +
+            '<div style="white-space:pre-wrap;font-size:0.88rem;background:#fef2f2;padding:0.75rem;border-radius:6px;border-left:3px solid #dc2626;margin-bottom:0.5rem">' + esc(secB.errors || '(none)') + '</div>' +
+            '<div style="font-size:0.75rem;font-weight:700;color:#666;margin-bottom:0.2rem">Why Each Error Made It Worse:</div>' +
+            '<div style="white-space:pre-wrap;font-size:0.88rem;background:#fffbeb;padding:0.75rem;border-radius:6px;border-left:3px solid #f59e0b;margin-bottom:0.5rem">' + esc(secB.impact || '(none)') + '</div>' +
+            '<div style="font-size:0.75rem;font-weight:700;color:#666;margin-bottom:0.2rem">Rewrite:</div>' +
+            '<div style="white-space:pre-wrap;font-size:0.88rem;background:#f0fdf4;padding:0.75rem;border-radius:6px;border-left:3px solid #10b981">' + esc(secB.rewrite || '(none)') + '</div>' +
+          '</div>';
+      } else {
+        transcriptBox.innerHTML = '<div style="color:var(--text-muted);font-style:italic">No response data found.</div>';
+      }
+    } else if (isWritten) {
+      transcriptBox.innerHTML = '<strong>Written Response:</strong><div style="white-space:pre-wrap;margin-top:0.5rem;font-size:0.9rem;max-height:240px;overflow-y:auto">' +
         (session.writtenText || '(no text)').replace(/</g,'&lt;') + '</div>';
     } else if (isMcq) {
       const ai = session.aiScores || {};
@@ -5691,17 +5721,37 @@ window.Admin = (() => {
         (session.transcript || '(no transcript)').replace(/</g,'&lt;') + '</div>';
     }
 
+    // AI scores display
     const aiBox = modal.querySelector('#mgr-modal-ai-scores');
     if (session.aiScores && session.aiScores.overall != null) {
-      aiBox.innerHTML = '<strong>AI Score: ' + session.aiScores.overall + '%</strong>';
+      if (isSR) {
+        const sa = session.aiScores.sectionA || {};
+        const sb = session.aiScores.sectionB || {};
+        aiBox.innerHTML =
+          '<strong>AI Score: ' + session.aiScores.overall + '%</strong>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.3rem;margin-top:0.5rem;font-size:0.8rem">' +
+            '<span style="color:#7c3aed">A — Tone &amp; Empathy: <strong>' + (sa.toneEmpathy ?? '—') + '/5</strong></span>' +
+            '<span style="color:#7c3aed">A — Ownership: <strong>' + (sa.ownershipLanguage ?? '—') + '/5</strong></span>' +
+            '<span style="color:#7c3aed">A — Avoided Risky Lang: <strong>' + (sa.avoidedRiskyLanguage ?? '—') + '/5</strong></span>' +
+            '<span style="color:#dc2626">B — Error ID: <strong>' + (sb.errorIdentification ?? '—') + '/5</strong></span>' +
+            '<span style="color:#dc2626">B — Impact Explanation: <strong>' + (sb.impactExplanation ?? '—') + '/5</strong></span>' +
+            '<span style="color:#dc2626">B — Rewrite Quality: <strong>' + (sb.rewriteQuality ?? '—') + '/5</strong></span>' +
+          '</div>' +
+          (sa.whatNotToSay && !/clean/i.test(sa.whatNotToSay) ? '<div style="margin-top:0.4rem;font-size:0.78rem;color:#92400e;background:#fef9c3;padding:0.4rem 0.6rem;border-radius:4px">⚠ <strong>Risky language (A):</strong> ' + sa.whatNotToSay + '</div>' : '') +
+          (sb.keyMissed && !/all key/i.test(sb.keyMissed) ? '<div style="margin-top:0.3rem;font-size:0.78rem;color:#92400e;background:#fef9c3;padding:0.4rem 0.6rem;border-radius:4px">📝 <strong>Missed error (B):</strong> ' + sb.keyMissed + '</div>' : '');
+      } else {
+        aiBox.innerHTML = '<strong>AI Score: ' + session.aiScores.overall + '%</strong>';
+      }
     } else {
       aiBox.innerHTML = '';
     }
 
+    // Scoring criteria inputs
     const criteriaEl = modal.querySelector('#mgr-scoring-criteria');
     const audioLabels   = ['Leadership Presence','Decision Quality','Communication Clarity','Empathy & EQ','Professionalism'];
     const writtenLabels = ['Content Quality','Critical Thinking','Communication Clarity','Empathy & Insight','Action Orientation'];
-    const labels = isWritten ? writtenLabels : audioLabels;
+    const srLabels      = ['A — Tone & Empathy','A — Ownership Language','A — Avoided Risky Language','B — Error Identification','B — Impact Explanation','B — Rewrite Quality'];
+    const labels = isSR ? srLabels : (isWritten ? writtenLabels : audioLabels);
     const existing = session.adminScores || {};
 
     if (isMcq) {
@@ -5710,8 +5760,9 @@ window.Admin = (() => {
       criteriaEl.innerHTML = labels.map((label, i) => {
         const key = label.toLowerCase().replace(/[^a-z]/g, '');
         const val = existing[key] != null ? existing[key] : (existing['score' + (i+1)] != null ? existing['score' + (i+1)] : '');
+        const color = isSR ? (i < 3 ? 'color:#5b21b6' : 'color:#991b1b') : '';
         return '<div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem">' +
-          '<label style="min-width:200px;font-size:0.88rem">' + label + '</label>' +
+          '<label style="min-width:220px;font-size:0.85rem;' + color + '">' + label + '</label>' +
           '<input type="number" min="1" max="5" step="0.5" value="' + val + '" class="mgr-criteria-input" data-key="' + key + '" style="width:70px;border:1px solid var(--border);border-radius:6px;padding:0.35rem 0.5rem;font-size:0.9rem" />' +
           '<span style="font-size:0.8rem;color:var(--text-muted)">(1–5)</span>' +
           '</div>';
