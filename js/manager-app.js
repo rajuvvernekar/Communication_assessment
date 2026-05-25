@@ -1160,24 +1160,30 @@ Let's get back on track.
       `${emp.name}: ${ex.emp}\nYou: ${ex.mgr || '(no response)'}`
     ).join('\n\n');
 
-    // Score manager's combined speech
-    const mgrText = _fb.history.map(ex => ex.mgr || '').join(' ').trim();
     const durationSecs = _fb.history.length * 60;
 
     let aiScores;
     try {
-      if (mgrText) {
-        const analysis = SpeechEngine.analyze(mgrText, Math.max(durationSecs, 1));
-        aiScores = SpeechEngine.scoreSpeech(analysis, Math.max(durationSecs, 1));
+      if (typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable() && fullTranscript) {
+        const result = await ClaudeEvaluator.evaluateManagerFeedback(
+          fullTranscript, _currentScenario.scenario || _currentScenario.title || ''
+        );
+        aiScores = {
+          ...result.scores,
+          overall:   result.overall,
+          _reasons:  result.reasons,
+          _method:   'mgr-feedback-params',
+        };
       } else {
         aiScores = { overall: null };
       }
     } catch(e) {
+      console.warn('Claude feedback eval failed:', e.message);
       aiScores = { overall: null };
     }
-    aiScores._method  = 'mgr-feedback-ai';
-    aiScores._module  = 'mgr-feedback';
-    aiScores._turns   = _fb.history.length;
+    aiScores._method    = aiScores._method  || 'mgr-feedback-ai';
+    aiScores._module    = 'mgr-feedback';
+    aiScores._turns     = _fb.history.length;
     aiScores._scenarioId = _currentScenario.id;
 
     try {
@@ -1392,17 +1398,24 @@ Let's get back on track.
       const emp = FB_EMPLOYEES[_currentScenario.id] || FB_EMPLOYEES['fb1'];
       $('mgr-result-subtitle').textContent = `Feedback Conversation with ${emp.name} — ${_fb.history.length} exchange(s)`;
       $('mgr-result-score').textContent = aiScores.overall != null ? `${aiScores.overall}%` : '—';
-      const rows = [
-        ['Fluency',        aiScores.fluency],
-        ['Vocabulary',     aiScores.vocabulary],
-        ['Confidence',     aiScores.confidence],
-        ['Clarity',        aiScores.clarity],
-        ['Professionalism',aiScores.professionalism],
-        ['Exchanges',      _fb.history.length + ' turns'],
-      ].filter(([, v]) => v !== undefined && v !== null);
-      $('mgr-score-grid').innerHTML = rows.map(([label, val]) =>
-        `<div class="mgr-score-item"><div class="label">${label}</div><div class="val">${typeof val === 'number' ? val+'/5' : val}</div></div>`
-      ).join('');
+      const isParams = aiScores._method === 'mgr-feedback-params';
+      if (isParams) {
+        const paramRows = [
+          ['Emotional Control',   aiScores.emotionalControl],
+          ['Empathy',             aiScores.empathy],
+          ['Listening',           aiScores.listening],
+          ['Coaching Style',      aiScores.coachingStyle],
+          ['Conflict Handling',   aiScores.conflictHandling],
+          ['Leadership Presence', aiScores.leadershipPresence],
+          ['Team Support',        aiScores.teamSupport],
+          ['Communication',       aiScores.communication],
+        ];
+        $('mgr-score-grid').innerHTML = paramRows.map(([label, val]) =>
+          `<div class="mgr-score-item"><div class="label">${label}</div><div class="val">${val != null ? val + '/5' : '—'}</div></div>`
+        ).join('');
+      } else {
+        $('mgr-score-grid').innerHTML = `<div class="mgr-score-item"><div class="label">Exchanges</div><div class="val">${_fb.history.length} turns</div></div>`;
+      }
     } else if (type === 'situation-room') {
       const sa = aiScores.sectionA || {};
       const sb = aiScores.sectionB || {};

@@ -760,5 +760,76 @@ Return ONLY valid JSON:
     };
   }
 
-  return { isAvailable, evaluate, evaluateBalanced, evaluateRewrite, callAiCustomer, callAiEmployee, evaluateManagerAssessment, evaluateSituationRoomA, evaluateSituationRoomB, getCriteria, scoreTimeManagement, MOCK_CALL_CRITERIA };
+  // ---- Manager Feedback Evaluation (8 leadership parameters) ----
+  async function evaluateManagerFeedback(transcript, scenarioContext) {
+    if (!isAvailable()) throw new Error('Claude proxy not configured');
+
+    const systemPrompt = `You are a senior leadership development expert evaluating a manager's feedback conversation with an employee.
+
+SCENARIO: ${scenarioContext}
+
+SCORING STANDARDS:
+- Score 3 = average — what most managers instinctively do
+- Score 4 = genuinely above average — real empathy, coaching instinct, not just absence of mistakes
+- Score 5 = exceptional — rare, only for masterful leadership communication
+- Score 2 = below standard — real problems present
+- Score 1 = critical failure in this area
+Be strict. Do NOT inflate scores.
+
+Evaluate the manager's responses on these 8 parameters (1-5 each):
+1. emotionalControl: Calmness under stress — did the manager stay composed, avoid reactive language?
+2. empathy: Understanding employee emotions — did the manager acknowledge feelings and perspective?
+3. listening: Giving employees space to speak — did the manager invite dialogue, avoid interrupting or dominating?
+4. coachingStyle: Constructive guidance — did the manager offer helpful, developmental feedback rather than just criticism?
+5. conflictHandling: Neutral & mature resolution — did the manager address disagreements without escalating or dismissing?
+6. leadershipPresence: Stability during chaos — did the manager project confidence and direction?
+7. teamSupport: Emotional reassurance — did the manager make the employee feel supported and valued?
+8. communication: Clear and respectful delivery — was the language clear, professional, and respectful throughout?
+
+Return ONLY a JSON object:
+{"emotionalControl":<1-5>,"empathy":<1-5>,"listening":<1-5>,"coachingStyle":<1-5>,"conflictHandling":<1-5>,"leadershipPresence":<1-5>,"teamSupport":<1-5>,"communication":<1-5>,"reasons":{"emotionalControl":"<sentence>","empathy":"<sentence>","listening":"<sentence>","coachingStyle":"<sentence>","conflictHandling":"<sentence>","leadershipPresence":"<sentence>","teamSupport":"<sentence>","communication":"<sentence>"}}`;
+
+    const resp = await fetch(getProxyUrl(), {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        model:      MODEL,
+        max_tokens: 500,
+        system:     systemPrompt,
+        messages:   [{ role: 'user', content: `MANAGER'S CONVERSATION TRANSCRIPT:\n\n${transcript}` }],
+      }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error?.message || `API error ${resp.status}`);
+    }
+
+    const data  = await resp.json();
+    const text  = data.content[0].text.trim();
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('No JSON in response');
+
+    const parsed = JSON.parse(match[0]);
+    const keys   = ['emotionalControl','empathy','listening','coachingStyle','conflictHandling','leadershipPresence','teamSupport','communication'];
+    const sum    = keys.reduce((s, k) => s + (parsed[k] || 0), 0);
+    const overall = parseFloat(((sum / (keys.length * 5)) * 100).toFixed(1));
+
+    return {
+      scores: {
+        emotionalControl:  parsed.emotionalControl,
+        empathy:           parsed.empathy,
+        listening:         parsed.listening,
+        coachingStyle:     parsed.coachingStyle,
+        conflictHandling:  parsed.conflictHandling,
+        leadershipPresence:parsed.leadershipPresence,
+        teamSupport:       parsed.teamSupport,
+        communication:     parsed.communication,
+      },
+      overall,
+      reasons: parsed.reasons || {},
+    };
+  }
+
+  return { isAvailable, evaluate, evaluateBalanced, evaluateRewrite, callAiCustomer, callAiEmployee, evaluateManagerAssessment, evaluateManagerFeedback, evaluateSituationRoomA, evaluateSituationRoomB, getCriteria, scoreTimeManagement, MOCK_CALL_CRITERIA };
 })();
