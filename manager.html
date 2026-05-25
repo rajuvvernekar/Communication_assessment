@@ -514,51 +514,37 @@
 
     <div class="mgr-module-card" data-module="mgr-situation-room">
       <div class="module-icon">🎯</div>
-      <h3>The Situation Room</h3>
-      <p>Section A: Write your exact verbal response. Section B: Diagnose a flawed manager response.</p>
-      <span class="module-tag">Written · 2 Sections</span>
+      <h3>Assessment 1 — The Situation Room</h3>
+      <p>Section A: Write your exact verbal response. Section B: Diagnose and rewrite a flawed manager response.</p>
+      <span class="module-tag">Written · 2 Sections · 50 Marks</span>
     </div>
 
     <div class="mgr-module-card" data-module="mgr-transcript-autopsy">
       <div class="module-icon">📋</div>
-      <h3>Transcript Autopsy</h3>
-      <p>Analyse a real conversation transcript and write coaching notes.</p>
-      <span class="module-tag">Written</span>
+      <h3>Assessment 2 — Transcript Autopsy</h3>
+      <p>Analyze a Zerodha support call transcript. Identify mistakes, find the turning point, and rewrite the close.</p>
+      <span class="module-tag">Written · 3 Sections · 50 Marks</span>
     </div>
 
     <div class="mgr-module-card" data-module="mgr-mock-call">
       <div class="module-icon">📞</div>
-      <h3>Mock Call</h3>
-      <p>Handle a difficult call — escalation, retention, or performance conversation.</p>
-      <span class="module-tag">Audio · 5 min</span>
+      <h3>Assessment 3 — The Paper Trade</h3>
+      <p>Read an escalation scenario, take 5 minutes to prepare, and handle a live mock call in real time.</p>
+      <span class="module-tag">Audio · 5 min prep · 50 Marks</span>
     </div>
 
     <div class="mgr-module-card" data-module="mgr-feedback">
       <div class="module-icon">💬</div>
-      <h3>Feedback</h3>
-      <p>Deliver structured feedback to a challenging team member scenario.</p>
-      <span class="module-tag">Audio · 5 min</span>
+      <h3>Assessment 4 — The Red Pen</h3>
+      <p>Deliver structured feedback to an employee. Manage pushback and hold the standard in a live AI chat.</p>
+      <span class="module-tag">Conversational AI · 50 Marks</span>
     </div>
 
     <div class="mgr-module-card" data-module="mgr-eq">
       <div class="module-icon">🧠</div>
-      <h3>Emotional Intelligence</h3>
-      <p>Respond to emotionally charged team scenarios with empathy and clarity.</p>
-      <span class="module-tag">Written</span>
-    </div>
-
-    <div class="mgr-module-card" data-module="mgr-listening-tone">
-      <div class="module-icon">🎧</div>
-      <h3>Listening &amp; Tone</h3>
-      <p>Analyse a manager communication sample. Answer 5 diagnostic MCQs.</p>
-      <span class="module-tag">MCQ · Auto Scored</span>
-    </div>
-
-    <div class="mgr-module-card" data-module="mgr-management-skills">
-      <div class="module-icon">📊</div>
-      <h3>Management Skills</h3>
-      <p>Write a structured response to a people management challenge.</p>
-      <span class="module-tag">Written</span>
+      <h3>Assessment 5 — The Mirror Room</h3>
+      <p>Experience a high-pressure "bad day" scenario cascade. State your gut reaction, first action, and emotional management.</p>
+      <span class="module-tag">Scenario Cascade · 50 Marks</span>
     </div>
 
   </div>
@@ -861,7 +847,8 @@
       </div>
     </div>
 
-    <div class="step-card">
+    <!-- Standard Written Container (EQ / Mgmt Skills Fallback) -->
+    <div class="step-card" id="mgr-written-standard-container">
       <div class="mgr-word-count-bar">
         <span>Word count:</span>
         <strong id="mgr-written-word-count">0</strong>
@@ -874,6 +861,150 @@
       <div style="margin-top:1rem;text-align:right">
         <button id="btn-mgr-submit-written" class="btn-primary" style="background:#7c3aed">
           Submit Response ✓
+        </button>
+      </div>
+    </div>
+
+    <!-- Transcript Autopsy Structured Container -->
+    <div id="mgr-written-autopsy-container" style="display:none">
+      <!-- Q1: List Mistakes -->
+      <div class="sr-analysis-group errors" style="margin-bottom:1.5rem">
+        <label>
+          <span class="sr-step-circle" style="background:#dc2626">1</span>
+          Q1 — List All Mistakes &amp; Impact
+          <span style="font-weight:400;color:var(--text-muted)"> — Identify every error in sequence and explain why it made the situation worse.</span>
+        </label>
+        <div class="mgr-word-count-bar" style="margin-top:0.4rem">
+          <span>Word count:</span><strong id="ta-q1-wc">0</strong>
+          <span style="margin-left:auto;font-size:0.75rem;color:var(--text-muted)">Minimum 100 words</span>
+        </div>
+        <textarea
+          id="ta-q1"
+          class="mgr-written-area"
+          style="min-height:180px"
+          placeholder="• Error 1 (Time Code/Line): Agent was blunt... Impact: Triggers defensiveness.&#10;• Error 2: Put customer on hold without explanation... Impact: Customer feels ignored."></textarea>
+      </div>
+
+      <!-- Q2: The Turning Point -->
+      <div class="sr-analysis-group impact" style="margin-bottom:1.5rem">
+        <label>
+          <span class="sr-step-circle" style="background:#f59e0b">2</span>
+          Q2 — The Turning Point &amp; Rewrite
+          <span style="font-weight:400;color:var(--text-muted)"> — Identify the exact moment the customer could have been de-escalated and rewrite the manager's response.</span>
+        </label>
+        <div class="mgr-word-count-bar" style="margin-top:0.4rem">
+          <span>Word count:</span><strong id="ta-q2-wc">0</strong>
+          <span style="margin-left:auto;font-size:0.75rem;color:var(--text-muted)">Minimum 60 words</span>
+        </div>
+        <textarea
+          id="ta-q2"
+          class="mgr-written-area"
+          style="min-height:140px"
+          placeholder="Identify the turning point moment in the transcript... Rewrite what the manager/agent should have said in that exact second."></textarea>
+      </div>
+
+      <!-- Q3: Rewrite the Close -->
+      <div class="sr-analysis-group rewrite" style="margin-bottom:1.5rem">
+        <label>
+          <span class="sr-step-circle" style="background:#10b981">3</span>
+          Q3 — Rewrite the Close
+          <span style="font-weight:400;color:var(--text-muted)"> — Rewrite the closing of the call, from the policy statement to the final sign-off.</span>
+        </label>
+        <div class="mgr-word-count-bar" style="margin-top:0.4rem">
+          <span>Word count:</span><strong id="ta-q3-wc">0</strong>
+          <span style="margin-left:auto;font-size:0.75rem;color:var(--text-muted)">Minimum 60 words</span>
+        </div>
+        <textarea
+          id="ta-q3"
+          class="mgr-written-area"
+          style="min-height:140px"
+          placeholder="Write the exact words for an improved, warm, branded, and complete call resolution and closing..."></textarea>
+      </div>
+
+      <div style="text-align:right;margin-top:1.25rem;margin-bottom:2rem">
+        <button id="btn-mgr-submit-autopsy" class="btn-primary" style="background:#7c3aed;padding:0.75rem 2rem">
+          Submit Analysis ✓
+        </button>
+      </div>
+    </div>
+
+    <!-- The Mirror Room Cascade Container -->
+    <div id="mgr-written-mirror-container" style="display:none">
+      <!-- Stepper Progress Bar -->
+      <div class="sr-steps" id="mr-progress-bar" style="margin-bottom:1.5rem">
+        <div class="sr-step active" id="mr-step-1">
+          <div class="sr-step-num">1</div>
+          <div class="sr-step-label">Situation 1</div>
+        </div>
+        <div class="sr-step-divider"></div>
+        <div class="sr-step" id="mr-step-2">
+          <div class="sr-step-num">2</div>
+          <div class="sr-step-label">Situation 2</div>
+        </div>
+        <div class="sr-step-divider"></div>
+        <div class="sr-step" id="mr-step-3">
+          <div class="sr-step-num">3</div>
+          <div class="sr-step-label">Situation 3</div>
+        </div>
+      </div>
+
+      <!-- Input 1: Gut Reaction -->
+      <div class="sr-analysis-group errors" style="margin-bottom:1.25rem;border-left-color:#7c3aed">
+        <label>
+          <span class="sr-step-circle" style="background:#7c3aed">1</span>
+          Your Gut Reaction
+          <span style="font-weight:400;color:var(--text-muted)"> — What is your immediate, instinctive feeling or trigger in this moment?</span>
+        </label>
+        <div class="mgr-word-count-bar" style="margin-top:0.4rem">
+          <span>Word count:</span><strong id="mr-gut-wc">0</strong>
+        </div>
+        <textarea
+          id="mr-gut"
+          class="mgr-written-area"
+          style="min-height:90px"
+          placeholder="Acknowledge and name your triggers or immediate thoughts honestly..."></textarea>
+      </div>
+
+      <!-- Input 2: First Action -->
+      <div class="sr-analysis-group impact" style="margin-bottom:1.25rem">
+        <label>
+          <span class="sr-step-circle" style="background:#f59e0b">2</span>
+          Your First Action
+          <span style="font-weight:400;color:var(--text-muted)"> — What concrete first action or response do you take immediately?</span>
+        </label>
+        <div class="mgr-word-count-bar" style="margin-top:0.4rem">
+          <span>Word count:</span><strong id="mr-action-wc">0</strong>
+        </div>
+        <textarea
+          id="mr-action"
+          class="mgr-written-area"
+          style="min-height:90px"
+          placeholder="State your exact spoken words or immediate concrete steps..."></textarea>
+      </div>
+
+      <!-- Input 3: Emotional Management -->
+      <div class="sr-analysis-group rewrite" style="margin-bottom:1.25rem">
+        <label>
+          <span class="sr-step-circle" style="background:#10b981">3</span>
+          Emotional Management
+          <span style="font-weight:400;color:var(--text-muted)"> — How will you regulate your own emotional state before responding?</span>
+        </label>
+        <div class="mgr-word-count-bar" style="margin-top:0.4rem">
+          <span>Word count:</span><strong id="mr-em-wc">0</strong>
+        </div>
+        <textarea
+          id="mr-em"
+          class="mgr-written-area"
+          style="min-height:90px"
+          placeholder="How do you ensure you act with deliberate impulse control rather than urgency?"></textarea>
+      </div>
+
+      <div style="text-align:right;margin-top:1.5rem;margin-bottom:2rem">
+        <button id="btn-mr-next" class="btn-primary" style="background:#7c3aed;padding:0.75rem 2rem">
+          Next Situation →
+        </button>
+        <button id="btn-mr-submit" class="btn-primary" style="background:#10b981;padding:0.75rem 2rem;display:none">
+          Submit Full Cascade ✓
         </button>
       </div>
     </div>
@@ -945,7 +1076,7 @@
 <script src="js/auth.js?v=9"></script>
 <script src="js/recorder.js?v=7"></script>
 <script src="js/speech.js?v=8"></script>
-<script src="js/claude.js?v=17"></script>
-<script src="js/manager-app.js?v=4"></script>
+<script src="js/claude.js?v=25"></script>
+<script src="js/manager-app.js?v=25"></script>
 </body>
 </html>

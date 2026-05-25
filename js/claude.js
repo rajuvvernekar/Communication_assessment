@@ -760,5 +760,189 @@ Return ONLY valid JSON:
     };
   }
 
-  return { isAvailable, evaluate, evaluateBalanced, evaluateRewrite, callAiCustomer, callAiEmployee, evaluateManagerAssessment, evaluateSituationRoomA, evaluateSituationRoomB, getCriteria, scoreTimeManagement, MOCK_CALL_CRITERIA };
+  // ---- Evaluate Assessment 2 — Transcript Autopsy ----
+  async function evaluateTranscriptAutopsy(scenarioText, transcriptText, q1Answer, q2Answer, q3Answer) {
+    if (!isAvailable()) return null;
+
+    const systemPrompt = `You are a senior leadership development expert evaluating a manager's deep coaching analysis of a support call transcript.
+Evaluate at management-level. Score 3 is AVERAGE. Score 4 requires genuine insight and depth. Score 5 is exceptional and should be rare.
+Be extremely strict. Do not inflate scores.`;
+
+    const userPrompt = `SCENARIO CONTEXT:
+${scenarioText}
+
+THE SUPPORT CALL TRANSCRIPT BEING ANALYSED:
+${transcriptText}
+
+THE MANAGER'S ANSWERS TO ASSESSMENT 2:
+
+Q1 — LIST ALL MISTAKES & IMPACT:
+"${q1Answer}"
+
+Q2 — THE TURNING POINT & REWRITE:
+"${q2Answer}"
+
+Q3 — REWRITE THE CLOSE:
+"${q3Answer}"
+
+Evaluate on 5 criteria (1-5 each):
+1. leadershipMaturity (Mistake Diagnosis in Q1): Did they find the real, most-damaging mistakes and explain them with leadership-level insight?
+2. empathyAndPeople (De-escalation insight in Q2): Did they correctly pinpoint the turning point and rewrite a highly empathetic and human-centric response?
+3. specificity (Closing quality in Q3): Is their closing rewrite professional, warm, structured, and complete (branded closing, resolution check)?
+4. communicationQuality (Clarity & Structure of coaching analysis): Is their overall coaching report structured, clear, and professional?
+5. accountability (Action Orientation): Does their analysis focus on employee growth and specific coaching development priorities?
+
+Also provide:
+- "strengths": What did the manager do particularly well in this analysis? (max 30 words)
+- "improvements": What is the highest-priority coaching improvement for the manager? (max 30 words)
+
+Return ONLY valid JSON:
+{"leadershipMaturity":<1-5>,"empathyAndPeople":<1-5>,"specificity":<1-5>,"communicationQuality":<1-5>,"accountability":<1-5>,"strengths":"<text>","improvements":"<text>"}`;
+
+    try {
+      const resp = await fetch(getProxyUrl(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: MODEL, max_tokens: 450, system: systemPrompt, messages: [{ role: 'user', content: userPrompt }] }),
+      });
+      if (!resp.ok) throw new Error(`API error ${resp.status}`);
+      const data = await resp.json();
+      const match = data.content[0].text.trim().match(/\{[\s\S]*\}/);
+      if (!match) throw new Error('No JSON in response');
+      const p = JSON.parse(match[0]);
+
+      const scores = {
+        leadershipMaturity:   Math.min(5, Math.max(1, Number(p.leadershipMaturity)   || 3)),
+        empathyAndPeople:     Math.min(5, Math.max(1, Number(p.empathyAndPeople)     || 3)),
+        specificity:          Math.min(5, Math.max(1, Number(p.specificity)          || 3)),
+        communicationQuality: Math.min(5, Math.max(1, Number(p.communicationQuality) || 3)),
+        accountability:       Math.min(5, Math.max(1, Number(p.accountability)       || 3)),
+      };
+      const sum = Object.values(scores).reduce((a, b) => a + b, 0);
+      const overall = parseFloat(((sum / 25) * 100).toFixed(1));
+
+      return { scores, overall, strengths: p.strengths || '', improvements: p.improvements || '' };
+    } catch (e) {
+      console.warn('Transcript Autopsy eval failed:', e.message);
+      return null;
+    }
+  }
+
+  // ---- Evaluate Assessment 4 — The Red Pen (Feedback AI) ----
+  async function evaluateRedPen(scenarioText, empName, dialogueHistoryText) {
+    if (!isAvailable()) return null;
+
+    const systemPrompt = `You are a senior leadership assessor evaluating a manager's performance in a live role-play feedback delivery conversation with an employee named ${empName}.
+Evaluate at management-level. Score 3 is AVERAGE. Score 4 is above average. Score 5 is exceptional (rare).
+Be strict. Do not inflate scores.`;
+
+    const userPrompt = `FEEDBACK SCENARIO:
+${scenarioText}
+
+CONVERSATION DIALOGUE HISTORY:
+${dialogueHistoryText}
+
+Evaluate the manager's performance on 5 criteria (1-5 each):
+1. structure: Clear, sequenced feedback with a defined opening, middle, and close (structure).
+2. empathy: Maintaining the relationship, asking open questions, showing genuine care while delivering a tough message.
+3. resilience: Holding the performance standard when the employee deflects, challenges, or pushes back.
+4. clarity: Appropriate rate, clear, professional tone, and avoidance of loaded/emotional words.
+5. resolution: Aligning on clear, actionable developmental steps and next actions with the employee.
+
+Also provide:
+- "strengths": A key strength from the feedback session (max 30 words)
+- "improvements": A high-priority area for manager development (max 30 words)
+
+Return ONLY valid JSON:
+{"structure":<1-5>,"empathy":<1-5>,"resilience":<1-5>,"clarity":<1-5>,"resolution":<1-5>,"strengths":"<text>","improvements":"<text>"}`;
+
+    try {
+      const resp = await fetch(getProxyUrl(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: MODEL, max_tokens: 450, system: systemPrompt, messages: [{ role: 'user', content: userPrompt }] }),
+      });
+      if (!resp.ok) throw new Error(`API error ${resp.status}`);
+      const data = await resp.json();
+      const match = data.content[0].text.trim().match(/\{[\s\S]*\}/);
+      if (!match) throw new Error('No JSON in response');
+      const p = JSON.parse(match[0]);
+
+      const scores = {
+        structure:  Math.min(5, Math.max(1, Number(p.structure)  || 3)),
+        empathy:    Math.min(5, Math.max(1, Number(p.empathy)    || 3)),
+        resilience: Math.min(5, Math.max(1, Number(p.resilience) || 3)),
+        clarity:    Math.min(5, Math.max(1, Number(p.clarity)    || 3)),
+        resolution: Math.min(5, Math.max(1, Number(p.resolution) || 3)),
+      };
+      const sum = Object.values(scores).reduce((a, b) => a + b, 0);
+      const overall = parseFloat(((sum / 25) * 100).toFixed(1));
+
+      return { scores, overall, strengths: p.strengths || '', improvements: p.improvements || '' };
+    } catch (e) {
+      console.warn('Feedback AI eval failed:', e.message);
+      return null;
+    }
+  }
+
+  // ---- Evaluate Assessment 5 — The Mirror Room (Scenario Cascade) ----
+  async function evaluateMirrorRoom(cascadeHistory) {
+    if (!isAvailable()) return null;
+
+    const systemPrompt = `You are a senior leadership EQ assessor evaluating a manager's performance in a scenario cascade (simulated bad day with 3 high-pressure events).
+Evaluate at management-level. Score 3 is AVERAGE. Score 4 requires genuine composure and strategic thinking. Score 5 is exceptional (rare).
+Be strict. Do not inflate scores.`;
+
+    const userPrompt = `MANAGER'S RESPONSES TO THE THREE SCENARIOS IN SEQUENCE:
+
+${cascadeHistory.map((h, i) => `SITUATION ${i+1}: ${h.title}
+- SCENARIO: ${h.scenario}
+- GUT REACTION: "${h.gut}"
+- FIRST ACTION: "${h.action}"
+- EMOTIONAL MANAGEMENT: "${h.em}"`).join('\n\n')}
+
+Evaluate on 5 criteria (1-5 each):
+1. selfAwareness: Did they recognize their own triggers and name them honestly without deflecting or minimizing?
+2. impulseControl: Do their first actions reflect composure, deliberate thinking, and strategic timing rather than reactivity or emotional urgency?
+3. empathyConsistency: Do they actively consider the human side in each scenario, and does their quality hold steady across all three pressure points?
+4. composure: Composure & emotional regulation under stress.
+5. communicationQuality: Professionalism, clarity, and tone of the responses.
+
+Also provide:
+- "strengths": A key emotional intelligence strength demonstrated (max 30 words)
+- "improvements": A high-priority area for emotional regulation improvement (max 30 words)
+
+Return ONLY valid JSON:
+{"selfAwareness":<1-5>,"impulseControl":<1-5>,"empathyConsistency":<1-5>,"composure":<1-5>,"communicationQuality":<1-5>,"strengths":"<text>","improvements":"<text>"}`;
+
+    try {
+      const resp = await fetch(getProxyUrl(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: MODEL, max_tokens: 450, system: systemPrompt, messages: [{ role: 'user', content: userPrompt }] }),
+      });
+      if (!resp.ok) throw new Error(`API error ${resp.status}`);
+      const data = await resp.json();
+      const match = data.content[0].text.trim().match(/\{[\s\S]*\}/);
+      if (!match) throw new Error('No JSON in response');
+      const p = JSON.parse(match[0]);
+
+      const scores = {
+        selfAwareness:      Math.min(5, Math.max(1, Number(p.selfAwareness)      || 3)),
+        impulseControl:     Math.min(5, Math.max(1, Number(p.impulseControl)     || 3)),
+        empathyConsistency: Math.min(5, Math.max(1, Number(p.empathyConsistency) || 3)),
+        composure:          Math.min(5, Math.max(1, Number(p.composure)          || 3)),
+        communicationQuality: Math.min(5, Math.max(1, Number(p.communicationQuality) || 3)),
+      };
+      const sum = Object.values(scores).reduce((a, b) => a + b, 0);
+      const overall = parseFloat(((sum / 25) * 100).toFixed(1));
+
+      return { scores, overall, strengths: p.strengths || '', improvements: p.improvements || '' };
+    } catch (e) {
+      console.warn('Mirror Room eval failed:', e.message);
+      return null;
+    }
+  }
+
+  return { isAvailable, evaluate, evaluateBalanced, evaluateRewrite, callAiCustomer, callAiEmployee, evaluateManagerAssessment, evaluateSituationRoomA, evaluateSituationRoomB, evaluateTranscriptAutopsy, evaluateRedPen, evaluateMirrorRoom, getCriteria, scoreTimeManagement, MOCK_CALL_CRITERIA };
 })();
