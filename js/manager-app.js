@@ -1185,51 +1185,31 @@ Let's get back on track.
       `${emp.name}: ${ex.emp}\nYou: ${ex.mgr || '(no response)'}`
     ).join('\n\n');
 
-    // Score manager's combined speech
-    const mgrText = _fb.history.map(ex => ex.mgr || '').join(' ').trim();
     const durationSecs = _fb.history.length * 60;
 
-    let aiScores = null;
+    let aiScores;
     try {
-      if (typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
-        const result = await ClaudeEvaluator.evaluateRedPen(
-          _currentScenario.scenario,
-          emp.name,
-          fullTranscript
+      if (typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable() && fullTranscript) {
+        const result = await ClaudeEvaluator.evaluateManagerFeedback(
+          fullTranscript, _currentScenario.scenario || _currentScenario.title || ''
         );
-        if (result) {
-          aiScores = {
-            ...result.scores,
-            overall: result.overall,
-            _strengths: result.strengths,
-            _improvements: result.improvements,
-            _method: 'claude-redpen',
-            _module: 'mgr-feedback',
-            _turns: _fb.history.length,
-            _scenarioId: _currentScenario.id
-          };
-        }
-      }
-    } catch (e) {
-      console.warn('Claude Red Pen evaluation failed, using local fallback:', e.message);
-    }
-
-    if (!aiScores) {
-      try {
-        if (mgrText) {
-          const analysis = SpeechEngine.analyze(mgrText, Math.max(durationSecs, 1));
-          aiScores = SpeechEngine.scoreSpeech(analysis, Math.max(durationSecs, 1));
-        } else {
-          aiScores = { overall: null };
-        }
-      } catch(e) {
+        aiScores = {
+          ...result.scores,
+          overall:   result.overall,
+          _reasons:  result.reasons,
+          _method:   'mgr-feedback-params',
+        };
+      } else {
         aiScores = { overall: null };
       }
-      aiScores._method  = 'mgr-feedback-ai';
-      aiScores._module  = 'mgr-feedback';
-      aiScores._turns   = _fb.history.length;
-      aiScores._scenarioId = _currentScenario.id;
+    } catch(e) {
+      console.warn('Claude feedback eval failed:', e.message);
+      aiScores = { overall: null };
     }
+    aiScores._method    = aiScores._method    || 'mgr-feedback-ai';
+    aiScores._module    = 'mgr-feedback';
+    aiScores._turns     = _fb.history.length;
+    aiScores._scenarioId = _currentScenario.id;
 
     try {
       // Guarantee trainees row exists before FK-constrained session insert
@@ -1777,39 +1757,23 @@ Let's get back on track.
       $('mgr-result-subtitle').textContent = `Feedback Conversation with ${emp.name} — ${_fb.history.length} exchange(s)`;
       $('mgr-result-score').textContent = aiScores.overall != null ? `${aiScores.overall}%` : '—';
       
-      const isClaude = aiScores._method === 'claude-redpen';
-      if (isClaude) {
-        $('mgr-score-grid').innerHTML = `
-          <div class="mgr-score-item"><div class="label">Structure (Opening/Body/Close)</div><div class="val">${aiScores.structure}/5</div></div>
-          <div class="mgr-score-item"><div class="label">Empathy &amp; Relationship</div><div class="val">${aiScores.empathy}/5</div></div>
-          <div class="mgr-score-item"><div class="label">Resilience (Pushback)</div><div class="val">${aiScores.resilience}/5</div></div>
-          <div class="mgr-score-item"><div class="label">Clarity &amp; Tone</div><div class="val">${aiScores.clarity}/5</div></div>
-          <div class="mgr-score-item"><div class="label">Resolution &amp; Action Plan</div><div class="val">${aiScores.resolution}/5</div></div>
-          <div class="mgr-score-item"><div class="label">Exchanges</div><div class="val">${_fb.history.length} turns</div></div>`;
-        
-        if (feedbackEl && (aiScores._strengths || aiScores._improvements)) {
-          const items = [];
-          if (aiScores._strengths) {
-            items.push(`<div class="sr-fb-item sr-fb-good"><strong>✓ Feedback Strength:</strong> ${aiScores._strengths}</div>`);
-          }
-          if (aiScores._improvements) {
-            items.push(`<div class="sr-fb-item sr-fb-info"><strong>💡 Priority Improvement:</strong> ${aiScores._improvements}</div>`);
-          }
-          feedbackEl.innerHTML = items.join('');
-          feedbackEl.classList.remove('hidden');
-        }
-      } else {
-        const rows = [
-          ['Fluency',        aiScores.fluency],
-          ['Vocabulary',     aiScores.vocabulary],
-          ['Confidence',     aiScores.confidence],
-          ['Clarity',        aiScores.clarity],
-          ['Professionalism',aiScores.professionalism],
-          ['Exchanges',      _fb.history.length + ' turns'],
-        ].filter(([, v]) => v !== undefined && v !== null);
-        $('mgr-score-grid').innerHTML = rows.map(([label, val]) =>
-          `<div class="mgr-score-item"><div class="label">${label}</div><div class="val">${typeof val === 'number' ? val+'/5' : val}</div></div>`
+      const isParams = aiScores._method === 'mgr-feedback-params';
+      if (isParams) {
+        const paramRows = [
+          ['Emotional Control',   aiScores.emotionalControl],
+          ['Empathy',             aiScores.empathy],
+          ['Listening',           aiScores.listening],
+          ['Coaching Style',      aiScores.coachingStyle],
+          ['Conflict Handling',   aiScores.conflictHandling],
+          ['Leadership Presence', aiScores.leadershipPresence],
+          ['Team Support',        aiScores.teamSupport],
+          ['Communication',       aiScores.communication],
+        ];
+        $('mgr-score-grid').innerHTML = paramRows.map(([label, val]) =>
+          `<div class="mgr-score-item"><div class="label">${label}</div><div class="val">${val != null ? val + '/5' : '—'}</div></div>`
         ).join('');
+      } else {
+        $('mgr-score-grid').innerHTML = `<div class="mgr-score-item"><div class="label">Exchanges</div><div class="val">${_fb.history.length} turns</div></div>`;
       }
     } else if (type === 'situation-room') {
       const sa = aiScores.sectionA || {};
