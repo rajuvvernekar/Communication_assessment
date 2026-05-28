@@ -20,6 +20,11 @@
 // v57:  Manager Assessments section: loadMgrAssessments, renderMgrAssessments, openMgrScoreModal, saveMgrScore
 // v58: Manager topic tabs in admin Topics section
 // v59: openMgrScoreModal — Situation Room two-section display + SR-specific criteria
+// v60: Fix "previous batch" + wrong scores for Anoop/Viraj/Sharuq teams:
+//      - getMasterScores: added strategy 4 — first+last token prefix match
+//      - matchFn: added same first+last token prefix match as pass 3
+//      - _TRAINEE_ALIASES: added 30+ entries for all 3 teams covering middle-name drops,
+//        compound-first-name splits (Sai Vishal↔Saivishal), and spelling variants
 const MASTER_SCORES = {
   // ── Vignesh Baliga ──
   "abdul razak":                     { selfAssessment: 9.243,  aiAudit: 3.945,  psScore: 12.68, lisScore: 16.20, mcScore:  8.58, gramScore:  7.00, totalScore: 57.65 },
@@ -377,7 +382,52 @@ const _TRAINEE_ALIASES = {
   "salman batiwala":            "Salman Batliwala",          // typo variant (one 'l')
   "shweta tiwari":              "Shweta Anil Tiwari",        // missing middle name
   "naved quresh":               "Naved Abdul Latif Qureshi", // truncated surname
-  "naved qureshi":              "Naved Abdul Latif Qureshi"  // common spelling variant
+  "naved qureshi":              "Naved Abdul Latif Qureshi", // common spelling variant
+
+  // ── Viraj Raikar team ──
+  "sai vishal balse":           "Saivishal Vinod Balse",     // space in compound first name + missing middle
+  "sai vishal vinod balse":     "Saivishal Vinod Balse",     // space variant with middle name
+  "saivishal balse":            "Saivishal Vinod Balse",     // missing middle name
+  "snehal mulaawadmath":        "Sneahaal Mulaawadmath",     // simplified spelling
+  "snehaal mulaawadmath":       "Sneahaal Mulaawadmath",     // one 'a' variant
+  "aqib beerwala":              "Aaqib Beerwala",            // missing leading 'a'
+  "aaqib berwala":              "Aaqib Beerwala",            // missing 'e'
+  "anuj chougule":              "Anuj Ajay Chougule",        // missing middle name
+  "nikhil chavan":              "Nikhil Subhash Chavan",     // missing middle name
+  "suraj motimath":             "Suraj Praveen Motimath",    // missing middle name
+  "nagaratna marihal":          "Nagaratna Mahantesh Marihal", // missing middle name
+  "amit goudadi":               "Amit Goudadi",              // exact (ensure no casing issue)
+  "pravin ternikar":            "Pravin Gajanan Ternikar",   // missing middle name
+
+  // ── Anoop Bharat Japtap team ──
+  "abdulsamad jamadar":         "Abdulsamad Riyazahmed Jamadar",   // missing middle name
+  "abdul samad jamadar":        "Abdulsamad Riyazahmed Jamadar",   // space in first name
+  "adnan darga":                "Adnan Parvezahmed Darga",         // missing middle name
+  "ashwin shet":                "Ashwinkumar A Shet",              // shortened first name
+  "ashwinkumar shet":           "Ashwinkumar A Shet",              // missing initial
+  "amit baligar":               "Amit Mahantesh Baligar",          // missing middle name
+  "ankush chougule":            "Ankush Ajay Chougule",            // missing middle name
+  "sujay satpute":              "Sujay Sanjeev Satpute",           // missing middle name
+  "amardeep baswa":             "Amardeep Narayan Baswa",          // missing middle name
+  "rohan kokane":               "Rohan Ajit Kokane",               // missing middle name
+  "rakesh guddadmani":          "Rakesh Guddadmani",               // exact (normalise)
+  "rajashekharayya salimath":   "Rajashekharayya Salimath",        // exact (normalise)
+
+  // ── Sharuq Fayaz Shaikh team ──
+  "vaibhavi balse":             "Vaibhavi Vinod Balse",       // missing middle name
+  "vaibhavi vinod balse":       "Vaibhavi Vinod Balse",       // exact (normalise)
+  "shabaz shaikh":              "Shabaaz Babajan Shaikh",     // simplified spelling + missing middle
+  "shabaaz shaikh":             "Shabaaz Babajan Shaikh",     // missing middle name
+  "faisal shaikh":              "Faisal Javed Shaikh",        // missing middle name
+  "nauseen nargund":            "Nauseen Asif Nargund",       // missing middle name
+  "nisha kurubar":              "Nisha Shankar Kurubar",      // missing middle name
+  "anupam vernekar":            "Anupam Premanand Vernekar",  // missing middle name
+  "vishal chavan":              "Vishal Vijay Chavan",        // missing middle name
+  "nitin ningannavar":          "Nitin Namdev Ningannavar",   // missing middle name
+  "faizan rangrez":             "Faizan Mohammed Ismail Rangrez", // shortened
+  "rohit patil":                "Rohit Rajeshkumar Patil",    // missing middle name
+  "nehal kallimani":            "Nehal Ravindra Kallimani",   // missing middle name
+  "yalleshi holennavar":        "Yalleshi Mareppa Holennavar" // missing middle name
 };
 
 // Resolve a raw DB/session name to its canonical map name (if an alias exists).
@@ -387,18 +437,52 @@ function _resolveAlias(name) {
 }
 
 // Look up master scores by trainee name (case-insensitive; resolves aliases automatically).
+// Strategy 1: exact lowercase key
+// Strategy 2: compact (remove spaces)
+// Strategy 3: full alnum (strip non-alphanumeric)
+// Strategy 4: first+last token match — handles middle-name variants and split compound
+//             first names (e.g. "Sai Vishal Balse" ↔ "Saivishal Vinod Balse")
 function getMasterScores(name) {
   if (!name) return null;
   const resolved = _resolveAlias(name);
   const key = resolved.trim().toLowerCase();
+  const alnum = s => s.replace(/[^a-z0-9]/g, '');
+
   if (MASTER_SCORES[key]) return MASTER_SCORES[key];
+
   const compact = key.replace(/\s+/g, '');
   const hit2 = Object.entries(MASTER_SCORES).find(([k]) => k.replace(/\s+/g, '') === compact)?.[1];
   if (hit2) return hit2;
-  const alnum = s => s.replace(/[^a-z0-9]/g, '');
+
   const normKey = alnum(key);
   if (!normKey) return null;
-  return Object.entries(MASTER_SCORES).find(([k]) => alnum(k) === normKey)?.[1] || null;
+  const hit3 = Object.entries(MASTER_SCORES).find(([k]) => alnum(k) === normKey)?.[1];
+  if (hit3) return hit3;
+
+  // Strategy 4: first-token prefix + exact last-token match
+  // Catches "Sai Vishal Balse" → "Saivishal Vinod Balse",
+  //         "Ashwin Shet"      → "Ashwinkumar A Shet",
+  //         "Vaibhavi Balse"   → "Vaibhavi Vinod Balse", etc.
+  const inputToks = key.split(/\s+/).filter(Boolean);
+  if (inputToks.length >= 2) {
+    const firstIn = alnum(inputToks[0]);
+    const lastIn  = alnum(inputToks[inputToks.length - 1]);
+    if (firstIn && lastIn) {
+      const hit4 = Object.entries(MASTER_SCORES).find(([k]) => {
+        const kToks = k.split(/\s+/).filter(Boolean);
+        if (kToks.length < 2) return false;
+        const firstK = alnum(kToks[0]);
+        const lastK  = alnum(kToks[kToks.length - 1]);
+        if (lastIn !== lastK) return false;
+        const minLen = Math.min(firstIn.length, firstK.length);
+        if (minLen < 3) return false;
+        return firstIn === firstK || firstK.startsWith(firstIn) || firstIn.startsWith(firstK);
+      })?.[1];
+      if (hit4) return hit4;
+    }
+  }
+
+  return null;
 }
 
 window.Admin = (() => {
@@ -3061,10 +3145,29 @@ window.Admin = (() => {
       const agentNames = (_MANAGER_AGENT_MAP[mgr] || []).slice().sort();
       agentNames.forEach(agentName => {
         const agentAlnum = alnum(agentName);
-        // Match t.name against agentName — try DB name directly, then via alias resolution
+        const agentToks  = agentName.trim().toLowerCase().split(/\s+/).filter(Boolean);
+        // Match t.name against agentName:
+        // Pass 1 — strict alnum (exact match after stripping non-alphanumeric)
+        // Pass 2 — alias → canonical → alnum
+        // Pass 3 — first+last token prefix: handles middle-name differences and split
+        //           compound first names e.g. "Sai Vishal Balse" ↔ "Saivishal Vinod Balse",
+        //           "Vaibhavi Balse" ↔ "Vaibhavi Vinod Balse", "Ankush Chougule" ↔ "Ankush Ajay Chougule"
         const matchFn = t => {
-          if (alnum(t.name)                 === agentAlnum) return true; // direct or near match
-          if (alnum(_resolveAlias(t.name))  === agentAlnum) return true; // alias → canonical
+          if (alnum(t.name)                === agentAlnum) return true;
+          if (alnum(_resolveAlias(t.name)) === agentAlnum) return true;
+          // Pass 3: first-token prefix + last-token exact
+          const tToks = t.name.trim().toLowerCase().split(/\s+/).filter(Boolean);
+          if (tToks.length >= 2 && agentToks.length >= 2) {
+            const firstT = alnum(tToks[0]),        firstA = alnum(agentToks[0]);
+            const lastT  = alnum(tToks[tToks.length - 1]);
+            const lastA  = alnum(agentToks[agentToks.length - 1]);
+            if (lastT === lastA) {
+              const minLen = Math.min(firstT.length, firstA.length);
+              if (minLen >= 3 && (firstT === firstA || firstA.startsWith(firstT) || firstT.startsWith(firstA))) {
+                return true;
+              }
+            }
+          }
           return false;
         };
         // Pass 1: match across all trainees
