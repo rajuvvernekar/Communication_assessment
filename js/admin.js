@@ -479,6 +479,26 @@ function getMasterScores(name) {
         return firstIn === firstK || firstK.startsWith(firstIn) || firstIn.startsWith(firstK);
       })?.[1];
       if (hit4) return hit4;
+
+      // Strategy 5: character multiset overlap ≥85% on first token + exact last token
+      // Catches "snehal" ↔ "sneahaal" (all chars of "snehal" found in "sneahaal")
+      const hit5 = Object.entries(MASTER_SCORES).find(([k]) => {
+        const kToks = k.split(/\s+/).filter(Boolean);
+        if (kToks.length < 2) return false;
+        const firstK = alnum(kToks[0]);
+        const lastK  = alnum(kToks[kToks.length - 1]);
+        if (lastIn !== lastK) return false;
+        const minLen = Math.min(firstIn.length, firstK.length);
+        if (minLen < 4) return false;
+        const shorter = firstIn.length <= firstK.length ? firstIn : firstK;
+        const longer  = firstIn.length <= firstK.length ? firstK : firstIn;
+        const freq = {};
+        for (const c of longer) freq[c] = (freq[c] || 0) + 1;
+        let overlap = 0;
+        for (const c of shorter) { if (freq[c] > 0) { overlap++; freq[c]--; } }
+        return overlap / shorter.length >= 0.85;
+      })?.[1];
+      if (hit5) return hit5;
     }
   }
 
@@ -3155,16 +3175,27 @@ window.Admin = (() => {
         const matchFn = t => {
           if (alnum(t.name)                === agentAlnum) return true;
           if (alnum(_resolveAlias(t.name)) === agentAlnum) return true;
-          // Pass 3: first-token prefix + last-token exact
           const tToks = t.name.trim().toLowerCase().split(/\s+/).filter(Boolean);
           if (tToks.length >= 2 && agentToks.length >= 2) {
-            const firstT = alnum(tToks[0]),        firstA = alnum(agentToks[0]);
+            const firstT = alnum(tToks[0]), firstA = alnum(agentToks[0]);
             const lastT  = alnum(tToks[tToks.length - 1]);
             const lastA  = alnum(agentToks[agentToks.length - 1]);
             if (lastT === lastA) {
+              // Pass 3: first-token prefix (Sai Vishal ↔ Saivishal, Ashwin ↔ Ashwinkumar)
               const minLen = Math.min(firstT.length, firstA.length);
               if (minLen >= 3 && (firstT === firstA || firstA.startsWith(firstT) || firstT.startsWith(firstA))) {
                 return true;
+              }
+              // Pass 4: character multiset overlap on first token (≥85% of shorter in longer)
+              // Catches vowel insertions/transpositions: "snehal" ↔ "sneahaal"
+              if (minLen >= 4) {
+                const shorter = firstT.length <= firstA.length ? firstT : firstA;
+                const longer  = firstT.length <= firstA.length ? firstA : firstT;
+                const freq = {};
+                for (const c of longer) freq[c] = (freq[c] || 0) + 1;
+                let overlap = 0;
+                for (const c of shorter) { if (freq[c] > 0) { overlap++; freq[c]--; } }
+                if (overlap / shorter.length >= 0.85) return true;
               }
             }
           }
