@@ -353,9 +353,9 @@ const MASTER_SCORES = {
   "saivishal vinod balse":           { selfAssessment: 7.513514, aiAudit: 4.03,  psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 11.54 },
   "sneahaal mulaawadmath":           { selfAssessment: 9.459459, aiAudit: 3.965, psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 13.42 },
   "suraj praveen motimath":          { selfAssessment: 9.027027, aiAudit: 3.79,  psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 12.82 },
-  "juned peerjade":                  { selfAssessment: null, aiAudit: null, psScore: null, lisScore: null, mcScore: null, gramScore: 10.75, totalScore: 10.75 },
-  "wagesh gopal jadhav":             { selfAssessment: null, aiAudit: null, psScore: null, lisScore: null, mcScore: null, gramScore: 10.75, totalScore: 10.75 },
-  "shubham sambhaji bhadvankar":     { selfAssessment: null, aiAudit: null, psScore: null, lisScore: null, mcScore: null, gramScore: 10.75, totalScore: 10.75 }
+  "juned peerjade":                  { selfAssessment: 8.972973, aiAudit: 3.655, psScore: null, lisScore: null, mcScore: null, gramScore: 10.75, totalScore: 23.38 },
+  "wagesh gopal jadhav":             { selfAssessment: 8.486486, aiAudit: 3.740, psScore: null, lisScore: null, mcScore: null, gramScore: 10.75, totalScore: 22.98 },
+  "shubham sambhaji bhadvankar":     { selfAssessment: 8.486486, aiAudit: 3.965, psScore: null, lisScore: null, mcScore: null, gramScore: 10.75, totalScore: 23.20 }
 };
 
 // Maps the name as stored in the DB (trainee.name) → canonical name used in _MANAGER_AGENT_MAP.
