@@ -348,9 +348,9 @@ const MASTER_SCORES = {
   "saivishal vinod balse":           { selfAssessment: 7.513514, aiAudit: 4.03,  psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 11.54 },
   "sneahaal mulaawadmath":           { selfAssessment: 9.459459, aiAudit: 3.965, psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 13.42 },
   "suraj praveen motimath":          { selfAssessment: 9.027027, aiAudit: 3.79,  psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 12.82 },
-  "juned peerjade":                  { selfAssessment: null, aiAudit: null, psScore: null, lisScore: null, mcScore: null, gramScore: 8.60, totalScore: 8.60 },
-  "wagesh gopal jadhav":             { selfAssessment: null, aiAudit: null, psScore: null, lisScore: null, mcScore: null, gramScore: 8.60, totalScore: 8.60 },
-  "shubham sambhaji bhadvankar":     { selfAssessment: null, aiAudit: null, psScore: null, lisScore: null, mcScore: null, gramScore: 8.60, totalScore: 8.60 }
+  "juned peerjade":                  { selfAssessment: null, aiAudit: null, psScore: null, lisScore: null, mcScore: null, gramScore: 10.75, totalScore: 10.75 },
+  "wagesh gopal jadhav":             { selfAssessment: null, aiAudit: null, psScore: null, lisScore: null, mcScore: null, gramScore: 10.75, totalScore: 10.75 },
+  "shubham sambhaji bhadvankar":     { selfAssessment: null, aiAudit: null, psScore: null, lisScore: null, mcScore: null, gramScore: 10.75, totalScore: 10.75 }
 };
 
 // Maps the name as stored in the DB (trainee.name) → canonical name used in _MANAGER_AGENT_MAP.
@@ -4601,7 +4601,7 @@ window.Admin = (() => {
     "Munish Kumar":       ["Sweta Soni","Aswin Prasad","Nitesh Kumar","Neeti Toppo","Suman Adithya Rao","Venkatesh Barad","Simran Gabrial Masih","Vipul Jain","Dipanwita Saha","Sayantan Bhattacharyya","Ganesh T","Riya Goyal","Anubhav Nepal","Sanjay S","Ashish Jyoti Bora"],
     "Shweta":             ["Kumar M G","Ishan Dhadwal","K Prakash Rao","Akhil M A","Sharique Shahid Ansari","Shridhar","Shweta Chauhan","Ajmal Rahim","Jyoti Umesh Sulgekar","Ravishankar Mohan Cherukupalli","Jaideep Singh","Neethu Paulose","Irfan Pasha S"],
     "Anoop Bharat Japtap":["Rajashekharayya Salimath","Nayan Hosur","Ashwinkumar A Shet","Rohan Ajit Kokane","Amit Mahantesh Baligar","Vikas Koti","Adnan Parvezahmed Darga","Sujay Sanjeev Satpute","Amardeep Narayan Baswa","Ankush Ajay Chougule","Abdulsamad Riyazahmed Jamadar","Rakesh Guddadmani","Prajwal"],
-    "Sharuq Fayaz Shaikh":["Rakesh Naik","Shabaaz Babajan Shaikh","Yalleshi Mareppa Holennavar","Faisal Javed Shaikh","Nauseen Asif Nargund","Vaibhavi Vinod Balse","Nisha Shankar Kurubar","Anupam Premanand Vernekar","Vishal Vijay Chavan","Nitin Namdev Ningannavar","Faizan Mohammed Ismail Rangrez","Shubham Oza","Rohit Rajeshkumar Patil","Nehal Ravindra Kallimani"],
+    "Sharuq Fayaz Shaikh":["Rakesh Naik","Shabaaz Babajan Shaikh","Yalleshi Mareppa Holennavar","Faisal Javed Shaikh","Nauseen Asif Nargund","Vaibhavi Vinod Balse","Nisha Shankar Kurubar","Anupam Premanand Vernekar","Vishal Vijay Chavan","Nitin Namdev Ningannavar","Faizan Mohammed Ismail Rangrez","Shubham Oza","Rohit Rajeshkumar Patil","Nehal Ravindra Kallimani","Juned Peerjade","Wagesh Gopal Jadhav","Shubham Sambhaji Bhadvankar"],
     "Viraj Raikar":       ["Mohammed Younus C A","Nikhil Subhash Chavan","Gautam Shah","Sneahaal Mulaawadmath","Saivishal Vinod Balse","Pravin Gajanan Ternikar","Nagaratna Mahantesh Marihal","Aaqib Beerwala","Nagesh Pednekar","Suraj Praveen Motimath","Amit Goudadi","Anuj Ajay Chougule"],
     "Nikita Sachin Desai":["Sumanth Kumar Sahu","Amulya K","Anup Sadanandan","Maya M Pillai","Rohan Jain","Mehul Harihar Dhande","Vivek Kumar Verma","Prathvik Saldanha","Jay Prakash Singh","Ravikumar Mangilal Shah","Tabassum Sharieff"],
     "Priyanka Dash":      ["Sadiya Banu","Sangeetha P","Regan Lobo","Sarfaraj Najeer Kudachee","Naman Prakash Awasthi","Prateek Manvi","Amar Vishwakarma","Shivanjali Kumari","M Vinod","Shaktiprasad Bentur","Vivek G K","Shashidhara L"],
