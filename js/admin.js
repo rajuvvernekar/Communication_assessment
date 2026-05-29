@@ -347,7 +347,10 @@ const MASTER_SCORES = {
   "pravin gajanan ternikar":         { selfAssessment: 7.081081, aiAudit: 3.915, psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 11.0 },
   "saivishal vinod balse":           { selfAssessment: 7.513514, aiAudit: 4.03,  psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 11.54 },
   "sneahaal mulaawadmath":           { selfAssessment: 9.459459, aiAudit: 3.965, psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 13.42 },
-  "suraj praveen motimath":          { selfAssessment: 9.027027, aiAudit: 3.79,  psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 12.82 }
+  "suraj praveen motimath":          { selfAssessment: 9.027027, aiAudit: 3.79,  psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 12.82 },
+  "juned peerjade":                  { selfAssessment: null, aiAudit: null, psScore: null, lisScore: null, mcScore: null, gramScore: 8.60, totalScore: 8.60 },
+  "wagesh gopal jadhav":             { selfAssessment: null, aiAudit: null, psScore: null, lisScore: null, mcScore: null, gramScore: 8.60, totalScore: 8.60 },
+  "shubham sambhaji bhadvankar":     { selfAssessment: null, aiAudit: null, psScore: null, lisScore: null, mcScore: null, gramScore: 8.60, totalScore: 8.60 }
 };
 
 // Maps the name as stored in the DB (trainee.name) → canonical name used in _MANAGER_AGENT_MAP.
@@ -377,7 +380,13 @@ const _TRAINEE_ALIASES = {
   "salman batiwala":            "Salman Batliwala",          // typo variant (one 'l')
   "shweta tiwari":              "Shweta Anil Tiwari",        // missing middle name
   "naved quresh":               "Naved Abdul Latif Qureshi", // truncated surname
-  "naved qureshi":              "Naved Abdul Latif Qureshi"  // common spelling variant
+  "naved qureshi":              "Naved Abdul Latif Qureshi", // common spelling variant
+  // Sneahaal name variants
+  "sneahall":                   "Sneahaal Mulaawadmath",     // short first-name only
+  "sneahall mulaawadmath":      "Sneahaal Mulaawadmath",     // misspelling of first name
+  // Mohammed Younus name variants
+  "mohammed yonus":             "Mohammed Younus C A",       // truncated / spelling variant
+  "mohammed yonus c a":        "Mohammed Younus C A"        // spelling variant with initials
 };
 
 // Resolve a raw DB/session name to its canonical map name (if an alias exists).
