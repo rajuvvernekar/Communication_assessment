@@ -352,7 +352,10 @@ const MASTER_SCORES = {
   "pravin gajanan ternikar":         { selfAssessment: 7.081081, aiAudit: 3.915, psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 11.0 },
   "saivishal vinod balse":           { selfAssessment: 7.513514, aiAudit: 4.03,  psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 11.54 },
   "sneahaal mulaawadmath":           { selfAssessment: 9.459459, aiAudit: 3.965, psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 13.42 },
-  "suraj praveen motimath":          { selfAssessment: 9.027027, aiAudit: 3.79,  psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 12.82 }
+  "suraj praveen motimath":          { selfAssessment: 9.027027, aiAudit: 3.79,  psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 12.82 },
+  "juned peerjade":                  { selfAssessment: null, aiAudit: null, psScore: null, lisScore: null, mcScore: null, gramScore: 8.60, totalScore: 8.60 },
+  "wagesh gopal jadhav":             { selfAssessment: null, aiAudit: null, psScore: null, lisScore: null, mcScore: null, gramScore: 8.60, totalScore: 8.60 },
+  "shubham sambhaji bhadvankar":     { selfAssessment: null, aiAudit: null, psScore: null, lisScore: null, mcScore: null, gramScore: 8.60, totalScore: 8.60 }
 };
 
 // Maps the name as stored in the DB (trainee.name) → canonical name used in _MANAGER_AGENT_MAP.
@@ -390,6 +393,8 @@ const _TRAINEE_ALIASES = {
   "saivishal balse":            "Saivishal Vinod Balse",     // missing middle name
   "snehal mulaawadmath":        "Sneahaal Mulaawadmath",     // simplified spelling
   "snehaal mulaawadmath":       "Sneahaal Mulaawadmath",     // one 'a' variant
+  "sneahall":                   "Sneahaal Mulaawadmath",     // double-l misspelling (first name only)
+  "sneahall mulaawadmath":      "Sneahaal Mulaawadmath",     // double-l misspelling with surname
   "aqib beerwala":              "Aaqib Beerwala",            // missing leading 'a'
   "aaqib berwala":              "Aaqib Beerwala",            // missing 'e'
   "anuj chougule":              "Anuj Ajay Chougule",        // missing middle name
@@ -398,6 +403,8 @@ const _TRAINEE_ALIASES = {
   "nagaratna marihal":          "Nagaratna Mahantesh Marihal", // missing middle name
   "amit goudadi":               "Amit Goudadi",              // exact (ensure no casing issue)
   "pravin ternikar":            "Pravin Gajanan Ternikar",   // missing middle name
+  "mohammed yonus":             "Mohammed Younus C A",       // truncated / spelling variant
+  "mohammed yonus c a":        "Mohammed Younus C A",       // spelling variant with initials
 
   // ── Anoop Bharat Japtap team ──
   "abdulsamad jamadar":         "Abdulsamad Riyazahmed Jamadar",   // missing middle name
