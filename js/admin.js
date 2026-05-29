@@ -395,6 +395,7 @@ const _TRAINEE_ALIASES = {
   "snehaal mulaawadmath":       "Sneahaal Mulaawadmath",     // one 'a' variant
   "sneahall":                   "Sneahaal Mulaawadmath",     // double-l misspelling (first name only)
   "sneahall mulaawadmath":      "Sneahaal Mulaawadmath",     // double-l misspelling with surname
+  "sneahaal":                   "Sneahaal Mulaawadmath",     // first name only (no surname)
   "aqib beerwala":              "Aaqib Beerwala",            // missing leading 'a'
   "aaqib berwala":              "Aaqib Beerwala",            // missing 'e'
   "anuj chougule":              "Anuj Ajay Chougule",        // missing middle name
@@ -405,6 +406,7 @@ const _TRAINEE_ALIASES = {
   "pravin ternikar":            "Pravin Gajanan Ternikar",   // missing middle name
   "mohammed yonus":             "Mohammed Younus C A",       // truncated / spelling variant
   "mohammed yonus c a":        "Mohammed Younus C A",       // spelling variant with initials
+  "mohammed younus":            "Mohammed Younus C A",       // correct spelling, missing initials
 
   // ── Anoop Bharat Japtap team ──
   "abdulsamad jamadar":         "Abdulsamad Riyazahmed Jamadar",   // missing middle name
@@ -434,7 +436,8 @@ const _TRAINEE_ALIASES = {
   "faizan rangrez":             "Faizan Mohammed Ismail Rangrez", // shortened
   "rohit patil":                "Rohit Rajeshkumar Patil",    // missing middle name
   "nehal kallimani":            "Nehal Ravindra Kallimani",   // missing middle name
-  "yalleshi holennavar":        "Yalleshi Mareppa Holennavar" // missing middle name
+  "yalleshi holennavar":        "Yalleshi Mareppa Holennavar", // missing middle name
+  "shubham sambhaji bhadavankar": "Shubham Sambhaji Bhadvankar" // extra 'a' in surname
 };
 
 // Resolve a raw DB/session name to its canonical map name (if an alias exists).
