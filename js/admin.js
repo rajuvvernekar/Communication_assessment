@@ -1122,6 +1122,14 @@ window.Admin = (() => {
   // ---- Topics ----
   async function loadTopics() {
     initTopicModal();
+
+    try {
+      const allTopics = await DB.getAll('topics');
+      if (allTopics.filter(t => t.module === 'stock-market-mcq').length < 2) {
+        await seedStockMarketMcq(true);
+      }
+    } catch (_) {}
+
     renderTopicsList();
 
     document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -5958,13 +5966,15 @@ window.Admin = (() => {
   }
 
   // ---- Seed: NRI Basics of Stock Market MCQ ----
-  async function seedStockMarketMcq() {
+  async function seedStockMarketMcq(silent = false) {
     const existing = await DB.getAll('topics');
-    if (existing.some(t => t.module === 'stock-market-mcq')) {
-      toast('NRI Stock Market topic already exists — no action taken.', 'info');
+    const smqTopics = existing.filter(t => t.module === 'stock-market-mcq');
+    if (smqTopics.length >= 2) {
+      if (!silent) toast('NRI Stock Market topics already exist — no action taken.', 'info');
       return;
     }
-    const questions = [
+
+    const set1Questions = [
       { stem: "In which year and city was Zerodha founded?", options: ["2005, Mumbai","2008, Hyderabad","2010, Bengaluru","2012, Delhi"], correct: 2, explanation: "Zerodha was founded in 2010 in Bengaluru by Nithin Kamath and Nikhil Kamath." },
       { stem: "Who are the founders of Zerodha?", options: ["Radhakishan Damani and Rakesh Jhunjhunwala","Nithin Kamath and Nikhil Kamath","Vijay Shekhar Sharma and Deepinder Goyal","Uday Kotak and Nandan Nilekani"], correct: 1, explanation: "Zerodha was founded by brothers Nithin Kamath and Nikhil Kamath." },
       { stem: "Zerodha was the first to introduce which revolutionary brokerage model in India?", options: ["Full-service broking with relationship managers","Discount broking — a flat fee of Rs. 20 per trade regardless of order size","Free broking with no charges at all","Subscription-based broking model"], correct: 1, explanation: "Zerodha pioneered discount broking — a flat Rs. 20 per trade regardless of order size." },
@@ -6014,28 +6024,95 @@ window.Admin = (() => {
       { stem: "How much short delivery margin does Zerodha block on T day?", options: ["50%","80%","100%","120% of the security value"], correct: 3, explanation: "Zerodha blocks 120% of the security value as short delivery margin on T day." },
       { stem: "In Zerodha, the Gift Transfer feature is accessible via:", options: ["Kite mobile app only","Console > Portfolio > Holdings","The Zerodha branch office","CDSL directly"], correct: 1, explanation: "Gift Transfers are done through Console (console.zerodha.com) under Portfolio > Holdings." },
       { stem: "What is the charge for gifting shares in Zerodha?", options: ["Free of charge","Rs. 10 per security + GST","Rs. 25 per security per transaction + 18% GST","0.1% of transaction value"], correct: 2, explanation: "Zerodha charges Rs. 25 per security per gift transaction plus 18% GST." },
-      { stem: "For the sender, what is the tax implication of gifting shares?", options: ["10% long-term capital gains tax applies","No tax implication for the sender","Short-term capital gains tax applies","Gift tax of 5% is levied"], correct: 1, explanation: "Gifting shares has no tax implication for the sender — the tax obligation falls on the recipient." },
-      { stem: "If the total value of gifted shares received exceeds Rs. 50,000 in a year, it is:", options: ["Exempt from tax entirely","Taxed at 10% flat rate","Taxable as income in the recipient's hands","Subject to wealth tax only"], correct: 2, explanation: "Gifts exceeding Rs. 50,000 are taxable as 'Income from Other Sources' in the recipient's hands." },
-      { stem: "FIFO stands for:", options: ["First In, Fixed Out","Full Investment For Options","First In, First Out","Fixed Income, Fixed Output"], correct: 2, explanation: "FIFO — First In, First Out — means the oldest shares bought are considered sold first." },
-      { stem: "The FIFO method for calculating buy average is mandated by:", options: ["SEBI","Zerodha internal policy","The Income Tax Department of India","Stock exchange circular"], correct: 2, explanation: "The Income Tax Department mandates FIFO for computing capital gains on share sales." },
-      { stem: "Using FIFO, when you sell shares, the system treats which shares as sold first?", options: ["The most recently purchased shares","The highest-priced shares you hold","The shares you bought the earliest","The shares closest to the current market price"], correct: 2, explanation: "FIFO: the earliest-purchased (first in) shares are treated as sold first." }
+      { stem: "For the sender, what is the tax implication of gifting shares?", options: ["10% long-term capital gains tax applies","No tax implication for the sender","Short-term capital gains tax applies","Gift tax of 5% is levied"], correct: 1, explanation: "Gifting shares has no tax implication for the sender — the tax obligation falls on the recipient." }
+    ];
+
+    const set2Questions = [
+      { stem: "What is the main role of a stock broker?", options: ["Store your shares physically","Provide access to buy and sell securities on exchanges","Regulate the stock market","Issue new shares to investors"], correct: 1, explanation: "A stock broker acts as an intermediary, providing investors access to buy and sell on exchanges." },
+      { stem: "In which city is Zerodha's headquarters located?", options: ["Mumbai","Hyderabad","Bengaluru","Delhi"], correct: 2, explanation: "Zerodha is headquartered in Bengaluru, Karnataka." },
+      { stem: "Which is the oldest stock exchange in India?", options: ["BSE (Bombay Stock Exchange)","NSE (National Stock Exchange)","MCX","NCDEX"], correct: 0, explanation: "BSE, established in 1875, is the oldest stock exchange in India and Asia." },
+      { stem: "NSE (National Stock Exchange) was established in which year?", options: ["1992","1875","2000","1985"], correct: 0, explanation: "NSE was established in 1992 and pioneered automated electronic trading in India." },
+      { stem: "The Nifty 50 index tracks how many stocks?", options: ["30","100","50","200"], correct: 2, explanation: "The Nifty 50 tracks the 50 largest and most liquid stocks on the NSE." },
+      { stem: "The BSE Sensex is made up of how many stocks?", options: ["50","30","100","200"], correct: 1, explanation: "The BSE Sensex tracks 30 of the largest and most actively traded stocks on the BSE." },
+      { stem: "Which body regulates the Indian stock market?", options: ["RBI (Reserve Bank of India)","SEBI (Securities and Exchange Board of India)","Ministry of Finance","IRDAI"], correct: 1, explanation: "SEBI is the regulatory authority for securities markets in India." },
+      { stem: "What is the primary purpose of SEBI?", options: ["Print and issue currency","Collect direct taxes","Regulate and develop the securities market and protect investors","Manage government borrowing"], correct: 2, explanation: "SEBI's core mandate is to regulate the securities market and protect investor interests." },
+      { stem: "When a company offers its shares to the public for the very first time, it is called:", options: ["IPO (Initial Public Offering)","FPO (Follow-on Public Offer)","Rights Issue","Buyback"], correct: 0, explanation: "An IPO is when a private company offers shares to the public for the first time." },
+      { stem: "A Demat account is used to:", options: ["Keep physical share certificates safe","Hold securities in electronic (dematerialised) form","Borrow money against shares","Pay dividends to shareholders"], correct: 1, explanation: "A Demat (dematerialised) account holds your shares electronically, replacing physical certificates." },
+      { stem: "What is the main purpose of a Demat account?", options: ["Execute trades directly","Pay brokerage fees","Hold your securities electronically without physical certificates","File income tax returns"], correct: 2, explanation: "A Demat account's primary purpose is to hold securities in electronic form." },
+      { stem: "Who oversees and regulates Demat account operations in India?", options: ["RBI","Ministry of Corporate Affairs","SEBI","IRDA"], correct: 2, explanation: "SEBI regulates all Demat account operations and the depositories (NSDL and CDSL)." },
+      { stem: "A stock broker acts as:", options: ["A government regulator","An intermediary between the investor and the stock exchange","A custodian of cash funds","An issuer of new securities"], correct: 1, explanation: "Brokers are intermediaries — they route investor orders to the exchange." },
+      { stem: "Which entities maintain Demat accounts in India?", options: ["NSE and BSE","RBI and SEBI","NSDL and CDSL","MCX and NCDEX"], correct: 2, explanation: "NSDL and CDSL are the two depositories in India that maintain Demat accounts." },
+      { stem: "In the secondary market, when shares are traded between two investors, the company:", options: ["Receives a small transaction fee","Issues new shares for each trade","Receives nothing — ownership just transfers between investors","Must approve each trade"], correct: 2, explanation: "The company is not involved in secondary market trades — only investor ownership changes." },
+      { stem: "MCX and NCDEX are specialised exchanges for trading in:", options: ["Equities (company shares)","Government securities","Commodities such as metals and agricultural products","Foreign currencies"], correct: 2, explanation: "MCX handles metals and energy, NCDEX handles agricultural commodities." },
+      { stem: "A Market Order executes at:", options: ["A price set by you in advance","The best available price at the moment of execution","The previous day's closing price","A price fixed by SEBI"], correct: 1, explanation: "A Market Order executes immediately at the best available market price." },
+      { stem: "A Limit Order executes:", options: ["Immediately at any price","Only at the specific price you set or better","Only at market opening","Automatically at the closing price"], correct: 1, explanation: "A Limit Order guarantees the price but execution is not guaranteed — it executes only if the market reaches your price." },
+      { stem: "A Stop Loss order is primarily used to:", options: ["Guarantee maximum profit","Buy more shares when the price drops","Limit potential losses by triggering an exit at a defined price","Execute trades at the opening bell"], correct: 2, explanation: "A Stop Loss order automatically exits your position when the price hits a defined level, capping losses." },
+      { stem: "KYC stands for:", options: ["Keep Your Capital","Know Your Currency","Know Your Customer","Keep Your Credentials"], correct: 2, explanation: "KYC — Know Your Customer — is a mandatory verification process for all financial accounts." },
+      { stem: "Settlement in stock trading refers to:", options: ["Calculating brokerage fees","The exchange of money and shares between buyer and seller after a trade","Opening a new trading account","Pledging shares as collateral"], correct: 1, explanation: "Settlement is the process where the buyer receives shares and the seller receives money." },
+      { stem: "Under T+1 settlement, money is debited from the buyer's account:", options: ["On the same day as the trade","After 2 trading days","The next trading day after the trade","After 3 trading days"], correct: 2, explanation: "Under T+1, the buyer's money is debited and the seller's money is credited the next trading day." },
+      { stem: "Under T+1 settlement, purchased shares appear in the buyer's Demat account:", options: ["On the same day","After 2 trading days","The next trading day after the trade","After 3 trading days"], correct: 2, explanation: "Shares are credited to the buyer's Demat account on T+1 (next trading day)." },
+      { stem: "The Clearing Corporation's main function is to:", options: ["Regulate brokers and impose fines","Issue new securities","Guarantee trade settlement and eliminate counterparty risk","Collect STT (Securities Transaction Tax)"], correct: 2, explanation: "Clearing Corporations act as the central counterparty, guaranteeing settlement of all trades." },
+      { stem: "Short delivery occurs when a seller:", options: ["Sells shares at a price below market value","Fails to deliver the sold shares to the exchange by the settlement deadline","Sells more than 10% of total holdings","Places a sell order outside market hours"], correct: 1, explanation: "Short delivery happens when a seller cannot provide the shares they sold by the T+1 deadline." },
+      { stem: "A share (equity) represents:", options: ["A loan you give to the company","A fixed deposit with the company","A unit of ownership in the company","A government-backed bond"], correct: 2, explanation: "Owning a share means owning a fraction of the company." },
+      { stem: "A derivative contract derives its value from:", options: ["A fixed government interest rate","An underlying asset such as a stock, index, or commodity","SEBI policy rates","The broker's risk model"], correct: 1, explanation: "Derivatives — futures and options — get their value from an underlying asset." },
+      { stem: "DDPI (Demat Debit and Pledge Instruction) allows a broker to:", options: ["Open new Demat accounts on your behalf","Debit your shares only for trades specifically initiated by you","Pledge shares without your knowledge","Access all linked family accounts"], correct: 1, explanation: "DDPI is a limited, investor-controlled authorisation — the broker can only debit shares for investor-initiated trades." },
+      { stem: "Adding a nominee to a Demat account ensures that:", options: ["Shares earn higher dividends","The shares are locked for 5 years","The nominee inherits the shares without legal complications","Shares are transferred to the government"], correct: 2, explanation: "Nomination allows smooth transfer of shares to a loved one after the account holder's demise." },
+      { stem: "Which method does the Income Tax Department mandate for calculating capital gains on share sales?", options: ["LIFO (Last In, First Out)","Average Cost method","FIFO (First In, First Out)","Specific Identification"], correct: 2, explanation: "The Income Tax Department mandates FIFO — the oldest shares are treated as sold first." },
+      { stem: "FIFO for computing capital gains on shares is mandated by:", options: ["SEBI","NSE and BSE","Income Tax Department of India","Zerodha's internal policy"], correct: 2, explanation: "FIFO is a tax rule mandated by the Income Tax Department, not a broker or exchange rule." },
+      { stem: "During an IPO, which mechanism blocks funds in the investor's bank account without deducting them until allotment?", options: ["ASBA (Application Supported by Blocked Amount)","DDPI","CMR","eDIS"], correct: 0, explanation: "ASBA blocks funds in your account during IPO bidding — funds are only deducted if shares are allotted." },
+      { stem: "Who manages the IPO process on behalf of the company going public?", options: ["SEBI directly","NSE/BSE jointly","A Merchant Banker appointed as lead manager","The Clearing Corporation"], correct: 2, explanation: "A Merchant Banker guides the company through the entire IPO process as lead manager." },
+      { stem: "DRHP stands for:", options: ["Direct Rights and Holdings Paper","Draft Red Herring Prospectus","Demat Regulatory Holdings Policy","Direct Registration and Holdings Proposal"], correct: 1, explanation: "DRHP — Draft Red Herring Prospectus — is the preliminary document filed with SEBI before an IPO." },
+      { stem: "Where are already-issued shares bought and sold between investors?", options: ["Primary Market","Money Market","Secondary Market","Commodity Market"], correct: 2, explanation: "The secondary market is where investors trade existing shares among themselves (e.g., BSE, NSE)." },
+      { stem: "Zerodha blocks how much of the security value as short delivery margin on Trade day?", options: ["50%","80%","100%","120%"], correct: 3, explanation: "Zerodha blocks 120% of the security's value as short delivery margin on T day to protect against default." },
+      { stem: "For retail investors, IPO allotment in an oversubscribed issue is done via:", options: ["First-come-first-served basis","Lottery to ensure fairness","Highest-bid priority","SEBI selection committee"], correct: 1, explanation: "Retail IPO allotment uses a lottery system when oversubscribed, ensuring equal opportunity." },
+      { stem: "Zerodha is described as a 'bootstrapped' company. This means it:", options: ["Is funded by the Government of India","Raised venture capital funding","Was funded only by its founders and internal profits — no external funding","Is a publicly listed company"], correct: 2, explanation: "Bootstrapped means the company funded itself through founders' capital and profits, without external investors." },
+      { stem: "Without DDPI active, how must a Zerodha client authorize each sell transaction?", options: ["By calling Zerodha customer care","Via eDIS — using CDSL TPIN and an OTP","By visiting the nearest Zerodha branch","By emailing a request to SEBI"], correct: 1, explanation: "Without DDPI, investors use eDIS (electronic Delivery Instruction Slip) with a CDSL TPIN and OTP for each sale." },
+      { stem: "CMR (Client Master Report) is best described as:", options: ["A monthly brokerage and transaction bill","A tax summary issued by SEBI","The identity document for your Demat account containing all KYC-verified details","A share certificate issued by the company"], correct: 2, explanation: "The CMR is the official record of all KYC-verified information linked to your Demat account." },
+      { stem: "Which trading platform was built by Zerodha?", options: ["Groww","Upstox","Kite","Angel One"], correct: 2, explanation: "Kite is Zerodha's proprietary trading platform, widely regarded as one of India's best trading interfaces." },
+      { stem: "Where in Zerodha's platforms can you initiate a Gift Transfer of shares?", options: ["Kite mobile app only","Zerodha branch office","Console (console.zerodha.com) > Portfolio > Holdings","CDSL website directly"], correct: 2, explanation: "Gift Transfers are initiated from Console under Portfolio > Holdings." },
+      { stem: "What is the tax implication for the sender when gifting shares?", options: ["10% long-term capital gains tax applies","5% gift tax applies","No tax implication for the sender","Stamp duty of 0.1% applies"], correct: 2, explanation: "Gifting shares carries no tax implication for the sender — the recipient bears any applicable tax." },
+      { stem: "If shares received as a gift exceed Rs. 50,000 in a financial year, the recipient:", options: ["Pays no tax on gifts","Pays income tax on the value as 'Income from Other Sources'","Pays 10% flat capital gains only","Pays wealth tax"], correct: 1, explanation: "Gifts exceeding Rs. 50,000 are taxable in the recipient's hands as 'Income from Other Sources'." },
+      { stem: "Which depository is sponsored by the NSE and is based in Mumbai?", options: ["CDSL","NSDL","MCX","SEBI"], correct: 1, explanation: "NSDL (National Securities Depository Limited) is sponsored by the NSE and operates from Mumbai." },
+      { stem: "Which depository was promoted by the BSE?", options: ["CDSL (Central Depository Services Limited)","NSDL","MCX","SEBI"], correct: 0, explanation: "CDSL (Central Depository Services Limited) was promoted by the BSE." },
+      { stem: "In 'T+1 settlement', what does 'T' stand for?", options: ["Transfer date","Treasury date","Time of execution","Trade date"], correct: 3, explanation: "'T' stands for Trade date — the day on which the trade is executed." },
+      { stem: "BSE (Bombay Stock Exchange) was established in:", options: ["1885","1875","1900","1950"], correct: 1, explanation: "BSE was established in 1875 as the Native Share and Stock Brokers' Association." },
+      { stem: "DDPI replaced which older authorisation mechanism used by brokers?", options: ["CMR (Client Master Report)","POA (Power of Attorney)","KYC form","eDIS slip"], correct: 1, explanation: "DDPI was introduced as a safer, limited replacement for the older broad Power of Attorney (POA)." },
+      { stem: "IPV (In-Person Verification) at Zerodha is completed via:", options: ["Physical visit to a Zerodha branch","A quick webcam video — no branch visit required","Aadhaar OTP only","A notarised document submission"], correct: 1, explanation: "Zerodha completes IPV digitally through a webcam video, eliminating the need for a branch visit." }
     ];
 
     try {
-      await DB.put('topics', {
-        module: 'stock-market-mcq',
-        title: 'NRI Basics of Stock Market — 54 Questions',
-        description: 'MCQ assessment covering Zerodha, stock exchanges, SEBI, IPO, order types, account opening, settlement, short delivery, gift transfers, and FIFO. 1 mark per question.',
-        scenario: '',
-        checklist: questions,
-        bot_script: [],
-        enabled: true,
-        created_at: new Date().toISOString()
-      });
-      toast('✅ NRI Stock Market topic seeded successfully! Trainees can now take the assessment.', 'success');
+      const hasSet1 = smqTopics.some(t => t.title && t.title.includes('Set 1'));
+      const hasSet2 = smqTopics.some(t => t.title && t.title.includes('Set 2'));
+
+      if (!hasSet1) {
+        await DB.put('topics', {
+          module: 'stock-market-mcq',
+          title: 'NRI Basics of Stock Market — Set 1',
+          description: 'MCQ assessment (Set 1) covering Zerodha, stock exchanges, SEBI, IPO, order types, account opening, settlement, short delivery, gift transfers, and FIFO. 50 questions, 1 mark each.',
+          scenario: '',
+          checklist: set1Questions,
+          bot_script: [],
+          enabled: true,
+          created_at: new Date().toISOString()
+        });
+      }
+      if (!hasSet2) {
+        await DB.put('topics', {
+          module: 'stock-market-mcq',
+          title: 'NRI Basics of Stock Market — Set 2',
+          description: 'MCQ assessment (Set 2) with simpler questions on Zerodha, BSE/NSE, SEBI, IPO, Demat accounts, order types, settlement, and compliance. 50 questions, 1 mark each.',
+          scenario: '',
+          checklist: set2Questions,
+          bot_script: [],
+          enabled: true,
+          created_at: new Date().toISOString()
+        });
+      }
+      if (!silent) toast('✅ NRI Stock Market topics seeded! Two sets of 50 questions are now live.', 'success');
       await renderTopicsList();
     } catch (e) {
-      toast('❌ Seed failed: ' + e.message, 'error');
+      if (!silent) toast('❌ Seed failed: ' + e.message, 'error');
+      else console.error('SMQ auto-seed failed:', e.message);
     }
   }
 
