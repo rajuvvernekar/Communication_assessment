@@ -27,6 +27,12 @@ const App = (() => {
   // Marks per section: Video=2, Audio=5, Reading=3 (by section index 0,1,2)
   const LA_MARKS = [2, 5, 3];
 
+  // ── NRI Stock Market MCQ state ──
+  let _smqQuestions   = [];   // all 54 questions for the chosen topic
+  let _smqCurrentIdx  = 0;    // current question index
+  let _smqUserAnswers = [];   // -1 = unanswered, 0-3 = chosen option index
+  let _smqTopicId     = null; // UUID of the topic row used
+
   // ── Grammar Assessment state ──
   let _gaSections       = [];   // [{id, title, questions}] all sections sorted A → C
   let _gaCurrentSection = 0;    // 0-based index into _gaSections
@@ -243,7 +249,8 @@ const App = (() => {
       'role-play': 'Role Play',
       'group-discussion': 'Group Discussion',
       'written-comm': 'Written Communication',
-      'grammar-assessment': 'Grammar Assessment'
+      'grammar-assessment': 'Grammar Assessment',
+      'stock-market-mcq':   'NRI Stock Market'
     };
     return map[module] || module;
   }
@@ -385,6 +392,11 @@ const App = (() => {
     if (module === 'pick-speak') {
       showScreen('pick-speak');
       initPickSpeakCategory();
+      return;
+    }
+
+    if (module === 'stock-market-mcq') {
+      await initStockMarketMcq();
       return;
     }
 
@@ -1816,6 +1828,128 @@ const App = (() => {
     }
 
     toast('Writing submitted!', 'success');
+  }
+
+  // ================================================================
+  //  NRI STOCK MARKET MCQ — single section, 54 questions, auto-scored
+  // ================================================================
+
+  async function initStockMarketMcq() {
+    const allTopics = enabledTopics(await DB.getByIndex('topics', 'module', 'stock-market-mcq'));
+    if (!allTopics.length) {
+      toast('No stock market questions available. Ask your admin to add some.', 'error');
+      return;
+    }
+
+    // Pick one topic at random (allows multiple sets in future)
+    const topic      = allTopics[Math.floor(Math.random() * allTopics.length)];
+    _smqTopicId      = topic.id;
+    _smqQuestions    = (topic.checklist || []).filter(q => q && q.stem);
+    _smqCurrentIdx   = 0;
+    _smqUserAnswers  = _smqQuestions.map(() => -1);
+
+    if (!_smqQuestions.length) {
+      toast('No questions found in this topic. Ask your admin to check the content.', 'error');
+      return;
+    }
+
+    showScreen('stock-market-mcq');
+    showStep('stock-market-mcq', 'smq-step-intro');
+    $('btn-smq-start').onclick = () => {
+      showStep('stock-market-mcq', 'smq-step-quiz');
+      renderSmqQuestion();
+    };
+  }
+
+  function renderSmqQuestion() {
+    const q     = _smqQuestions[_smqCurrentIdx];
+    const total = _smqQuestions.length;
+    const cur   = _smqCurrentIdx + 1;
+
+    $('smq-progress-bar').style.width = `${((cur - 1) / total) * 100}%`;
+    $('smq-q-num').textContent        = `Question ${cur} of ${total}`;
+    $('smq-q-stem').textContent       = q.stem;
+
+    const container = $('smq-options-container');
+    container.innerHTML = '';
+    const LABELS = ['A', 'B', 'C', 'D'];
+    (q.options || []).forEach((opt, idx) => {
+      const btn     = document.createElement('button');
+      btn.className = 'smq-option-btn' + (_smqUserAnswers[_smqCurrentIdx] === idx ? ' selected' : '');
+      btn.innerHTML = `<span class="smq-option-label">${LABELS[idx]}</span><span>${opt}</span>`;
+      btn.onclick   = () => selectSmqOption(idx);
+      container.appendChild(btn);
+    });
+
+    const prevBtn         = $('btn-smq-prev');
+    prevBtn.style.display = _smqCurrentIdx > 0 ? '' : 'none';
+    prevBtn.onclick       = () => { if (_smqCurrentIdx > 0) { _smqCurrentIdx--; renderSmqQuestion(); } };
+
+    const nextBtn   = $('btn-smq-next');
+    const isLastQ   = _smqCurrentIdx === total - 1;
+    if (!isLastQ) {
+      nextBtn.textContent = 'Next →';
+      nextBtn.onclick     = () => {
+        if (_smqUserAnswers[_smqCurrentIdx] === -1) {
+          toast('Please select an answer before continuing.', 'error'); return;
+        }
+        _smqCurrentIdx++;
+        renderSmqQuestion();
+      };
+    } else {
+      nextBtn.textContent = 'Submit Test ✓';
+      nextBtn.onclick     = () => {
+        if (_smqUserAnswers[_smqCurrentIdx] === -1) {
+          toast('Please select an answer before submitting.', 'error'); return;
+        }
+        submitSmqAssessment();
+      };
+    }
+  }
+
+  function selectSmqOption(idx) {
+    _smqUserAnswers[_smqCurrentIdx] = idx;
+    document.querySelectorAll('#smq-options-container .smq-option-btn').forEach((btn, i) => {
+      btn.classList.toggle('selected', i === idx);
+    });
+  }
+
+  async function submitSmqAssessment() {
+    let correct = 0;
+    const answerRecord = _smqQuestions.map((q, i) => {
+      const chosen  = _smqUserAnswers[i];
+      const isRight = chosen === q.correct;
+      if (isRight) correct++;
+      return { stem: q.stem, chosen, correctAnswer: q.correct, correct: isRight };
+    });
+
+    const total        = _smqQuestions.length;
+    const scoreOutOf100 = total > 0 ? Math.round((correct / total) * 100) : 0;
+
+    try {
+      await DB.put('sessions', {
+        traineeId:    _trainee.id,
+        traineeName:  _trainee.name,
+        module:       'stock-market-mcq',
+        topicId:      _smqTopicId,
+        topicTitle:   'NRI Basics of Stock Market — Full Test',
+        recordingBlob: null,
+        transcript:   '',
+        writtenText:  JSON.stringify({ answerRecord, correct, total, scoreOutOf100 }),
+        aiScores:     { overall: scoreOutOf100, correctAnswers: correct, totalQuestions: total },
+        adminScores:  null,
+        adminComment: '',
+        status:       'ai-evaluated',
+        submittedAt:  new Date().toISOString(),
+        timeTaken:    0
+      });
+      toast('Stock market test submitted!', 'success');
+    } catch (e) {
+      console.error('Session save failed:', e.message);
+      toast('⚠ Could not save session: ' + e.message, 'error');
+    }
+
+    showStep('stock-market-mcq', 'smq-step-results');
   }
 
   // ================================================================
