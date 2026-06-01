@@ -290,6 +290,7 @@
           <option value="scored">Fully Scored</option>
         </select>
         <button id="btn-refresh-assessments" class="btn-ghost">↻ Refresh</button>
+        <button class="btn-ghost" onclick="Admin.reassignUnassignedSessions()" title="Move all (No Manager Assigned) sessions to Leepha Joseph">👤 Fix Unassigned → Leepha Joseph</button>
         <!-- Bulk action buttons (session-level) -->
         <button id="btn-archive-selected" class="btn-ghost" onclick="Admin.archiveSelectedSessions()" disabled style="display:none">📁 Archive Selected</button>
         <button id="btn-restore-selected" class="btn-ghost" onclick="Admin.restoreSelectedSessions()" disabled style="display:none">↩ Restore Selected</button>
