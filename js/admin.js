@@ -953,31 +953,6 @@ window.Admin = (() => {
     toast(name ? `Assigned to "${name}"` : 'Team removed', 'success');
   }
 
-  async function reassignUnassignedSessions(managerName = 'Leepha Joseph') {
-    try {
-      const sessions = await DB.getAll('sessions');
-      let count = 0;
-      sessions.forEach(s => {
-        const assigned = _teamAssignments[s.traineeId];
-        const hasMgr = (assigned && _MANAGER_AGENT_MAP[assigned]) || _getAgentManager(s.traineeName);
-        if (!hasMgr) {
-          _teamAssignments[s.traineeId] = managerName;
-          count++;
-        }
-      });
-      if (count === 0) {
-        toast('No unassigned sessions found — nothing to update.', 'info');
-        return;
-      }
-      await saveTeamAssignments();
-      populateTeamFilter();
-      toast(`✅ ${count} unassigned session(s) reassigned to "${managerName}".`, 'success');
-      await loadAssessments();
-    } catch (e) {
-      toast('❌ Reassignment failed: ' + e.message, 'error');
-    }
-  }
-
   function populateTeamFilter() {
     const sel = $('filter-team');
     if (!sel) return;
@@ -6221,7 +6196,6 @@ window.Admin = (() => {
     openMgrScoreModal,
     saveMgrScore,
     seedStockMarketMcq,
-    reassignUnassignedSessions,
   };
 })();
 
