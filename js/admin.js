@@ -4756,6 +4756,7 @@ window.Admin = (() => {
     "Renuka Mishra":      ["Gonegondla Karanam Venkata Karthik","Adarsh Singh Gautam","Girish A","Saqlain Khalique Shaikh","M Kiran","Keyur P Shah","Ankita Das","Mohd Altaf Bhutta"],
     "Basavaraj Gurav":    ["Shrikanth K","Srawani Deka Basumatary","Vishvajeet Singh","Harshvardhan Singh Rathore","Pratik P Bontra","Rajan Kiran Wagh","Vipul Prakash Sande"],
     "Ratanjeet Maharaj":  ["Roshan KM","Shashank Verma","Martin Davis","Shrutika Sumit Jain","Fiza Kouser","Tejas K Madeval","Khushpreet Kaur","Priyank Sharma"],
+    "Girish A":           [],
     "Gopi Kiran":         ["Masooma Yousuf","Nitin Tanajirao Pimpalpalle","S Mohammed Akhil","Ankit Agarwal","Murgendra Rajashekhar Patil","Mary Salins","Aldrich Frewin Dsouza"],
     "Shwethayini":        ["Sridevi K V","Suman Janghel","Chandan Kumar","Rahul Kumar","Ravi Kumar Deo","Vishal Bhattar","Rohini Kumari","Nikhil Murlidhar Bhatkar","Mutyala Dinesh"],
     "Swanand Dixit":      ["Deepanshi Lalwani","Roshni","Mayank Lodha","Alamgir Haque","Karthik R","Sachinkumar Ghanti B","Bharat Halagalimath"]
