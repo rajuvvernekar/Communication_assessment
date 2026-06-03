@@ -1918,12 +1918,19 @@ const App = (() => {
     let correct = 0;
     const answerRecord = _smqQuestions.map((q, i) => {
       const chosen  = _smqUserAnswers[i];
-      const isRight = chosen === q.correct;
+      const isRight = (chosen !== undefined && chosen !== null) ? chosen === q.correct : false;
       if (isRight) correct++;
-      return { stem: q.stem, chosen, correctAnswer: q.correct, correct: isRight };
+      return {
+        stem:        q.stem,
+        options:     q.options,
+        userAnswer:  chosen ?? null,
+        isCorrect:   isRight,
+        correct:     q.correct,
+        explanation: q.explanation || ''
+      };
     });
 
-    const total        = _smqQuestions.length;
+    const total         = _smqQuestions.length;
     const scoreOutOf100 = total > 0 ? Math.round((correct / total) * 100) : 0;
 
     try {
@@ -1936,7 +1943,7 @@ const App = (() => {
         recordingBlob: null,
         transcript:   '',
         writtenText:  JSON.stringify({ answerRecord, correct, total, scoreOutOf100 }),
-        aiScores:     { overall: scoreOutOf100, correctAnswers: correct, totalQuestions: total },
+        aiScores:     { overall: scoreOutOf100, marksObtained: correct, totalMarks: total },
         adminScores:  null,
         adminComment: '',
         status:       'ai-evaluated',

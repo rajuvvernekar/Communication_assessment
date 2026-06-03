@@ -1452,8 +1452,8 @@ window.Admin = (() => {
       $('topic-scenario').value = topic.scenario || '';
       _callerAudioBlob = topic.callerAudioBlob || null;
 
-      if (topic.module === 'grammar-assessment' || topic.module === 'listening-assessment') {
-        // checklist holds question objects for grammar/listening-assessment
+      if (topic.module === 'grammar-assessment' || topic.module === 'listening-assessment' || topic.module === 'stock-market-mcq') {
+        // checklist holds question objects for grammar/listening/stock-market-mcq
         const questions = (topic.checklist || []).filter(q => q && typeof q === 'object' && q.stem);
         renderMcqQuestions(questions);
         renderChecklistItems([]);
@@ -1489,7 +1489,7 @@ window.Admin = (() => {
 
   function toggleMockCallFields(module) {
     const isMC  = module === 'mock-call';
-    const isMCQ = module === 'grammar-assessment' || module === 'listening-assessment';
+    const isMCQ = module === 'grammar-assessment' || module === 'listening-assessment' || module === 'stock-market-mcq';
     $('topic-caller-audio-group').style.display = isMC ? '' : 'none';
     $('topic-bot-script-group').style.display    = isMC ? '' : 'none';
     $('topic-mcq-group').style.display           = isMCQ ? '' : 'none';
@@ -1880,7 +1880,7 @@ window.Admin = (() => {
     if (!title) { toast('Please enter a title.', 'error'); return; }
 
     let checklist;
-    if (module === 'grammar-assessment' || module === 'listening-assessment') {
+    if (module === 'grammar-assessment' || module === 'listening-assessment' || module === 'stock-market-mcq') {
       // Collect MCQ questions from the editor blocks
       const blocks = document.querySelectorAll('#mcq-questions-list .mcq-question-block');
       const questions = [];
@@ -2155,7 +2155,7 @@ window.Admin = (() => {
       } else if (s.aiScores && typeof SpeechEngine !== 'undefined') {
         aiSummary = SpeechEngine.generateCoachingSummary(s.module, s.aiScores);
       }
-      const isAutoScoredModule = s.module === 'grammar-assessment' || s.module === 'listening-assessment';
+      const isAutoScoredModule = s.module === 'grammar-assessment' || s.module === 'listening-assessment' || s.module === 'stock-market-mcq';
       const adminSummary = (s.adminScores && !isAutoScoredModule && typeof SpeechEngine !== 'undefined')
         ? SpeechEngine.generateCoachingSummary(s.module, s.adminScores, 'admin')
         : (s.adminScores && isAutoScoredModule ? 'Reviewed by admin' : '');
@@ -2662,7 +2662,8 @@ window.Admin = (() => {
     const isWritten   = session.module === 'written-comm';
     const isGrammar   = session.module === 'grammar-assessment';
     const isListening = session.module === 'listening-assessment';
-    const isMCQ       = isGrammar || isListening;
+    const isSmq       = session.module === 'stock-market-mcq';
+    const isMCQ       = isGrammar || isListening || isSmq;
 
     // Show correct left-panel section based on module type
     if (isMCQ) {
@@ -2727,12 +2728,12 @@ window.Admin = (() => {
             </div>`;
           }).join('');
         } else {
-          // ── Legacy format: flat answerRecord array
-          const answerRecord = Array.isArray(parsed) ? parsed : [];
-          const correct = answerRecord.filter(a => a.isCorrect).length;
-          const total   = answerRecord.length;
-          const pct     = total > 0 ? Math.round((correct / total) * 100) : 0;
-          $('scoring-mcq-score').textContent = `Score: ${correct} / ${total} correct (${pct}%)`;
+          // ── Flat format: bare array (grammar legacy) or SMQ object { answerRecord, correct, total }
+          const answerRecord = Array.isArray(parsed) ? parsed : (parsed.answerRecord || []);
+          const correct = parsed.correct != null ? parsed.correct : answerRecord.filter(a => a.isCorrect).length;
+          const total   = parsed.total   != null ? parsed.total   : answerRecord.length;
+          const pct     = parsed.scoreOutOf100 ?? (total > 0 ? Math.round((correct / total) * 100) : 0);
+          $('scoring-mcq-score').textContent = `Score: ${correct} / ${total} marks (${pct}%)`;
           $('scoring-mcq-review').innerHTML  = answerRecord.map((item, i) => {
             const userLbl    = item.userAnswer >= 0 ? LABELS[item.userAnswer] : '—';
             const correctLbl = LABELS[item.correct];
@@ -2780,11 +2781,13 @@ window.Admin = (() => {
       // Grammar/Listening assessment: show a simple score summary, not individual criteria bars
       if (isMCQ) {
         const { overall, correctAnswers, totalQuestions, marksObtained, totalMarks } = session.aiScores;
-        const accentColor  = isListening ? '#db2777' : '#7c3aed';
-        const accentBorder = isListening ? '#fbcfe8' : '#ddd6fe';
-        const accentBg2    = isListening ? '#fdf2f8' : '#f5f3ff';
-        const accentDark   = isListening ? '#be185d' : '#6d28d9';
-        const scoreDisplay = marksObtained != null ? `${marksObtained} / ${totalMarks ?? '?'} marks` : `${correctAnswers ?? '?'} / ${totalQuestions ?? '?'}`;
+        const accentColor  = isSmq ? '#059669' : (isListening ? '#db2777' : '#7c3aed');
+        const accentBorder = isSmq ? '#a7f3d0' : (isListening ? '#fbcfe8' : '#ddd6fe');
+        const accentBg2    = isSmq ? '#ecfdf5' : (isListening ? '#fdf2f8' : '#f5f3ff');
+        const accentDark   = isSmq ? '#065f46' : (isListening ? '#be185d' : '#6d28d9');
+        const marks  = marksObtained ?? correctAnswers;
+        const maxMrk = totalMarks ?? totalQuestions;
+        const scoreDisplay = marks != null ? `${marks} / ${maxMrk ?? '?'} marks` : `${overall ?? '?'}%`;
         aiDisplay.innerHTML = `
           <div style="background:${accentBg2};border:1px solid ${accentBorder};border-radius:8px;padding:0.75rem;text-align:center;margin-bottom:0.5rem">
             <div style="font-size:1.5rem;font-weight:800;color:${accentColor}">${scoreDisplay}</div>
