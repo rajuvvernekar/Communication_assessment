@@ -1017,6 +1017,16 @@ window.Admin = (() => {
   // ---- Topics ----
   async function loadTopics() {
     initTopicModal();
+
+    try {
+      const allTopics = await DB.getAll('topics');
+      const smqTopics = allTopics.filter(t => t.module === 'stock-market-mcq');
+      const hasSet4   = smqTopics.some(t => t.title && t.title.includes('Set 4'));
+      if (!smqTopics.length || !hasSet4) {
+        await seedStockMarketMcq(true);
+      }
+    } catch (_) {}
+
     renderTopicsList();
 
     document.querySelectorAll('.tab-btn').forEach(btn => {
