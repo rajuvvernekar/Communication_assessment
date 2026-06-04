@@ -150,16 +150,18 @@
       <div class="ga-intro-meta">
         <div class="ga-meta-item"><span class="ga-meta-icon">📋</span><span>54 Questions</span></div>
         <div class="ga-meta-item"><span class="ga-meta-icon">🏆</span><span>54 Marks</span></div>
-        <div class="ga-meta-item"><span class="ga-meta-icon">⏱️</span><span>No time limit</span></div>
+        <div class="ga-meta-item"><span class="ga-meta-icon">⏱️</span><span>60 Minutes</span></div>
       </div>
 
       <div class="ga-intro-rules">
         <h4>Instructions</h4>
         <ul>
-          <li>All 54 questions are multiple choice — select the best answer.</li>
+          <li>All questions are multiple choice — select the best answer.</li>
+          <li>You have <strong>60 minutes</strong> to complete the test. The timer starts when you click Start.</li>
+          <li>The test will <strong>auto-submit</strong> when time is up — all answered questions will be scored.</li>
           <li>Use <strong>← Previous</strong> to revisit earlier questions.</li>
           <li>No negative marking — attempt all questions.</li>
-          <li>Click <strong>Submit Test</strong> on the final question.</li>
+          <li>Click <strong>Submit Test</strong> on the final question to submit early.</li>
           <li>Topics: Zerodha, Exchanges, SEBI, IPO, Orders, Account Opening, Settlement, Short Delivery, Gifts, FIFO.</li>
         </ul>
       </div>
@@ -172,10 +174,13 @@
   <!-- Step 2: Quiz -->
   <div class="step-container hidden" id="smq-step-quiz">
     <div class="step-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem">
+        <div class="smq-question-num" id="smq-q-num" style="margin-bottom:0">Question 1 of 54</div>
+        <div id="smq-timer" style="font-size:0.9rem;font-weight:700;color:var(--smq-color);letter-spacing:0.03em">⏱ 60:00</div>
+      </div>
       <div class="smq-progress-bar-wrap">
         <div id="smq-progress-bar" class="smq-progress-bar" style="width:0%"></div>
       </div>
-      <div class="smq-question-num" id="smq-q-num">Question 1 of 54</div>
       <div class="smq-question-stem" id="smq-q-stem"></div>
       <div class="smq-options-grid" id="smq-options-container"></div>
       <div class="ga-nav-row">

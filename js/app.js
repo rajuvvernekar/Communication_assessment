@@ -28,10 +28,12 @@ const App = (() => {
   const LA_MARKS = [2, 5, 3];
 
   // ── NRI Stock Market MCQ state ──
-  let _smqQuestions   = [];   // all 54 questions for the chosen topic
-  let _smqCurrentIdx  = 0;    // current question index
-  let _smqUserAnswers = [];   // -1 = unanswered, 0-3 = chosen option index
-  let _smqTopicId     = null; // UUID of the topic row used
+  let _smqQuestions      = [];   // all questions for the chosen topic
+  let _smqCurrentIdx     = 0;    // current question index
+  let _smqUserAnswers    = [];   // -1 = unanswered, 0-3 = chosen option index
+  let _smqTopicId        = null; // UUID of the topic row used
+  let _smqTimerInterval  = null; // setInterval handle for countdown
+  let _smqStartTime      = null; // Date.now() when quiz started
 
   // ── Grammar Assessment state ──
   let _gaSections       = [];   // [{id, title, questions}] all sections sorted A → C
@@ -1857,8 +1859,34 @@ const App = (() => {
     showStep('stock-market-mcq', 'smq-step-intro');
     $('btn-smq-start').onclick = () => {
       showStep('stock-market-mcq', 'smq-step-quiz');
+      _smqStartTime = Date.now();
+      startSmqTimer();
       renderSmqQuestion();
     };
+  }
+
+  function startSmqTimer() {
+    const DURATION = 60 * 60; // 60 minutes in seconds
+    let remaining  = DURATION;
+    const el = $('smq-timer');
+
+    function tick() {
+      const m = String(Math.floor(remaining / 60)).padStart(2, '0');
+      const s = String(remaining % 60).padStart(2, '0');
+      if (el) {
+        el.textContent = `⏱ ${m}:${s}`;
+        el.style.color = remaining <= 300 ? '#dc2626' : '';  // red when ≤ 5 min
+      }
+      if (remaining <= 0) {
+        clearInterval(_smqTimerInterval);
+        _smqTimerInterval = null;
+        submitSmqAssessment();
+        return;
+      }
+      remaining--;
+    }
+    tick();
+    _smqTimerInterval = setInterval(tick, 1000);
   }
 
   function renderSmqQuestion() {
@@ -1915,6 +1943,8 @@ const App = (() => {
   }
 
   async function submitSmqAssessment() {
+    if (_smqTimerInterval) { clearInterval(_smqTimerInterval); _smqTimerInterval = null; }
+    const timeTaken = _smqStartTime ? Math.round((Date.now() - _smqStartTime) / 1000) : 0;
     let correct = 0;
     const answerRecord = _smqQuestions.map((q, i) => {
       const chosen  = _smqUserAnswers[i];
@@ -1948,7 +1978,7 @@ const App = (() => {
         adminComment: '',
         status:       'ai-evaluated',
         submittedAt:  new Date().toISOString(),
-        timeTaken:    0
+        timeTaken:    timeTaken
       });
       toast('Stock market test submitted!', 'success');
     } catch (e) {
