@@ -2600,20 +2600,28 @@ window.Admin = (() => {
 
   // ---- Delete All Sessions ----
   async function deleteAllSessions() {
-    const sessions = await DB.getAll('sessions');
+    const allSessions = _cachedSessions.length ? _cachedSessions : await DB.getAll('sessions');
+
+    // Scope to the currently drilled-in manager, if any
+    const managerName = _currentManagerDrill;
+    const sessions = managerName
+      ? allSessions.filter(s => _resolveSessionManager(s) === managerName)
+      : allSessions;
+
     if (!sessions.length) {
-      toast('No assessments to delete.', '');
+      toast(managerName ? `No assessments found for ${managerName}.` : 'No assessments to delete.', '');
       return;
     }
 
-    // Two-step confirmation for a destructive bulk action
+    const label = managerName ? `${managerName}'s team` : 'ALL trainees';
+
     const step1 = confirm(
-      `⚠️ Delete ALL Assessments?\n\nThis will permanently delete ${sessions.length} assessment record${sessions.length !== 1 ? 's' : ''} across all trainees and modules.\n\nThis action cannot be undone.`
+      `⚠️ Delete Assessments for ${label}?\n\nThis will permanently delete ${sessions.length} assessment record${sessions.length !== 1 ? 's' : ''}.\n\nThis action cannot be undone.`
     );
     if (!step1) return;
 
     const step2 = confirm(
-      `Are you absolutely sure?\n\nAll ${sessions.length} assessments — including scores, transcripts, and recordings — will be deleted permanently.`
+      `Are you absolutely sure?\n\nAll ${sessions.length} assessment${sessions.length !== 1 ? 's' : ''} for ${label} — including scores, transcripts, and recordings — will be deleted permanently.`
     );
     if (!step2) return;
 
@@ -2621,14 +2629,14 @@ window.Admin = (() => {
     if (btn) { btn.disabled = true; btn.textContent = '🗑 Deleting…'; }
 
     try {
-      // Delete all using Supabase bulk delete (not null filter matches every row)
+      const ids = sessions.map(s => s.id);
       const { error } = await DB.getClient()
         .from('sessions')
         .delete()
-        .not('id', 'is', null);
+        .in('id', ids);
       if (error) throw error;
 
-      toast(`✅ All ${sessions.length} assessments deleted.`, 'success');
+      toast(`✅ ${sessions.length} assessment${sessions.length !== 1 ? 's' : ''} deleted${managerName ? ` for ${managerName}` : ''}.`, 'success');
       await updatePendingBadge();
       loadAssessments();
     } catch (e) {
