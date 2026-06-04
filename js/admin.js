@@ -2201,6 +2201,94 @@ window.Admin = (() => {
     toast('Excel file downloaded!', 'success');
   }
 
+  // ---- NRI Stock Market — Wrong Answers Report ----
+  async function downloadSmqWrongAnswersReport() {
+    const sessions = await DB.getAll('sessions');
+    const smqSessions = sessions.filter(s => s.module === 'stock-market-mcq' && s.writtenText);
+
+    if (!smqSessions.length) {
+      toast('No NRI Stock Market test sessions found.', '');
+      return;
+    }
+
+    const LABELS = ['A', 'B', 'C', 'D'];
+    // Map: stem → { stem, options, correctIdx, explanation, wrongBy:[{name, chosen}] }
+    const wrongMap = {};
+
+    smqSessions.forEach(session => {
+      let parsed;
+      try { parsed = JSON.parse(session.writtenText); } catch { return; }
+      const answerRecord = Array.isArray(parsed) ? parsed : (parsed.answerRecord || []);
+      answerRecord.forEach(ans => {
+        if (ans.isCorrect || !ans.stem) return;
+        if (!wrongMap[ans.stem]) {
+          wrongMap[ans.stem] = {
+            stem: ans.stem,
+            options: ans.options || [],
+            correctIdx: ans.correct,
+            explanation: ans.explanation || '',
+            wrongBy: []
+          };
+        }
+        wrongMap[ans.stem].wrongBy.push({
+          name: session.traineeName || 'Unknown',
+          chosen: ans.userAnswer
+        });
+      });
+    });
+
+    const wrongQuestions = Object.values(wrongMap)
+      .sort((a, b) => b.wrongBy.length - a.wrongBy.length);
+
+    if (!wrongQuestions.length) {
+      toast('All agents answered every question correctly!', 'success');
+      return;
+    }
+
+    const totalAgents = smqSessions.length;
+    const date = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+
+    let doc = `# NRI Stock Market — Wrong Answers Report\n\n`;
+    doc += `**Agents who completed the test:** ${totalAgents}\n`;
+    doc += `**Questions missed by at least one agent:** ${wrongQuestions.length}\n`;
+    doc += `**Generated:** ${date}\n\n`;
+    doc += `---\n\n`;
+
+    wrongQuestions.forEach((q, i) => {
+      const pct = Math.round((q.wrongBy.length / totalAgents) * 100);
+      doc += `## Q${i + 1}. ${q.stem}\n\n`;
+      doc += `**Missed by:** ${q.wrongBy.length} of ${totalAgents} agent${totalAgents !== 1 ? 's' : ''} (${pct}%)\n\n`;
+
+      q.options.forEach((opt, idx) => {
+        const tick = idx === q.correctIdx ? ' ✅' : '';
+        doc += `- **${LABELS[idx] || idx})** ${opt}${tick}\n`;
+      });
+
+      doc += `\n**Correct Answer:** ${LABELS[q.correctIdx] || '?'}) ${q.options[q.correctIdx] || ''}\n\n`;
+      if (q.explanation) doc += `**Explanation:** ${q.explanation}\n\n`;
+
+      doc += `**Agents who answered incorrectly:**\n\n`;
+      doc += `| Agent | Chose |\n|---|---|\n`;
+      q.wrongBy.forEach(w => {
+        const chosenLabel = (w.chosen != null && w.chosen >= 0 && w.chosen < q.options.length)
+          ? `${LABELS[w.chosen]}) ${q.options[w.chosen]}`
+          : 'Unanswered';
+        doc += `| ${w.name} | ${chosenLabel} |\n`;
+      });
+
+      doc += `\n---\n\n`;
+    });
+
+    const blob = new Blob([doc], { type: 'text/markdown' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `NRI_Wrong_Answers_${new Date().toISOString().slice(0, 10)}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast(`✅ Report downloaded — ${wrongQuestions.length} questions missed across ${totalAgents} agents.`, 'success');
+  }
+
   function applyAssessmentFilters(sessions, topicMap) {
     // First split by archive status (stored in settings, not a DB column)
     let filtered = _viewArchive
@@ -6267,6 +6355,7 @@ window.Admin = (() => {
     deleteSelectedTrainees,
     deleteAllTrainees,
     downloadCSV,
+    downloadSmqWrongAnswersReport,
     downloadRecording,
     downloadAllRecordings,
     deleteSession,
