@@ -1125,7 +1125,7 @@ window.Admin = (() => {
 
     try {
       const allTopics = await DB.getAll('topics');
-      if (allTopics.filter(t => t.module === 'stock-market-mcq' && t.title && (t.title.includes('Set 1') || t.title.includes('Set 2') || t.title.includes('Set 3'))).length < 3) {
+      if (!allTopics.some(t => t.module === 'stock-market-mcq')) {
         await seedStockMarketMcq(true);
       }
     } catch (_) {}
