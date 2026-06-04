@@ -2277,15 +2277,6 @@ window.Admin = (() => {
       doc += `\n**Correct Answer:** ${LABELS[q.correctIdx] || '?'}) ${q.options[q.correctIdx] || ''}\n\n`;
       if (q.explanation) doc += `**Explanation:** ${q.explanation}\n\n`;
 
-      doc += `**Agents who answered incorrectly:**\n\n`;
-      doc += `| Agent | Chose |\n|---|---|\n`;
-      q.wrongBy.forEach(w => {
-        const chosenLabel = (w.chosen != null && w.chosen >= 0 && w.chosen < q.options.length)
-          ? `${LABELS[w.chosen]}) ${q.options[w.chosen]}`
-          : 'Unanswered';
-        doc += `| ${w.name} | ${chosenLabel} |\n`;
-      });
-
       doc += `\n---\n\n`;
     });
 
