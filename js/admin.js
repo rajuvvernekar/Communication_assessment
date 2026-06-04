@@ -2647,6 +2647,51 @@ window.Admin = (() => {
     }
   }
 
+  // ---- Deduplicate sessions for a specific trainee ----
+  // Keeps the most recent session per module, deletes all older duplicates.
+  // Call from browser console: Admin.deduplicateTraineeSessions('Mehul')
+  async function deduplicateTraineeSessions(nameFragment) {
+    const all = await DB.getAll('sessions');
+    const needle = nameFragment.trim().toLowerCase();
+    const matched = all.filter(s => s.traineeName && s.traineeName.toLowerCase().includes(needle));
+
+    if (!matched.length) {
+      toast(`No sessions found matching "${nameFragment}".`, '');
+      return;
+    }
+
+    // Group by module, keep latest per group, collect the rest for deletion
+    const groups = {};
+    matched.forEach(s => {
+      if (!groups[s.module]) groups[s.module] = [];
+      groups[s.module].push(s);
+    });
+
+    const toDelete = [];
+    Object.entries(groups).forEach(([mod, sessions]) => {
+      if (sessions.length <= 1) return;
+      sessions.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+      toDelete.push(...sessions.slice(1)); // keep index 0 (newest), delete the rest
+    });
+
+    if (!toDelete.length) {
+      toast(`No duplicates found for "${nameFragment}".`, '');
+      return;
+    }
+
+    const traineeName = matched[0].traineeName;
+    if (!confirm(`Delete ${toDelete.length} duplicate session(s) for "${traineeName}"?\n\nThe most recent entry per module will be kept. This cannot be undone.`)) return;
+
+    try {
+      for (const s of toDelete) await DB.del('sessions', s.id);
+      toast(`✅ Deleted ${toDelete.length} duplicate session(s) for "${traineeName}".`, 'success');
+      await updatePendingBadge();
+      loadAssessments();
+    } catch (e) {
+      toast('Failed to delete duplicates: ' + e.message, 'error');
+    }
+  }
+
   // ---- Scoring Modal ----
   function initScoringModal() {
     $('btn-close-scoring').onclick = closeScoringModal;
@@ -4764,7 +4809,7 @@ window.Admin = (() => {
     "Renuka Mishra":      ["Gonegondla Karanam Venkata Karthik","Adarsh Singh Gautam","Girish A","Saqlain Khalique Shaikh","M Kiran","Keyur P Shah","Ankita Das","Mohd Altaf Bhutta"],
     "Basavaraj Gurav":    ["Shrikanth K","Srawani Deka Basumatary","Vishvajeet Singh","Harshvardhan Singh Rathore","Pratik P Bontra","Rajan Kiran Wagh","Vipul Prakash Sande"],
     "Ratanjeet Maharaj":  ["Roshan KM","Shashank Verma","Martin Davis","Shrutika Sumit Jain","Fiza Kouser","Tejas K Madeval","Khushpreet Kaur","Priyank Sharma"],
-    "Girish A":           [],
+    "Girish A":           ["Vansh Agarwal"],
     "Gopi Kiran":         ["Masooma Yousuf","Nitin Tanajirao Pimpalpalle","S Mohammed Akhil","Ankit Agarwal","Murgendra Rajashekhar Patil","Mary Salins","Aldrich Frewin Dsouza"],
     "Shwethayini":        ["Sridevi K V","Suman Janghel","Chandan Kumar","Rahul Kumar","Ravi Kumar Deo","Vishal Bhattar","Rohini Kumari","Nikhil Murlidhar Bhatkar","Mutyala Dinesh"],
     "Swanand Dixit":      ["Deepanshi Lalwani","Roshni","Mayank Lodha","Alamgir Haque","Karthik R","Sachinkumar Ghanti B","Bharat Halagalimath"]
@@ -6226,6 +6271,7 @@ window.Admin = (() => {
     downloadAllRecordings,
     deleteSession,
     deleteAllSessions,
+    deduplicateTraineeSessions,
     copyLetter,
     downloadTraineePPT,
     downloadMasterExcel,
