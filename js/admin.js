@@ -2225,13 +2225,14 @@ window.Admin = (() => {
     const uniqueSessions = Object.values(latestByTrainee);
     const totalAgents = uniqueSessions.length;
 
-    // Map: stem → { stem, options, correctIdx, explanation, wrongByMap:{name→chosen} }
+    // Map: stem → { stem, options, correctIdx, explanation, seenNames:Set, count }
     const wrongMap = {};
 
     uniqueSessions.forEach(session => {
       let parsed;
       try { parsed = JSON.parse(session.writtenText); } catch { return; }
       const answerRecord = Array.isArray(parsed) ? parsed : (parsed.answerRecord || []);
+      const agentKey = (session.traineeName || 'unknown').trim().toLowerCase();
       answerRecord.forEach(ans => {
         if (ans.isCorrect || !ans.stem) return;
         if (!wrongMap[ans.stem]) {
@@ -2240,17 +2241,20 @@ window.Admin = (() => {
             options: ans.options || [],
             correctIdx: ans.correct,
             explanation: ans.explanation || '',
-            wrongByMap: {}
+            seenNames: new Set(),
+            count: 0
           };
         }
-        // One entry per agent — keyed by name so duplicates within a session are also collapsed
-        wrongMap[ans.stem].wrongByMap[session.traineeName || 'Unknown'] = ans.userAnswer;
+        // Count each agent only once per question
+        if (!wrongMap[ans.stem].seenNames.has(agentKey)) {
+          wrongMap[ans.stem].seenNames.add(agentKey);
+          wrongMap[ans.stem].count++;
+        }
       });
     });
 
     const wrongQuestions = Object.values(wrongMap)
-      .map(q => ({ ...q, wrongBy: Object.entries(q.wrongByMap).map(([name, chosen]) => ({ name, chosen })) }))
-      .sort((a, b) => b.wrongBy.length - a.wrongBy.length);
+      .sort((a, b) => b.count - a.count);
 
     if (!wrongQuestions.length) {
       toast('All agents answered every question correctly!', 'success');
@@ -2265,9 +2269,9 @@ window.Admin = (() => {
     doc += `---\n\n`;
 
     wrongQuestions.forEach((q, i) => {
-      const pct = Math.round((q.wrongBy.length / totalAgents) * 100);
+      const pct = Math.round((q.count / totalAgents) * 100);
       doc += `## Q${i + 1}. ${q.stem}\n\n`;
-      doc += `**Missed by:** ${q.wrongBy.length} of ${totalAgents} agent${totalAgents !== 1 ? 's' : ''} (${pct}%)\n\n`;
+      doc += `**Missed by:** ${q.count} of ${totalAgents} agent${totalAgents !== 1 ? 's' : ''} (${pct}%)\n\n`;
 
       q.options.forEach((opt, idx) => {
         const tick = idx === q.correctIdx ? ' ✅' : '';
@@ -2287,7 +2291,7 @@ window.Admin = (() => {
     a.download = `NRI_Wrong_Answers_${new Date().toISOString().slice(0, 10)}.md`;
     a.click();
     URL.revokeObjectURL(url);
-    toast(`✅ Report downloaded — ${wrongQuestions.length} questions missed across ${totalAgents} agents.`, 'success');
+    toast(`✅ Report downloaded — ${wrongQuestions.length} question${wrongQuestions.length !== 1 ? 's' : ''} missed across ${totalAgents} agent${totalAgents !== 1 ? 's' : ''}.`, 'success');
   }
 
   function applyAssessmentFilters(sessions, topicMap) {
