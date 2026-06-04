@@ -2212,10 +2212,23 @@ window.Admin = (() => {
     }
 
     const LABELS = ['A', 'B', 'C', 'D'];
-    // Map: stem → { stem, options, correctIdx, explanation, wrongBy:[{name, chosen}] }
+
+    // Deduplicate sessions: one per trainee — keep the most recent submission
+    const latestByTrainee = {};
+    smqSessions.forEach(s => {
+      const key = (s.traineeName || 'Unknown').trim().toLowerCase();
+      const existing = latestByTrainee[key];
+      if (!existing || new Date(s.submittedAt) > new Date(existing.submittedAt)) {
+        latestByTrainee[key] = s;
+      }
+    });
+    const uniqueSessions = Object.values(latestByTrainee);
+    const totalAgents = uniqueSessions.length;
+
+    // Map: stem → { stem, options, correctIdx, explanation, wrongByMap:{name→chosen} }
     const wrongMap = {};
 
-    smqSessions.forEach(session => {
+    uniqueSessions.forEach(session => {
       let parsed;
       try { parsed = JSON.parse(session.writtenText); } catch { return; }
       const answerRecord = Array.isArray(parsed) ? parsed : (parsed.answerRecord || []);
@@ -2227,25 +2240,22 @@ window.Admin = (() => {
             options: ans.options || [],
             correctIdx: ans.correct,
             explanation: ans.explanation || '',
-            wrongBy: []
+            wrongByMap: {}
           };
         }
-        wrongMap[ans.stem].wrongBy.push({
-          name: session.traineeName || 'Unknown',
-          chosen: ans.userAnswer
-        });
+        // One entry per agent — keyed by name so duplicates within a session are also collapsed
+        wrongMap[ans.stem].wrongByMap[session.traineeName || 'Unknown'] = ans.userAnswer;
       });
     });
 
     const wrongQuestions = Object.values(wrongMap)
+      .map(q => ({ ...q, wrongBy: Object.entries(q.wrongByMap).map(([name, chosen]) => ({ name, chosen })) }))
       .sort((a, b) => b.wrongBy.length - a.wrongBy.length);
 
     if (!wrongQuestions.length) {
       toast('All agents answered every question correctly!', 'success');
       return;
     }
-
-    const totalAgents = smqSessions.length;
     const date = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
     let doc = `# NRI Stock Market — Wrong Answers Report\n\n`;
