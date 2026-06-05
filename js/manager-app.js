@@ -358,21 +358,10 @@ Minimum 300 words.` },
         scenario:'Arjun has 5 years of experience and is technically your best agent. However, he consistently dismisses new processes, is condescending to newer team members in public, and says "we\'ve always done it this way."\n\nGive Arjun clear, direct feedback on his behaviour and its impact on team culture.' },
     ],
     'mgr-eq': [
-      {
-        id: 'mr1',
-        title: 'Situation 1: The Team Breakdown',
-        scenario: `During a high-stakes weekly team sync with 12 people, Kavya — a reliable mid-level performer — suddenly turns off her camera, unmutes, and says in a trembling voice:\n\n"I'm sorry. I just can't do this anymore. The workload is impossible and I feel like no matter what I do, it's never enough. I am signing off."\n\nShe leaves the meeting. The rest of the team goes completely silent, waiting for your response.`
-      },
-      {
-        id: 'mr2',
-        title: 'Situation 2: The Direct Client Attack',
-        scenario: `Thirty minutes after Kavya's breakdown, you receive an unscheduled call from a major enterprise client who is furious. He yells:\n\n"Your team has completely botched the integration! I don't care that you're short-staffed — that's your problem, not mine. I want this fixed by end of day, or we are pulling our contract. Do you understand how incompetent this makes you look?"`
-      },
-      {
-        id: 'mr3',
-        title: 'Situation 3: The Public Peer Undermining',
-        scenario: `At the end of the day, during the regional management sync attended by your Director and 4 other managers, one peer manager says publicly:\n\n"I noticed your team had some major slippages today. Frankly, this seems like a pattern of leadership failure rather than just workload. Maybe we need to step in and restructure your team's oversight."`
-      }
+      { id:'eq1', title:'In-the-Moment Crisis',
+        scenario:'During a team meeting, a team member suddenly becomes visibly distressed and says: "I\'m sorry, I can\'t do this anymore. I am completely overwhelmed. Everything is falling apart."\n\nThe rest of the team is watching.\n\nWrite your response: What do you say and do in the next 5 minutes? What actions do you take in the 24 hours after? How do you handle the rest of the team? (Min 150 words)' },
+      { id:'eq2', title:'The Public Undermining',
+        scenario:'In a leadership review meeting attended by 15 people including your team, a peer manager says: "I think the numbers from [your team] are a bit misleading — they\'re hitting targets but the quality issues tell a different story. Maybe the management style needs a rethink."\n\nWrite your response: How do you handle this in the moment without escalating? What do you do afterwards with the peer, your team, and leadership? What does this situation tell you about your own emotional regulation? (Min 150 words)' },
     ],
     'mgr-management-skills': [
       { id:'ms1', title:'30-60-90 Day Plan',
@@ -424,11 +413,11 @@ Let's get back on track.
 
   // ── Module metadata ──────────────────────────────────────
   const MODULE_META = {
-    'mgr-situation-room':    { label: 'Assessment 1 — The Situation Room',    type: 'situation-room', icon: '🎯' },
-    'mgr-transcript-autopsy':{ label: 'Assessment 2 — Transcript Autopsy',    type: 'written',     icon: '📋', minWords: 220 },
-    'mgr-mock-call':         { label: 'Assessment 3 — The Paper Trade',       type: 'audio',       icon: '📞' },
-    'mgr-feedback':          { label: 'Assessment 4 — The Red Pen',           type: 'feedback-ai', icon: '💬' },
-    'mgr-eq':                { label: 'Assessment 5 — The Mirror Room',       type: 'written',    icon: '🧠', minWords: 150 },
+    'mgr-situation-room':    { label: 'The Situation Room',    type: 'situation-room', icon: '🎯' },
+    'mgr-transcript-autopsy':{ label: 'Transcript Autopsy',    type: 'written',     icon: '📋', minWords: 150 },
+    'mgr-mock-call':         { label: 'Mock Call',             type: 'audio',       icon: '📞' },
+    'mgr-feedback':          { label: 'Feedback',              type: 'feedback-ai', icon: '💬' },
+    'mgr-eq':                { label: 'Emotional Intelligence', type: 'written',    icon: '🧠', minWords: 150 },
     'mgr-listening-tone':    { label: 'Listening & Tone',      type: 'mcq',         icon: '🎧' },
     'mgr-management-skills': { label: 'Management Skills',     type: 'written',     icon: '📊', minWords: 200 },
   };
@@ -446,10 +435,6 @@ Let's get back on track.
 
   // ── Situation Room two-section state ────────────────────
   let _sr = { phase: 'A', sectionAText: '', sectionAScores: null };
-
-  // ── Mirror Room Scenario Cascade state ──────────────────
-  let _currentMirrorStep = 0;
-  let _mirrorCascadeHistory = [];
 
   // ── Feedback AI conversation state ──────────────────────
   let _fb = {
@@ -625,9 +610,7 @@ Let's get back on track.
   function _launchAudio() {
     const meta = MODULE_META[_currentModule];
     $('mgr-audio-module-title').textContent = `${meta.icon} ${meta.label}`;
-    $('mgr-audio-scenario-label').textContent = _currentModule === 'mgr-mock-call'
-      ? 'Read the scenario carefully. You have 5 minutes of preparation time.'
-      : 'Read the scenario carefully';
+    $('mgr-audio-scenario-label').textContent = 'Read the scenario carefully';
     $('mgr-audio-topic-title').textContent  = _currentScenario.title;
     $('mgr-audio-scenario-text').textContent = _currentScenario.scenario;
 
@@ -635,20 +618,12 @@ Let's get back on track.
     $('mgr-record-phase').classList.add('hidden');
     $('mgr-live-transcript').innerHTML = '<span class="placeholder">Your speech will appear here in real time...</span>';
 
-    // Set correct prep message
-    const prepLabel = document.querySelector('#mgr-prep-phase .mgr-prep-label');
-    if (prepLabel) {
-      prepLabel.textContent = _currentModule === 'mgr-mock-call'
-        ? 'seconds to prepare (5 minutes) — recording will start automatically'
-        : 'seconds to prepare — recording will start automatically';
-    }
-
     showScreen('mgr-screen-audio');
     _startPrepTimer();
   }
 
   function _startPrepTimer() {
-    let remaining = _currentModule === 'mgr-mock-call' ? 300 : 60;
+    let remaining = 60;
     $('mgr-prep-count').textContent = remaining;
     _clearPrepTimer();
     _prepTimer = setInterval(() => {
@@ -1206,7 +1181,7 @@ Let's get back on track.
       console.warn('Claude feedback eval failed:', e.message);
       aiScores = { overall: null };
     }
-    aiScores._method    = aiScores._method    || 'mgr-feedback-ai';
+    aiScores._method    = aiScores._method  || 'mgr-feedback-ai';
     aiScores._module    = 'mgr-feedback';
     aiScores._turns     = _fb.history.length;
     aiScores._scenarioId = _currentScenario.id;
@@ -1257,300 +1232,16 @@ Let's get back on track.
     const meta = MODULE_META[_currentModule];
     $('mgr-written-module-title').textContent = `${meta.icon} ${meta.label}`;
     $('mgr-written-scenario-label').textContent = 'Read the task carefully, then write your response below';
-
-    // Hide all written containers initially
-    $('mgr-written-standard-container').style.display = 'none';
-    $('mgr-written-autopsy-container').style.display = 'none';
-    $('mgr-written-mirror-container').style.display = 'none';
-
-    if (_currentModule === 'mgr-transcript-autopsy') {
-      $('mgr-written-autopsy-container').style.display = 'block';
-      $('mgr-written-scenario-label').textContent = 'Dissect the following call transcript and write your structured autopsy analysis';
-      // Load first scenario (or picked)
-      const pool = SCENARIOS['mgr-transcript-autopsy'];
-      _currentScenario = pool.find(s => s.id === 'ta1') || pool[0];
-      $('mgr-written-topic-title').textContent = _currentScenario.title;
-      $('mgr-written-scenario-text').textContent = _currentScenario.scenario;
-
-      // Reset autopsy inputs
-      ['ta-q1', 'ta-q2', 'ta-q3'].forEach(id => {
-        $(id).value = '';
-        $(id + '-wc').textContent = '0';
-      });
-    }
-    else if (_currentModule === 'mgr-eq') {
-      $('mgr-written-mirror-container').style.display = 'block';
-      $('mgr-written-scenario-label').textContent = 'SCENARIO CASCADE — state your reaction and actions for each situation';
-      
-      // Start Cascade state
-      _currentMirrorStep = 0; // 0, 1, 2
-      _mirrorCascadeHistory = []; // to collect answers
-
-      _loadMirrorRoomStep(0);
-    }
-    else {
-      $('mgr-written-standard-container').style.display = 'block';
-      $('mgr-written-topic-title').textContent  = _currentScenario.title;
-      $('mgr-written-scenario-text').textContent = _currentScenario.scenario;
-      const minWords = meta.minWords || 150;
-      $('mgr-written-min-hint').textContent = `Minimum ${minWords} words`;
-      $('mgr-written-textarea').value = '';
-      $('mgr-written-word-count').textContent = '0';
-    }
-
-    showScreen('mgr-screen-written');
-  }
-
-  function _loadMirrorRoomStep(stepIndex) {
-    _currentMirrorStep = stepIndex;
-    const pool = SCENARIOS['mgr-eq'];
-    _currentScenario = pool[stepIndex];
-
     $('mgr-written-topic-title').textContent  = _currentScenario.title;
     $('mgr-written-scenario-text').textContent = _currentScenario.scenario;
 
-    // Update step indicators
-    for (let i = 1; i <= 3; i++) {
-      const stepEl = $('mr-step-' + i);
-      if (stepEl) {
-        if (i - 1 < stepIndex) stepEl.className = 'sr-step done';
-        else if (i - 1 === stepIndex) stepEl.className = 'sr-step active';
-        else stepEl.className = 'sr-step';
-      }
-    }
+    const minWords = meta.minWords || 150;
+    $('mgr-written-min-hint').textContent = `Minimum ${minWords} words`;
 
-    // Reset fields
-    ['mr-gut', 'mr-action', 'mr-em'].forEach(id => {
-      $(id).value = '';
-      $(id + '-wc').textContent = '0';
-    });
-
-    // Toggle buttons
-    if (stepIndex === 2) {
-      $('btn-mr-next').style.display = 'none';
-      $('btn-mr-submit').style.display = 'inline-block';
-    } else {
-      $('btn-mr-next').style.display = 'inline-block';
-      $('btn-mr-submit').style.display = 'none';
-    }
-    window.scrollTo(0, 0);
-  }
-
-  function _nextMirrorRoomStep() {
-    const gutVal = $('mr-gut').value.trim();
-    const actVal = $('mr-action').value.trim();
-    const emVal  = $('mr-em').value.trim();
-
-    const minWords = (t) => t.split(/\s+/).filter(Boolean).length;
-    if (minWords(gutVal) < 5 || minWords(actVal) < 5 || minWords(emVal) < 5) {
-      toast('Please write at least 5 words in each field to proceed.', 'error');
-      return;
-    }
-
-    // Save to history
-    _mirrorCascadeHistory.push({
-      title: _currentScenario.title,
-      scenario: _currentScenario.scenario,
-      gut: gutVal,
-      action: actVal,
-      em: emVal
-    });
-
-    _loadMirrorRoomStep(_currentMirrorStep + 1);
-    toast('Situation response saved! Next situation loaded.', 'success');
-  }
-
-  async function _submitMirrorRoom() {
-    const gutVal = $('mr-gut').value.trim();
-    const actVal = $('mr-action').value.trim();
-    const emVal  = $('mr-em').value.trim();
-
-    const minWords = (t) => t.split(/\s+/).filter(Boolean).length;
-    if (minWords(gutVal) < 5 || minWords(actVal) < 5 || minWords(emVal) < 5) {
-      toast('Please write at least 5 words in each field before submitting.', 'error');
-      return;
-    }
-
-    // Save final step
-    _mirrorCascadeHistory.push({
-      title: _currentScenario.title,
-      scenario: _currentScenario.scenario,
-      gut: gutVal,
-      action: actVal,
-      em: emVal
-    });
-
-    const btn = $('btn-mr-submit');
-    if (btn) { btn.disabled = true; btn.textContent = 'Evaluating…'; }
-
-    let aiScores = null;
-    try {
-      if (typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
-        const result = await ClaudeEvaluator.evaluateMirrorRoom(_mirrorCascadeHistory);
-        if (result) {
-          aiScores = {
-            ...result.scores,
-            overall: result.overall,
-            _strengths: result.strengths,
-            _improvements: result.improvements,
-            _method: 'claude-mirror',
-            _module: 'mgr-eq',
-            _scenarioId: 'mr-cascade'
-          };
-        }
-      }
-    } catch (e) {
-      console.warn('Claude mirror failed:', e.message);
-    }
-
-    if (!aiScores) {
-      // Fallback local scoring
-      let totalGutWordCount = 0;
-      let totalActWordCount = 0;
-      _mirrorCascadeHistory.forEach(h => {
-        totalGutWordCount += minWords(h.gut);
-        totalActWordCount += minWords(h.action);
-      });
-      
-      const selfAwareness = Math.min(5, Math.max(1, Math.round(totalGutWordCount / 20) + 1));
-      const impulseControl = Math.min(5, Math.max(1, Math.round(totalActWordCount / 20) + 1));
-      const empathyConsistency = 3;
-      const composure = 3;
-      const communicationQuality = 3;
-      const overall = parseFloat(((selfAwareness + impulseControl + empathyConsistency + composure + communicationQuality) / 25 * 100).toFixed(1));
-
-      aiScores = {
-        selfAwareness,
-        impulseControl,
-        empathyConsistency,
-        composure,
-        communicationQuality,
-        overall,
-        _method: 'local-mirror',
-        _module: 'mgr-eq',
-        _scenarioId: 'mr-cascade'
-      };
-    }
-
-    // Structure writtenText as plain text for the Admin view
-    const writtenText = `🧠 ASSESSMENT 5: THE MIRROR ROOM (SCENARIO CASCADE)\n\n` +
-      _mirrorCascadeHistory.map((h, i) =>
-        `SITUATION ${i+1}: ${h.title}\n` +
-        `- Gut Reaction: ${h.gut}\n` +
-        `- First Action: ${h.action}\n` +
-        `- Emotional Management: ${h.em}\n`
-      ).join('\n');
-
-    try {
-      await Auth.ensureTraineeRecord();
-      await DB.put('sessions', {
-        traineeId:    Auth.getId(),
-        traineeName:  Auth.getName(),
-        traineeEmail: Auth.getEmail(),
-        module:       'mgr-eq',
-        topicId:      null,
-        topicTitle:   'The Mirror Room (Scenario Cascade)',
-        transcript:   '',
-        recordingBlob: null,
-        writtenText,
-        aiScores,
-        timeTaken:    0,
-        submittedAt:  new Date().toISOString(),
-        status:       'ai-evaluated',
-      });
-      _showResult(aiScores, 'mirror-room');
-    } catch (e) {
-      toast('Error saving Mirror Room session: ' + e.message, 'error');
-      console.error('submitMirror error:', e);
-    } finally {
-      if (btn) { btn.disabled = false; btn.textContent = 'Submit Full Cascade ✓'; }
-    }
-  }
-
-  async function _submitAutopsy() {
-    const q1Val = $('ta-q1').value.trim();
-    const q2Val = $('ta-q2').value.trim();
-    const q3Val = $('ta-q3').value.trim();
-
-    const minWords = (t) => t.split(/\s+/).filter(Boolean).length;
-    if (minWords(q1Val) < 30 || minWords(q2Val) < 20 || minWords(q3Val) < 20) {
-      toast('Please write at least 30/20/20 words for Q1/Q2/Q3 before submitting.', 'error');
-      return;
-    }
-
-    const btn = $('btn-mgr-submit-autopsy');
-    if (btn) { btn.disabled = true; btn.textContent = 'Evaluating…'; }
-
-    let aiScores = null;
-    try {
-      if (typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
-        const result = await ClaudeEvaluator.evaluateTranscriptAutopsy(
-          _currentScenario.scenario,
-          _currentScenario.scenario, // The background and transcript
-          q1Val, q2Val, q3Val
-        );
-        if (result) {
-          aiScores = {
-            ...result.scores,
-            overall: result.overall,
-            _strengths: result.strengths,
-            _improvements: result.improvements,
-            _method: 'claude-autopsy',
-            _module: 'mgr-transcript-autopsy',
-            _scenarioId: _currentScenario.id
-          };
-        }
-      }
-    } catch (e) {
-      console.warn('Claude autopsy failed:', e.message);
-    }
-
-    if (!aiScores) {
-      // Fallback to local heuristic
-      const q1Scores = scoreWrittenResponse(q1Val, 'mgr-transcript-autopsy');
-      const q2Scores = scoreWrittenResponse(q2Val, 'mgr-transcript-autopsy');
-      const q3Scores = scoreWrittenResponse(q3Val, 'mgr-transcript-autopsy');
-      
-      const overall = parseFloat(((q1Scores.overall + q2Scores.overall + q3Scores.overall) / 3).toFixed(1));
-      aiScores = {
-        leadershipMaturity: q1Scores.contentScore,
-        empathyAndPeople: q2Scores.empathyScore,
-        specificity: q3Scores.actionScore,
-        communicationQuality: q1Scores.clarityScore,
-        accountability: q2Scores.criticalThinkingScore,
-        overall,
-        _method: 'local-autopsy',
-        _module: 'mgr-transcript-autopsy',
-        _scenarioId: _currentScenario.id
-      };
-    }
-
-    const writtenText = `📋 ASSESSMENT 2: TRANSCRIPT AUTOPSY\n\nQ1 — LIST ALL MISTAKES & IMPACT\n--------------------------------------------------\n${q1Val}\n\nQ2 — THE TURNING POINT & REWRITE\n--------------------------------------------------\n${q2Val}\n\nQ3 — REWRITE THE CLOSE\n--------------------------------------------------\n${q3Val}`;
-
-    try {
-      await Auth.ensureTraineeRecord();
-      await DB.put('sessions', {
-        traineeId:    Auth.getId(),
-        traineeName:  Auth.getName(),
-        traineeEmail: Auth.getEmail(),
-        module:       'mgr-transcript-autopsy',
-        topicId:      null,
-        topicTitle:   _currentScenario.title,
-        transcript:   '',
-        recordingBlob: null,
-        writtenText,
-        aiScores,
-        timeTaken:    0,
-        submittedAt:  new Date().toISOString(),
-        status:       'ai-evaluated',
-      });
-      _showResult(aiScores, 'transcript-autopsy');
-    } catch (e) {
-      toast('Error saving autopsy session: ' + e.message, 'error');
-      console.error('submitAutopsy error:', e);
-    } finally {
-      if (btn) { btn.disabled = false; btn.textContent = 'Submit Analysis ✓'; }
-    }
+    const ta = $('mgr-written-textarea');
+    ta.value = '';
+    $('mgr-written-word-count').textContent = '0';
+    showScreen('mgr-screen-written');
   }
 
   async function submitWritten() {
@@ -1680,68 +1371,19 @@ Let's get back on track.
   function _showResult(aiScores, type) {
     const meta = MODULE_META[_currentModule];
 
-    // Reset feedback panel visibility
-    const feedbackEl = $('mgr-sr-ai-feedback');
-    if (feedbackEl) {
-      feedbackEl.innerHTML = '';
-      feedbackEl.classList.add('hidden');
-    }
-
     if (type === 'mcq') {
       $('mgr-result-subtitle').textContent = `Listening & Tone — ${aiScores.correct}/${aiScores.total} correct`;
       $('mgr-result-score').textContent = `${aiScores.overall}%`;
       $('mgr-score-grid').innerHTML = `
         <div class="mgr-score-item"><div class="label">Correct Answers</div><div class="val">${aiScores.correct} / ${aiScores.total}</div></div>
         <div class="mgr-score-item"><div class="label">Score</div><div class="val">${aiScores.overall}%</div></div>`;
-    } else if (type === 'transcript-autopsy') {
-      $('mgr-result-subtitle').textContent = `Assessment 2 — Transcript Autopsy — response evaluated`;
-      $('mgr-result-score').textContent = `${aiScores.overall}%`;
-      $('mgr-score-grid').innerHTML = `
-        <div class="mgr-score-item"><div class="label">Q1 — Mistake Diagnosis</div><div class="val">${aiScores.leadershipMaturity}/5</div></div>
-        <div class="mgr-score-item"><div class="label">Q2 — De-escalation Insight</div><div class="val">${aiScores.empathyAndPeople}/5</div></div>
-        <div class="mgr-score-item"><div class="label">Q3 — Closing Rewrite</div><div class="val">${aiScores.specificity}/5</div></div>
-        <div class="mgr-score-item"><div class="label">Clarity &amp; Structure</div><div class="val">${aiScores.communicationQuality}/5</div></div>
-        <div class="mgr-score-item"><div class="label">Action Orientation</div><div class="val">${aiScores.accountability}/5</div></div>`;
-      
-      if (feedbackEl && (aiScores._strengths || aiScores._improvements)) {
-        const items = [];
-        if (aiScores._strengths) {
-          items.push(`<div class="sr-fb-item sr-fb-good"><strong>✓ Strength:</strong> ${aiScores._strengths}</div>`);
-        }
-        if (aiScores._improvements) {
-          items.push(`<div class="sr-fb-item sr-fb-info"><strong>💡 Priority Improvement:</strong> ${aiScores._improvements}</div>`);
-        }
-        feedbackEl.innerHTML = items.join('');
-        feedbackEl.classList.remove('hidden');
-      }
-    } else if (type === 'mirror-room') {
-      $('mgr-result-subtitle').textContent = `Assessment 5 — The Mirror Room — cascade complete`;
-      $('mgr-result-score').textContent = `${aiScores.overall}%`;
-      $('mgr-score-grid').innerHTML = `
-        <div class="mgr-score-item"><div class="label">Self-Awareness</div><div class="val">${aiScores.selfAwareness}/5</div></div>
-        <div class="mgr-score-item"><div class="label">Impulse Control</div><div class="val">${aiScores.impulseControl}/5</div></div>
-        <div class="mgr-score-item"><div class="label">Empathy &amp; Consistency</div><div class="val">${aiScores.empathyConsistency}/5</div></div>
-        <div class="mgr-score-item"><div class="label">Emotional Composure</div><div class="val">${aiScores.composure}/5</div></div>
-        <div class="mgr-score-item"><div class="label">Communication Quality</div><div class="val">${aiScores.communicationQuality}/5</div></div>`;
-      
-      if (feedbackEl && (aiScores._strengths || aiScores._improvements)) {
-        const items = [];
-        if (aiScores._strengths) {
-          items.push(`<div class="sr-fb-item sr-fb-good"><strong>✓ EQ Strength:</strong> ${aiScores._strengths}</div>`);
-        }
-        if (aiScores._improvements) {
-          items.push(`<div class="sr-fb-item sr-fb-info"><strong>💡 Priority Improvement:</strong> ${aiScores._improvements}</div>`);
-        }
-        feedbackEl.innerHTML = items.join('');
-        feedbackEl.classList.remove('hidden');
-      }
     } else if (type === 'written') {
       $('mgr-result-subtitle').textContent = `${meta.label} — response evaluated`;
       $('mgr-result-score').textContent = `${aiScores.overall}%`;
       const isClaude = aiScores._method === 'claude-mgr-strict';
       $('mgr-score-grid').innerHTML = isClaude ? `
         <div class="mgr-score-item"><div class="label">Leadership Maturity</div><div class="val">${aiScores.leadershipMaturity}/5</div></div>
-        <div class="mgr-score-item"><div class="label">Empathy &amp; People</div><div class="val">${aiScores.empathyAndPeople}/5</div></div>
+        <div class="mgr-score-item"><div class="label">Empathy & People</div><div class="val">${aiScores.empathyAndPeople}/5</div></div>
         <div class="mgr-score-item"><div class="label">Specificity</div><div class="val">${aiScores.specificity}/5</div></div>
         <div class="mgr-score-item"><div class="label">Communication Quality</div><div class="val">${aiScores.communicationQuality}/5</div></div>
         <div class="mgr-score-item"><div class="label">Accountability</div><div class="val">${aiScores.accountability}/5</div></div>
@@ -1756,7 +1398,6 @@ Let's get back on track.
       const emp = FB_EMPLOYEES[_currentScenario.id] || FB_EMPLOYEES['fb1'];
       $('mgr-result-subtitle').textContent = `Feedback Conversation with ${emp.name} — ${_fb.history.length} exchange(s)`;
       $('mgr-result-score').textContent = aiScores.overall != null ? `${aiScores.overall}%` : '—';
-      
       const isParams = aiScores._method === 'mgr-feedback-params';
       if (isParams) {
         const paramRows = [
@@ -1787,7 +1428,9 @@ Let's get back on track.
         <div class="mgr-score-item sr-section-b-item"><div class="label">B — Error Identification</div><div class="val">${sb.errorIdentification ?? '—'}/5</div></div>
         <div class="mgr-score-item sr-section-b-item"><div class="label">B — Impact Explanation</div><div class="val">${sb.impactExplanation ?? '—'}/5</div></div>
         <div class="mgr-score-item sr-section-b-item"><div class="label">B — Rewrite Quality</div><div class="val">${sb.rewriteQuality ?? '—'}/5</div></div>`;
-      
+
+      // AI feedback panel
+      const feedbackEl = $('mgr-sr-ai-feedback');
       if (feedbackEl) {
         const items = [];
         if (sa.whatNotToSay && !/clean/i.test(sa.whatNotToSay)) {
@@ -1921,28 +1564,6 @@ Let's get back on track.
         $('mgr-written-word-count').textContent = words;
       });
     }
-
-    // Transcript Autopsy Submit
-    const btnSubmitAutopsy = $('btn-mgr-submit-autopsy');
-    if (btnSubmitAutopsy) btnSubmitAutopsy.addEventListener('click', _submitAutopsy);
-
-    // Mirror Room Cascade Next/Submit
-    const btnMRNext = $('btn-mr-next');
-    if (btnMRNext) btnMRNext.addEventListener('click', _nextMirrorRoomStep);
-    const btnMRSubmit = $('btn-mr-submit');
-    if (btnMRSubmit) btnMRSubmit.addEventListener('click', _submitMirrorRoom);
-
-    // Track word counts for structured fields
-    ['ta-q1', 'ta-q2', 'ta-q3', 'mr-gut', 'mr-action', 'mr-em'].forEach(id => {
-      const ta = $(id);
-      if (ta) {
-        ta.addEventListener('input', () => {
-          const words = ta.value.trim().split(/\s+/).filter(Boolean).length;
-          const wcEl = $(id + '-wc');
-          if (wcEl) wcEl.textContent = words;
-        });
-      }
-    });
 
     // MCQ screen
     const btnSubmitMCQ = $('btn-mgr-submit-mcq');

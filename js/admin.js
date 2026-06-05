@@ -1125,7 +1125,9 @@ window.Admin = (() => {
 
     try {
       const allTopics = await DB.getAll('topics');
-      if (!allTopics.some(t => t.module === 'stock-market-mcq')) {
+      const smqTopics = allTopics.filter(t => t.module === 'stock-market-mcq');
+      const hasSet4   = smqTopics.some(t => t.title && t.title.includes('Set 4'));
+      if (!smqTopics.length || !hasSet4) {
         await seedStockMarketMcq(true);
       }
     } catch (_) {}
@@ -6405,6 +6407,403 @@ window.Admin = (() => {
     }
   }
 
+  function applyAssessmentFilters(sessions, topicMap) {
+    // First split by archive status (stored in settings, not a DB column)
+    let filtered = _viewArchive
+      ? sessions.filter(s => _archivedIds.has(s.id))
+      : sessions.filter(s => !_archivedIds.has(s.id));
+
+    filtered = filtered.filter(s => matchesModuleFilter(s.module, _assessmentsFilter.module));
+    if (_assessmentsFilter.status !== 'all') {
+      filtered = filtered.filter(s => s.status === _assessmentsFilter.status);
+    }
+    if (_assessmentsFilter.team !== 'all') {
+      filtered = filtered.filter(s => _teamAssignments[s.traineeId] === _assessmentsFilter.team);
+    }
+
+    if (_currentManagerDrill) {
+      _restoreIndividualSessionsHeader();
+      const drill = _currentManagerDrill;
+      // Resolve each session's manager using team-assignment (primary) or baked index (fallback)
+      const resolveSessionMgr = s => {
+        const assigned = _teamAssignments[s.traineeId];
+        return (assigned && _MANAGER_AGENT_MAP[assigned]) ? assigned : _getAgentManager(s.traineeName);
+      };
+      if (drill === '(No Manager Assigned)') {
+        filtered = filtered.filter(s => !resolveSessionMgr(s));
+      } else {
+        filtered = filtered.filter(s => resolveSessionMgr(s) === drill);
+      }
+      renderAssessmentsTable(filtered, topicMap);
+    } else {
+      // Default: manager summary view
+      renderManagerSummaryTable(filtered, topicMap);
+    }
+  }
+
+  // ---- Restore thead to individual-session columns ----
+  function _restoreIndividualSessionsHeader() {
+    const theadTr = $('assessments-thead-tr');
+    if (!theadTr) return;
+    theadTr.innerHTML = `
+      <th style="width:36px;text-align:center">
+        <input type="checkbox" id="select-all-sessions" onchange="Admin.toggleAllSessions(this.checked)" />
+      </th>
+      <th>Trainee</th>
+      <th>Module</th>
+      <th>Topic</th>
+      <th>Submitted</th>
+      <th>Status</th>
+      <th>AI Score</th>
+      <th>Admin Score</th>
+      <th>Final Score</th>
+      <th>Actions</th>`;
+  }
+
+  // ---- Manager summary table (default assessments view) ----
+  function renderManagerSummaryTable(sessions, topicMap) {
+    const theadTr = $('assessments-thead-tr');
+    const tbody   = $('assessments-tbody');
+
+    // Switch to manager-summary columns
+    if (theadTr) {
+      theadTr.innerHTML = `
+        <th style="width:36px;text-align:center"><input type="checkbox" id="select-all-managers" onchange="Admin.toggleAllManagers(this.checked)" /></th>
+        <th>Manager</th>
+        <th style="text-align:center">Agents (with sessions / total)</th>
+        <th style="text-align:center">Sessions</th>
+        <th style="text-align:right">Avg AI Score</th>
+        <th style="text-align:right">Avg Admin Score</th>
+        <th>Actions</th>`;
+    }
+
+    _allRenderedSessions = sessions;
+    _selectedSessionIds.clear();
+    _selectedManagerNames.clear();
+    _updateManagerActionBtns();
+    // hide session-level bulk buttons when in manager summary
+    const archBtn = $('btn-archive-selected');
+    const restBtn = $('btn-restore-selected');
+    if (archBtn) archBtn.style.display = 'none';
+    if (restBtn) restBtn.style.display = 'none';
+
+    if (!sessions.length) {
+      tbody.innerHTML = `<tr><td colspan="7" class="empty-state">${_viewArchive ? 'No archived assessments.' : 'No assessments found.'}</td></tr>`;
+      return;
+    }
+
+    // Group sessions by manager
+    // Primary: team assignment stored in settings (traineeId → managerName)
+    // Fallback: name-based lookup from _MANAGER_AGENT_MAP
+    const managerGroups = {};
+    const unassigned    = [];
+    sessions.forEach(s => {
+      const assigned = _teamAssignments[s.traineeId];
+      // Use team assignment if it's a known manager, else name-match (with alias resolution)
+      const mgr = (assigned && _MANAGER_AGENT_MAP[assigned])
+                ? assigned
+                : _getAgentManager(s.traineeName);
+      if (mgr) {
+        if (!managerGroups[mgr]) managerGroups[mgr] = [];
+        managerGroups[mgr].push(s);
+      } else {
+        unassigned.push(s);
+      }
+    });
+
+    const makeRow = (mgr, mgrSessions, isUnassigned) => {
+      const totalAgents        = isUnassigned ? '?' : ((_MANAGER_AGENT_MAP[mgr] || []).length);
+      const agentsWithSessions = new Set(mgrSessions.map(s => (s.traineeName || '').trim().toLowerCase())).size;
+      const agentsLabel        = isUnassigned ? agentsWithSessions : `${agentsWithSessions} / ${totalAgents}`;
+
+      const aiNums    = mgrSessions.map(s => s.aiScores    ? normalizeOverall(s.aiScores.overall) : null).filter(x => x !== null);
+      const adminNums = mgrSessions.map(s => s.adminScores ? calcAdminAvg(s.adminScores)           : null).filter(x => x !== null);
+      const avgAI    = aiNums.length    ? (aiNums.reduce((a, b) => a + b, 0)    / aiNums.length).toFixed(1)    : '—';
+      const avgAdmin = adminNums.length ? (adminNums.reduce((a, b) => a + b, 0) / adminNums.length).toFixed(1) : '—';
+
+      const safeMgr    = mgr.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      const archiveBtn = _viewArchive
+        ? `<button class="btn-small" onclick="event.stopPropagation();Admin.restoreAllManagerSessions('${safeMgr}')">↩ Restore All</button>`
+        : `<button class="btn-small" onclick="event.stopPropagation();Admin.archiveAllManagerSessions('${safeMgr}')">📁 Archive All</button>`;
+
+      return `<tr style="cursor:pointer" onclick="Admin.drillIntoManager('${safeMgr}')">
+        <td style="text-align:center" onclick="event.stopPropagation()">
+          ${!isUnassigned ? `<input type="checkbox" class="manager-cb" data-mgr="${mgr.replace(/"/g,'&quot;')}" onchange="Admin.toggleManagerCheckbox('${safeMgr}', this.checked)" />` : ''}
+        </td>
+        <td><strong style="color:var(--primary)">${mgr}</strong></td>
+        <td style="text-align:center">${agentsLabel}</td>
+        <td style="text-align:center;font-weight:600">${mgrSessions.length}</td>
+        <td style="text-align:right">${avgAI !== '—' ? avgAI + '/100' : '—'}</td>
+        <td style="text-align:right;font-weight:600;color:${avgAdmin !== '—' ? '#1d4ed8' : 'var(--text-muted)'}">${avgAdmin !== '—' ? avgAdmin + '/100' : '—'}</td>
+        <td style="display:flex;gap:0.4rem;flex-wrap:wrap">
+          <button class="btn-small primary" onclick="event.stopPropagation();Admin.drillIntoManager('${safeMgr}')">View Sessions</button>
+          ${!isUnassigned ? archiveBtn : ''}
+        </td>
+      </tr>`;
+    };
+
+    const rows = Object.entries(managerGroups)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([mgr, mgrSessions]) => makeRow(mgr, mgrSessions, false))
+      .join('');
+
+    const unassignedRow = unassigned.length ? makeRow('(No Manager Assigned)', unassigned, true) : '';
+
+    tbody.innerHTML = rows + unassignedRow;
+  }
+
+  // ---- Drill into a specific manager's sessions ----
+  function drillIntoManager(managerName) {
+    _currentManagerDrill = managerName;
+    const backBtn = $('btn-back-to-managers');
+    if (backBtn) {
+      backBtn.style.display = '';
+      backBtn.querySelector('button').textContent = `← Back to Managers  (${managerName})`;
+    }
+    const mgrSel = $('filter-manager');
+    if (mgrSel) mgrSel.value = managerName;
+    applyAssessmentFilters(_cachedSessions, _cachedTopicMap);
+  }
+
+  function backToManagers() {
+    _currentManagerDrill = null;
+    const backBtn = $('btn-back-to-managers');
+    if (backBtn) backBtn.style.display = 'none';
+    const mgrSel = $('filter-manager');
+    if (mgrSel) mgrSel.value = '';
+    applyAssessmentFilters(_cachedSessions, _cachedTopicMap);
+  }
+
+  // ---- Archive / Restore all sessions for a manager ----
+  // Resolve which manager a session belongs to — same logic used by renderManagerSummaryTable
+  function _resolveSessionManager(s) {
+    const assigned = _teamAssignments[s.traineeId];
+    return (assigned && _MANAGER_AGENT_MAP[assigned]) ? assigned : _getAgentManager(s.traineeName);
+  }
+
+  async function archiveAllManagerSessions(managerName) {
+    const ids = _cachedSessions
+      .filter(s => _resolveSessionManager(s) === managerName)
+      .filter(s => !_archivedIds.has(s.id))
+      .map(s => s.id);
+    if (!ids.length) { toast('No active sessions to archive for this manager.', ''); return; }
+    if (!confirm(`Archive all ${ids.length} active session${ids.length !== 1 ? 's' : ''} for ${managerName}?\n\nYou can restore them at any time from the Archive tab.`)) return;
+    try {
+      await _setSessionsArchived(ids, true);
+      toast(`Archived ${ids.length} session${ids.length !== 1 ? 's' : ''} for ${managerName}.`, 'success');
+    } catch (e) {
+      toast('Archive failed: ' + e.message, 'error');
+    }
+  }
+
+  async function restoreAllManagerSessions(managerName) {
+    const ids = _cachedSessions
+      .filter(s => _resolveSessionManager(s) === managerName)
+      .filter(s => _archivedIds.has(s.id))
+      .map(s => s.id);
+    if (!ids.length) { toast('No archived sessions to restore for this manager.', ''); return; }
+    if (!confirm(`Restore all ${ids.length} archived session${ids.length !== 1 ? 's' : ''} for ${managerName}?`)) return;
+    try {
+      await _setSessionsArchived(ids, false);
+      toast(`Restored ${ids.length} session${ids.length !== 1 ? 's' : ''} for ${managerName}.`, 'success');
+    } catch (e) {
+      toast('Restore failed: ' + e.message, 'error');
+    }
+  }
+
+  // ---- Manager checkbox multi-select ----
+  function toggleManagerCheckbox(mgrName, checked) {
+    if (checked) _selectedManagerNames.add(mgrName);
+    else         _selectedManagerNames.delete(mgrName);
+    _updateManagerActionBtns();
+    const allCb = $('select-all-managers');
+    if (allCb) {
+      const allCbs = document.querySelectorAll('.manager-cb');
+      const n = _selectedManagerNames.size;
+      allCb.indeterminate = n > 0 && n < allCbs.length;
+      allCb.checked       = allCbs.length > 0 && n === allCbs.length;
+    }
+  }
+
+  function toggleAllManagers(checked) {
+    _selectedManagerNames.clear();
+    document.querySelectorAll('.manager-cb').forEach(cb => {
+      cb.checked = checked;
+      if (checked) _selectedManagerNames.add(cb.dataset.mgr);
+    });
+    _updateManagerActionBtns();
+  }
+
+  function _updateManagerActionBtns() {
+    const archBtn = $('btn-archive-selected-managers');
+    const restBtn = $('btn-restore-selected-managers');
+    if (!archBtn || !restBtn) return;
+    const n = _selectedManagerNames.size;
+    if (_viewArchive) {
+      archBtn.style.display = 'none';
+      restBtn.style.display = '';
+      restBtn.disabled      = n === 0;
+      restBtn.textContent   = n > 0 ? `↩ Restore Selected (${n})` : '↩ Restore Selected';
+    } else {
+      restBtn.style.display = 'none';
+      archBtn.style.display = '';
+      archBtn.disabled      = n === 0;
+      archBtn.textContent   = n > 0 ? `📁 Archive Selected (${n})` : '📁 Archive Selected';
+    }
+  }
+
+  async function archiveSelectedManagers() {
+    const managers = [..._selectedManagerNames];
+    if (!managers.length) return;
+    const ids = _cachedSessions
+      .filter(s => managers.includes(_resolveSessionManager(s)))
+      .filter(s => !_archivedIds.has(s.id))
+      .map(s => s.id);
+    if (!ids.length) { toast('No active sessions found for selected managers.', ''); return; }
+    if (!confirm(`Archive all ${ids.length} active session${ids.length !== 1 ? 's' : ''} for ${managers.length} selected manager${managers.length !== 1 ? 's' : ''}?\n\nYou can restore them at any time from the Archive tab.`)) return;
+    try {
+      await _setSessionsArchived(ids, true);
+      _selectedManagerNames.clear();
+      toast(`Archived ${ids.length} session${ids.length !== 1 ? 's' : ''}.`, 'success');
+    } catch (e) {
+      toast('Archive failed: ' + e.message, 'error');
+    }
+  }
+
+  async function restoreSelectedManagers() {
+    const managers = [..._selectedManagerNames];
+    if (!managers.length) return;
+    const ids = _cachedSessions
+      .filter(s => managers.includes(_resolveSessionManager(s)))
+      .filter(s => _archivedIds.has(s.id))
+      .map(s => s.id);
+    if (!ids.length) { toast('No archived sessions found for selected managers.', ''); return; }
+    if (!confirm(`Restore all ${ids.length} archived session${ids.length !== 1 ? 's' : ''} for ${managers.length} selected manager${managers.length !== 1 ? 's' : ''}?`)) return;
+    try {
+      await _setSessionsArchived(ids, false);
+      _selectedManagerNames.clear();
+      toast(`Restored ${ids.length} session${ids.length !== 1 ? 's' : ''}.`, 'success');
+    } catch (e) {
+      toast('Restore failed: ' + e.message, 'error');
+    }
+  }
+
+  function renderAssessmentsTable(sessions, topicMap) {
+    const tbody = $('assessments-tbody');
+    const sorted = [...sessions].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+    _currentFilteredSessions = sorted; // track for Download All
+    _allRenderedSessions = sorted;     // track for select-all
+    _selectedSessionIds.clear();
+    _selectedManagerNames.clear();
+    _updateSessionActionBtns();
+    // hide manager-level bulk buttons when in session drill view
+    const mgrArchBtn = $('btn-archive-selected-managers');
+    const mgrRestBtn = $('btn-restore-selected-managers');
+    if (mgrArchBtn) mgrArchBtn.style.display = 'none';
+    if (mgrRestBtn) mgrRestBtn.style.display = 'none';
+
+    // Reset select-all checkbox
+    const allCb = $('select-all-sessions');
+    if (allCb) { allCb.checked = false; allCb.indeterminate = false; }
+
+    if (sorted.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="10" class="empty-state">${_viewArchive ? 'No archived assessments.' : 'No assessments found.'}</td></tr>`;
+      return;
+    }
+
+    // ── Pick & Speak: pre-compute per-trainee.
+    // Effective score per session = admin score if scored, else AI score.
+    // avgOfAll  = average of effective scores across ALL that trainee's P&S sessions.
+    // bestId    = session with the highest effective score (that row shows avgOfAll; rest → N/A).
+    const PS_MODULES = new Set(['pick-speak', 'pick-speak-general', 'pick-speak-stock']);
+    const psGrouped  = {}; // traineeId → [{ id, eff }]
+    sorted.forEach(s => {
+      if (!PS_MODULES.has(s.module)) return;
+      const adminNum = s.adminScores ? (calcAdminAvg(s.adminScores)          ?? null) : null;
+      const aiNum    = s.aiScores    ? (normalizeOverall(s.aiScores.overall) ?? null) : null;
+      const eff      = adminNum !== null ? adminNum : aiNum; // prefer admin
+      if (eff === null) return;
+      if (!psGrouped[s.traineeId]) psGrouped[s.traineeId] = [];
+      psGrouped[s.traineeId].push({ id: s.id, eff });
+    });
+    const psByTrainee = {}; // traineeId → { bestId, avgOfAll }
+    Object.entries(psGrouped).forEach(([tid, list]) => {
+      const best     = list.reduce((a, b) => b.eff > a.eff ? b : a);
+      const avgOfAll = parseFloat((list.reduce((s, x) => s + x.eff, 0) / list.length).toFixed(1));
+      psByTrainee[tid] = { bestId: best.id, avgOfAll };
+    });
+
+    tbody.innerHTML = sorted.map(s => {
+      const aiScore    = s.aiScores    ? (normalizeOverall(s.aiScores.overall) ?? '—') : '—';
+      const adminScore = s.adminScores ? (calcAdminAvg(s.adminScores)          ?? '—') : '—';
+      const isScored   = !!s.adminScores;
+
+      // For P&S: best-session row shows average of all sessions' effective scores; others → N/A
+      // For all other modules (mock call, grammar, listening): admin score is final;
+      //   if no admin score, AI score is final. No averaging.
+      let avgScore;
+      if (PS_MODULES.has(s.module)) {
+        const info = psByTrainee[s.traineeId];
+        avgScore = (info && s.id === info.bestId) ? info.avgOfAll : 'N/A';
+      } else {
+        const aiNum    = aiScore    !== '—' ? parseFloat(aiScore)    : null;
+        const adminNum = adminScore !== '—' ? parseFloat(adminScore) : null;
+        avgScore = adminNum !== null ? adminNum : (aiNum !== null ? aiNum : '—');
+      }
+      const ext = (s.recordingUrl || '').includes('.mp4') ? 'mp4' : (s.recordingUrl || '').includes('.ogg') ? 'ogg' : 'webm';
+      const dlFilename = `${(s.traineeName || 'recording').replace(/\s+/g, '_')}-${s.module}-${(s.submittedAt || '').slice(0, 10)}.${ext}`;
+      const dlBtn = s.recordingUrl
+        ? `<button class="btn-small" onclick="Admin.downloadRecording('${s.recordingUrl}', '${dlFilename}')">⬇ Recording</button>`
+        : '';
+
+      const archiveBtn = _viewArchive
+        ? `<button class="btn-small" onclick="Admin.restoreSingleSession('${s.id}', '${(s.traineeName || '').replace(/'/g, "\\'")}')">↩ Restore</button>`
+        : `<button class="btn-small" onclick="Admin.archiveSingleSession('${s.id}', '${(s.traineeName || '').replace(/'/g, "\\'")}')">📁 Archive</button>`;
+
+      return `
+        <tr class="${_archivedIds.has(s.id) ? 'session-archived' : ''}">
+          <td style="width:36px;text-align:center">
+            <input type="checkbox" class="session-cb" data-id="${s.id}"
+              onchange="Admin.toggleSessionCheckbox('${s.id}', this.checked)" />
+          </td>
+          <td><strong>${s.traineeName || '—'}</strong></td>
+          <td>${moduleBadge(s.module)}</td>
+          <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.topicTitle || '—'}</td>
+          <td style="white-space:nowrap">${formatDate(s.submittedAt).split(' ')[0]}</td>
+          <td>${statusBadge(isScored ? 'scored' : s.status)}</td>
+          <td>${aiScore    !== '—' ? aiScore    + '/100' : '—'}</td>
+          <td>${adminScore !== '—' ? adminScore + '/100' : '—'}</td>
+          <td style="font-weight:600;color:${avgScore === 'N/A' || avgScore === '—' ? 'var(--text-muted)' : '#1d4ed8'}">${avgScore !== '—' && avgScore !== 'N/A' ? avgScore + '/100' : avgScore}</td>
+          <td style="display:flex;gap:0.4rem;flex-wrap:wrap">
+            <button class="btn-small primary" onclick="Admin.openScoring('${s.id}')">
+              ${isScored ? 'Review' : 'Score'}
+            </button>
+            ${dlBtn}
+            ${archiveBtn}
+            <button class="btn-small danger" onclick="Admin.deleteSession('${s.id}', '${(s.traineeName || '').replace(/'/g, "\\'")}')">
+              🗑 Delete
+            </button>
+          </td>
+        </tr>`;
+    }).join('');
+  }
+
+  // ---- Delete Session ----
+  async function deleteSession(sessionId, traineeName) {
+    const confirmed = confirm(
+      `Delete this assessment?\n\nTrainee: ${traineeName || 'Unknown'}\n\nThis action cannot be undone.`
+    );
+    if (!confirmed) return;
+    try {
+      await DB.del('sessions', sessionId);
+      toast('Assessment deleted.', '');
+      loadAssessments();
+    } catch (e) {
+      console.error('Delete failed:', e);
+      toast('Failed to delete assessment.', 'error');
+    }
+  }
+
   // ---- Public API (called from inline onclick) ----
   return {
     init,
@@ -6478,6 +6877,8 @@ window.Admin = (() => {
     openMgrScoreModal,
     saveMgrScore,
     seedStockMarketMcq,
+    downloadSmqWrongAnswersReport,
+    deduplicateTraineeSessions,
   };
 })();
 
