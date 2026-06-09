@@ -195,8 +195,8 @@ const MASTER_SCORES = {
   "rugved sambhajirao yadav":        { selfAssessment: 8.0,      aiAudit: 3.895, psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 11.89 },
   "shruti jain":                     { selfAssessment: 7.189189, aiAudit: 4.125, psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 11.31 },
   // ── Munish Kumar ──
-  "anubhav nepal":                   { selfAssessment: null,     aiAudit: null,  psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: null },
-  "ashish jyoti bora":               { selfAssessment: null,     aiAudit: null,  psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: null },
+  "anubhav nepal":                   { selfAssessment: 7.837838, aiAudit: 4.025, psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: null },
+  "ashish jyoti bora":               { selfAssessment: 9.351351, aiAudit: 4.0,   psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: null },
   "aswin prasad":                    { selfAssessment: 8.756757, aiAudit: 3.84,  psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 12.60 },
   "dipanwita saha":                  { selfAssessment: 8.432432, aiAudit: 3.95,  psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 12.38 },
   "ganesh t":                        { selfAssessment: 8.486486, aiAudit: 3.58,  psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 12.07 },
