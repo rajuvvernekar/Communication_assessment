@@ -378,6 +378,9 @@ const _TRAINEE_ALIASES = {
   "gajanan ternikar":           "Pravin Gajanan Ternikar",  // name corrected in new sheet
   "roshan k m":                 "Roshan KM",                 // spacing variant
   "leepha joseph":              "Leepha Joseph",             // normalise casing
+  // Leepha Joseph team
+  "maddu nikhil":               "M Nikhil",                  // full first name — M = Maddu
+  "bhaviteja chittimani":       "Chittimani Bhaviteja",      // first/last name reversed
   // Sadique Raza team — short names registered vs. full names in master sheet
   "amit sharma":                "Amit Sharma Rajeshwar",     // missing surname
   "chitra raghani":             "Chitra Mulchand Raghani",  // missing middle name
