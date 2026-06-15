@@ -447,7 +447,12 @@ const _TRAINEE_ALIASES = {
   "s dhruvanandana":            "Dhruvanandana",
   "v r dhan raj":               "Dhanraj",
   "v r dhanraj":                "Dhanraj",
-  "mehul chandrakant shetty":   "Mehul Chandtrakant Shetty"
+  "mehul chandrakant shetty":   "Mehul Chandtrakant Shetty",
+
+  // ── Additional team aliases ──
+  "sanjay suresh":              "Sanjay S",
+  "ganesh thiagarajan":         "Ganesh T",
+  "rugved yadav":               "Rugved Sambhajirao Yadav"
 };
 
 // Resolve a raw DB/session name to its canonical map name (if an alias exists).
@@ -4920,14 +4925,14 @@ window.Admin = (() => {
     "Pradeep Kumar V":    ["Anil kumara M","Sourabh Singha","Amit Khatri","Yadhu Raman","Premkumar Shivappa Kumbar","Supriti Sinha","Sushree Sangita Santi","Soumya Das","Chandru B","Ankita Bharat Kabra","Govind Goel","Neha Chugh","Anchal Ratan Isaac"],
     "Ankit Singh":        ["Priyanka Singh","Bhanuprakash","Mohan Bhumayya Sabban","MD Tahur","Vaishali B","Shekhar Suman","Ranjitha K","Naheet Parwin","Bhagyashree","Jatin Sharma","Megham Sai Srinivas","Pawan Rajesh Bohra","Sakshi Suryakant Pawar","Vipul Devendra Manek","Koushik C"],
     "Harsha Kumar":       ["Vikram R","Nikhil Raveendran","Mahesh H","Charitha N","Subhashree Das","Amrita Meher","Renuka Devi C","Tapasi Gayen","Praveen Kumar J H","Raghu R","Rashmi Sachin Desai","Akilkumar"],
-    "Munish Kumar":       ["Sweta Soni","Aswin Prasad","Nitesh Kumar","Neeti Toppo","Suman Adithya Rao","Venkatesh Barad","Simran Gabrial Masih","Vipul Jain","Dipanwita Saha","Sayantan Bhattacharyya","Ganesh T","Riya Goyal","Anubhav Nepal","Sanjay S","Ashish Jyoti Bora"],
+    "Munish Kumar":       ["Sweta Soni","Aswin Prasad","Nitesh Kumar","Neeti Toppo","Suman Adithya Rao","Venkatesh Barad","Simran Gabrial Masih","Vipul Jain","Dipanwita Saha","Sayantan Bhattacharyya","Ganesh T","Ganesh Thiagarajan","Riya Goyal","Anubhav Nepal","Sanjay S","Sanjay Suresh","Ashish Jyoti Bora"],
     "Shweta":             ["Kumar M G","Ishan Dhadwal","K Prakash Rao","Akhil M A","Sharique Shahid Ansari","Shridhar","Shweta Chauhan","Ajmal Rahim","Jyoti Umesh Sulgekar","Ravishankar Mohan Cherukupalli","Jaideep Singh","Neethu Paulose","Irfan Pasha S"],
     "Anoop Bharat Japtap":["Rajashekharayya Salimath","Nayan Hosur","Ashwinkumar A Shet","Rohan Ajit Kokane","Amit Mahantesh Baligar","Vikas Koti","Adnan Parvezahmed Darga","Sujay Sanjeev Satpute","Amardeep Narayan Baswa","Ankush Ajay Chougule","Abdulsamad Riyazahmed Jamadar","Rakesh Guddadmani","Prajwal"],
     "Sharuq Fayaz Shaikh":["Rakesh Naik","Shabaaz Babajan Shaikh","Yalleshi Mareppa Holennavar","Faisal Javed Shaikh","Nauseen Asif Nargund","Vaibhavi Vinod Balse","Nisha Shankar Kurubar","Anupam Premanand Vernekar","Vishal Vijay Chavan","Nitin Namdev Ningannavar","Faizan Mohammed Ismail Rangrez","Shubham Oza","Rohit Rajeshkumar Patil","Nehal Ravindra Kallimani","Juned Peerjade","Wagesh Gopal Jadhav","Shubham Sambhaji Bhadvankar"],
     "Viraj Raikar":       ["Mohammed Younus C A","Nikhil Subhash Chavan","Gautam Shah","Sneahaal Mulaawadmath","Saivishal Vinod Balse","Pravin Gajanan Ternikar","Nagaratna Mahantesh Marihal","Aaqib Beerwala","Nagesh Pednekar","Suraj Praveen Motimath","Amit Goudadi","Anuj Ajay Chougule"],
     "Nikita Sachin Desai":["Sumanth Kumar Sahu","Amulya K","Anup Sadanandan","Maya M Pillai","Rohan Jain","Mehul Harihar Dhande","Vivek Kumar Verma","Prathvik Saldanha","Jay Prakash Singh","Ravikumar Mangilal Shah","Tabassum Sharieff"],
     "Priyanka Dash":      ["Sadiya Banu","Sangeetha P","Regan Lobo","Sarfaraj Najeer Kudachee","Naman Prakash Awasthi","Prateek Manvi","Amar Vishwakarma","Shivanjali Kumari","M Vinod","Shaktiprasad Bentur","Vivek G K","Shashidhara L"],
-    "Leepha Joseph":      ["Chittimani Bhaviteja","Arpitha L K","M Nikhil","Shruti Jain","Joel K Joy","Amritpal Singh","Rugved Sambhajirao Yadav","Rakesh S Sankangoudar","Abhimanyu","Deepak B Nair"],
+    "Leepha Joseph":      ["Chittimani Bhaviteja","Arpitha L K","M Nikhil","Shruti Jain","Joel K Joy","Amritpal Singh","Rugved Sambhajirao Yadav","Rugved Yadav","Rakesh S Sankangoudar","Abhimanyu","Deepak B Nair"],
     "Pratyaksha":         [],
     // ── Ticket Team ──
     "Renuka Mishra":      ["Gonegondla Karanam Venkata Karthik","Adarsh Singh Gautam","Girish A","Saqlain Khalique Shaikh","M Kiran","Keyur P Shah","Ankita Das","Mohd Altaf Bhutta"],
