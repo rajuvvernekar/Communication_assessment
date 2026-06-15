@@ -35,6 +35,11 @@ const App = (() => {
   let _smqTimerInterval  = null; // setInterval handle for countdown
   let _smqStartTime      = null; // Date.now() when quiz started
 
+  // ── Calculator state ──
+  let _calcExpr          = '';   // Stores current history expression string
+  let _calcInput         = '0';  // Stores current input display string
+  let _calcResetOnInput  = false;// Overwrite input on next digit if true
+
   // ── Grammar Assessment state ──
   let _gaSections       = [];   // [{id, title, questions}] all sections sorted A → C
   let _gaCurrentSection = 0;    // 0-based index into _gaSections
@@ -1857,10 +1862,27 @@ const App = (() => {
 
     showScreen('stock-market-mcq');
     showStep('stock-market-mcq', 'smq-step-intro');
+
+    // Reset and hide calculator on starting assessment
+    const calcEl = $('smq-calculator');
+    if (calcEl) calcEl.classList.add('hidden');
+    handleCalcClear();
+
+    // Dynamic text for intro screen
+    const titleEl = $('smq-intro-title');
+    if (titleEl) titleEl.textContent = topic.title;
+    const gridQCountEl = $('smq-intro-qcount-grid');
+    if (gridQCountEl) gridQCountEl.textContent = _smqQuestions.length;
+    const gridMarksEl = $('smq-intro-marks-grid');
+    if (gridMarksEl) gridMarksEl.textContent = _smqQuestions.length;
+    const metaQCountEl = $('smq-intro-qcount-meta');
+    if (metaQCountEl) metaQCountEl.innerHTML = `<span class="ga-meta-icon">📋</span><span>${_smqQuestions.length} Questions</span>`;
+    const metaMarksEl = $('smq-intro-marks-meta');
+    if (metaMarksEl) metaMarksEl.innerHTML = `<span class="ga-meta-icon">🏆</span><span>${_smqQuestions.length} Marks</span>`;
+
     $('btn-smq-start').onclick = () => {
       showStep('stock-market-mcq', 'smq-step-quiz');
       _smqStartTime = Date.now();
-      startSmqTimer();
       renderSmqQuestion();
     };
   }
@@ -1898,20 +1920,67 @@ const App = (() => {
     $('smq-q-num').textContent        = `Question ${cur} of ${total}`;
     $('smq-q-stem').textContent       = q.stem;
 
+    const expBox = $('smq-explanation-box');
+    if (expBox) expBox.remove();
+
     const container = $('smq-options-container');
     container.innerHTML = '';
     const LABELS = ['A', 'B', 'C', 'D'];
+    const answeredIdx = _smqUserAnswers[_smqCurrentIdx];
+
     (q.options || []).forEach((opt, idx) => {
       const btn     = document.createElement('button');
-      btn.className = 'smq-option-btn' + (_smqUserAnswers[_smqCurrentIdx] === idx ? ' selected' : '');
+      btn.className = 'smq-option-btn';
       btn.innerHTML = `<span class="smq-option-label">${LABELS[idx]}</span><span>${opt}</span>`;
       btn.onclick   = () => selectSmqOption(idx);
+      
+      // Instant trial test feedback mode
+      if (answeredIdx !== -1) {
+        btn.style.pointerEvents = 'none';
+        if (idx === answeredIdx) {
+          if (answeredIdx === q.correct) {
+            btn.style.background = '#d1fae5';
+            btn.style.borderColor = '#10b981';
+            btn.style.color = '#064e3b';
+          } else {
+            btn.style.background = '#fee2e2';
+            btn.style.borderColor = '#ef4444';
+            btn.style.color = '#7f1d1d';
+          }
+        }
+        if (idx === q.correct) {
+          btn.style.background = '#d1fae5';
+          btn.style.borderColor = '#10b981';
+          btn.style.color = '#064e3b';
+        }
+      }
+      
       container.appendChild(btn);
     });
+
+    if (answeredIdx !== -1) {
+      let box = $('smq-explanation-box');
+      if (!box) {
+        box = document.createElement('div');
+        box.id = 'smq-explanation-box';
+        container.parentNode.insertBefore(box, container.nextSibling);
+      }
+      box.style = 'margin-top: 1rem; padding: 0.75rem 1rem; border-radius: 8px; background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; font-size: 0.88rem; line-height: 1.5;';
+      box.innerHTML = `<strong>Correct Answer: ${LABELS[q.correct]}</strong>${q.explanation ? '<br><span style="color:#374151; font-size: 0.82rem; margin-top: 0.25rem; display: block;">' + q.explanation + '</span>' : ''}`;
+    }
 
     const prevBtn         = $('btn-smq-prev');
     prevBtn.style.display = _smqCurrentIdx > 0 ? '' : 'none';
     prevBtn.onclick       = () => { if (_smqCurrentIdx > 0) { _smqCurrentIdx--; renderSmqQuestion(); } };
+
+    const endBtn = $('btn-smq-end');
+    if (endBtn) {
+      endBtn.onclick = () => {
+        if (confirm('Are you sure you want to end the test early and submit your answers?')) {
+          submitSmqAssessment();
+        }
+      };
+    }
 
     const nextBtn   = $('btn-smq-next');
     const isLastQ   = _smqCurrentIdx === total - 1;
@@ -1937,9 +2006,39 @@ const App = (() => {
 
   function selectSmqOption(idx) {
     _smqUserAnswers[_smqCurrentIdx] = idx;
+    const q = _smqQuestions[_smqCurrentIdx];
+    const correctIdx = q.correct;
+
     document.querySelectorAll('#smq-options-container .smq-option-btn').forEach((btn, i) => {
-      btn.classList.toggle('selected', i === idx);
+      btn.style.pointerEvents = 'none';
+      if (i === idx) {
+        if (idx === correctIdx) {
+          btn.style.background = '#d1fae5';
+          btn.style.borderColor = '#10b981';
+          btn.style.color = '#064e3b';
+        } else {
+          btn.style.background = '#fee2e2';
+          btn.style.borderColor = '#ef4444';
+          btn.style.color = '#7f1d1d';
+        }
+      }
+      if (i === correctIdx) {
+        btn.style.background = '#d1fae5';
+        btn.style.borderColor = '#10b981';
+        btn.style.color = '#064e3b';
+      }
     });
+
+    let box = $('smq-explanation-box');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'smq-explanation-box';
+      const container = $('smq-options-container');
+      container.parentNode.insertBefore(box, container.nextSibling);
+    }
+    const LABELS = ['A', 'B', 'C', 'D'];
+    box.style = 'margin-top: 1rem; padding: 0.75rem 1rem; border-radius: 8px; background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; font-size: 0.88rem; line-height: 1.5;';
+    box.innerHTML = `<strong>Correct Answer: ${LABELS[correctIdx]}</strong>${q.explanation ? '<br><span style="color:#374151; font-size: 0.82rem; margin-top: 0.25rem; display: block;">' + q.explanation + '</span>' : ''}`;
   }
 
   async function submitSmqAssessment() {
@@ -2131,6 +2230,13 @@ const App = (() => {
     const prevBtn         = $('btn-ga-prev');
     prevBtn.style.display = _gaCurrentIdx > 0 ? '' : 'none';
     prevBtn.onclick       = () => prevGrammarQuestion();
+
+    const endBtn = $('btn-ga-end');
+    if (endBtn) {
+      endBtn.onclick = () => {
+        endGrammarAssessmentEarly();
+      };
+    }
 
     // Next / Complete-Section / Submit button
     const nextBtn       = $('btn-ga-next');
@@ -2374,6 +2480,156 @@ const App = (() => {
     showStep('grammar-assessment', 'ga-step-results');
   }
 
+  async function endGrammarAssessmentEarly() {
+    if (!confirm('Are you sure you want to end the test early and submit your answers?')) return;
+
+    // Show loading indicator since we might evaluate written answers using Claude
+    const endBtn = $('btn-ga-end');
+    const nextBtn = $('btn-ga-next');
+    const prevBtn = $('btn-ga-prev');
+    if (endBtn) { endBtn.disabled = true; endBtn.textContent = '⌛ Ending…'; }
+    if (nextBtn) nextBtn.disabled = true;
+    if (prevBtn) prevBtn.disabled = true;
+
+    // 1. Grade the current section
+    const marksPerQ = _gaCurrentSection === 0 ? 1 : 2;
+    const normalise = s => (s || '').trim().toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+    const expandContractions = s => s
+      .replace(/\bwon't\b/g, 'will not')
+      .replace(/\bcan't\b/g, 'cannot')
+      .replace(/\bdon't\b/g, 'do not')
+      .replace(/\bdoesn't\b/g, 'does not')
+      .replace(/\bdidn't\b/g, 'did not')
+      .replace(/\bisn't\b/g, 'is not')
+      .replace(/\baren't\b/g, 'are not')
+      .replace(/\bwasn't\b/g, 'was not')
+      .replace(/\bweren't\b/g, 'were not')
+      .replace(/\bhadn't\b/g, 'had not')
+      .replace(/\bhasn't\b/g, 'has not')
+      .replace(/\bhaven't\b/g, 'have not')
+      .replace(/\bcouldn't\b/g, 'could not')
+      .replace(/\bshouldn't\b/g, 'should not')
+      .replace(/\bwouldn't\b/g, 'would not')
+      .replace(/\bhe's\b/g, 'he is')
+      .replace(/\bshe's\b/g, 'she is')
+      .replace(/\bit's\b/g, 'it is')
+      .replace(/\bi'm\b/g, 'i am')
+      .replace(/\bthey're\b/g, 'they are')
+      .replace(/\bwe're\b/g, 'we are')
+      .replace(/\byou're\b/g, 'you are')
+      .replace(/\bi've\b/g, 'i have')
+      .replace(/\bthey've\b/g, 'they have')
+      .replace(/\bwe've\b/g, 'we have')
+      .replace(/\byou've\b/g, 'you have')
+      .replace(/\bhe'd\b/g, 'he would')
+      .replace(/\bshe'd\b/g, 'she would')
+      .replace(/\bi'd\b/g, 'i would')
+      .replace(/\bthey'd\b/g, 'they would')
+      .replace(/\bhe'll\b/g, 'he will')
+      .replace(/\bshe'll\b/g, 'she will')
+      .replace(/\bthey'll\b/g, 'they will');
+    const normFull = s => normalise(expandContractions((s || '').toLowerCase()));
+
+    let correct = 0;
+    const answerRecord = [];
+    for (let idx = 0; idx < _gaQuestions.length; idx++) {
+      const q  = _gaQuestions[idx];
+      const ua = _gaUserAnswers[idx];
+
+      if (q.type === 'fill-blank' || q.type === 'rewrite') {
+        const userNorm = normFull(ua);
+        let isOk = false;
+        if (ua && ua.trim()) {
+          isOk = (q.acceptedAnswers || []).some(a => normFull(a) === userNorm);
+          if (!isOk && q.type === 'rewrite' && userNorm) {
+            try {
+              isOk = await ClaudeEvaluator.evaluateRewrite(q.stem, ua, q.acceptedAnswers || []);
+            } catch (e) {
+              console.warn('Claude rewrite eval failed:', e.message);
+              isOk = false;
+            }
+          }
+        }
+        if (isOk) correct++;
+        answerRecord.push({
+          stem:            q.stem,
+          type:            q.type,
+          acceptedAnswers: q.acceptedAnswers,
+          userAnswer:      ua || '',
+          isCorrect:       isOk,
+          explanation:     q.explanation || ''
+        });
+      } else {
+        const isOk = ua === q.correct;
+        if (isOk) correct++;
+        answerRecord.push({
+          stem:        q.stem,
+          options:     q.options,
+          correct:     q.correct,
+          userAnswer:  ua,
+          isCorrect:   isOk,
+          explanation: q.explanation || ''
+        });
+      }
+    }
+
+    const marksObtained = correct * marksPerQ;
+    const maxMarks      = _gaQuestions.length * marksPerQ;
+
+    _gaSectionResults.push({
+      title:        _gaSections[_gaCurrentSection].title,
+      answerRecord,
+      correct,
+      total:        _gaQuestions.length,
+      marksPerQ,
+      marksObtained,
+      maxMarks
+    });
+
+    // 2. Grade any remaining unstarted sections as 0/empty
+    for (let nextSecIdx = _gaCurrentSection + 1; nextSecIdx < _gaSections.length; nextSecIdx++) {
+      const nextSec = _gaSections[nextSecIdx];
+      const nextQuestions = nextSec.questions || [];
+      const nextMarksPerQ = nextSecIdx === 0 ? 1 : 2;
+      const nextAnswerRecord = nextQuestions.map(q => {
+        if (q.type === 'fill-blank' || q.type === 'rewrite') {
+          return {
+            stem:            q.stem,
+            type:            q.type,
+            acceptedAnswers: q.acceptedAnswers,
+            userAnswer:      '',
+            isCorrect:       false,
+            explanation:     q.explanation || ''
+          };
+        } else {
+          return {
+            stem:        q.stem,
+            options:     q.options,
+            correct:     q.correct,
+            userAnswer:  -1,
+            isCorrect:   false,
+            explanation: q.explanation || ''
+          };
+        }
+      });
+      _gaSectionResults.push({
+        title:        nextSec.title,
+        answerRecord:  nextAnswerRecord,
+        correct:       0,
+        total:        nextQuestions.length,
+        marksPerQ:     nextMarksPerQ,
+        marksObtained: 0,
+        maxMarks:      nextQuestions.length * nextMarksPerQ
+      });
+    }
+
+    if (endBtn) { endBtn.disabled = false; endBtn.textContent = 'End Test'; }
+    if (nextBtn) nextBtn.disabled = false;
+    if (prevBtn) prevBtn.disabled = false;
+
+    submitGrammarAssessment();
+  }
+
   // ================================================================
   //  LISTENING ASSESSMENT (MCQ) — 3 sections, 100 marks total
   // ================================================================
@@ -2471,6 +2727,13 @@ const App = (() => {
     const prevBtn         = $('btn-la-prev');
     prevBtn.style.display = _laCurrentIdx > 0 ? '' : 'none';
     prevBtn.onclick       = () => prevListeningQuestion();
+
+    const endBtn = $('btn-la-end');
+    if (endBtn) {
+      endBtn.onclick = () => {
+        endListeningAssessmentEarly();
+      };
+    }
 
     // Next / Complete-Section / Submit button
     const nextBtn       = $('btn-la-next');
@@ -2613,11 +2876,241 @@ const App = (() => {
     showStep('listening-assessment', 'la-step-results');
   }
 
+  async function endListeningAssessmentEarly() {
+    if (!confirm('Are you sure you want to end the test early and submit your answers?')) return;
+
+    // 1. Grade the current section
+    const marksPerQ = (_laQuestions[0] && _laQuestions[0].marksPerQ) || LA_MARKS[_laCurrentSection] || 1;
+    let correct = 0;
+    const answerRecord = _laQuestions.map((q, idx) => {
+      const isOk = _laUserAnswers[idx] === q.correct;
+      if (isOk) correct++;
+      return {
+        stem:        q.stem,
+        options:     q.options,
+        correct:     q.correct,
+        userAnswer:  _laUserAnswers[idx],
+        isCorrect:   isOk,
+        explanation: q.explanation || ''
+      };
+    });
+
+    const marksObtained = correct * marksPerQ;
+    const maxMarks      = _laQuestions.length * marksPerQ;
+
+    _laSectionResults.push({
+      title:        _laSections[_laCurrentSection].title,
+      sectionType:  _laSections[_laCurrentSection].sectionType,
+      answerRecord,
+      correct,
+      total:        _laQuestions.length,
+      marksPerQ,
+      marksObtained,
+      maxMarks
+    });
+
+    // 2. Grade any remaining unstarted sections as 0/empty
+    for (let nextSecIdx = _laCurrentSection + 1; nextSecIdx < _laSections.length; nextSecIdx++) {
+      const nextSec = _laSections[nextSecIdx];
+      const nextQuestions = nextSec.questions || [];
+      const nextMarksPerQ = nextSec.marksPerQ || LA_MARKS[nextSecIdx] || 1;
+      const nextAnswerRecord = nextQuestions.map(q => {
+        return {
+          stem:        q.stem,
+          options:     q.options,
+          correct:     q.correct,
+          userAnswer:  -1,
+          isCorrect:   false,
+          explanation: q.explanation || ''
+        };
+      });
+      _laSectionResults.push({
+        title:        nextSec.title,
+        sectionType:  nextSec.sectionType,
+        answerRecord:  nextAnswerRecord,
+        correct:       0,
+        total:        nextQuestions.length,
+        marksPerQ:     nextMarksPerQ,
+        marksObtained: 0,
+        maxMarks:      nextQuestions.length * nextMarksPerQ
+      });
+    }
+
+    submitListeningAssessment();
+  }
+
+  // ── NRI STOCK MARKET MCQ — Calculator Logic ──
+  function safeEval(expression) {
+    const sanitized = expression.replace(/×/g, '*').replace(/÷/g, '/');
+    if (!/^[0-9+\-*/.\s()]+$/.test(sanitized)) {
+      throw new Error('Invalid characters');
+    }
+    try {
+      const fn = new Function(`return (${sanitized});`);
+      const val = fn();
+      if (typeof val !== 'number' || isNaN(val) || !isFinite(val)) {
+        return 'Error';
+      }
+      return Number(val.toFixed(8));
+    } catch (e) {
+      return 'Error';
+    }
+  }
+
+  function updateCalcDisplay() {
+    const historyEl = $('calc-history');
+    const inputEl = $('calc-input');
+    if (historyEl) historyEl.textContent = _calcExpr;
+    if (inputEl) inputEl.textContent = _calcInput;
+  }
+
+  function handleCalcInput(val) {
+    if (_calcResetOnInput) {
+      if (val === '.') {
+        _calcInput = '0.';
+      } else {
+        _calcInput = val;
+      }
+      _calcResetOnInput = false;
+      if (_calcExpr === '') {
+        const historyEl = $('calc-history');
+        if (historyEl) historyEl.textContent = '';
+      }
+    } else {
+      if (val === '.') {
+        if (_calcInput.includes('.')) return;
+        _calcInput += '.';
+      } else {
+        if (_calcInput === '0') {
+          _calcInput = val;
+        } else {
+          _calcInput += val;
+        }
+      }
+    }
+    updateCalcDisplay();
+  }
+
+  function handleCalcOperator(op) {
+    if (_calcResetOnInput) {
+      if (_calcExpr !== '' && !/=\s*$/.test(_calcExpr)) {
+        _calcExpr = _calcExpr.trim().slice(0, -1).trim() + ' ' + op + ' ';
+      } else {
+        _calcExpr = _calcInput + ' ' + op + ' ';
+      }
+    } else {
+      _calcExpr += _calcInput + ' ' + op + ' ';
+    }
+    _calcResetOnInput = true;
+    updateCalcDisplay();
+  }
+
+  function handleCalcEqual() {
+    if (_calcExpr === '' || /=\s*$/.test(_calcExpr)) return;
+    
+    const fullExpr = _calcExpr + _calcInput;
+    const result = safeEval(fullExpr);
+    
+    const historyEl = $('calc-history');
+    if (historyEl) historyEl.textContent = fullExpr + ' =';
+    
+    _calcInput = String(result);
+    _calcExpr = '';
+    _calcResetOnInput = true;
+    
+    const inputEl = $('calc-input');
+    if (inputEl) inputEl.textContent = _calcInput;
+  }
+
+  function handleCalcBackspace() {
+    if (_calcResetOnInput) return;
+    
+    _calcInput = _calcInput.slice(0, -1);
+    if (_calcInput === '' || _calcInput === '-') {
+      _calcInput = '0';
+    }
+    updateCalcDisplay();
+  }
+
+  function handleCalcClear() {
+    _calcExpr = '';
+    _calcInput = '0';
+    _calcResetOnInput = false;
+    updateCalcDisplay();
+  }
+
+  function initCalculator() {
+    const toggleBtn = $('btn-smq-calc-toggle');
+    const closeBtn = $('btn-smq-calc-close');
+    const calcEl = $('smq-calculator');
+
+    if (toggleBtn && calcEl) {
+      toggleBtn.onclick = (e) => {
+        e.stopPropagation();
+        calcEl.classList.toggle('hidden');
+      };
+    }
+
+    if (closeBtn && calcEl) {
+      closeBtn.onclick = (e) => {
+        e.stopPropagation();
+        calcEl.classList.add('hidden');
+      };
+    }
+
+    const buttons = document.querySelectorAll('#smq-calculator .calc-btn');
+    buttons.forEach(btn => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        const val = btn.getAttribute('data-val');
+        if (val === 'C') {
+          handleCalcClear();
+        } else if (val === 'back') {
+          handleCalcBackspace();
+        } else if (['+', '-', '*', '/'].includes(val)) {
+          handleCalcOperator(val);
+        } else if (val === '=') {
+          handleCalcEqual();
+        } else {
+          handleCalcInput(val);
+        }
+      };
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (!calcEl || calcEl.classList.contains('hidden')) return;
+
+      const active = document.activeElement;
+      if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) {
+        return;
+      }
+
+      const key = e.key;
+      if (/[0-9.]/.test(key)) {
+        e.preventDefault();
+        handleCalcInput(key);
+      } else if (['+', '-', '*', '/'].includes(key)) {
+        e.preventDefault();
+        handleCalcOperator(key);
+      } else if (key === 'Enter' || key === '=') {
+        e.preventDefault();
+        handleCalcEqual();
+      } else if (key === 'Backspace') {
+        e.preventDefault();
+        handleCalcBackspace();
+      } else if (key === 'Escape' || key.toLowerCase() === 'c') {
+        e.preventDefault();
+        handleCalcClear();
+      }
+    });
+  }
+
   // ---- Init ----
   async function init() {
     await DB.init();
     initAuth();
     bindNavigation();
+    initCalculator();
 
     // Draw idle waveforms on load
     ['ps', 'mc', 'rp', 'gd'].forEach(prefix => {

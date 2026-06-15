@@ -2646,3 +2646,168 @@ body {
   font-size: 0.78rem; font-weight: 800; flex-shrink: 0;
 }
 .smq-option-btn.selected .smq-option-label { background: var(--smq-color); color: #fff; }
+
+/* ================================================================
+   NRI STOCK MARKET MCQ — Floating Calculator Widget
+   ================================================================ */
+.smq-calculator {
+  position: absolute;
+  top: 10px;
+  right: -310px; /* Positioned to the right of the quiz card on wide screens */
+  width: 280px;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1.5px solid rgba(16, 185, 129, 0.25);
+  border-radius: 16px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+  padding: 1rem;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-sizing: border-box;
+}
+
+@media (max-width: 1400px) {
+  /* Overlay directly over card on smaller screen sizes */
+  .smq-calculator {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    right: auto;
+    width: 290px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
+  }
+}
+
+.smq-calculator.hidden {
+  display: none !important;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.calc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 700;
+  color: #064e3b;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.15);
+  padding-bottom: 0.45rem;
+}
+
+.calc-close-btn {
+  background: none;
+  border: none;
+  font-size: 1.35rem;
+  color: #059669;
+  cursor: pointer;
+  padding: 0 0.25rem;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.calc-close-btn:hover {
+  color: #dc2626;
+}
+
+.calc-display {
+  background: #0f172a;
+  border-radius: 10px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  min-height: 62px;
+  color: #fff;
+  font-family: monospace;
+  box-sizing: border-box;
+  box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.1);
+}
+
+.calc-history {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  height: 1rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.calc-input {
+  font-size: 1.35rem;
+  font-weight: 600;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calc-buttons {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+}
+
+.calc-btn {
+  height: 42px;
+  border-radius: 8px;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  background: #fff;
+  font-weight: 600;
+  color: #334155;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.1s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.calc-btn:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.calc-btn:active {
+  transform: scale(0.95);
+}
+
+.calc-btn.btn-op {
+  background: #f0fdf4;
+  color: #059669;
+  border-color: #d1fae5;
+}
+
+.calc-btn.btn-op:hover {
+  background: #d1fae5;
+}
+
+.calc-btn.btn-clear {
+  background: #fef2f2;
+  color: #dc2626;
+  border-color: #fee2e2;
+}
+
+.calc-btn.btn-clear:hover {
+  background: #fee2e2;
+}
+
+.calc-btn.btn-eq {
+  background: #10b981;
+  color: #fff;
+  border-color: #10b981;
+}
+
+.calc-btn.btn-eq:hover {
+  background: #059669;
+  border-color: #059669;
+}

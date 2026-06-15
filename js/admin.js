@@ -440,7 +440,14 @@ const _TRAINEE_ALIASES = {
   "rohit patil":                "Rohit Rajeshkumar Patil",    // missing middle name
   "nehal kallimani":            "Nehal Ravindra Kallimani",   // missing middle name
   "yalleshi holennavar":        "Yalleshi Mareppa Holennavar", // missing middle name
-  "shubham sambhaji bhadavankar": "Shubham Sambhaji Bhadvankar" // extra 'a' in surname
+  "shubham sambhaji bhadavankar": "Shubham Sambhaji Bhadvankar", // extra 'a' in surname
+
+  // ── Girish A team ──
+  "dnyanesh jitendra badgujar": "Dnyanesh JItendra Badgujar",
+  "s dhruvanandana":            "Dhruvanandana",
+  "v r dhan raj":               "Dhanraj",
+  "v r dhanraj":                "Dhanraj",
+  "mehul chandrakant shetty":   "Mehul Chandtrakant Shetty"
 };
 
 // Resolve a raw DB/session name to its canonical map name (if an alias exists).
@@ -4926,7 +4933,7 @@ window.Admin = (() => {
     "Renuka Mishra":      ["Gonegondla Karanam Venkata Karthik","Adarsh Singh Gautam","Girish A","Saqlain Khalique Shaikh","M Kiran","Keyur P Shah","Ankita Das","Mohd Altaf Bhutta"],
     "Basavaraj Gurav":    ["Shrikanth K","Srawani Deka Basumatary","Vishvajeet Singh","Harshvardhan Singh Rathore","Pratik P Bontra","Rajan Kiran Wagh","Vipul Prakash Sande"],
     "Ratanjeet Maharaj":  ["Roshan KM","Shashank Verma","Martin Davis","Shrutika Sumit Jain","Fiza Kouser","Tejas K Madeval","Khushpreet Kaur","Priyank Sharma"],
-    "Girish A":           ["Vansh Agarwal"],
+    "Girish A":           ["Vansh Agarwal", "Dnyanesh JItendra Badgujar", "Dnyanesh Badgujar", "Sayed Maaz Pasha Inamdar", "Dhruvanandana", "Javeriya Burhanuddin Kittur", "Shivani N Shetty", "Dhanraj", "Mehul Chandtrakant Shetty", "Varun", "Arati Hajgulkar"],
     "Gopi Kiran":         ["Masooma Yousuf","Nitin Tanajirao Pimpalpalle","S Mohammed Akhil","Ankit Agarwal","Murgendra Rajashekhar Patil","Mary Salins","Aldrich Frewin Dsouza"],
     "Shwethayini":        ["Sridevi K V","Suman Janghel","Chandan Kumar","Rahul Kumar","Ravi Kumar Deo","Vishal Bhattar","Rohini Kumari","Nikhil Murlidhar Bhatkar","Mutyala Dinesh"],
     "Swanand Dixit":      ["Deepanshi Lalwani","Roshni","Mayank Lodha","Alamgir Haque","Karthik R","Sachinkumar Ghanti B","Bharat Halagalimath"]
