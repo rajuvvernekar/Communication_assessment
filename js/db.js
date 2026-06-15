@@ -1,7 +1,7 @@
 'use strict';
 
 // ============================================================
-//  CommAssess — Database Layer (Supabase with LocalStorage fallback)
+//  CommAssess — Database Layer (Supabase with LocalStorage fallback & auto-sync)
 //  Drop-in replacement for the old IndexedDB-based DB module.
 //  The public API (init, get, getAll, put, del, getByIndex)
 //  is identical so the rest of the app needs minimal changes.
@@ -121,6 +121,11 @@ const DB = (() => {
     }
   }
 
+  // Exposed for migration/sync purposes
+  function _localClear(store) {
+    localStorage.removeItem('commassess_' + store);
+  }
+
   function _localGet(store, id) {
     const list = _localGetAll(store);
     if (store === 'settings') {
@@ -190,10 +195,48 @@ const DB = (() => {
       await _seedDefaults();
       await _seedManagerTopics();
       console.log('[DB] Supabase connected successfully.');
+
+      // Auto-migrate any local storage data to Supabase if any exists!
+      await _migrateLocalStorageToSupabase();
     } catch (e) {
       console.warn('[DB] Supabase unavailable, using LocalStorage fallback:', e.message || e);
       _useLocalStorage = true;
       _seedLocalStorageDefaults();
+    }
+  }
+
+  // ---- Migrate data saved locally during outage back to Supabase ----
+  async function _migrateLocalStorageToSupabase() {
+    try {
+      const stores = ['trainees', 'topics', 'sessions', 'ai_audit_scores', 'settings'];
+      for (const store of stores) {
+        const localItems = _localGetAll(store);
+        if (localItems.length === 0) continue;
+
+        console.log(`[DB] Found ${localItems.length} unsynced items in local storage for ${store}. Migrating to Supabase...`);
+        for (const item of localItems) {
+          try {
+            if (store === 'settings') {
+              // Settings key merge (e.g. merge team assignments, avoid overwriting adminUsers entirely unless default)
+              if (item.key === 'adminUsers') continue; // don't push default admins over customized cloud database admins
+              await _sb.from('settings').upsert({ key: item.key, value: item.value }, { onConflict: 'key' });
+            } else {
+              const dbData = _toDB(store, item);
+              if (item.id) {
+                await _sb.from(store).upsert(dbData, { onConflict: 'id' });
+              } else {
+                await _sb.from(store).insert(dbData);
+              }
+            }
+          } catch (itemErr) {
+            console.warn(`[DB] Migration failed for item in ${store}:`, itemErr.message);
+          }
+        }
+        _localClear(store);
+        console.log(`[DB] Completed migration for ${store}.`);
+      }
+    } catch (e) {
+      console.warn('[DB] Automatic migration failed:', e.message || e);
     }
   }
 
