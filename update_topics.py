@@ -5,8 +5,8 @@ and create 5 new escalation stock-market mock-call topics.
 import requests, json, sys
 from datetime import datetime
 
-URL = "https://dpiklhrnikitgzuhlfqp.supabase.co"
-KEY = "sb_publishable_TGdvU1SyEqO_3G6wuP8Oow_bxli_Brs"
+URL = "https://kkyrrxubielpxiwjilio.supabase.co"
+KEY = "sb_publishable_2tj0JGEJGNbqTx5pzZXXng_-fNpeVyq"
 H = {"apikey": KEY, "Authorization": f"Bearer {KEY}",
      "Content-Type": "application/json", "Prefer": "return=representation"}
 
