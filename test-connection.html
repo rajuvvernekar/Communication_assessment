@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Connection Test</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="config.js?v=8"></script>
+  <style>
+    body { font-family: sans-serif; padding: 40px; background: #f5f5f5; }
+    .box { background: white; border-radius: 12px; padding: 30px; max-width: 600px; margin: auto; box-shadow: 0 2px 12px rgba(0,0,0,0.1); }
+    h2 { margin-top: 0; }
+    .ok { color: green; font-weight: bold; font-size: 1.2em; }
+    .fail { color: red; font-weight: bold; font-size: 1.2em; }
+    .info { color: #333; margin: 8px 0; font-size: 0.95em; }
+    .label { color: #888; font-size: 0.85em; }
+  </style>
+</head>
+<body>
+<div class="box">
+  <h2>CommAssess — Connection Test</h2>
+  <div class="label">Supabase URL</div>
+  <div class="info" id="url">Loading...</div>
+  <br>
+  <div class="label">Connection Status</div>
+  <div id="status" class="info">Testing...</div>
+  <br>
+  <div class="label">Data Counts</div>
+  <div id="counts" class="info">—</div>
+</div>
+<script>
+(async () => {
+  document.getElementById('url').textContent = CONFIG.SUPABASE_URL;
+  try {
+    const sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+    const { data: s, error: se } = await sb.from('sessions').select('id', { count: 'exact', head: true });
+    const { count: sc } = await sb.from('sessions').select('*', { count: 'exact', head: true });
+    const { count: tc } = await sb.from('trainees').select('*', { count: 'exact', head: true });
+    if (se) throw se;
+    document.getElementById('status').innerHTML = '<span class="ok">✅ Connected to Supabase</span>';
+    document.getElementById('counts').innerHTML = `Sessions: <b>${sc}</b> &nbsp;|&nbsp; Trainees: <b>${tc}</b>`;
+  } catch(e) {
+    document.getElementById('status').innerHTML = '<span class="fail">❌ NOT connected — using LocalStorage (no sessions will show)</span>';
+    document.getElementById('counts').textContent = 'Error: ' + e.message;
+  }
+})();
+</script>
+</body>
+</html>
