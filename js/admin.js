@@ -4444,12 +4444,30 @@ window.Admin = (() => {
       const msg = $('pwd-msg');
       if (!np) { msg.textContent = 'Please enter a new password.'; msg.style.color = 'red'; return; }
       if (np !== cp) { msg.textContent = 'Passwords do not match.'; msg.style.color = 'red'; return; }
-      await DB.put('settings', { key: 'adminPassword', value: np });
-      $('new-pwd').value = '';
-      $('confirm-pwd').value = '';
-      msg.textContent = 'Password updated successfully!';
-      msg.style.color = 'green';
-      toast('Password saved!', 'success');
+      try {
+        const currentAdmin = sessionStorage.getItem('adminName') || 'admin';
+        const stored = await DB.get('settings', 'adminUsers');
+        let users = [];
+        try { users = JSON.parse(stored?.value || stored || '[]'); } catch (_) {}
+        
+        let userIdx = users.findIndex(u => u.username.toLowerCase() === currentAdmin.toLowerCase());
+        if (userIdx > -1) {
+          users[userIdx].password = np;
+        } else {
+          users.push({ username: currentAdmin, password: np });
+        }
+        await DB.put('settings', { key: 'adminUsers', value: JSON.stringify(users) });
+        await DB.put('settings', { key: 'adminPassword', value: np });
+        
+        $('new-pwd').value = '';
+        $('confirm-pwd').value = '';
+        msg.textContent = 'Password updated successfully!';
+        msg.style.color = 'green';
+        toast('Password saved!', 'success');
+      } catch (e) {
+        msg.textContent = 'Failed to update password: ' + e.message;
+        msg.style.color = 'red';
+      }
     };
 
     // Claude AI Scoring — now proxied via Cloudflare Worker (key is server-side)
@@ -4903,6 +4921,7 @@ window.Admin = (() => {
     "Nikita Sachin Desai":["Sumanth Kumar Sahu","Amulya K","Anup Sadanandan","Maya M Pillai","Rohan Jain","Mehul Harihar Dhande","Vivek Kumar Verma","Prathvik Saldanha","Jay Prakash Singh","Ravikumar Mangilal Shah","Tabassum Sharieff"],
     "Priyanka Dash":      ["Sadiya Banu","Sangeetha P","Regan Lobo","Sarfaraj Najeer Kudachee","Naman Prakash Awasthi","Prateek Manvi","Amar Vishwakarma","Shivanjali Kumari","M Vinod","Shaktiprasad Bentur","Vivek G K","Shashidhara L"],
     "Leepha Joseph":      ["Chittimani Bhaviteja","Arpitha L K","M Nikhil","Shruti Jain","Joel K Joy","Amritpal Singh","Rugved Sambhajirao Yadav","Rakesh S Sankangoudar","Abhimanyu","Deepak B Nair"],
+    "Pratyaksha":         [],
     // ── Ticket Team ──
     "Renuka Mishra":      ["Gonegondla Karanam Venkata Karthik","Adarsh Singh Gautam","Girish A","Saqlain Khalique Shaikh","M Kiran","Keyur P Shah","Ankita Das","Mohd Altaf Bhutta"],
     "Basavaraj Gurav":    ["Shrikanth K","Srawani Deka Basumatary","Vishvajeet Singh","Harshvardhan Singh Rathore","Pratik P Bontra","Rajan Kiran Wagh","Vipul Prakash Sande"],

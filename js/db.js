@@ -1,7 +1,7 @@
 'use strict';
 
 // ============================================================
-//  CommAssess — Database Layer (Supabase)
+//  CommAssess — Database Layer (Supabase with LocalStorage fallback)
 //  Drop-in replacement for the old IndexedDB-based DB module.
 //  The public API (init, get, getAll, put, del, getByIndex)
 //  is identical so the rest of the app needs minimal changes.
@@ -9,6 +9,7 @@
 
 const DB = (() => {
   let _sb = null; // Supabase client instance
+  let _useLocalStorage = false;
 
   // ---- camelCase ↔ snake_case field maps ----
   const SESSION_MAP = {
@@ -110,16 +111,124 @@ const DB = (() => {
     return data.publicUrl;
   }
 
+  // ---- LocalStorage helper functions ----
+  function _localGetAll(store) {
+    try {
+      const raw = localStorage.getItem('commassess_' + store);
+      return raw ? JSON.parse(raw) : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function _localGet(store, id) {
+    const list = _localGetAll(store);
+    if (store === 'settings') {
+      return list.find(r => r.key === id) || null;
+    }
+    return list.find(r => r.id === id) || null;
+  }
+
+  function _localPut(store, data) {
+    const list = _localGetAll(store);
+    if (store === 'settings') {
+      const idx = list.findIndex(r => r.key === data.key);
+      if (idx > -1) list[idx] = data;
+      else list.push(data);
+      localStorage.setItem('commassess_' + store, JSON.stringify(list));
+      return data.key;
+    }
+    if (!data.id) {
+      data.id = 'local-' + Math.random().toString(36).substring(2, 11);
+    }
+    const idx = list.findIndex(r => r.id === data.id);
+    if (idx > -1) list[idx] = data;
+    else list.push(data);
+    localStorage.setItem('commassess_' + store, JSON.stringify(list));
+    return data.id;
+  }
+
+  function _localDel(store, id) {
+    const list = _localGetAll(store);
+    let updated;
+    if (store === 'settings') {
+      updated = list.filter(r => r.key !== id);
+    } else {
+      updated = list.filter(r => r.id !== id);
+    }
+    localStorage.setItem('commassess_' + store, JSON.stringify(updated));
+  }
+
+  function _localGetByIndex(store, field, value) {
+    const list = _localGetAll(store);
+    return list.filter(r => r[field] === value);
+  }
+
+  function _seedLocalStorageDefaults() {
+    const storedAdmins = _localGet('settings', 'adminUsers');
+    if (!storedAdmins) {
+      const defaultAdmins = [
+        { username: 'admin', password: 'admin123' },
+        { username: 'girish', password: 'admin123' }
+      ];
+      _localPut('settings', { key: 'adminUsers', value: JSON.stringify(defaultAdmins) });
+    }
+    const storedPwd = _localGet('settings', 'adminPassword');
+    if (!storedPwd) {
+      _localPut('settings', { key: 'adminPassword', value: 'admin123' });
+    }
+  }
+
   // ---- Public: initialise Supabase client ----
   async function init() {
-    _sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
-    await _seedDefaults();
-    await _seedManagerTopics();
+    try {
+      _sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+      // Quick test of connection
+      const { data, error } = await _sb.from('settings').select('key').limit(1);
+      if (error) throw error;
+
+      await _seedDefaults();
+      await _seedManagerTopics();
+      console.log('[DB] Supabase connected successfully.');
+    } catch (e) {
+      console.warn('[DB] Supabase unavailable, using LocalStorage fallback:', e.message || e);
+      _useLocalStorage = true;
+      _seedLocalStorageDefaults();
+    }
   }
 
   // ---- Seed default topics on first run ----
   async function _seedDefaults() {
     try {
+      // Seed default admin users
+      try {
+        const { data: adminData } = await _sb.from('settings').select('*').eq('key', 'adminUsers');
+        if (!adminData || adminData.length === 0) {
+          const defaultAdmins = [
+            { username: 'admin', password: 'admin123' },
+            { username: 'girish', password: 'admin123' }
+          ];
+          await _sb.from('settings').upsert({ key: 'adminUsers', value: JSON.stringify(defaultAdmins) }, { onConflict: 'key' });
+        } else {
+          let users = [];
+          try { users = JSON.parse(adminData[0].value || '[]'); } catch (_) {}
+          // Ensure 'admin' exists
+          if (!users.some(u => u.username.toLowerCase() === 'admin')) {
+            users.push({ username: 'admin', password: 'admin123' });
+          }
+          // Ensure 'girish' exists and password is reset to 'admin123'
+          const girishUser = users.find(u => u.username.toLowerCase() === 'girish');
+          if (girishUser) {
+            girishUser.password = 'admin123';
+          } else {
+            users.push({ username: 'girish', password: 'admin123' });
+          }
+          await _sb.from('settings').upsert({ key: 'adminUsers', value: JSON.stringify(users) }, { onConflict: 'key' });
+        }
+      } catch (adminErr) {
+        console.warn('[DB] Admin users seeding failed:', adminErr.message);
+      }
+
       const { count } = await _sb.from('topics').select('*', { count: 'exact', head: true });
       if (count > 0) return; // already seeded
 
@@ -269,6 +378,10 @@ const DB = (() => {
 
   // ---- put: insert or upsert a record ----
   async function put(store, data) {
+    if (_useLocalStorage) {
+      return _localPut(store, data);
+    }
+
     // Special case: settings table uses 'key' as PK, not 'id'
     if (store === 'settings') {
       const { error } = await _sb.from('settings')
@@ -320,6 +433,10 @@ const DB = (() => {
 
   // ---- get: fetch a single record by id (or key for settings) ----
   async function get(store, id) {
+    if (_useLocalStorage) {
+      return _localGet(store, id);
+    }
+
     if (store === 'settings') {
       const { data } = await _sb.from('settings').select('*').eq('key', id).single();
       return data || null; // returns { key, value } matching old IndexedDB shape
@@ -331,6 +448,10 @@ const DB = (() => {
 
   // ---- getAll: fetch all records in a store ----
   async function getAll(store) {
+    if (_useLocalStorage) {
+      return _localGetAll(store);
+    }
+
     // sessions uses submitted_at; everything else uses created_at
     const orderCol = store === 'sessions' ? 'submitted_at' : 'created_at';
     const { data, error } = await _sb.from(store).select('*').order(orderCol, { ascending: true });
@@ -340,19 +461,41 @@ const DB = (() => {
 
   // ---- patch: partial update (only specified columns) ----
   async function patch(store, id, data) {
+    if (_useLocalStorage) {
+      _localPatch(store, id, data);
+      return;
+    }
+
     const dbData = _toDB(store, data);
     const { error } = await _sb.from(store).update(dbData).eq('id', id);
     if (error) throw error;
   }
 
+  function _localPatch(store, id, data) {
+    const record = _localGet(store, id);
+    if (record) {
+      Object.assign(record, data);
+      _localPut(store, record);
+    }
+  }
+
   // ---- del: delete a record by id ----
   async function del(store, id) {
+    if (_useLocalStorage) {
+      _localDel(store, id);
+      return;
+    }
+
     const { error } = await _sb.from(store).delete().eq('id', id);
     if (error) throw error;
   }
 
   // ---- getByIndex: filter records by a field value ----
   async function getByIndex(store, field, value) {
+    if (_useLocalStorage) {
+      return _localGetByIndex(store, field, value);
+    }
+
     // Map camelCase field names to DB column names
     const colMap = {
       sessions: { module: 'module', traineeId: 'trainee_id', status: 'status' },
@@ -366,7 +509,24 @@ const DB = (() => {
   }
 
   // ---- expose Supabase client (for Auth in auth.js) ----
-  function getClient() { return _sb; }
+  function getClient() {
+    if (_useLocalStorage) {
+      return {
+        auth: {
+          getSession: async () => ({ data: { session: null } }),
+          onAuthStateChange: () => {},
+          signInWithPassword: async () => { throw new Error('Offline mode: Auth not available'); },
+          signUp: async () => { throw new Error('Offline mode: Auth not available'); },
+          signOut: async () => {}
+        }
+      };
+    }
+    return _sb;
+  }
 
-  return { init, put, patch, get, getAll, del, getByIndex, getClient };
+  function isLocalStorage() {
+    return _useLocalStorage;
+  }
+
+  return { init, put, patch, get, getAll, del, getByIndex, getClient, isLocalStorage };
 })();
