@@ -7,40 +7,55 @@
   <script src="config.js?v=8"></script>
   <style>
     body { font-family: sans-serif; padding: 40px; background: #f5f5f5; }
-    .box { background: white; border-radius: 12px; padding: 30px; max-width: 600px; margin: auto; box-shadow: 0 2px 12px rgba(0,0,0,0.1); }
+    .box { background: white; border-radius: 12px; padding: 30px; max-width: 700px; margin: auto; box-shadow: 0 2px 12px rgba(0,0,0,0.1); }
     h2 { margin-top: 0; }
-    .ok { color: green; font-weight: bold; font-size: 1.2em; }
-    .fail { color: red; font-weight: bold; font-size: 1.2em; }
-    .info { color: #333; margin: 8px 0; font-size: 0.95em; }
-    .label { color: #888; font-size: 0.85em; }
+    .ok { color: green; font-weight: bold; }
+    .fail { color: red; font-weight: bold; }
+    pre { background: #f0f0f0; padding: 12px; border-radius: 6px; font-size: 0.85em; white-space: pre-wrap; word-break: break-all; }
+    .label { color: #888; font-size: 0.85em; margin-top: 16px; }
   </style>
 </head>
 <body>
 <div class="box">
   <h2>CommAssess — Connection Test</h2>
   <div class="label">Supabase URL</div>
-  <div class="info" id="url">Loading...</div>
-  <br>
-  <div class="label">Connection Status</div>
-  <div id="status" class="info">Testing...</div>
-  <br>
-  <div class="label">Data Counts</div>
-  <div id="counts" class="info">—</div>
+  <pre id="url"></pre>
+  <div class="label">Anon Key (first 30 chars)</div>
+  <pre id="key"></pre>
+  <div class="label">Direct Fetch Test (bypasses Supabase JS client)</div>
+  <pre id="fetch-result">Testing...</pre>
+  <div class="label">Supabase JS Client Test</div>
+  <pre id="sb-result">Testing...</pre>
 </div>
 <script>
+document.getElementById('url').textContent = CONFIG.SUPABASE_URL;
+document.getElementById('key').textContent = CONFIG.SUPABASE_ANON_KEY.substring(0, 40) + '...';
+
+// Test 1: raw fetch
 (async () => {
-  document.getElementById('url').textContent = CONFIG.SUPABASE_URL;
+  try {
+    const res = await fetch(CONFIG.SUPABASE_URL + '/rest/v1/settings?select=key&limit=1', {
+      headers: {
+        'apikey': CONFIG.SUPABASE_ANON_KEY,
+        'Authorization': 'Bearer ' + CONFIG.SUPABASE_ANON_KEY
+      }
+    });
+    const text = await res.text();
+    document.getElementById('fetch-result').textContent = 'HTTP ' + res.status + ' ' + res.statusText + '\n' + text;
+  } catch(e) {
+    document.getElementById('fetch-result').textContent = 'ERROR: ' + e.message;
+  }
+})();
+
+// Test 2: Supabase JS client
+(async () => {
   try {
     const sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
-    const { data: s, error: se } = await sb.from('sessions').select('id', { count: 'exact', head: true });
-    const { count: sc } = await sb.from('sessions').select('*', { count: 'exact', head: true });
-    const { count: tc } = await sb.from('trainees').select('*', { count: 'exact', head: true });
-    if (se) throw se;
-    document.getElementById('status').innerHTML = '<span class="ok">✅ Connected to Supabase</span>';
-    document.getElementById('counts').innerHTML = `Sessions: <b>${sc}</b> &nbsp;|&nbsp; Trainees: <b>${tc}</b>`;
+    const { data, error } = await sb.from('settings').select('key').limit(1);
+    if (error) throw error;
+    document.getElementById('sb-result').textContent = 'SUCCESS: ' + JSON.stringify(data);
   } catch(e) {
-    document.getElementById('status').innerHTML = '<span class="fail">❌ NOT connected — using LocalStorage (no sessions will show)</span>';
-    document.getElementById('counts').textContent = 'Error: ' + e.message;
+    document.getElementById('sb-result').textContent = 'ERROR: ' + (e.message || JSON.stringify(e));
   }
 })();
 </script>
