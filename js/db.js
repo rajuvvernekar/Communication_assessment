@@ -241,7 +241,7 @@ const DB = (() => {
   }
 
   // ---- Seed default topics on first run ----
-  async function _seedDefaults() {
+  async function _seedDefaults(force = false) {
     try {
       // Seed default admin users
       try {
@@ -272,8 +272,53 @@ const DB = (() => {
         console.warn('[DB] Admin users seeding failed:', adminErr.message);
       }
 
-      const { count } = await _sb.from('topics').select('*', { count: 'exact', head: true });
-      if (count > 0) return; // already seeded
+      // Cleanup of old suffix-heavy titles to keep database clean
+      const oldTitles = [
+        'Physical Delivery Penalty – ITM Options Expired (Written Chat)',
+        'IMPS Credit Delay – Missed Trade Dispute (Written Chat)',
+        'Short Delivery Auction Penalty – IPO Shares Sale (Written Chat)',
+        'Double Billing Dispute – Irate Client (Written Chat)',
+        'Service Outage – Compensation Request (Written Chat)',
+        'Physical Delivery Penalty – ITM Stock Options Expired Without Funds (Written Chat)',
+        'IMPS Credit Delay – Missed Intraday Trade and Loss of Opportunity (Written Chat)',
+        'Short Delivery Auction Penalty – Client Sold Recently Allotted IPO Shares (Written Chat)',
+        'Angry Customer – Double Billing (Written Chat)',
+        'Service Outage – Status Call (Written Chat)',
+        'Angry Customer – Double Billing (Written Mail)',
+        'Service Outage – Status Call (Written Mail)',
+        'Physical Delivery Penalty – ITM Stock Options Expired Without Funds (Written Mail)',
+        'IMPS Credit Delay – Missed Intraday Trade and Loss of Opportunity (Written Mail)',
+        'Short Delivery Auction Penalty – Client Sold Recently Allotted IPO Shares (Written Mail)',
+        'Account Modification – Name Change Document Rejection (Written Mail)',
+        'Name Change – Client Refuses to Submit Gazette Notification (Written Mail)',
+        'Takeover Offer – Client Insists Despite Higher Market Price (Written Mail)',
+        'NCRP Lien – Delayed Payment Charges on Frozen Funds (Written Mail)',
+        'Minor Account – Premature Blocking Before 18th Birthday (Written Mail)',
+        'Emergency Withdrawal – Blocked Due to Open Long Index Options (Written Mail)',
+        'Pledged Stocks – Undisclosed Aging Debit Balance & Trading Losses (Written Mail)'
+      ];
+
+      if (_useLocalStorage) {
+        try {
+          const localTopics = _localGetAll('topics');
+          const filtered = localTopics.filter(t => !oldTitles.includes(t.title));
+          localStorage.setItem('commassess_topics', JSON.stringify(filtered));
+        } catch (_) {}
+      } else {
+        try {
+          await _sb.from('topics').delete().in('title', oldTitles);
+        } catch (e) {
+          console.warn('[DB] Cloud cleanup of old titles failed:', e.message);
+        }
+      }
+
+      let existing = [];
+      if (_useLocalStorage) {
+        existing = _localGetAll('topics');
+      } else {
+        const { data: res } = await _sb.from('topics').select('module, title');
+        existing = res || [];
+      }
 
       const defaults = [
         // Pick & Speak — General
@@ -290,15 +335,103 @@ const DB = (() => {
         { module: 'pick-speak-stock', title: 'How to Read a Stock Chart',     description: 'Walk through the basics of reading a stock chart — price trends, volume, and key indicators like moving averages.',             scenario: '', checklist: [], enabled: true },
         { module: 'pick-speak-stock', title: 'Managing Market Volatility',    description: 'How should a long-term investor think about and respond to short-term market volatility? Share your approach.',                  scenario: '', checklist: [], enabled: true },
         { module: 'pick-speak-stock', title: 'Fundamental vs Technical Analysis', description: 'What is the difference between fundamental and technical analysis? Which do you rely on more, and why?',                    scenario: '', checklist: [], enabled: true },
+        
         // Mock Call
-        { module: 'mock-call', title: 'Angry Customer – Double Billing',
+        {
+          module: 'mock-call',
+          title: 'Angry Customer – Double Billing',
           description: 'A customer calls furious about being charged twice for the same service.',
           scenario: 'You receive an inbound support call. The customer says: "I\'ve been charged TWICE this month and nobody is helping me! This is completely unacceptable — I want my money back NOW!"',
-          checklist: ['Greet professionally and introduce yourself','Acknowledge the frustration with empathy','Verify the account details calmly','Offer a clear resolution or escalation path','Close the call warmly and professionally'] },
-        { module: 'mock-call', title: 'Service Outage – Status Call',
+          checklist: ['Greet professionally and introduce yourself','Acknowledge the frustration with empathy','Verify the account details calmly','Offer a clear resolution or escalation path','Close the call warmly and professionally'],
+          bot_script: [
+            "I've been charged twice this month for my subscription fee! This is completely unacceptable. Why is my money being deducted twice without my permission?",
+            "I checked my bank statement and both debits are cleared. I want my money back in my account right now. I shouldn't have to wait for your system errors.",
+            "Can you send me a written confirmation or receipt right now showing that the refund has been processed? I don't trust verbal promises.",
+            "Fine, I will check my bank account in 3 days. If it's not there, I will escalate this. Is there anything else you can do to make up for this trouble?"
+          ],
+          enabled: true
+        },
+        {
+          module: 'mock-call',
+          title: 'Service Outage – Status Call',
           description: 'Customer has had a 2-day service outage and wants a status update and compensation.',
           scenario: 'Customer says: "My internet has been down for 2 days straight. I work from home — this is costing me real clients and money. What exactly are you doing about it, and what compensation am I getting?"',
-          checklist: ['Show genuine empathy for the business impact','Provide an honest and accurate status update','Offer a practical interim workaround if possible','Set realistic expectations on resolution timeline','Make a clear follow-up commitment'] },
+          checklist: ['Show genuine empathy for the business impact','Provide an honest and accurate status update','Offer a practical interim workaround if possible','Set realistic expectations on resolution timeline','Make a clear follow-up commitment'],
+          bot_script: [
+            "My internet has been down for 2 days straight. I work from home — this is costing me real clients and money. What exactly are you doing about it, and what compensation am I getting?",
+            "I have already tried restarting my router and checking the cables — your basic troubleshooting is not the issue. Your main server in my area is down. When will it be fixed?",
+            "I am losing over ₹5,000 every day this service is down. Your company needs to compensate me for this loss of income. It is a direct result of your server outage.",
+            "Fine, log a formal complaint and give me the ticket number. I expect a credit adjustment on my next bill for the outage duration."
+          ],
+          enabled: true
+        },
+        {
+          module: 'mock-call',
+          title: 'Physical Delivery Penalty – ITM Stock Options Expired Without Funds',
+          description: 'When an in-the-money (ITM) stock option is held to expiry, it is subject to physical delivery under exchange rules — meaning the buyer must pay the full contract value to take delivery of the underlying shares, and the seller must deliver them. If a client holds such an option at expiry without adequate funds or shares in their account, the position goes into compulsory physical delivery, resulting in auction penalties, margin shortfall charges, and possible financial loss. The client was not aware of this obligation and had assumed the position would simply expire or be cash-settled.',
+          scenario: 'You receive an inbound support call. The client is furious about an unexpected penalty debited from their account after their ITM stock options expired without sufficient funds for physical delivery. They are demanding a full refund, claiming they were never informed about the physical delivery obligation.',
+          checklist: [
+            'Greet professionally and introduce yourself',
+            'Empathize with the client\'s shock and acknowledge the financial impact of the unexpected penalty',
+            'Clearly explain the physical delivery obligation for ITM stock options at expiry and that this is an exchange-mandated rule, not a broker policy',
+            'Explain why the auto square-off may not have been triggered — ITM positions within the do-not-exercise range are not squared off automatically',
+            'Walk the client through the penalty structure — what amount was charged, why it was applied, and which exchange circular governs it',
+            'Escalate to the Risk or Compliance team and check whether any waiver or partial adjustment is possible, while setting honest expectations',
+            'Close the call warmly and professionally'
+          ],
+          bot_script: [
+            "I had absolutely no idea my options would go to physical delivery. Your platform never showed me a single warning before expiry. Why wasn't I informed that I needed funds to take delivery of the actual shares?",
+            "I clearly did not have the funds for physical delivery — your own system would have shown that. So why was the position allowed to expire instead of being squared off automatically before expiry?",
+            "I'm looking at my account right now and there is a debit for a physical delivery penalty that I never authorised. How is this even legal?",
+            "I want the full penalty amount reversed. If your platform failed to warn me and failed to auto square-off my position, the fault is yours. Please reverse it or give me the contact of your nodal officer."
+          ],
+          enabled: true
+        },
+        {
+          module: 'mock-call',
+          title: 'IMPS Credit Delay – Missed Intraday Trade and Loss of Opportunity',
+          description: 'IMPS (Immediate Payment Service) transfers are designed to credit funds near-instantly, typically within minutes. However, broker-end fund availability depends on payment gateway processing, bank batch timings, and internal risk checks — which can sometimes cause a delay between the bank\'s confirmation timestamp and when the funds appear as tradeable balance on the platform. A client who transferred funds early in the morning before a significant market move experienced this delay, missing an intraday opportunity, and is now holding the broker directly responsible for the financial loss.',
+          scenario: 'You receive an inbound support call. The client transferred funds via IMPS at 9:10 AM — before market open — and the money only reflected as tradeable balance at 11:45 AM. In the intervening time, a stock they intended to buy moved 15% intraday. The client is demanding compensation for the missed opportunity and is threatening to escalate formally.',
+          checklist: [
+            'Greet professionally and introduce yourself',
+            'Acknowledge the client\'s frustration and the financial impact of the missed opportunity without deflecting or dismissing their concern',
+            'Explain the IMPS fund credit process — while IMPS is near-instant at the bank level, broker-end tradeable balance availability depends on payment gateway batch processing, T+0 cut-off windows, and internal risk checks',
+            'Clarify the distinction between the bank\'s IMPS confirmation timestamp and the broker\'s fund availability timestamp',
+            'Commit to investigating the specific delay with the payments and technology team, and to providing the client with a written explanation',
+            'Explain the limitations on opportunity-loss compensation clearly and empathetically',
+            'Close the call warmly and professionally'
+          ],
+          bot_script: [
+            "I transferred funds via IMPS at 9:10 AM — I have the bank transaction receipt right here. Your platform only showed the money as available at 11:45 AM. IMPS is supposed to be instant — what exactly happened on your end?",
+            "Because of that delay, I missed a trade that moved 15% intraday. That is a direct financial loss caused entirely by your system's failure to credit my account on time. I want compensation.",
+            "I have used IMPS with other brokers and the funds always show within minutes — not hours. This is clearly a failure specific to your platform. Who is accountable here?",
+            "If you cannot compensate me for the missed trade, I want the direct contact of your nodal officer and the SEBI SCORES complaint category for payment delays. I will file the complaint today."
+          ],
+          enabled: true
+        },
+        {
+          module: 'mock-call',
+          title: 'Short Delivery Auction Penalty – Client Sold Recently Allotted IPO Shares',
+          description: 'When shares are allotted through an IPO, they follow a T+2 settlement cycle before they appear as freely tradeable in the demat account. If a client attempts to sell these shares before settlement is complete, the trade is accepted by the exchange but results in short delivery — because the shares cannot be delivered on settlement day. The exchange then runs an auction to source the undelivered shares, and the original seller is charged an auction penalty, which can be significantly higher than the market price. The client in this scenario was unaware of the settlement lock-in and is furious that the platform allowed the sell order to go through when delivery was not possible.',
+          scenario: 'You receive an inbound support call. The client received IPO allotment shares and sold them the next day, believing they were freely tradeable. The sell order was accepted by the platform, but when delivery failed, the exchange ran an auction and debited a penalty from the client\'s account. The client is demanding a full reversal, arguing that the platform should have blocked an order it could not deliver.',
+          checklist: [
+            'Greet professionally and introduce yourself',
+            'Empathize genuinely with the client\'s frustration and acknowledge the unexpected penalty debit without minimising the impact',
+            'Explain the T+2 settlement cycle for IPO-allotted shares — shares are credited to the demat after allotment but are not deliverable until the settlement cycle completes',
+            'Clarify that while the sell order being accepted on the exchange does not guarantee delivery capability — the exchange and broker systems operate in layers',
+            'Walk through the auction penalty mechanism clearly — when short delivery occurs, the exchange sources shares via an auction and charges a penalty',
+            'Escalate to the Operations or Risk team for a formal review of whether the penalty can be waived or adjusted, and commit to a clear TAT',
+            'Close the call warmly and professionally'
+          ],
+          bot_script: [
+            "I sold shares that your platform allowed me to sell — the order went through. Now you are telling me there is an auction penalty because of short delivery? Why did your platform accept the order in the first place?",
+            "I just received these shares through an IPO allotment. Nobody told me there was a settlement period before I could sell. Shouldn't your system block the sale automatically?",
+            "There is a significant debit for an auction penalty taken from my account. Your system created this situation by accepting an order it could not fulfil. How is that acceptable?",
+            "I want the full auction penalty reversed. If you are not able to reverse it, I want the name of your grievance officer and the SEBI SCORES complaint link."
+          ],
+          enabled: true
+        },
+
         // Role Play
         { module: 'role-play', title: 'Addressing a Consistently Late Team Member',
           description: 'You are a team lead. A team member consistently misses deadlines.',
@@ -317,7 +450,8 @@ const DB = (() => {
           description: 'Should companies mandate office attendance, allow full flexibility, or implement a structured hybrid model?',
           scenario: 'You are senior stakeholders deciding your company\'s 5-year work policy. Discuss and arrive at a recommendation.',
           checklist: ['Present data-backed, well-reasoned arguments','Consider both employee wellbeing and business impact','Engage constructively with opposing views','Show leadership in moving the discussion forward','Synthesize key points and help close the discussion'] },
-        // Written Communication
+        
+        // Written Communication — Static
         { module: 'written-comm', title: 'Project Delay Notification Email',
           description: 'Inform a client that a project will be delayed by 2 weeks due to unexpected technical issues.',
           scenario: 'To: Client (Sarah Mitchell, TechCorp)\nFrom: You\nSubject: [Write your own subject line]\n\nContext: The project was due this Friday. A critical API dependency failed late last week. The revised delivery date is 2 weeks from now.',
@@ -326,8 +460,309 @@ const DB = (() => {
           description: 'Write an internal memo escalating a recurring vendor delivery issue.',
           scenario: 'To: Your Manager (Rajesh Kumar, VP Operations)\nFrom: You\nSubject: [Write your own subject line]\n\nContext: Vendor X has missed 3 consecutive weekly deliveries. Each delay causes a 1-2 day productivity loss for your 5-person team.',
           checklist: ['Clear problem statement in the opening line','Quantified impact (time, people, cost if applicable)','Brief timeline of events and prior actions taken','Your recommendation or specific ask','Concise, professional tone throughout'] },
+
+        // Written Communication — Interactive Email Correspondence
+        {
+          module: 'written-comm',
+          title: 'Angry Customer – Double Billing',
+          description: 'A customer has sent an email support request, furious about being charged twice for the same service.',
+          scenario: 'A client opens a support email: "I have been charged twice for my subscription this month, and nobody is helping me! I want my refund immediately and a written confirmation."',
+          checklist: [
+            'Greet professionally and apologize sincerely for the billing error',
+            'Verify the double debit transaction IDs on the client\'s billing ledger',
+            'Initiate the refund request immediately and state the bank processing TAT (3-5 working days)',
+            'Offer a reference number or ticket confirmation for tracking the refund',
+            'Close the email politely, confirming if they have any other questions'
+          ],
+          bot_script: [
+            "I've been charged twice this month for my subscription fee! This is completely unacceptable. Why is my money being deducted twice without my permission?",
+            "I checked my bank statement and both debits are cleared. I want my money back in my account right now. I shouldn't have to wait for your system errors.",
+            "Can you send me a written confirmation or receipt right now showing that the refund has been processed? I don't trust verbal promises.",
+            "Fine, I will check my bank account in 3 days. If it's not there, I will escalate this. Is there anything else you can do to make up for this trouble?"
+          ],
+          enabled: true
+        },
+        {
+          module: 'written-comm',
+          title: 'Service Outage – Status Call',
+          description: 'Customer has sent an email about a 2-day service outage, requesting a status update and compensation.',
+          scenario: 'A client writes a support email: "My internet has been down for 2 days straight. I work from home — this is costing me real clients and money. What exactly are you doing about it, and what compensation am I getting?"',
+          checklist: [
+            'Acknowledge the system outage with sincere apologies and empathy for the impact',
+            'Explain the root cause of the outage briefly and transparently',
+            'Explain SEBI guidelines and platform terms of service regarding tech outages and opportunity losses',
+            'Verify and log the client\'s affected position details for the technical investigation team',
+            'Provide a formal support ticket number and outline the next follow-up steps'
+          ],
+          bot_script: [
+            "My internet has been down for 2 days straight. I work from home — this is costing me real clients and money. What exactly are you doing about it, and what compensation am I getting?",
+            "I have already tried restarting my router and checking the cables — your basic troubleshooting is not the issue. Your main server in my area is down. When will it be fixed?",
+            "I am losing over ₹5,000 every day this service is down. Your company needs to compensate me for this loss of income. It is a direct result of your server outage.",
+            "Fine, log a formal complaint and give me the ticket number. I expect a credit adjustment on my next bill for the outage duration."
+          ],
+          enabled: true
+        },
+        {
+          module: 'written-comm',
+          title: 'Physical Delivery Penalty – ITM Stock Options Expired Without Funds',
+          description: 'When an in-the-money (ITM) stock option is held to expiry, it is subject to physical delivery under exchange rules — meaning the buyer must pay the full contract value to take delivery of the underlying shares, and the seller must deliver them. If a client holds such an option at expiry without adequate funds or shares in their account, the position goes into compulsory physical delivery, resulting in auction penalties, margin shortfall charges, and possible financial loss. The client was not aware of this obligation and had assumed the position would simply expire or be cash-settled.',
+          scenario: 'A client has sent a support email: "I had absolutely no idea my stock options would go to physical delivery. Your platform didn\'t show any warnings. Why wasn\'t I informed that I needed funds to take delivery of the actual shares? I demand a refund of the penalty!"',
+          checklist: [
+            'Greet professionally and address the client by name if provided',
+            'Acknowledge the client\'s frustration and shock regarding the physical delivery penalty',
+            'Explain the compulsory physical delivery obligation for ITM options under exchange rules',
+            'Explain why the auto square-off was not triggered for their specific position',
+            'Propose a formal escalation to compliance for ledger review while setting realistic expectations'
+          ],
+          bot_script: [
+            "I had absolutely no idea my options would go to physical delivery. Your platform never showed me a single warning before expiry. Why wasn't I informed that I needed funds to take delivery of the actual shares?",
+            "I clearly did not have the funds for physical delivery — your own system would have shown that. So why was the position allowed to expire instead of being squared off automatically before expiry?",
+            "I'm looking at my account right now and there is a debit for a physical delivery penalty that I never authorised. How is this even legal?",
+            "I want the full penalty amount reversed. If your platform failed to warn me and failed to auto square-off my position, the fault is yours. Please reverse it or give me the contact of your nodal officer."
+          ],
+          enabled: true
+        },
+        {
+          module: 'written-comm',
+          title: 'IMPS Credit Delay – Missed Intraday Trade and Loss of Opportunity',
+          description: 'IMPS (Immediate Payment Service) transfers are designed to credit funds near-instantly, typically within minutes. However, broker-end fund availability depends on payment gateway processing, bank batch timings, and internal risk checks — which can sometimes cause a delay between the bank\'s confirmation timestamp and when the funds appear as tradeable balance on the platform. A client who transferred funds early in the morning before a significant market move experienced this delay, missing an intraday opportunity, and is now holding the broker directly responsible for the financial loss.',
+          scenario: 'A client opens an email support ticket: "I transferred funds via IMPS at 9:10 AM, but they only showed up in my account at 11:45 AM! Because of this, I missed a stock buy order that went up 15% today. This is completely your system\'s fault, and I want compensation!"',
+          checklist: [
+            'Acknowledge the frustration regarding the delay and the missed market opportunity',
+            'Explain the payment gateway flow and batch processing timelines for IMPS transfers',
+            'Clarify the distinction between bank confirmation and broker-end ledger credit',
+            'Commit to checking gateway logs and providing a written explanation for the delay',
+            'State politely but clearly that opportunity-loss compensation is not possible under standard policies'
+          ],
+          bot_script: [
+            "I transferred funds via IMPS at 9:10 AM — I have the bank transaction receipt right here. Your platform only showed the money as available at 11:45 AM. IMPS is supposed to be instant — what exactly happened on your end?",
+            "Because of that delay, I missed a trade that moved 15% intraday. That is a direct financial loss caused entirely by your system's failure to credit my account on time. I want compensation.",
+            "I have used IMPS with other brokers and the funds always show within minutes — not hours. This is clearly a failure specific to your platform. Who is accountable here?",
+            "If you cannot compensate me for the missed trade, I want the direct contact of your nodal officer and the SEBI SCORES complaint category for payment delays. I will file the complaint today."
+          ],
+          enabled: true
+        },
+        {
+          module: 'written-comm',
+          title: 'Short Delivery Auction Penalty – Client Sold Recently Allotted IPO Shares',
+          description: 'When shares are allotted through an IPO, they follow a T+2 settlement cycle before they appear as freely tradeable in the demat account. If a client attempts to sell these shares before settlement is complete, the trade is accepted by the exchange but results in short delivery — because the shares cannot be delivered on settlement day. The exchange then runs an auction to source the undelivered shares, and the original seller is charged an auction penalty, which can be significantly higher than the market price. The client in this scenario was unaware of the settlement lock-in and is furious that the platform allowed the sell order to go through when delivery was not possible.',
+          scenario: 'A client writes in a support email: "I sold the IPO shares I was allotted, and your platform executed the trade. Now I see a huge auction penalty on my ledger! If they couldn\'t be delivered, why did you let me sell them? I want this penalty reversed immediately."',
+          checklist: [
+            'Empathize with the client\'s surprise at the penalty and acknowledge the financial impact',
+            'Explain the T+2 settlement cycle for newly allotted IPO shares',
+            'Explain how order placement and post-trade settlement checks operate in separate layers',
+            'Explain the exchange-mandated auction penalty mechanism for short delivery',
+            'Initiate a review with the risk operations team while setting honest expectations'
+          ],
+          bot_script: [
+            "I sold shares that your platform allowed me to sell — the order went through. Now you are telling me there is an auction penalty because of short delivery? Why did your platform accept the order in the first place?",
+            "I just received these shares through an IPO allotment. Nobody told me there was a settlement period before I could sell. Shouldn't your system block the sale automatically?",
+            "There is a significant debit for an auction penalty taken from my account. Your system created this situation by accepting an order it could not fulfil. How is that acceptable?",
+            "I want the full auction penalty reversed. If you are not able to reverse it, I want the name of your grievance officer and the SEBI SCORES complaint link."
+          ],
+          enabled: true
+        },
+        {
+          module: 'written-comm',
+          title: 'Account Modification – Name Change Document Rejection',
+          description: 'A client submitted an Account Modification Form (Name Change). The documents were verified internally and couriered, but were later rejected by the processing team. The client writes in seeking clarification, as the documents were sent only after internal verification.',
+          scenario: 'A client writes in a support email: "I was told by your team that my documents were perfectly fine before I couriered them. Now you\'re saying they\'re rejected — can you explain how that even happens?"',
+          checklist: [
+            "Stay calm and professional throughout",
+            "Acknowledge the client's frustration with empathy",
+            "Explain the internal vs external verification process clearly",
+            "Offer a concrete resolution path (re-submission support, escalation)",
+            "Confirm next steps in writing before ending the correspondence"
+          ],
+          bot_script: [
+            "I was told by your team that my documents were perfectly fine before I couriered them. Now you're saying they're rejected — can you explain how that even happens?",
+            "Do you have any idea how long it takes to get these documents arranged and couriered? Who is going to compensate me for that effort and cost?",
+            "I specifically called and confirmed before sending. Do your teams not talk to each other?",
+            "I don't want to hear 'I'll check and get back to you' — I've been patient enough. What is the exact reason my documents were rejected?"
+          ],
+          enabled: true
+        },
+        {
+          module: 'written-comm',
+          title: 'Name Change – Client Refuses to Submit Gazette Notification',
+          description: 'A client requests a name change on their account. The Gazette notification is mandatory for processing. The client refuses to submit it, claiming other documents (Aadhaar, PAN, passport) should be sufficient, and insists on an exception.',
+          scenario: 'A client writes in a support email: "I\'ve been your customer for so many years — isn\'t my word enough? Why do I need to prove my own name to you? I have my Aadhaar, PAN, and passport all updated with my new name."',
+          checklist: [
+            "Empathetically acknowledge the inconvenience",
+            "Clearly explain the regulatory/policy reason for the Gazette requirement",
+            "Guide the client on how to obtain a Gazette notification if possible",
+            "Offer escalation path without overpromising exceptions",
+            "Close professionally with a clear next step"
+          ],
+          bot_script: [
+            "I\'ve been your customer for so many years — isn\'t my word enough? Why do I need to prove my own name to you?",
+            "I have my Aadhaar, PAN, and passport all updated with my new name. Why isn\'t that sufficient? Why specifically a Gazette notification?",
+            "Other institutions have updated my name without a Gazette — why is your process so outdated and complicated?",
+            "Who made this rule? Is this a government regulation or just your company\'s internal policy? Show me where it\'s written."
+          ],
+          enabled: true
+        },
+        {
+          module: 'written-comm',
+          title: 'Takeover Offer – Client Insists Despite Higher Market Price',
+          description: 'A client wants to apply for a takeover offer through Console/Kite. The policy allows takeover applications only when the market price is lower than the takeover price. In this case, the market price is higher, so the client must raise a support ticket instead of applying directly.',
+          scenario: 'A client writes in a support email: "If I\'m willing to proceed at a higher takeover price, that\'s my financial decision to make — why is your system blocking me from doing that?"',
+          checklist: [
+            "Explain the policy and the reason behind the price-based restriction clearly",
+            "Empathise with the urgency of the live market situation",
+            "Walk the client through the ticket process step by step",
+            "Set realistic expectations on turnaround time",
+            "Offer to assist while the ticket is being raised"
+          ],
+          bot_script: [
+            "If I\'m willing to proceed at a higher takeover price, that\'s my financial decision to make — why is your system blocking me from doing that?",
+            "You\'re allowing it through Console when the market price is lower — so the system can process takeovers. Why is the same Console suddenly off-limits when the price is higher?",
+            "What is the business logic behind this restriction? Is this a SEBI regulation or your internal risk policy? I want a clear answer.",
+            "If I\'m the one bearing the financial risk of a higher takeover price, why does your organisation get to decide whether I can proceed or not?"
+          ],
+          enabled: true
+        },
+        {
+          module: 'written-comm',
+          title: 'NCRP Lien – Delayed Payment Charges on Frozen Funds',
+          description: 'A client calls/writes about delayed payment charges on their account. The funds were marked as Lien following an NCRP complaint. The client has filed a police complaint and claims they are not at fault. Due to the lien, the account moved into debit and delayed payment charges were applied.',
+          scenario: 'A client writes in a support email: "I am the victim here — someone filed a complaint against me fraudulently, and instead of protecting me, you\'ve frozen my own money. How does that make any sense?"',
+          checklist: [
+            "Empathise genuinely — the client is a victim in this situation",
+            "Clearly explain the regulatory obligation behind the Lien (NCRP directive)",
+            "Explain the NOC process accurately and which authority issues it",
+            "Address the delayed payment charges with sensitivity and escalation path",
+            "Commit to sending a written summary of the correspondence and next steps"
+          ],
+          bot_script: [
+            "I am the victim here — someone filed a complaint against me fraudulently, and instead of protecting me, you\'ve frozen my own money. How does that make any sense?",
+            "I have already filed a police complaint proving I am not at fault. Why is that not enough for you to release my funds immediately?",
+            "Did you even bother to verify the complaint before marking my funds as Lien? Or did you just act on it blindly without informing me?",
+            "When exactly was the Lien marked, and why was I not notified immediately? I had to find out on my own — is that your standard process?"
+          ],
+          enabled: true
+        },
+        {
+          module: 'written-comm',
+          title: 'Minor Account – Premature Blocking Before 18th Birthday',
+          description: 'A client\'s daughter had her minor account blocked 15 days before her 18th birthday as part of the system\'s majority-attainment process. The client argues the block should only trigger after she officially turns 18, and claims missed trading opportunities during those 15 days.',
+          scenario: 'A client writes in a support email: "My daughter\'s account was blocked 15 days before her birthday — can you show me exactly which policy or clause says you are authorised to block an account before she even turns 18? Because as far as I know, she was still a minor and the account should have remained active."',
+          checklist: [
+            "Acknowledge the client's frustration and validate the concern",
+            "Explain the policy reason for early blocking (system-triggered majority process)",
+            "Clearly outline the unblocking and minor-to-major conversion steps",
+            "Give a realistic commitment on resolution timeline",
+            "Offer to send written confirmation of the process and timeline"
+          ],
+          bot_script: [
+            "My daughter\'s account was blocked 15 days before her birthday — can you show me exactly which policy or clause says you are authorised to block an account before she even turns 18? Because as far as I know, she was still a minor and the account should have remained active.",
+            "Those 15 days may seem small to you, but there were market movements and investment opportunities during that period that we completely missed out on. Who in your organisation is going to take accountability for that financial loss?",
+            "I have been a loyal client for years. Is this how you treat long-standing customers — by blocking accounts without even sending a prior notice or warning? Why was I not informed before this action was taken?",
+            "If your system triggered this block automatically, then clearly there is a flaw in your process. How do I know this kind of error won\'t happen again with my other accounts or future transactions?"
+          ],
+          enabled: true
+        },
+        {
+          module: 'written-comm',
+          title: 'Emergency Withdrawal – Blocked Due to Open Long Index Options',
+          description: 'A client requests an instant withdrawal citing a personal emergency. Their account has an open long index options position. Policy disallows instant withdrawal with open positions. The client argues that long options have limited (capped) downside and insists the withdrawal should be allowed.',
+          scenario: 'A client writes in a support email: "I have been waiting for over an hour now and nobody has given me a answer. Why does your platform even allow me to put my money in if you can\'t give it back to me when I need it the most?"',
+          checklist: [
+            "Empathise deeply with the emergency situation",
+            "Explain the policy on withdrawals with open positions clearly and calmly",
+            "Acknowledge the limited-loss nature of long options while holding firm on policy",
+            "Walk through the emergency payout request process step by step",
+            "Escalate proactively if the situation genuinely warrants it"
+          ],
+          bot_script: [
+            "I have been waiting for over an hour now and nobody has given me a clear answer. Why does your platform even allow me to put my money in if you can\'t give it back to me when I need it the most?",
+            "I understand there\'s something called limited loss on my position — does that mean my money is already safe? Then why can\'t you just release it to me right now?",
+            "I never signed anything that said my funds would be locked. Where exactly in your terms does it say you can block my withdrawal? Can you read it out to me?",
+            "If I close my options position right now and take the loss, will you process my withdrawal immediately? Or are you going to find another reason to hold my money?"
+          ],
+          enabled: true
+        },
+        {
+          module: 'written-comm',
+          title: 'Pledged Stocks – Undisclosed Aging Debit Balance & Trading Losses',
+          description: 'A client pledged stocks after calling/writing support but was not informed about an existing aging debit balance. They used the collateral margin to trade, incurred losses, and are now demanding a refund — claiming the support representative\'s omission directly caused the losses.',
+          scenario: 'A client writes in a support email: "I specifically called/wrote your team before pledging my stocks and asked all the necessary questions. Why was I never told that there was an existing debit balance on my account? Isn\'t it your representative\'s job to disclose everything before I make a financial decision?"',
+          checklist: [
+            "Acknowledge the client's frustration without admitting liability prematurely",
+            "Explain the process for investigating the communication logs",
+            "Set clear expectations on investigation timelines",
+            "Empathise with the financial impact while explaining the refund process",
+            "Escalate to the appropriate team and give the client an owner's name and TAT"
+          ],
+          bot_script: [
+            "I specifically called your team before pledging my stocks and asked all the necessary questions. Why was I never told that there was an existing debit balance on my account? Isn\'t it your representative\'s job to disclose everything before I make a financial decision?",
+            "Because your sales manager hid this debit balance from me, I went ahead and traded, made losses, and now my collateral is blocked. How is any of this my fault? Your negligence caused my losses — why should I bear them?",
+            "I have the call recording of when I spoke to your representative before pledging. If I pull that up and prove that the debit balance was never mentioned, will your company refund my losses in full? What is your stand on that?",
+            "You are telling me I cannot trade using my collateral because of a debit balance that I didn\'t even know existed. So essentially you took my pledged stocks, let me trade, and then pulled the rug from under me. How is that not a fraudulent business practice?"
+          ],
+          enabled: true
+        },
+        {
+          module: 'written-comm',
+          title: 'NAV Date Dispute (Payment Aggregator Delay)',
+          description: 'A client is disputing the NAV date allotted for their mutual fund purchase, which was delayed due to a payment aggregator processing lag. They are demanding the previous day\'s NAV or compensation for the price difference.',
+          scenario: 'A client writes a support email: "I placed a mutual fund purchase order and transferred the funds at 11:30 AM yesterday — well before the 2 PM cut-off. But you have allotted today\'s NAV, which is 1.5% higher! This is completely unfair. I want my NAV date corrected or the difference refunded immediately."',
+          checklist: [
+            "Empathize with the client's frustration regarding the NAV price difference and the unit allotment impact",
+            "Clearly explain SEBI regulations on NAV applicability — which mandate that NAV is based on fund realization by the AMC, not the payment timestamp",
+            "Explain the payment aggregator's transit delay and how it affects the fund realization timeline",
+            "Decline the request to manually alter the NAV date or offer financial compensation, citing regulatory boundaries",
+            "Propose a formal check of the transaction logs with the payment gateway team and provide a clear TAT for a detailed audit report"
+          ],
+          bot_script: [
+            "I placed a mutual fund purchase order and transferred the funds at 11:30 AM yesterday — well before the 2 PM cut-off. But you have allotted today\'s NAV, which is 1.5% higher! This is completely unfair. I want my NAV date corrected or the difference refunded immediately.",
+            "Why should I pay for a delay in your payment gateway? I have the bank receipt showing the funds left my account at 11:32 AM. Your system accepted the transfer — how is it my fault if your aggregator was slow?",
+            "This is absolute nonsense. Other apps give the same-day NAV if you pay before the cut-off. You are just hiding behind regulations to avoid paying for your platform\'s technical failures.",
+            "Fine, run your check with the aggregator. But if the log shows the delay was on your gateway\'s end, I expect a full refund of the difference or I am taking this straight to the SEBI SCORES portal. Give me my ticket number."
+          ],
+          enabled: true
+        }
       ];
-      await _sb.from('topics').insert(defaults.map(t => ({ ...t, created_at: new Date().toISOString() })));
+
+      // If force is enabled, clean up any existing matching default topics first!
+      if (force) {
+        if (_useLocalStorage) {
+          try {
+            const titles = new Set(defaults.map(t => t.title));
+            const localTopics = _localGetAll('topics');
+            const filtered = localTopics.filter(t => !titles.has(t.title));
+            localStorage.setItem('commassess_topics', JSON.stringify(filtered));
+          } catch (_) {}
+        } else {
+          const titles = defaults.map(t => t.title);
+          // Delete all matching titles to avoid duplicates and ensure a fresh clean state
+          await _sb.from('topics').delete().in('title', titles);
+        }
+        // Refresh existing list to be empty so all default topics are re-seeded
+        existing = [];
+      }
+
+      const existingMap = new Set(existing.map(t => `${t.module}:${t.title}`));
+      const toInsert = defaults.filter(t => !existingMap.has(`${t.module}:${t.title}`));
+      if (toInsert.length > 0) {
+        if (_useLocalStorage) {
+          try {
+            const localTopics = _localGetAll('topics');
+            toInsert.forEach((t, idx) => {
+              localTopics.push({
+                id: crypto.randomUUID ? crypto.randomUUID() : `topic-${idx}-${Date.now()}`,
+                created_at: new Date().toISOString(),
+                ...t
+              });
+            });
+            localStorage.setItem('commassess_topics', JSON.stringify(localTopics));
+            console.log(`[Offline] Seeded ${toInsert.length} new default topics.`);
+          } catch (_) {}
+        } else {
+          await _sb.from('topics').insert(toInsert.map(t => ({ ...t, created_at: new Date().toISOString() })));
+          console.log(`Seeded ${toInsert.length} new default topics.`);
+        }
+      }
     } catch (e) {
       console.warn('DB seed skipped:', e.message);
     }
@@ -571,5 +1006,10 @@ const DB = (() => {
     return _useLocalStorage;
   }
 
-  return { init, put, patch, get, getAll, del, getByIndex, getClient, isLocalStorage };
+  async function forceReSeed() {
+    await _seedDefaults(true);
+    await _seedManagerTopics();
+  }
+
+  return { init, put, patch, get, getAll, del, getByIndex, getClient, isLocalStorage, forceReSeed };
 })();

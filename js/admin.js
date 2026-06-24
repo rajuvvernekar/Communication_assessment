@@ -1506,9 +1506,10 @@ window.Admin = (() => {
 
   function toggleMockCallFields(module) {
     const isMC  = module === 'mock-call';
+    const isWC  = module === 'written-comm';
     const isMCQ = module === 'grammar-assessment' || module === 'listening-assessment' || module === 'stock-market-mcq';
     $('topic-caller-audio-group').style.display = isMC ? '' : 'none';
-    $('topic-bot-script-group').style.display    = isMC ? '' : 'none';
+    $('topic-bot-script-group').style.display    = (isMC || isWC) ? '' : 'none';
     $('topic-mcq-group').style.display           = isMCQ ? '' : 'none';
     // For MCQ modules, hide scenario & checklist (replaced by MCQ editor)
     const scenarioGroup   = $('topic-scenario').closest('.form-group');
@@ -1519,10 +1520,19 @@ window.Admin = (() => {
     if (isMCQ && $('mcq-questions-list') && $('mcq-questions-list').children.length === 0) {
       addMcqQuestion();
     }
+
+    // Toggle audio previews for existing rows in the UI
+    const rows = document.querySelectorAll('#bot-script-items .bot-script-turn-row');
+    rows.forEach(r => {
+      const audioRow = r.querySelector('.bst-audio-row');
+      if (audioRow) {
+        audioRow.style.display = isMC ? '' : 'none';
+      }
+    });
   }
 
-  function _bstAudioRow(hasAudio, audioSrc) {
-    return `<div class="bst-audio-row">
+  function _bstAudioRow(hasAudio, audioSrc, isMC) {
+    return `<div class="bst-audio-row" style="display: ${isMC ? '' : 'none'}">
           <input type="file" class="bst-file-input" accept="audio/*" style="display:none" onchange="Admin.uploadBotTurnAudio(this)">
           <button class="bst-rec-btn${hasAudio ? ' has-audio' : ''}" onclick="Admin.toggleBotTurnRec(this)">
             ${hasAudio ? '🔄 Re-record' : '🎙 Record'}
@@ -1540,6 +1550,8 @@ window.Admin = (() => {
     _botScriptAudioBlobs = lines.map((_, i) => audioBlobs[i] || null);
     const container = $('bot-script-items');
     const total = lines.length;
+    const module = $('topic-module').value;
+    const isMC = module === 'mock-call';
     container.innerHTML = lines.map((line, i) => {
       const safe     = line.replace(/"/g, '&quot;');
       const hasAudio = !!_botScriptAudioBlobs[i];
@@ -1551,11 +1563,13 @@ window.Admin = (() => {
           <button class="btn-remove-item bst-remove" title="Remove" onclick="Admin.removeBotScriptRow(this)">✕</button>
         </div>
         <input type="text" class="bst-input" placeholder="e.g. I've been charged twice this month!" value="${safe}">
-        ${_bstAudioRow(hasAudio, audioSrc)}
+        ${_bstAudioRow(hasAudio, audioSrc, isMC)}
       </div>`;
     }).join('');
 
     $('btn-add-bot-line').onclick = () => {
+      const currentModule = $('topic-module').value;
+      const currentIsMC = currentModule === 'mock-call';
       const idx = document.querySelectorAll('#bot-script-items .bot-script-turn-row').length;
       _botScriptAudioBlobs.push(null);
       $('bot-script-items').insertAdjacentHTML('beforeend', `
@@ -1565,7 +1579,7 @@ window.Admin = (() => {
             <button class="btn-remove-item bst-remove" title="Remove" onclick="Admin.removeBotScriptRow(this)">✕</button>
           </div>
           <input type="text" class="bst-input" placeholder="Customer line...">
-          ${_bstAudioRow(false, '')}
+          ${_bstAudioRow(false, '', currentIsMC)}
         </div>`);
       _renumberBotRows();
     };
@@ -6838,9 +6852,32 @@ window.Admin = (() => {
     }
   }
 
+  async function forceReSeed() {
+    const btn = document.getElementById('btn-force-seed');
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '⏳ Seeding Database...';
+    }
+    toast('Checking and re-seeding default topics...', 'info');
+    try {
+      await DB.forceReSeed();
+      toast('Database defaults successfully re-seeded!', 'success');
+      await renderTopicsList();
+    } catch (e) {
+      console.error('Force seed failed:', e);
+      alert('Failed to seed database: ' + e.message);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '⚡ Force Re-seed Defaults';
+      }
+    }
+  }
+
   // ---- Public API (called from inline onclick) ----
   return {
     init,
+    forceReSeed,
     openTopicModal,
     deleteTopic,
     toggleTopicEnabled,
