@@ -367,6 +367,8 @@ const _TRAINEE_ALIASES = {
   "sakshi pawar":               "Sakshi Suryakant Pawar",
   "ravikumar shah":             "Ravikumar Mangilal Shah",
   "mohan":                      "Mohan Bhumayya Sabban",
+  "vaishali.b":                 "Vaishali B",
+  "priya singh":                "Priyanka Singh",
 
   "alihussain basha hayatkhan": "Alihussain Basha Hyatkhan", // HAYAT → HYAT
   "shankar kumar jha":          "Shankar Kumar",             // extra surname
