@@ -192,8 +192,14 @@ const DB = (() => {
       const { data, error } = await _sb.from('settings').select('key').limit(1);
       if (error) throw error;
 
-      await _seedDefaults();
-      await _seedManagerTopics();
+      // Isolated seeding block: failures here should not crash the Supabase connection
+      try {
+        await _seedDefaults();
+        await _seedManagerTopics();
+      } catch (seedErr) {
+        console.warn('[DB] Seeding defaults skipped or failed, but proceeding with Supabase:', seedErr.message || seedErr);
+      }
+
       console.log('[DB] Supabase connected successfully.');
 
       // Auto-migrate any local storage data to Supabase if any exists!
