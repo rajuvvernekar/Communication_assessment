@@ -171,13 +171,42 @@ const DB = (() => {
 
   function _seedLocalStorageDefaults() {
     const storedAdmins = _localGet('settings', 'adminUsers');
-    if (!storedAdmins) {
-      const defaultAdmins = [
-        { username: 'admin', password: 'admin123' },
-        { username: 'girish', password: 'admin123' }
-      ];
-      _localPut('settings', { key: 'adminUsers', value: JSON.stringify(defaultAdmins) });
+    let users = [];
+    if (storedAdmins) {
+      try {
+        users = JSON.parse(storedAdmins.value || storedAdmins || '[]');
+      } catch (_) {
+        users = [];
+      }
     }
+    if (!Array.isArray(users) || users.length === 0) {
+      users = [
+        { username: 'admin', password: 'admin123' },
+        { username: 'girish', password: 'admin123' },
+        { username: 'harish', password: 'admin123' }
+      ];
+    } else {
+      // Ensure 'admin' exists
+      if (!users.some(u => u.username.toLowerCase() === 'admin')) {
+        users.push({ username: 'admin', password: 'admin123' });
+      }
+      // Ensure 'girish' exists and password is reset to 'admin123'
+      const girishUser = users.find(u => u.username.toLowerCase() === 'girish');
+      if (girishUser) {
+        girishUser.password = 'admin123';
+      } else {
+        users.push({ username: 'girish', password: 'admin123' });
+      }
+      // Ensure 'harish' exists and password is reset to 'admin123'
+      const harishUser = users.find(u => u.username.toLowerCase() === 'harish');
+      if (harishUser) {
+        harishUser.password = 'admin123';
+      } else {
+        users.push({ username: 'harish', password: 'admin123' });
+      }
+    }
+    _localPut('settings', { key: 'adminUsers', value: JSON.stringify(users) });
+
     const storedPwd = _localGet('settings', 'adminPassword');
     if (!storedPwd) {
       _localPut('settings', { key: 'adminPassword', value: 'admin123' });
@@ -255,7 +284,8 @@ const DB = (() => {
         if (!adminData || adminData.length === 0) {
           const defaultAdmins = [
             { username: 'admin', password: 'admin123' },
-            { username: 'girish', password: 'admin123' }
+            { username: 'girish', password: 'admin123' },
+            { username: 'harish', password: 'admin123' }
           ];
           await _sb.from('settings').upsert({ key: 'adminUsers', value: JSON.stringify(defaultAdmins) }, { onConflict: 'key' });
         } else {
@@ -271,6 +301,13 @@ const DB = (() => {
             girishUser.password = 'admin123';
           } else {
             users.push({ username: 'girish', password: 'admin123' });
+          }
+          // Ensure 'harish' exists and password is reset to 'admin123'
+          const harishUser = users.find(u => u.username.toLowerCase() === 'harish');
+          if (harishUser) {
+            harishUser.password = 'admin123';
+          } else {
+            users.push({ username: 'harish', password: 'admin123' });
           }
           await _sb.from('settings').upsert({ key: 'adminUsers', value: JSON.stringify(users) }, { onConflict: 'key' });
         }
