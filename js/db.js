@@ -736,7 +736,11 @@ const DB = (() => {
         } else {
           const titles = defaults.map(t => t.title);
           // Delete all matching titles to avoid duplicates and ensure a fresh clean state
-          await _sb.from('topics').delete().in('title', titles);
+          const { error: deleteError } = await _sb.from('topics').delete().in('title', titles);
+          if (deleteError) {
+            console.error('[DB] Delete defaults failed:', deleteError);
+            throw new Error(deleteError.message || 'Failed to delete old default topics');
+          }
         }
         // Refresh existing list to be empty so all default topics are re-seeded
         existing = [];
@@ -759,12 +763,17 @@ const DB = (() => {
             console.log(`[Offline] Seeded ${toInsert.length} new default topics.`);
           } catch (_) {}
         } else {
-          await _sb.from('topics').insert(toInsert.map(t => ({ ...t, created_at: new Date().toISOString() })));
+          const { error: insertError } = await _sb.from('topics').insert(toInsert.map(t => ({ ...t, created_at: new Date().toISOString() })));
+          if (insertError) {
+            console.error('[DB] Insert defaults failed:', insertError);
+            throw new Error(insertError.message || 'Failed to insert new default topics');
+          }
           console.log(`Seeded ${toInsert.length} new default topics.`);
         }
       }
     } catch (e) {
       console.warn('DB seed skipped:', e.message);
+      throw e; // re-throw so the caller knows the seeding failed
     }
   }
 
