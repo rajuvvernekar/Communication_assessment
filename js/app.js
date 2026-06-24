@@ -18,6 +18,7 @@ const App = (() => {
   let _wcChatTurns = [];
   let _wcChatTurnIndex = 0;
   let _wcChatTranscripts = [];
+  let _wcChatHistory = [];
   let _wcChatStartTime = null;
   let _wcChatTimerInterval = null;
 
@@ -1741,6 +1742,20 @@ const App = (() => {
     };
   }
 
+  // Build the alternating user/assistant message array for Claude in written chat assessment
+  function _buildWcAiMessages() {
+    const msgs = [{ role: 'user', content: 'The support chat session has started. Please open the chat by stating your complaint/issue.' }];
+    for (const turn of _wcChatHistory) {
+      if (turn.bot) {
+        msgs.push({ role: 'assistant', content: turn.bot });
+      }
+      if (turn.agent) {
+        msgs.push({ role: 'user', content: turn.agent });
+      }
+    }
+    return msgs;
+  }
+
   function startWrittenCommChat(script) {
     showStep('written-comm', 'wc-step-chat');
     $('wc-chat-title').textContent = _currentTopic.title;
@@ -1758,6 +1773,7 @@ const App = (() => {
     _wcChatTurns = script;
     _wcChatTurnIndex = 0;
     _wcChatTranscripts = [];
+    _wcChatHistory = []; // Initialize dynamic chat history
     $('wc-chat-thread').innerHTML = '';
     $('wc-chat-input').value = '';
     $('wc-chat-input').disabled = false;
@@ -1779,7 +1795,6 @@ const App = (() => {
   }
 
   function runWcChatBotTurn() {
-    const line = _wcChatTurns[_wcChatTurnIndex];
     const mood = _botMoodParams(_wcChatTurnIndex, _wcChatTurns.length);
     const isLastTurn = _wcChatTurnIndex === _wcChatTurns.length - 1;
 
@@ -1792,12 +1807,13 @@ const App = (() => {
       turnLabel.style.color = isLastTurn ? '#d97706' : '';
     }
 
-    // Show bot typing animation with a short delay, then append the message
+    // Show bot typing animation
     $('wc-chat-bot-status').style.display = '';
     $('wc-chat-input').disabled = true;
     $('btn-wc-chat-send').disabled = true;
 
-    setTimeout(() => {
+    // Helper to display the bot bubble and handle next steps
+    function displayBotBubble(text) {
       $('wc-chat-bot-status').style.display = 'none';
       $('wc-chat-input').disabled = false;
       $('btn-wc-chat-send').disabled = false;
@@ -1805,16 +1821,56 @@ const App = (() => {
 
       const bubble = document.createElement('div');
       bubble.className = `mc-bubble bot ${mood.bubbleClass}`;
-      bubble.innerHTML = `<span class="mc-bubble-mood">${mood.emoji}</span>${line}`;
+      bubble.innerHTML = `<span class="mc-bubble-mood">${mood.emoji}</span>${text}`;
       $('wc-chat-thread').appendChild(bubble);
       $('wc-chat-thread').scrollTop = $('wc-chat-thread').scrollHeight;
 
-      // Log turn
-      _wcChatTranscripts.push({ role: 'bot', text: line });
+      // Log turn in transcripts and history
+      _wcChatTranscripts.push({ role: 'bot', text: text });
+      
+      // Update the current history slot or create one if it's the opening turn
+      if (_wcChatTurnIndex === 0) {
+        _wcChatHistory.push({ bot: text, agent: '' });
+      }
 
       // Handle trainee send click
       $('btn-wc-chat-send').onclick = () => sendWcChatTraineeTurn();
-    }, 1000); // 1 second delay feels natural
+    }
+
+    if (_wcChatTurnIndex === 0) {
+      // First turn: always use the high-quality pre-scripted starting query from the database
+      setTimeout(() => {
+        displayBotBubble(_wcChatTurns[0]);
+      }, 1000);
+    } else if (ClaudeEvaluator.isAvailable()) {
+      // Subsequent turns: use Claude to dynamically reply to the agent's message
+      (async () => {
+        let botLine = '';
+        try {
+          const messages = _buildWcAiMessages();
+          botLine = await ClaudeEvaluator.callAiWrittenCustomer(
+            _currentTopic.title || '',
+            _currentTopic.scenario || '',
+            _currentTopic.description || '',
+            messages,
+            _wcChatTurnIndex + 1,
+            _wcChatTurns.length
+          );
+        } catch (e) {
+          console.warn('Claude written chat turn failed, using fallback:', e.message);
+          botLine = _wcChatTurns[_wcChatTurnIndex];
+        }
+        _wcChatHistory.push({ bot: botLine, agent: '' });
+        displayBotBubble(botLine);
+      })();
+    } else {
+      // Offline fallback: use pre-scripted script turns
+      setTimeout(() => {
+        const line = _wcChatTurns[_wcChatTurnIndex];
+        _wcChatHistory.push({ bot: line, agent: '' });
+        displayBotBubble(line);
+      }, 1000);
+    }
   }
 
   function sendWcChatTraineeTurn() {
@@ -1831,6 +1887,11 @@ const App = (() => {
     // Log turn
     _wcChatTranscripts.push({ role: 'trainee', text: text });
     
+    // Update active history entry with agent's response
+    if (_wcChatHistory.length > 0) {
+      _wcChatHistory[_wcChatHistory.length - 1].agent = text;
+    }
+
     // Clear input
     $('wc-chat-input').value = '';
 

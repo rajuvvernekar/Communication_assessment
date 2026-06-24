@@ -487,6 +487,57 @@ Return ONLY the customer\'s spoken dialogue. No stage directions, no narration, 
     return data.content[0].text.trim();
   }
 
+  // ---- Live AI customer for the Written Assessment Chat ----
+  // Generates a customer's dynamic response in a text support chat based on the topic.
+  // Returns a string — the customer's next dialogue line (1-3 sentences).
+  async function callAiWrittenCustomer(topicTitle, topicScenario, topicDescription, messages, turnNumber, maxTurns) {
+    if (!isAvailable()) throw new Error('Claude proxy not configured');
+
+    const isLast = turnNumber >= maxTurns;
+    const system = `You are roleplaying as a customer in a live support chat with an agent.
+
+TOPIC: ${topicTitle || 'Customer Support Query'}
+SCENARIO: ${topicScenario || 'A client is contacting support.'}
+DESCRIPTION: ${topicDescription || ''}
+
+YOUR PERSONA:
+- You are a realistic customer dealing with the issue described in the scenario.
+- You are articulate, direct, and expect clear, professional, and empathetic assistance.
+- You react dynamically to what the agent has typed:
+  * If the agent is highly empathetic, polite, and gives clear, correct information, you soften your tone and cooperate.
+  * If the agent is robotic, vague, evasive, or lacks empathy, you push back firmly, ask for clarification, or express frustration.
+  * If the agent makes a mistake, point it out politely but firmly.
+- You keep the conversation moving forward toward resolving your problem according to the customer's goal.
+
+STRICT RULES:
+- Stay in character as the CUSTOMER at all times. Never break the fourth wall.
+- Reply in 1 to 3 sentences MAXIMUM — keep it extremely natural, conversational, and suited for a live text chat.
+- Ask ONE question or make ONE statement per turn.
+- React directly to the specific response the agent has typed. Do not repeat what they said verbatim.
+- Do NOT add any stage directions, narration, quotes, or conversational headers (like "Customer:"). Only output your dialogue.
+\${isLast ? '\\n- This is your FINAL turn (turn ' + turnNumber + ' of ' + maxTurns + '). Express whether you are satisfied with the agent\\'s solution/handling, or say that you will check and end the chat.' : ''}
+
+Return ONLY your written chat message.`;
+
+    const resp = await fetch(getProxyUrl(), {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        model:      MODEL,
+        max_tokens: 120,
+        system,
+        messages
+      })
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error?.message || `API error ${resp.status}`);
+    }
+    const data = await resp.json();
+    return data.content[0].text.trim();
+  }
+
   // ---- AI Employee for Manager Feedback Assessment ----
   // Plays the role of an employee receiving feedback from their manager.
   // Responds dynamically based on how the manager delivers the feedback.
@@ -831,5 +882,5 @@ Return ONLY a JSON object:
     };
   }
 
-  return { isAvailable, evaluate, evaluateBalanced, evaluateRewrite, callAiCustomer, callAiEmployee, evaluateManagerAssessment, evaluateManagerFeedback, evaluateSituationRoomA, evaluateSituationRoomB, getCriteria, scoreTimeManagement, MOCK_CALL_CRITERIA };
+  return { isAvailable, evaluate, evaluateBalanced, evaluateRewrite, callAiCustomer, callAiWrittenCustomer, callAiEmployee, evaluateManagerAssessment, evaluateManagerFeedback, evaluateSituationRoomA, evaluateSituationRoomB, getCriteria, scoreTimeManagement, MOCK_CALL_CRITERIA };
 })();
