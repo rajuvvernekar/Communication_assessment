@@ -361,6 +361,13 @@ const MASTER_SCORES = {
 // Maps the name as stored in the DB (trainee.name) → canonical name used in _MANAGER_AGENT_MAP.
 // Keys are lowercase. Value is the correct canonical name (mixed-case, matching the map).
 const _TRAINEE_ALIASES = {
+  // Trainee duplicate variants mapping to canonical Excel names
+  "bhanuprakasha lr":           "Bhanuprakash",
+  "vipul manek":                "Vipul Devendra Manek",
+  "sakshi pawar":               "Sakshi Suryakant Pawar",
+  "ravikumar shah":             "Ravikumar Mangilal Shah",
+  "mohan":                      "Mohan Bhumayya Sabban",
+
   "alihussain basha hayatkhan": "Alihussain Basha Hyatkhan", // HAYAT → HYAT
   "shankar kumar jha":          "Shankar Kumar",             // extra surname
   "lovepreet singh":            "Love Preet Singh",          // no space
