@@ -15,6 +15,11 @@ const App = (() => {
   let _psMicPregranted = false;     // mic was pre-requested during category click (for auto-advance)
   let _wcStartTime = null;
   let _wcTimerInterval = null;
+  let _wcChatTurns = [];
+  let _wcChatTurnIndex = 0;
+  let _wcChatTranscripts = [];
+  let _wcChatStartTime = null;
+  let _wcChatTimerInterval = null;
 
   // ── Listening Assessment state ──
   let _laSections       = [];   // [{id, title, sectionType, questions}] sorted by title
@@ -1726,7 +1731,169 @@ const App = (() => {
       ul.innerHTML += `<li>${item}</li>`;
     });
 
-    $('btn-wc-start').onclick = () => startWrittenCommEditor();
+    $('btn-wc-start').onclick = () => {
+      const script = _currentTopic.botScript || _currentTopic.bot_script || [];
+      if (script.length > 0) {
+        startWrittenCommChat(script);
+      } else {
+        startWrittenCommEditor();
+      }
+    };
+  }
+
+  function startWrittenCommChat(script) {
+    showStep('written-comm', 'wc-step-chat');
+    $('wc-chat-title').textContent = _currentTopic.title;
+    $('wc-chat-desc').textContent = _currentTopic.description || '';
+    $('wc-chat-scenario').textContent = _currentTopic.scenario || '';
+
+    const checklistUl = $('wc-chat-checklist');
+    if (checklistUl) {
+      checklistUl.innerHTML = '';
+      (_currentTopic.checklist || []).forEach(item => {
+        checklistUl.innerHTML += `<li>${item}</li>`;
+      });
+    }
+
+    _wcChatTurns = script;
+    _wcChatTurnIndex = 0;
+    _wcChatTranscripts = [];
+    $('wc-chat-thread').innerHTML = '';
+    $('wc-chat-input').value = '';
+    $('wc-chat-input').disabled = false;
+    $('btn-wc-chat-send').disabled = false;
+    $('btn-wc-chat-submit').style.display = 'none';
+
+    // Start timer
+    _wcChatStartTime = Date.now();
+    if (_wcChatTimerInterval) clearInterval(_wcChatTimerInterval);
+    _wcChatTimerInterval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - _wcChatStartTime) / 1000);
+      const m = Math.floor(elapsed / 60);
+      const s = elapsed % 60;
+      $('wc-chat-time-elapsed').textContent = `${m}:${s.toString().padStart(2, '0')}`;
+    }, 1000);
+
+    // Run first bot turn
+    runWcChatBotTurn();
+  }
+
+  function runWcChatBotTurn() {
+    const line = _wcChatTurns[_wcChatTurnIndex];
+    const mood = _botMoodParams(_wcChatTurnIndex, _wcChatTurns.length);
+    const isLastTurn = _wcChatTurnIndex === _wcChatTurns.length - 1;
+
+    // Update turn label
+    const turnLabel = $('wc-chat-turn-label');
+    if (turnLabel) {
+      turnLabel.textContent = isLastTurn
+        ? `Turn ${_wcChatTurnIndex + 1} of ${_wcChatTurns.length} — Final Turn`
+        : `Turn ${_wcChatTurnIndex + 1} of ${_wcChatTurns.length}`;
+      turnLabel.style.color = isLastTurn ? '#d97706' : '';
+    }
+
+    // Show bot typing animation with a short delay, then append the message
+    $('wc-chat-bot-status').style.display = '';
+    $('wc-chat-input').disabled = true;
+    $('btn-wc-chat-send').disabled = true;
+
+    setTimeout(() => {
+      $('wc-chat-bot-status').style.display = 'none';
+      $('wc-chat-input').disabled = false;
+      $('btn-wc-chat-send').disabled = false;
+      $('wc-chat-input').focus();
+
+      const bubble = document.createElement('div');
+      bubble.className = `mc-bubble bot ${mood.bubbleClass}`;
+      bubble.innerHTML = `<span class="mc-bubble-mood">${mood.emoji}</span>${line}`;
+      $('wc-chat-thread').appendChild(bubble);
+      $('wc-chat-thread').scrollTop = $('wc-chat-thread').scrollHeight;
+
+      // Log turn
+      _wcChatTranscripts.push({ role: 'bot', text: line });
+
+      // Handle trainee send click
+      $('btn-wc-chat-send').onclick = () => sendWcChatTraineeTurn();
+    }, 1000); // 1 second delay feels natural
+  }
+
+  function sendWcChatTraineeTurn() {
+    const text = $('wc-chat-input').value.trim();
+    if (!text) return;
+
+    // Append trainee message to chat
+    const bubble = document.createElement('div');
+    bubble.className = 'mc-bubble trainee';
+    bubble.innerHTML = text.replace(/\n/g, '<br>');
+    $('wc-chat-thread').appendChild(bubble);
+    $('wc-chat-thread').scrollTop = $('wc-chat-thread').scrollHeight;
+
+    // Log turn
+    _wcChatTranscripts.push({ role: 'trainee', text: text });
+    
+    // Clear input
+    $('wc-chat-input').value = '';
+
+    _wcChatTurnIndex++;
+
+    if (_wcChatTurnIndex < _wcChatTurns.length) {
+      // Run next bot turn
+      runWcChatBotTurn();
+    } else {
+      // No more turns! Finish conversation.
+      $('wc-chat-input').disabled = true;
+      $('btn-wc-chat-send').disabled = true;
+      $('wc-chat-turn-label').textContent = '🏁 Conversation Finished';
+      $('wc-chat-turn-label').style.color = '#10b981';
+      $('btn-wc-chat-submit').style.display = '';
+      $('btn-wc-chat-submit').onclick = () => submitWcChatCorrespondence();
+    }
+  }
+
+  async function submitWcChatCorrespondence() {
+    clearInterval(_wcChatTimerInterval);
+    const duration = Math.floor((Date.now() - _wcChatStartTime) / 1000);
+
+    // Format the entire chat thread for storage and display
+    const formattedChat = _wcChatTranscripts.map(t => {
+      const label = t.role === 'bot' ? 'CUSTOMER' : 'AGENT';
+      return `${label}:\n${t.text}`;
+    }).join('\n\n');
+
+    // Combine trainee responses for AI scoring
+    const traineeResponsesCombined = _wcChatTranscripts
+      .filter(t => t.role === 'trainee')
+      .map(t => t.text)
+      .join('\n\n');
+
+    const analysis = SpeechEngine.analyze(traineeResponsesCombined, duration);
+    const aiScores = SpeechEngine.scoreWriting(traineeResponsesCombined, duration);
+    aiScores._summary = SpeechEngine.generateCoachingSummary('written-comm', aiScores);
+
+    try {
+      await DB.put('sessions', {
+        traineeId: _trainee.id,
+        traineeName: _trainee.name,
+        module: 'written-comm',
+        topicId: _currentTopic.id,
+        topicTitle: _currentTopic.title,
+        recordingBlob: null,
+        writtenText: formattedChat,
+        transcript: formattedChat,
+        aiScores,
+        adminScores: null,
+        adminComment: '',
+        status: 'ai-evaluated',
+        submittedAt: new Date().toISOString(),
+        timeTaken: duration,
+        analysis
+      });
+    } catch (e) {
+      console.error('Session save failed:', e.message);
+      toast('⚠ Could not save session: ' + e.message, 'error');
+    }
+
+    showWrittenCommResults(aiScores, traineeResponsesCombined, analysis, duration);
   }
 
   function startWrittenCommEditor() {

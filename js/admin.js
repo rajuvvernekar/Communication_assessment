@@ -1350,12 +1350,7 @@ window.Admin = (() => {
       const topic = await DB.get('topics', topicId);
       if (!topic) return;
       const nowEnabled = topic.enabled === false; // flip: false→true, undefined/true→false
-      // Use a targeted PATCH via Supabase client (avoids re-uploading blobs)
-      const { error } = await DB.getClient()
-        .from('topics')
-        .update({ enabled: nowEnabled })
-        .eq('id', topicId);
-      if (error) throw error;
+      await DB.patch('topics', topicId, { enabled: nowEnabled });
       toast(nowEnabled ? '✅ Topic enabled — visible to users.' : '⏸ Topic disabled — hidden from users.', '');
       renderTopicsList();
     } catch (e) {
@@ -1375,11 +1370,7 @@ window.Admin = (() => {
       if (!first) return;
       const nowEnabled = first.enabled === false; // flip
       for (const id of ids) {
-        const { error } = await DB.getClient()
-          .from('topics')
-          .update({ enabled: nowEnabled })
-          .eq('id', id);
-        if (error) throw error;
+        await DB.patch('topics', id, { enabled: nowEnabled });
       }
       toast(nowEnabled ? '✅ Grammar set enabled — visible to trainees.' : '⏸ Grammar set disabled — hidden from trainees.', '');
       renderTopicsList();
@@ -1997,7 +1988,7 @@ window.Admin = (() => {
       if (!confirm(`${enable ? 'Enable' : 'Disable'} ${label} (${targets.length} topic${targets.length !== 1 ? 's' : ''})?`)) return;
 
       await Promise.all(targets.map(t =>
-        DB.getClient().from('topics').update({ enabled: enable }).eq('id', t.id)
+        DB.patch('topics', t.id, { enabled: enable })
       ));
       toast(`${enable ? '✅ Enabled' : '⏸ Disabled'} ${targets.length} topic${targets.length !== 1 ? 's' : ''}.`, 'success');
       renderTopicsList();
@@ -2754,11 +2745,17 @@ window.Admin = (() => {
 
     try {
       const ids = sessions.map(s => s.id);
-      const { error } = await DB.getClient()
-        .from('sessions')
-        .delete()
-        .in('id', ids);
-      if (error) throw error;
+      if (DB.isLocalStorage()) {
+        for (const id of ids) {
+          await DB.del('sessions', id);
+        }
+      } else {
+        const { error } = await DB.getClient()
+          .from('sessions')
+          .delete()
+          .in('id', ids);
+        if (error) throw error;
+      }
 
       toast(`✅ ${sessions.length} assessment${sessions.length !== 1 ? 's' : ''} deleted${managerName ? ` for ${managerName}` : ''}.`, 'success');
       await updatePendingBadge();
