@@ -183,7 +183,8 @@ const DB = (() => {
       users = [
         { username: 'admin', password: 'admin123' },
         { username: 'girish', password: 'admin123' },
-        { username: 'harish', password: 'admin123' }
+        { username: 'harish', password: 'admin123' },
+        { username: 'freeda', password: 'admin123' }
       ];
     } else {
       // Ensure 'admin' exists
@@ -203,6 +204,13 @@ const DB = (() => {
         harishUser.password = 'admin123';
       } else {
         users.push({ username: 'harish', password: 'admin123' });
+      }
+      // Ensure 'freeda' exists and password is reset to 'admin123'
+      const freedaUser = users.find(u => u.username.toLowerCase() === 'freeda');
+      if (freedaUser) {
+        freedaUser.password = 'admin123';
+      } else {
+        users.push({ username: 'freeda', password: 'admin123' });
       }
     }
     _localPut('settings', { key: 'adminUsers', value: JSON.stringify(users) });
@@ -285,7 +293,8 @@ const DB = (() => {
           const defaultAdmins = [
             { username: 'admin', password: 'admin123' },
             { username: 'girish', password: 'admin123' },
-            { username: 'harish', password: 'admin123' }
+            { username: 'harish', password: 'admin123' },
+            { username: 'freeda', password: 'admin123' }
           ];
           await _sb.from('settings').upsert({ key: 'adminUsers', value: JSON.stringify(defaultAdmins) }, { onConflict: 'key' });
         } else {
@@ -308,6 +317,13 @@ const DB = (() => {
             harishUser.password = 'admin123';
           } else {
             users.push({ username: 'harish', password: 'admin123' });
+          }
+          // Ensure 'freeda' exists and password is reset to 'admin123'
+          const freedaUser = users.find(u => u.username.toLowerCase() === 'freeda');
+          if (freedaUser) {
+            freedaUser.password = 'admin123';
+          } else {
+            users.push({ username: 'freeda', password: 'admin123' });
           }
           await _sb.from('settings').upsert({ key: 'adminUsers', value: JSON.stringify(users) }, { onConflict: 'key' });
         }

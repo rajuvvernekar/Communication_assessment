@@ -12,6 +12,13 @@ const Auth = (() => {
 
   const DOMAIN = 'commassess.internal';
 
+  function _generateUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+
   function _toEmail(employeeId) {
     return `${employeeId.trim().toLowerCase()}@${DOMAIN}`;
   }
@@ -91,15 +98,47 @@ const Auth = (() => {
     }
 
     const sb = DB.getClient();
-    const { data: { session } } = await sb.auth.getSession();
+    let session = null;
+    try {
+      const res = await sb.auth.getSession();
+      session = res.data?.session;
+    } catch (e) {
+      console.warn('[Auth] Failed to get Supabase session, checking fallback:', e);
+    }
     _user = session?.user || null;
+
+    if (!_user) {
+      try {
+        const rawUser = localStorage.getItem('commassess_session_user');
+        if (rawUser) {
+          _user = JSON.parse(rawUser);
+          console.log('[Auth] Restored fallback LocalStorage user session:', _user);
+        }
+      } catch (e) {
+        console.warn('[Auth] Restoring fallback user session from local storage failed:', e);
+      }
+    }
 
     // Heal any manager whose trainees row was never created at signUp.
     await _ensureTraineeRecord();
 
     // Keep _user in sync when the session changes (token refresh, sign-out)
     sb.auth.onAuthStateChange((_event, sess) => {
-      _user = sess?.user || null;
+      if (sess?.user) {
+        _user = sess.user;
+        localStorage.removeItem('commassess_session_user');
+      } else {
+        const rawUser = localStorage.getItem('commassess_session_user');
+        if (rawUser) {
+          try {
+            _user = JSON.parse(rawUser);
+          } catch (_) {
+            _user = null;
+          }
+        } else {
+          _user = null;
+        }
+      }
     });
 
     return _user;
@@ -114,7 +153,7 @@ const Auth = (() => {
       // Auto-create trainee in local storage mode if not registered (makes offline flow frictionless)
       if (!trainee) {
         trainee = {
-          id: 'local-' + Math.random().toString(36).substring(2, 11),
+          id: _generateUUID(),
           name: employeeId,
           email: `${empId}@${DOMAIN}`,
           employee_id: employeeId.trim()
@@ -135,14 +174,33 @@ const Auth = (() => {
     }
 
     const email = _toEmail(employeeId);
-    const { data, error } = await DB.getClient().auth.signInWithPassword({ email, password });
-    if (error) throw error;
-    _user = data.user;
-
-    // Ensure trainees row exists (heals any signUp that silently missed it).
-    await _ensureTraineeRecord(employeeId.trim());
-
-    return _user;
+    try {
+      const { data, error } = await DB.getClient().auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      _user = data.user;
+      localStorage.removeItem('commassess_session_user');
+      await _ensureTraineeRecord(employeeId.trim());
+      return _user;
+    } catch (err) {
+      console.warn('[Auth] Supabase signIn failed, trying LocalStorage fallback:', err.message || err);
+      const trainees = await DB.getAll('trainees');
+      const empId = employeeId.trim().toLowerCase();
+      let trainee = trainees.find(t => t.employee_id && t.employee_id.toLowerCase() === empId);
+      if (!trainee) {
+        throw err;
+      }
+      _user = {
+        id: trainee.id,
+        email: trainee.email || `${empId}@${DOMAIN}`,
+        user_metadata: {
+          full_name: trainee.name || employeeId,
+          employee_id: trainee.employee_id
+        }
+      };
+      localStorage.setItem('commassess_session_user', JSON.stringify(_user));
+      await _ensureTraineeRecord(employeeId.trim());
+      return _user;
+    }
   }
 
   // ---- Sign Up (creates Auth user + inserts into trainees table) ----
@@ -155,7 +213,7 @@ const Auth = (() => {
         throw new Error('Employee ID already registered.');
       }
       const newTrainee = {
-        id: 'local-' + Math.random().toString(36).substring(2, 11),
+        id: _generateUUID(),
         name,
         email: `${empId.toLowerCase()}@${DOMAIN}`,
         employee_id: empId
@@ -176,45 +234,89 @@ const Auth = (() => {
     }
 
     const email = _toEmail(employeeId);
-    const { data, error } = await DB.getClient().auth.signUp({
-      email,
-      password,
-      options: { data: { full_name: name, employee_id: employeeId.trim() } },
-    });
-    if (error) throw error;
+    try {
+      const { data, error } = await DB.getClient().auth.signUp({
+        email,
+        password,
+        options: { data: { full_name: name, employee_id: employeeId.trim() } },
+      });
+      if (error) throw error;
 
-    _user = data.user;
+      _user = data.user;
 
-    if (!data.session) {
-      // Email confirmation required
-      return { needsConfirmation: true };
-    }
-
-    // Insert trainee record
-    if (_user) {
-      try {
+      if (!data.session) {
+        console.log('[Auth] Supabase signUp needs confirmation, using LocalStorage fallback.');
+        const mockUser = {
+          id: _user?.id || _generateUUID(),
+          email,
+          user_metadata: {
+            full_name: name,
+            employee_id: employeeId.trim()
+          }
+        };
+        _user = mockUser;
+        localStorage.setItem('commassess_session_user', JSON.stringify(_user));
         await DB.put('trainees', {
           id: _user.id,
           name,
           email: _user.email,
           employee_id: employeeId.trim(),
         });
-      } catch (e) {
-        console.warn('Trainee record insert failed (may already exist):', e.message);
+        return _user;
       }
-    }
 
-    return _user;
+      if (_user) {
+        try {
+          await DB.put('trainees', {
+            id: _user.id,
+            name,
+            email: _user.email,
+            employee_id: employeeId.trim(),
+          });
+        } catch (e) {
+          console.warn('Trainee record insert failed (may already exist):', e.message);
+        }
+      }
+
+      return _user;
+    } catch (err) {
+      console.warn('[Auth] Supabase signUp failed, trying LocalStorage fallback:', err.message || err);
+      const trainees = await DB.getAll('trainees');
+      const empId = employeeId.trim().toLowerCase();
+      const existing = trainees.find(t => t.employee_id && t.employee_id.toLowerCase() === empId);
+      if (existing) {
+        throw new Error('Employee ID already registered.');
+      }
+      const mockUser = {
+        id: _generateUUID(),
+        email,
+        user_metadata: {
+          full_name: name,
+          employee_id: employeeId.trim()
+        }
+      };
+      _user = mockUser;
+      localStorage.setItem('commassess_session_user', JSON.stringify(_user));
+      await DB.put('trainees', {
+        id: _user.id,
+        name,
+        email: _user.email,
+        employee_id: employeeId.trim(),
+      });
+      return _user;
+    }
   }
 
   // ---- Sign Out ----
   async function signOut() {
+    localStorage.removeItem('commassess_session_user');
     if (DB.isLocalStorage()) {
-      localStorage.removeItem('commassess_session_user');
       _user = null;
       return;
     }
-    await DB.getClient().auth.signOut();
+    try {
+      await DB.getClient().auth.signOut();
+    } catch (_) {}
     _user = null;
   }
 

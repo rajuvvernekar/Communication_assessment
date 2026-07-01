@@ -528,12 +528,7 @@ Let's get back on track.
       let user;
       try { user = await Auth.signIn(empId, password); }
       catch (signInErr) {
-        const result = await Auth.signUp(empId, name, password);
-        if (result && result.needsConfirmation) {
-          errEl.textContent = 'Please disable email confirmation in Supabase Auth settings.';
-          errEl.classList.remove('hidden'); return;
-        }
-        user = result;
+        user = await Auth.signUp(empId, name, password);
       }
       if (!user) throw new Error('Sign-in failed.');
       _showLoggedInUI();

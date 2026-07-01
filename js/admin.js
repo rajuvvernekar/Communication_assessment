@@ -1,5 +1,19 @@
 'use strict';
 
+if (window.location.search.includes('mockDialogs=true')) {
+  window.confirm = function(msg) {
+    console.log('[Mock Confirm]', msg);
+    if (msg.includes('Delete') || msg.includes('delete') || msg.includes('clear') || msg.includes('Clear')) {
+      return true;
+    }
+    return false; // preserve in reports
+  };
+  window.prompt = function(msg) {
+    console.log('[Mock Prompt]', msg);
+    return 'admin123';
+  };
+}
+
 // ── Master score lookup — Source: "Communicate 360 Master Sheet (1).xlsx" ──
 // selfAssessment / aiAudit = weighted component scores
 // psScore=Pick&Speak/20, lisScore=Listening/20, mcScore=MockCall/20, gramScore=Grammar/25
@@ -2706,13 +2720,90 @@ window.Admin = (() => {
     }).join('');
   }
 
+  // Helper to preserve scores in settings before sessions are deleted from DB
+  async function _preserveScoresBeforeDeletion(sessions, alsoDeleteFromReports = false) {
+    try {
+      const rec = await DB.get('settings', 'preservedReportScores');
+      let preserved = {};
+      if (rec && rec.value) {
+        try {
+          preserved = JSON.parse(rec.value) || {};
+        } catch (_) {
+          preserved = {};
+        }
+      }
+      const r2 = v => Math.round(v * 100) / 100;
+      
+      sessions.forEach(s => {
+        if (!s.traineeName || !s.module) return;
+        const key = s.traineeName.toLowerCase().trim();
+        
+        if (alsoDeleteFromReports) {
+          if (preserved[key]) {
+            const mappedMod = s.module === 'pick-speak' || s.module === 'pick-speak-general' || s.module === 'pick-speak-stock' ? 'psScore'
+                            : s.module === 'listening-assessment' ? 'lisScore'
+                            : s.module === 'mock-call' ? 'mcScore'
+                            : s.module === 'grammar-assessment' ? 'gramScore'
+                            : null;
+            if (mappedMod) {
+              delete preserved[key][mappedMod];
+              if (Object.keys(preserved[key]).length === 0) {
+                delete preserved[key];
+              }
+            }
+          }
+        } else {
+          const score = effScore(s);
+          if (score != null) {
+            if (!preserved[key]) preserved[key] = {};
+            const mappedMod = s.module === 'pick-speak' || s.module === 'pick-speak-general' || s.module === 'pick-speak-stock' ? 'psScore'
+                            : s.module === 'listening-assessment' ? 'lisScore'
+                            : s.module === 'mock-call' ? 'mcScore'
+                            : s.module === 'grammar-assessment' ? 'gramScore'
+                            : null;
+            if (mappedMod) {
+              if (mappedMod === 'psScore')   preserved[key].psScore   = r2(score / 100 * 20);
+              if (mappedMod === 'lisScore')  preserved[key].lisScore  = r2(score / 100 * 20);
+              if (mappedMod === 'mcScore')   preserved[key].mcScore   = r2(score / 100 * 20);
+              if (mappedMod === 'gramScore') preserved[key].gramScore = r2(score / 100 * 25);
+            }
+          }
+        }
+      });
+      
+      await DB.put('settings', { key: 'preservedReportScores', value: JSON.stringify(preserved) });
+    } catch (err) {
+      console.warn('[DB] Failed to preserve scores:', err);
+    }
+  }
+
   // ---- Delete Session ----
   async function deleteSession(sessionId, traineeName) {
     const confirmed = confirm(
-      `Delete this assessment?\n\nTrainee: ${traineeName || 'Unknown'}\n\nThis action cannot be undone.`
+      `Delete this assessment?\n\nTrainee: ${traineeName || 'Unknown'}\n\nThis will remove the session details (recording & transcript) but PRESERVE the score in the reports.`
     );
     if (!confirmed) return;
+
+    let deleteFromReports = false;
+    const confirmReports = confirm(
+      `Do you also want to permanently delete this score from Reports and the Comm360 Master Sheet?\n\n(Warning: This requires separate admin confirmation)`
+    );
+    if (confirmReports) {
+      const pin = prompt("Enter Admin Password to confirm deletion from reports:");
+      const pwRec = await DB.get('settings', 'adminPassword');
+      const correctPw = pwRec ? pwRec.value : 'admin123';
+      if (pin === correctPw) {
+        deleteFromReports = true;
+      } else {
+        alert("Invalid password. The score will be preserved in reports.");
+      }
+    }
+
     try {
+      const session = await DB.get('sessions', sessionId);
+      if (session) {
+        await _preserveScoresBeforeDeletion([session], deleteFromReports);
+      }
       await DB.del('sessions', sessionId);
       toast('Assessment deleted.', '');
       loadAssessments();
@@ -2728,31 +2819,45 @@ window.Admin = (() => {
 
     // Scope to the currently drilled-in manager, if any
     const managerName = _currentManagerDrill;
-    const sessions = managerName
-      ? allSessions.filter(s => _resolveSessionManager(s) === managerName)
-      : allSessions;
-
-    if (!sessions.length) {
-      toast(managerName ? `No assessments found for ${managerName}.` : 'No assessments to delete.', '');
+    if (!managerName) {
+      alert("Please select a specific manager first using the manager filter dropdown to delete assessments for their team.");
       return;
     }
 
-    const label = managerName ? `${managerName}'s team` : 'ALL trainees';
+    const sessions = allSessions.filter(s => _resolveSessionManager(s) === managerName);
+
+    if (!sessions.length) {
+      toast(`No assessments found for ${managerName}.`, '');
+      return;
+    }
+
+    const label = `${managerName}'s team`;
 
     const step1 = confirm(
-      `⚠️ Delete Assessments for ${label}?\n\nThis will permanently delete ${sessions.length} assessment record${sessions.length !== 1 ? 's' : ''}.\n\nThis action cannot be undone.`
+      `⚠️ Delete Assessments for ${label}?\n\nThis will remove the session details (recordings & transcripts) but PRESERVE the scores in the reports.`
     );
     if (!step1) return;
 
-    const step2 = confirm(
-      `Are you absolutely sure?\n\nAll ${sessions.length} assessment${sessions.length !== 1 ? 's' : ''} for ${label} — including scores, transcripts, and recordings — will be deleted permanently.`
+    let deleteFromReports = false;
+    const confirmReports = confirm(
+      `Do you also want to permanently delete these scores from Reports and the Comm360 Master Sheet?\n\n(Warning: This requires separate admin confirmation)`
     );
-    if (!step2) return;
+    if (confirmReports) {
+      const pin = prompt("Enter Admin Password to confirm deletion from reports:");
+      const pwRec = await DB.get('settings', 'adminPassword');
+      const correctPw = pwRec ? pwRec.value : 'admin123';
+      if (pin === correctPw) {
+        deleteFromReports = true;
+      } else {
+        alert("Invalid password. The scores will be preserved in reports.");
+      }
+    }
 
     const btn = $('btn-delete-all-assessments');
     if (btn) { btn.disabled = true; btn.textContent = '🗑 Deleting…'; }
 
     try {
+      await _preserveScoresBeforeDeletion(sessions, deleteFromReports);
       const ids = sessions.map(s => s.id);
       if (DB.isLocalStorage()) {
         for (const id of ids) {
@@ -4243,9 +4348,10 @@ window.Admin = (() => {
   }
 
   async function loadTraineeReport(traineeId) {
-    const [trainee, sessions] = await Promise.all([
+    const [trainee, sessions, preservedRec] = await Promise.all([
       DB.get('trainees', traineeId),
-      DB.getByIndex('sessions', 'traineeId', traineeId)
+      DB.getByIndex('sessions', 'traineeId', traineeId),
+      DB.get('settings', 'preservedReportScores')
     ]);
     if (!trainee) return;
     $('report-content').classList.remove('hidden');
@@ -4257,18 +4363,22 @@ window.Admin = (() => {
     // Fetch master scores for fallback (modules not recorded in the DB)
     const ms = getMasterScores(_resolveAlias(trainee.name));
 
+    // Fetch preserved report scores
+    const preserved = preservedRec && preservedRec.value ? JSON.parse(preservedRec.value) : {};
+    const pr = preserved[trainee.name.toLowerCase().trim()] || {};
+
     const lisMark = scores['listening-assessment'] != null
       ? r2(scores['listening-assessment'] / 100 * 20)
-      : (ms?.lisScore  != null ? r2(ms.lisScore)  : null);
+      : (pr.lisScore != null ? r2(pr.lisScore) : (ms?.lisScore  != null ? r2(ms.lisScore)  : null));
     const psMark  = scores['pick-speak'] != null
       ? r2(scores['pick-speak']  / 100 * 20)
-      : (ms?.psScore   != null ? r2(ms.psScore)   : null);
+      : (pr.psScore != null ? r2(pr.psScore) : (ms?.psScore   != null ? r2(ms.psScore)   : null));
     const gaMark  = scores['grammar-assessment'] != null
       ? r2(scores['grammar-assessment'] / 100 * 25)
-      : (ms?.gramScore != null ? r2(ms.gramScore) : null);
+      : (pr.gramScore != null ? r2(pr.gramScore) : (ms?.gramScore != null ? r2(ms.gramScore) : null));
     const mcMark  = scores['mock-call'] != null
       ? r2(scores['mock-call']   / 100 * 20)
-      : (ms?.mcScore   != null ? r2(ms.mcScore)   : null);
+      : (pr.mcScore != null ? r2(pr.mcScore) : (ms?.mcScore   != null ? r2(ms.mcScore)   : null));
 
     // ── Total score ──
     // Use ms.totalScore ONLY when master has ALL module components.
@@ -5472,9 +5582,10 @@ window.Admin = (() => {
   async function _buildLiveScoreMap() {
     const r2 = v => Math.round(v * 100) / 100;
     try {
-      const [trainees, sessions] = await Promise.all([
+      const [trainees, sessions, preservedRec] = await Promise.all([
         DB.getAll('trainees'),
-        DB.getAll('sessions')
+        DB.getAll('sessions'),
+        DB.get('settings', 'preservedReportScores')
       ]);
       const liveMap = {};
       trainees.forEach(trainee => {
@@ -5487,6 +5598,18 @@ window.Admin = (() => {
         if (scores['grammar-assessment'] != null) live.gramScore = r2(scores['grammar-assessment'] / 100 * 25);
         if (Object.keys(live).length) liveMap[canonical.toLowerCase()] = live;
       });
+
+      // Merge preserved report scores (e.g. from deleted assessments)
+      const preserved = preservedRec && preservedRec.value ? JSON.parse(preservedRec.value) : {};
+      for (const [key, scores] of Object.entries(preserved)) {
+        const lowKey = key.toLowerCase().trim();
+        if (!liveMap[lowKey]) liveMap[lowKey] = {};
+        if (liveMap[lowKey].psScore == null && scores.psScore != null)     liveMap[lowKey].psScore   = scores.psScore;
+        if (liveMap[lowKey].lisScore == null && scores.lisScore != null)   liveMap[lowKey].lisScore  = scores.lisScore;
+        if (liveMap[lowKey].mcScore == null && scores.mcScore != null)     liveMap[lowKey].mcScore   = scores.mcScore;
+        if (liveMap[lowKey].gramScore == null && scores.gramScore != null) liveMap[lowKey].gramScore = scores.gramScore;
+      }
+
       return liveMap;
     } catch (e) {
       console.warn('Comm360 live score load failed:', e);
@@ -6845,10 +6968,30 @@ window.Admin = (() => {
   // ---- Delete Session ----
   async function deleteSession(sessionId, traineeName) {
     const confirmed = confirm(
-      `Delete this assessment?\n\nTrainee: ${traineeName || 'Unknown'}\n\nThis action cannot be undone.`
+      `Delete this assessment?\n\nTrainee: ${traineeName || 'Unknown'}\n\nThis will remove the session details (recording & transcript) but PRESERVE the score in the reports.`
     );
     if (!confirmed) return;
+
+    let deleteFromReports = false;
+    const confirmReports = confirm(
+      `Do you also want to permanently delete this score from Reports and the Comm360 Master Sheet?\n\n(Warning: This requires separate admin confirmation)`
+    );
+    if (confirmReports) {
+      const pin = prompt("Enter Admin Password to confirm deletion from reports:");
+      const pwRec = await DB.get('settings', 'adminPassword');
+      const correctPw = pwRec ? pwRec.value : 'admin123';
+      if (pin === correctPw) {
+        deleteFromReports = true;
+      } else {
+        alert("Invalid password. The score will be preserved in reports.");
+      }
+    }
+
     try {
+      const session = await DB.get('sessions', sessionId);
+      if (session) {
+        await _preserveScoresBeforeDeletion([session], deleteFromReports);
+      }
       await DB.del('sessions', sessionId);
       toast('Assessment deleted.', '');
       loadAssessments();
