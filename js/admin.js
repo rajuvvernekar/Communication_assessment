@@ -592,6 +592,12 @@ window.Admin = (() => {
     return overall <= 5 ? parseFloat(((overall / 5) * 100).toFixed(1)) : overall;
   }
 
+  // ---- Ticket Team Managers Set ----
+  const TICKET_MANAGERS = new Set([
+    'Swanand Dixit', 'Renuka Mishra', 'Basavaraj Gurav', 'Ratanjeet Maharaj', 
+    'Girish A', 'Gopi Kiran', 'Shwethayini'
+  ]);
+
   // ---- Module metadata ----
   const MODULE_LABELS = {
     'pick-speak':          'Pick & Speak',
@@ -3575,9 +3581,16 @@ window.Admin = (() => {
     const ga = scores['grammar-assessment'];
     const la = scores['listening-assessment'];
 
+    // Resolve if this trainee belongs to the Tickets team
+    const firstSess = Object.values(details).find(lst => lst && lst.length)?.[0];
+    const traineeName = firstSess ? firstSess.traineeName : null;
+    const traineeId = firstSess ? firstSess.traineeId : null;
+    const mgr = traineeId ? (_teamAssignments[traineeId] || _getAgentManager(traineeName)) : _getAgentManager(traineeName);
+    const isTicketsTeam = TICKET_MANAGERS.has(mgr) || scores['written-comm'] != null || details['written-comm'] != null;
+
     const modNames = {
       'pick-speak': 'Pick & Speak',
-      'mock-call':  'Mock Call',
+      'mock-call':  isTicketsTeam ? 'Mock Ticket' : 'Mock Call',
       'grammar-assessment': 'Grammar',
       'listening-assessment': 'Listening'
     };
@@ -3604,11 +3617,19 @@ window.Admin = (() => {
     const latestMC = (details['mock-call'] || []).sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt))[0];
     if (latestMC) {
       const cr = { ...(latestMC.aiScores || {}), ...(latestMC.adminScores || {}) };
-      if (typeof cr.callOpening         === 'number' && cr.callOpening         >= 4) subStrengths.push('professional call opening');
-      if (typeof cr.acknowledgment      === 'number' && cr.acknowledgment      >= 4) subStrengths.push('empathy and acknowledgment');
-      if (typeof cr.communicationClarity === 'number' && cr.communicationClarity >= 4) subStrengths.push('communication clarity');
-      if (typeof cr.callEssence         === 'number' && cr.callEssence         >= 4) subStrengths.push('call essence and warmth');
-      if (typeof cr.callClosing         === 'number' && cr.callClosing         >= 4) subStrengths.push('professional call closing');
+      if (isTicketsTeam) {
+        if (typeof cr.criterion_0 === 'number' && cr.criterion_0 >= 4) subStrengths.push('written clarity');
+        if (typeof cr.criterion_1 === 'number' && cr.criterion_1 >= 4) subStrengths.push('structured responses');
+        if (typeof cr.criterion_2 === 'number' && cr.criterion_2 >= 4) subStrengths.push('grammatical accuracy');
+        if (typeof cr.criterion_3 === 'number' && cr.criterion_3 >= 4) subStrengths.push('empathy and tone');
+        if (typeof cr.criterion_4 === 'number' && cr.criterion_4 >= 4) subStrengths.push('professional formatting');
+      } else {
+        if (typeof cr.callOpening         === 'number' && cr.callOpening         >= 4) subStrengths.push('professional call opening');
+        if (typeof cr.acknowledgment      === 'number' && cr.acknowledgment      >= 4) subStrengths.push('empathy and acknowledgment');
+        if (typeof cr.communicationClarity === 'number' && cr.communicationClarity >= 4) subStrengths.push('communication clarity');
+        if (typeof cr.callEssence         === 'number' && cr.callEssence         >= 4) subStrengths.push('call essence and warmth');
+        if (typeof cr.callClosing         === 'number' && cr.callClosing         >= 4) subStrengths.push('professional call closing');
+      }
     }
     if (la >= 70) subStrengths.push('listening comprehension');
     if (ga >= 75) subStrengths.push('grammatical precision');
@@ -3643,7 +3664,13 @@ window.Admin = (() => {
     // Mock Call — weakest criteria
     if (latestMC) {
       const cr = { ...(latestMC.aiScores || {}), ...(latestMC.adminScores || {}) };
-      const MC_CRIT = [
+      const MC_CRIT = isTicketsTeam ? [
+        { key: 'criterion_0', label: 'Written Clarity',       mod: 'Mock Tickets' },
+        { key: 'criterion_1', label: 'Response Structure',    mod: 'Mock Tickets' },
+        { key: 'criterion_2', label: 'Grammar & Accuracy',    mod: 'Mock Tickets' },
+        { key: 'criterion_3', label: 'Written Tone',          mod: 'Mock Tickets' },
+        { key: 'criterion_4', label: 'Formatting Rules',      mod: 'Mock Tickets' },
+      ] : [
         { key: 'callOpening',          label: 'Call Opening',           mod: 'Mock Calls' },
         { key: 'acknowledgment',        label: 'Acknowledgment',         mod: 'Mock Calls' },
         { key: 'communicationClarity',  label: 'Communication Clarity',  mod: 'Mock Calls' },
@@ -3657,9 +3684,9 @@ window.Admin = (() => {
         .slice(0, 2)
         .forEach(c => { priorityBullets.push({ param: c.label, desc: `This is the highest-impact area for your ${c.mod}.` }); });
     } else if (mc == null) {
-      priorityBullets.push({ param: 'Mock Call', desc: 'Assessment pending — your score will be updated once reviewed by your manager.' });
+      priorityBullets.push({ param: isTicketsTeam ? 'Mock Ticket' : 'Mock Call', desc: 'Assessment pending — your score will be updated once reviewed by your manager.' });
     } else if (mc < 60) {
-      priorityBullets.push({ param: 'Call Handling', desc: 'Focus on consistent greeting structure, empathy language and hold procedure.' });
+      priorityBullets.push({ param: isTicketsTeam ? 'Written Response' : 'Call Handling', desc: isTicketsTeam ? 'Focus on response clarity, structure and tone.' : 'Focus on consistent greeting structure, empathy language and hold procedure.' });
     }
 
     // Grammar — weakest section
@@ -3741,6 +3768,9 @@ window.Admin = (() => {
     const { lisMark, psMark, gaMark, mcMark, totalMark } = marks;
     const { strengthPara, priorityIntro, priorityBullets, actionIntro, actions, closing1, closing2 } = insights;
 
+    const mgr = _teamAssignments[trainee.id] || _getAgentManager(trainee.name);
+    const isTicketsTeam = TICKET_MANAGERS.has(mgr) || (priorityBullets && priorityBullets.some(b => b.param.includes('Ticket') || b.param.includes('written') || b.param.includes('Response')));
+
     const fmt = (v, max) => v != null
       ? `<strong>${v.toFixed(2)} / ${max}</strong>`
       : `<strong style="color:#94a3b8">Not attempted / ${max}</strong>`;
@@ -3769,7 +3799,7 @@ window.Admin = (() => {
         <li>Listening: ${fmt(lisMark, 20)}</li>
         <li>Pick &amp; Speak: ${fmt(psMark, 20)}</li>
         <li>Grammar: ${fmt(gaMark, 25)}</li>
-        <li>Mock Call: ${fmt(mcMark, 20)}</li>
+        <li>${isTicketsTeam ? 'Mock Ticket' : 'Mock Call'}: ${fmt(mcMark, 20)}</li>
       </ul>
       <p style="font-size:0.82rem;color:var(--text-muted);margin-top:0.3rem;margin-bottom:0.1rem"><em>* AI &amp; Manager evaluation scores are taken into consideration and carry a weightage of 15% in the total score.</em></p>
 
@@ -3947,15 +3977,18 @@ window.Admin = (() => {
     s1.addText('Total Score',         { x:7.55, y:1.02, w:1.9, h:0.28, fontSize:9,  bold:true, color:C.label, align:'center', fontFace:'Calibri' });
     s1.addText(fmt2(totalMark),        { x:7.55, y:1.28, w:1.9, h:0.62, fontSize:30, bold:true, color:C.white, align:'center', fontFace:'Calibri' });
     s1.addText('/ 100',                { x:7.55, y:1.9,  w:1.9, h:0.28, fontSize:11, color:C.denom, align:'center', fontFace:'Calibri' });
+    const mgr = _teamAssignments[trainee.id] || _getAgentManager(trainee.name);
+    const isTicketsTeam = TICKET_MANAGERS.has(mgr);
+
     // Main text
     s1.addText('Performance Assessment Report', { x:0.45, y:0.55, w:6.6, h:0.32, fontSize:13, color:C.light, fontFace:'Calibri' });
     s1.addText(name,                            { x:0.45, y:0.88, w:6.5, h:1.1,  fontSize:name.length > 18 ? 34 : 42, bold:true, color:C.white, fontFace:'Calibri', breakLine:true });
-    s1.addText('Communication & Call Centre Skills Evaluation', { x:0.45, y:2.55, w:6.5, h:0.38, fontSize:13, color:C.light, fontFace:'Calibri' });
+    s1.addText(isTicketsTeam ? 'Communication & Written Skills Evaluation' : 'Communication & Call Centre Skills Evaluation', { x:0.45, y:2.55, w:6.5, h:0.38, fontSize:13, color:C.light, fontFace:'Calibri' });
     // 4 score cards
     const cards = [
       { label:'Pick & Speak', score:psMark, max:20 },
       { label:'Listening',    score:lisMark, max:20 },
-      { label:'Mock Call',    score:mcMark,  max:20 },
+      { label:isTicketsTeam ? 'Mock Ticket' : 'Mock Call', score:mcMark,  max:20 },
       { label:'Grammar',      score:gaMark,  max:25 }
     ];
     const cXs = [0.3, 2.58, 4.86, 7.14], cW=2.1, cH=1.55, cY=3.55;
@@ -4028,18 +4061,24 @@ window.Admin = (() => {
       });
     }
 
-    // ── SLIDE 3 — Mock Call ──────────────────────────────────────────────────────
+    // ── SLIDE 3 — Mock Call / Ticket ─────────────────────────────────────────────
     const s3 = pptx.addSlide();
     s3.background = { color: C.lightBg };
     s3.addShape(pptx.ShapeType.rect, { x:0, y:0, w:W, h:0.82, fill:{color:C.darkNav}, line:noBorder });
-    s3.addText('📞  Mock Call Feedback', { x:0.25, y:0.08, w:7.6, h:0.66, fontSize:20, bold:true, color:C.white, fontFace:'Calibri', valign:'middle' });
+    s3.addText(isTicketsTeam ? '📝  Mock Ticket Feedback' : '📞  Mock Call Feedback', { x:0.25, y:0.08, w:7.6, h:0.66, fontSize:20, bold:true, color:C.white, fontFace:'Calibri', valign:'middle' });
     s3.addShape(pptx.ShapeType.rect, { x:8.08, y:0.1, w:1.72, h:0.62, fill:{color:C.teal}, line:noBorder });
     s3.addText(`${fmt2(mcMark)} / 20`, { x:8.08, y:0.1, w:1.72, h:0.62, fontSize:13, bold:true, color:C.white, align:'center', valign:'middle', fontFace:'Calibri' });
 
     const mcSess = details['mock-call'] || [];
     const latestMC = mcSess.sort((a,b)=>new Date(b.submittedAt)-new Date(a.submittedAt))[0];
     const mcCom = { ...(latestMC?.aiScores||{}), ...(latestMC?.adminScores||{}) };
-    const MC_CRIT2 = [
+    const MC_CRIT2 = isTicketsTeam ? [
+      { key:'criterion_0', label:'Written Clarity',       tip:'Ensure written response is clear, concise, and easy for the customer to follow.' },
+      { key:'criterion_1', label:'Response Structure',    tip:'Use appropriate formatting, paragraphs, bullet points, and email salutation/closing.' },
+      { key:'criterion_2', label:'Grammar & Accuracy',    tip:'Correct tense usage; proper sentence construction and syntax throughout.' },
+      { key:'criterion_3', label:'Written Tone',          tip:'Maintain a helpful, customer-centric tone, avoiding negative or passive-aggressive language.' },
+      { key:'criterion_4', label:'Formatting Rules',      tip:'Strictly follow Zerodha written communication guidelines, greetings, and disclaimers.' }
+    ] : [
       { key:'callOpening',          label:'Call Opening',          tip:'Greet warmly, state your name & company, invite the customer\'s concern — all 4 elements.' },
       { key:'acknowledgment',       label:'Acknowledgment',        tip:'"I completely understand how frustrating this must be" — empathy always comes first.' },
       { key:'communicationClarity', label:'Communication Clarity', tip:'Short sentences, professional tone, zero fillers. Confirm understanding at key points.' },
@@ -4053,7 +4092,7 @@ window.Admin = (() => {
       .filter(c => typeof mcCom[c.key] === 'number')
       .sort((a, b) => (mcCom[a.key] ?? 5) - (mcCom[b.key] ?? 5))
       .slice(0, 6);
-    const priorityMC = displayMC[0]?.label || 'Call Handling';
+    const priorityMC = displayMC[0]?.label || (isTicketsTeam ? 'Response Clarity' : 'Call Handling');
 
     s3.addShape(pptx.ShapeType.rect, { x:0, y:0.82, w:W/2, h:0.5, fill:{color:C.green}, line:noBorder });
     s3.addText('✨  Development Areas (prioritised):', { x:0.1, y:0.82, w:W/2-0.15, h:0.5, fontSize:10, bold:true, color:C.white, fontFace:'Calibri', valign:'middle' });
@@ -4260,7 +4299,7 @@ window.Admin = (() => {
       const headers = [
         'Manager', 'Agent Name',
         'Self Assessment (/20)', 'AI Audit (/5)',
-        'Pick & Speak (/20)', 'Listening (/20)', 'Mock Call (/20)', 'Grammar (/25)',
+        'Pick & Speak (/20)', 'Listening (/20)', 'Mock Call / Ticket (/20)', 'Grammar (/25)',
         'Total Score (/100)'
       ];
 
@@ -4593,7 +4632,8 @@ window.Admin = (() => {
     modules.forEach((mod, i) => {
       const lx = cx + (r + 22) * Math.cos(angles[i]);
       const ly = cy + (r + 22) * Math.sin(angles[i]);
-      const short = { 'pick-speak': 'P&S', 'mock-call': 'Call', 'role-play': 'Role', 'group-discussion': 'GD', 'written-comm': 'Written' };
+      const isTkt = trainee && (TICKET_MANAGERS.has(_teamAssignments[trainee.id]) || TICKET_MANAGERS.has(_getAgentManager(trainee.name)));
+      const short = { 'pick-speak': 'P&S', 'mock-call': isTkt ? 'Ticket' : 'Call', 'role-play': 'Role', 'group-discussion': 'GD', 'written-comm': 'Written' };
       ctx.fillText(short[mod] || mod, lx, ly + 4);
     });
   }
@@ -4890,6 +4930,28 @@ window.Admin = (() => {
       }
     }
 
+    // Written Comm (Mock Ticket)
+    const wcSess = ts.filter(s => s.module === 'written-comm');
+    if (wcSess.length) {
+      const effs = wcSess.map(effScore).filter(x => x !== null);
+      if (effs.length) {
+        scores['written-comm'] = parseFloat((effs.reduce((a, b) => a + b, 0) / effs.length).toFixed(1));
+        details['written-comm'] = wcSess;
+      }
+    }
+
+    // Tickets team check: replace mock-call with written-comm
+    const mgr = _teamAssignments[traineeId] || _getAgentManager(ts.find(s => s.traineeId === traineeId)?.traineeName);
+    const isTicketsTeam = TICKET_MANAGERS.has(mgr) || scores['written-comm'] != null;
+    if (isTicketsTeam) {
+      if (scores['written-comm'] != null) {
+        scores['mock-call'] = scores['written-comm'];
+        details['mock-call'] = details['written-comm'];
+      }
+      delete scores['written-comm'];
+      delete details['written-comm'];
+    }
+
     // Grammar: take admin score if present, otherwise latest session's auto-graded score. No averaging.
     const gaSess = ts.filter(s => s.module === 'grammar-assessment');
     if (gaSess.length) {
@@ -4954,9 +5016,10 @@ window.Admin = (() => {
 
     // ── Individual agent cards ────────────────────────────────────
     const cards = agentRows.map(({ trainee, scores, overall, insights }) => {
+      const isTkt = trainee && (TICKET_MANAGERS.has(_teamAssignments[trainee.id]) || TICKET_MANAGERS.has(_getAgentManager(trainee.name)));
       const modules = [
         { key: 'pick-speak',          label: 'Pick & Speak',  color: '#3b82f6' },
-        { key: 'mock-call',           label: 'Mock Call',     color: '#8b5cf6', pending: scores['mock-call'] == null },
+        { key: 'mock-call',           label: isTkt ? 'Mock Ticket' : 'Mock Call', color: '#8b5cf6', pending: scores['mock-call'] == null },
         { key: 'grammar-assessment',  label: 'Grammar',       color: '#7c3aed' },
         { key: 'listening-assessment',label: 'Listening',     color: '#db2877' },
       ];
@@ -5009,7 +5072,7 @@ window.Admin = (() => {
         <div class="aar-report-topbar">
           <div>
             <div class="aar-report-title">All Agents Communication Report</div>
-            <div class="aar-report-sub">Generated on ${today} &nbsp;·&nbsp; Modules: Pick &amp; Speak · Mock Call · Grammar · Listening &nbsp;·&nbsp; Mock Call scores shown as AI scores where admin has not yet scored</div>
+            <div class="aar-report-sub">Generated on ${today} &nbsp;·&nbsp; Modules: Pick &amp; Speak · Mock Call / Ticket · Grammar · Listening &nbsp;·&nbsp; Mock Call / Ticket scores shown as AI scores where admin has not yet scored</div>
           </div>
           <button class="btn-secondary aar-print-btn" onclick="window.print()">🖨 Print / Save PDF</button>
         </div>
@@ -5020,7 +5083,7 @@ window.Admin = (() => {
               <tr>
                 <th>Agent</th>
                 <th style="text-align:center">Pick &amp; Speak</th>
-                <th style="text-align:center">Mock Call</th>
+                <th style="text-align:center">Mock Call / Ticket</th>
                 <th style="text-align:center">Grammar</th>
                 <th style="text-align:center">Listening</th>
                 <th style="text-align:center">Overall</th>
@@ -5596,7 +5659,7 @@ window.Admin = (() => {
 
   const _TICKET_TEAM_MANAGERS = new Set([
     'Renuka Mishra', 'Basavaraj Gurav', 'Ratanjeet Maharaj',
-    'Gopi Kiran', 'Shwethayini', 'Swanand Dixit'
+    'Gopi Kiran', 'Shwethayini', 'Swanand Dixit', 'Girish A'
   ]);
 
   let _comm360AllRows    = [];
