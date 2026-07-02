@@ -3182,14 +3182,23 @@ window.Admin = (() => {
     criteriaContainer.innerHTML = '';
     let lastGroup = null;
 
-    // Grammar Assessment: no manual scoring criteria — show info note instead
-    if (isGrammar) {
+    // Grammar Assessment / Listening Assessment: show auto-graded details and direct score editing input
+    if (isGrammar || isListening) {
+      const currentAdminScore = session.adminScores?.overall ?? session.aiScores?.overall ?? '';
       criteriaContainer.innerHTML = `
-        <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:0.875rem;font-size:0.85rem;color:#5b21b6">
-          <strong>📊 Auto-graded</strong><br>
-          This test is automatically scored based on correct answers. The score has been calculated and saved. You can add a comment or feedback below.
+        <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:0.875rem;font-size:0.85rem;color:#5b21b6;margin-bottom:1rem">
+          <strong>📊 Auto-graded Assessment</strong><br>
+          This test is auto-graded based on correct answers. The default score is ${session.aiScores?.overall ?? 0}%. You can edit the final score below.
+        </div>
+        <div class="criterion-row" style="margin-top:1rem">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-weight:600">Admin Score (%):</span>
+            <input type="number" id="admin-score-input" min="0" max="100" value="${currentAdminScore}" 
+              style="width: 80px; padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem;"
+              oninput="Admin.updateAdminScoreDisplay(this.value)" />
+          </div>
         </div>`;
-      $('scoring-total-display').textContent = (session.aiScores?.overall ?? '—');
+      $('scoring-total-display').textContent = currentAdminScore;
     }
 
     criteria.forEach((criterion, idx) => {
@@ -3374,6 +3383,15 @@ window.Admin = (() => {
     }
   }
 
+  function updateAdminScoreDisplay(val) {
+    const parsed = parseFloat(val);
+    if (!isNaN(parsed)) {
+      $('scoring-total-display').textContent = parsed.toFixed(1);
+    } else {
+      $('scoring-total-display').textContent = '—';
+    }
+  }
+
   async function saveScore() {
     const session = await DB.get('sessions', _scoringSessionId);
     if (!session) return;
@@ -3381,9 +3399,11 @@ window.Admin = (() => {
     const criteria    = SCORING_CRITERIA[session.module] || [];
     const adminScores = {};
 
-    // Grammar/Listening Assessment is auto-scored — admin just reviews and adds a comment
+    // Grammar/Listening Assessment is auto-scored — read custom score entered by admin, fallback to auto-graded score
     if (session.module === 'grammar-assessment' || session.module === 'listening-assessment') {
-      adminScores.overall = session.aiScores?.overall ?? 0;
+      const inputEl = $('admin-score-input');
+      const inputVal = inputEl ? parseFloat(inputEl.value) : null;
+      adminScores.overall = (inputVal !== null && !isNaN(inputVal)) ? inputVal : (session.aiScores?.overall ?? 0);
     } else {
       criteria.forEach((criterion, i) => {
         const key = criterion.key;
@@ -4870,22 +4890,28 @@ window.Admin = (() => {
       }
     }
 
-    // Grammar
+    // Grammar: take admin score if present, otherwise latest session's auto-graded score. No averaging.
     const gaSess = ts.filter(s => s.module === 'grammar-assessment');
     if (gaSess.length) {
-      const vals = gaSess.map(s => s.aiScores ? (normalizeOverall(s.aiScores.overall) ?? null) : null).filter(x => x !== null);
-      if (vals.length) {
-        scores['grammar-assessment'] = parseFloat((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1));
+      const sortedGa = [...gaSess].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+      const scoredSess = sortedGa.find(s => s.adminScores && s.adminScores.overall != null);
+      const targetSess = scoredSess || sortedGa[0];
+      const scoreVal = effScore(targetSess);
+      if (scoreVal != null) {
+        scores['grammar-assessment'] = scoreVal;
         details['grammar-assessment'] = gaSess;
       }
     }
 
-    // Listening
+    // Listening: take admin score if present, otherwise latest session's auto-graded score. No averaging.
     const laSess = ts.filter(s => s.module === 'listening-assessment');
     if (laSess.length) {
-      const vals = laSess.map(s => s.aiScores ? (normalizeOverall(s.aiScores.overall) ?? null) : null).filter(x => x !== null);
-      if (vals.length) {
-        scores['listening-assessment'] = parseFloat((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1));
+      const sortedLa = [...laSess].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+      const scoredSess = sortedLa.find(s => s.adminScores && s.adminScores.overall != null);
+      const targetSess = scoredSess || sortedLa[0];
+      const scoreVal = effScore(targetSess);
+      if (scoreVal != null) {
+        scores['listening-assessment'] = scoreVal;
         details['listening-assessment'] = laSess;
       }
     }
@@ -7034,6 +7060,7 @@ window.Admin = (() => {
     enableAllTopics,
     disableAllTopics,
     openScoring,
+    updateAdminScoreDisplay,
     updateCriterionDisplay,
     selectScale135,
     viewTraineeSessions,
