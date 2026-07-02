@@ -22,6 +22,49 @@ const App = (() => {
   let _wcChatStartTime = null;
   let _wcChatTimerInterval = null;
 
+  const WRITTEN_COMM_DEFAULT_PREFIX = "Thank you for writing to Zerodha.\n\n";
+  const WRITTEN_COMM_DEFAULT_SUFFIX = "\n\nYou can update this ticket if you have any concerns or queries, and we will get back to you.\n\nPlease note: This ticket will auto-close after 24 hours of inactivity, but you can reopen it at any time or reach out to us via our Support Portal.";
+
+  function getTraineeContent(text) {
+    if (!text) return '';
+    let cleaned = text;
+
+    const prefixes = [
+      "Thank you for writing to Zerodha.",
+      "Thank you for writing to Zerodha.\n\n",
+      "Thank you for writing to Zerodha.\r\n\r\n"
+    ];
+
+    const suffixes = [
+      "You can update this ticket if you have any concerns or queries, and we will get back to you.\n\nPlease note: This ticket will auto-close after 24 hours of inactivity, but you can reopen it at any time or reach out to us via our Support Portal.",
+      "You can update this ticket if you have any concerns or queries, and we will get back to you.\r\n\r\nPlease note: This ticket will auto-close after 24 hours of inactivity, but you can reopen it at any time or reach out to us via our Support Portal.",
+      "You can update this ticket if you have any concerns or queries, and we will get back to you.",
+      "Please note: This ticket will auto-close after 24 hours of inactivity, but you can reopen it at any time or reach out to us via our Support Portal."
+    ];
+
+    for (const p of prefixes) {
+      if (cleaned.startsWith(p)) {
+        cleaned = cleaned.substring(p.length);
+        break;
+      }
+      const idx = cleaned.toLowerCase().indexOf(p.toLowerCase());
+      if (idx !== -1) {
+        cleaned = cleaned.substring(idx + p.length);
+        break;
+      }
+    }
+
+    for (const s of suffixes) {
+      const idx = cleaned.toLowerCase().indexOf(s.toLowerCase());
+      if (idx !== -1) {
+        cleaned = cleaned.substring(0, idx);
+        break;
+      }
+    }
+
+    return cleaned.trim();
+  }
+
   // ── Listening Assessment state ──
   let _laSections       = [];   // [{id, title, sectionType, questions}] sorted by title
   let _laCurrentSection = 0;    // 0-based index into _laSections
@@ -1817,7 +1860,14 @@ const App = (() => {
       $('wc-chat-bot-status').style.display = 'none';
       $('wc-chat-input').disabled = false;
       $('btn-wc-chat-send').disabled = false;
+
+      // Pre-fill the default response template
+      const defaultText = WRITTEN_COMM_DEFAULT_PREFIX + "\n" + WRITTEN_COMM_DEFAULT_SUFFIX;
+      $('wc-chat-input').value = defaultText;
+
       $('wc-chat-input').focus();
+      const pos = WRITTEN_COMM_DEFAULT_PREFIX.length;
+      $('wc-chat-input').setSelectionRange(pos, pos);
 
       const bubble = document.createElement('div');
       bubble.className = `mc-bubble bot ${mood.bubbleClass}`;
@@ -1877,6 +1927,13 @@ const App = (() => {
     const text = $('wc-chat-input').value.trim();
     if (!text) return;
 
+    // Check if the trainee has actually added any content
+    const traineeText = getTraineeContent(text);
+    if (!traineeText) {
+      toast('Please write your response content.', 'error');
+      return;
+    }
+
     // Append trainee message to chat
     const bubble = document.createElement('div');
     bubble.className = 'mc-bubble trainee';
@@ -1924,7 +1981,7 @@ const App = (() => {
     // Combine trainee responses for AI scoring
     const traineeResponsesCombined = _wcChatTranscripts
       .filter(t => t.role === 'trainee')
-      .map(t => t.text)
+      .map(t => getTraineeContent(t.text))
       .join('\n\n');
 
     const analysis = SpeechEngine.analyze(traineeResponsesCombined, duration);
@@ -1971,7 +2028,15 @@ const App = (() => {
     }
 
     const editor = $('wc-editor');
-    editor.value = '';
+    // Pre-fill default template response
+    const defaultText = WRITTEN_COMM_DEFAULT_PREFIX + "\n" + WRITTEN_COMM_DEFAULT_SUFFIX;
+    editor.value = defaultText;
+
+    // Position cursor in the empty line between prefix and suffix
+    const cursorPosition = WRITTEN_COMM_DEFAULT_PREFIX.length;
+    editor.setSelectionRange(cursorPosition, cursorPosition);
+    editor.focus();
+
     $('wc-word-count').textContent = '0';
     $('wc-time-elapsed').textContent = '0:00';
 
@@ -1985,8 +2050,9 @@ const App = (() => {
     }, 1000);
 
     editor.oninput = () => {
-      const words = editor.value.trim().split(/\s+/).filter(w => w);
-      $('wc-word-count').textContent = editor.value.trim() ? words.length : 0;
+      const traineeText = getTraineeContent(editor.value);
+      const words = traineeText.trim().split(/\s+/).filter(w => w);
+      $('wc-word-count').textContent = traineeText.trim() ? words.length : 0;
     };
 
     $('btn-wc-submit').onclick = () => submitWrittenComm();
@@ -1999,10 +2065,16 @@ const App = (() => {
       return;
     }
 
+    const traineeText = getTraineeContent(text);
+    if (!traineeText) {
+      toast('Please add your custom response content between the default template greetings.', 'error');
+      return;
+    }
+
     clearInterval(_wcTimerInterval);
     const duration = Math.floor((Date.now() - _wcStartTime) / 1000);
-    const analysis = SpeechEngine.analyze(text, duration);
-    const aiScores = SpeechEngine.scoreWriting(text, duration);
+    const analysis = SpeechEngine.analyze(traineeText, duration);
+    const aiScores = SpeechEngine.scoreWriting(traineeText, duration);
     aiScores._summary = SpeechEngine.generateCoachingSummary('written-comm', aiScores);
 
     try {

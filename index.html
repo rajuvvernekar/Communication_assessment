@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CommAssess — Communication Assessment Tool</title>
-  <link rel="stylesheet" href="css/style.css?v=15">
+  <link rel="stylesheet" href="css/style.css?v=16">
   <!-- Supabase JS SDK (CDN) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
@@ -840,8 +840,8 @@
         <!-- Chat Input bar -->
         <div style="padding:1rem;background:#fff;border-top:1px solid var(--border)">
           <div style="display:flex;gap:0.75rem;align-items:flex-end">
-            <textarea id="wc-chat-input" placeholder="Type your response here..." style="flex:1;resize:none;height:60px;padding:0.75rem;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:0.95rem" onkeydown="if(event.key==='Enter' && !event.shiftKey){ event.preventDefault(); document.getElementById('btn-wc-chat-send').click(); }"></textarea>
-            <button id="btn-wc-chat-send" class="btn-primary" style="background:var(--wc-color);height:60px;padding:0 1.5rem;border-radius:8px;font-weight:600">Send →</button>
+            <textarea id="wc-chat-input" placeholder="Type your response here..." style="flex:1;resize:none;height:120px;padding:0.75rem;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:0.95rem" onkeydown="if(event.key==='Enter' && !event.shiftKey){ event.preventDefault(); document.getElementById('btn-wc-chat-send').click(); }"></textarea>
+            <button id="btn-wc-chat-send" class="btn-primary" style="background:var(--wc-color);height:120px;padding:0 1.5rem;border-radius:8px;font-weight:600">Send →</button>
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.5rem">
             <span style="font-size:0.75rem;color:var(--text-muted)">Press Enter to send, Shift + Enter for new line.</span>
@@ -1182,6 +1182,6 @@
 <script src="js/recorder.js?v=7"></script>
 <script src="js/speech.js?v=8"></script>
 <script src="js/claude.js?v=15"></script>
-<script src="js/app.js?v=25"></script>
+<script src="js/app.js?v=26"></script>
 </body>
 </html>
