@@ -731,11 +731,12 @@ window.Admin = (() => {
       { label: 'Communication Clarity', key: 'criterion_3' }
     ],
     'written-comm': [
-      { label: 'Clarity', key: 'criterion_0' },
-      { label: 'Structure', key: 'criterion_1' },
-      { label: 'Grammar', key: 'criterion_2' },
-      { label: 'Tone', key: 'criterion_3' },
-      { label: 'Professionalism', key: 'criterion_4' }
+      { label: 'Tone & Empathy', key: 'criterion_0', desc: 'Remained polite and professional; acknowledged customer\'s actual concern and policy rationale with empathy' },
+      { label: 'Clarity', key: 'criterion_1', desc: 'Clear, consistent, and non-contradictory explanation (no saying "disabled" and later "no restriction")' },
+      { label: 'Ownership', key: 'criterion_2', desc: 'Addressed customer\'s underlying questions, reasoning behind internal policies, and why they questioned it' },
+      { label: 'Accuracy', key: 'criterion_3', desc: 'Correctly clarified internal safeguards, differentiated UI restrictions vs. manual support options' },
+      { label: 'Customer Education', key: 'criterion_4', desc: 'Explained the business rationale/safeguards clearly instead of using generic statements' },
+      { label: 'Grammar & Language', key: 'criterion_5', desc: 'Grammar, spelling (e.g. no "inconvinence"), professional sentence construction, and no repetitive closing statements' }
     ],
     // Grammar/Listening Assessment is auto-scored — no manual sliders, just admin comment
     'grammar-assessment':  [],
@@ -3618,11 +3619,12 @@ window.Admin = (() => {
     if (latestMC) {
       const cr = { ...(latestMC.aiScores || {}), ...(latestMC.adminScores || {}) };
       if (isTicketsTeam) {
-        if (typeof cr.criterion_0 === 'number' && cr.criterion_0 >= 4) subStrengths.push('written clarity');
-        if (typeof cr.criterion_1 === 'number' && cr.criterion_1 >= 4) subStrengths.push('structured responses');
-        if (typeof cr.criterion_2 === 'number' && cr.criterion_2 >= 4) subStrengths.push('grammatical accuracy');
-        if (typeof cr.criterion_3 === 'number' && cr.criterion_3 >= 4) subStrengths.push('empathy and tone');
-        if (typeof cr.criterion_4 === 'number' && cr.criterion_4 >= 4) subStrengths.push('professional formatting');
+        if (typeof cr.criterion_0 === 'number' && cr.criterion_0 >= 4) subStrengths.push('tone and empathy');
+        if (typeof cr.criterion_1 === 'number' && cr.criterion_1 >= 4) subStrengths.push('written clarity');
+        if (typeof cr.criterion_2 === 'number' && cr.criterion_2 >= 4) subStrengths.push('ownership in resolution');
+        if (typeof cr.criterion_3 === 'number' && cr.criterion_3 >= 4) subStrengths.push('explanation accuracy');
+        if (typeof cr.criterion_4 === 'number' && cr.criterion_4 >= 4) subStrengths.push('customer education');
+        if (typeof cr.criterion_5 === 'number' && cr.criterion_5 >= 4) subStrengths.push('grammar and language quality');
       } else {
         if (typeof cr.callOpening         === 'number' && cr.callOpening         >= 4) subStrengths.push('professional call opening');
         if (typeof cr.acknowledgment      === 'number' && cr.acknowledgment      >= 4) subStrengths.push('empathy and acknowledgment');
@@ -3665,11 +3667,12 @@ window.Admin = (() => {
     if (latestMC) {
       const cr = { ...(latestMC.aiScores || {}), ...(latestMC.adminScores || {}) };
       const MC_CRIT = isTicketsTeam ? [
-        { key: 'criterion_0', label: 'Written Clarity',       mod: 'Mock Tickets' },
-        { key: 'criterion_1', label: 'Response Structure',    mod: 'Mock Tickets' },
-        { key: 'criterion_2', label: 'Grammar & Accuracy',    mod: 'Mock Tickets' },
-        { key: 'criterion_3', label: 'Written Tone',          mod: 'Mock Tickets' },
-        { key: 'criterion_4', label: 'Formatting Rules',      mod: 'Mock Tickets' },
+        { key: 'criterion_0', label: 'Tone & Empathy',       mod: 'Mock Tickets' },
+        { key: 'criterion_1', label: 'Written Clarity',      mod: 'Mock Tickets' },
+        { key: 'criterion_2', label: 'Ownership',            mod: 'Mock Tickets' },
+        { key: 'criterion_3', label: 'Explanation Accuracy', mod: 'Mock Tickets' },
+        { key: 'criterion_4', label: 'Customer Education',   mod: 'Mock Tickets' },
+        { key: 'criterion_5', label: 'Grammar & Language',   mod: 'Mock Tickets' },
       ] : [
         { key: 'callOpening',          label: 'Call Opening',           mod: 'Mock Calls' },
         { key: 'acknowledgment',        label: 'Acknowledgment',         mod: 'Mock Calls' },
@@ -3799,7 +3802,7 @@ window.Admin = (() => {
         <li>Listening: ${fmt(lisMark, 20)}</li>
         <li>Pick &amp; Speak: ${fmt(psMark, 20)}</li>
         <li>Grammar: ${fmt(gaMark, 25)}</li>
-        <li>${isTicketsTeam ? 'Mock Ticket' : 'Mock Call'}: ${fmt(mcMark, 20)}</li>
+        <li>${isTicketsTeam ? 'Mock Ticket' : 'Mock Call'}: ${isTicketsTeam ? (mcMark != null ? `<strong>${(mcMark / 20 * 30).toFixed(1)}/30 (${(mcMark / 20 * 5).toFixed(1)}/5)</strong>` : `<strong style="color:#94a3b8">Not attempted / 30</strong>`) : fmt(mcMark, 20)}</li>
       </ul>
       <p style="font-size:0.82rem;color:var(--text-muted);margin-top:0.3rem;margin-bottom:0.1rem"><em>* AI &amp; Manager evaluation scores are taken into consideration and carry a weightage of 15% in the total score.</em></p>
 
@@ -4067,17 +4070,18 @@ window.Admin = (() => {
     s3.addShape(pptx.ShapeType.rect, { x:0, y:0, w:W, h:0.82, fill:{color:C.darkNav}, line:noBorder });
     s3.addText(isTicketsTeam ? '📝  Mock Ticket Feedback' : '📞  Mock Call Feedback', { x:0.25, y:0.08, w:7.6, h:0.66, fontSize:20, bold:true, color:C.white, fontFace:'Calibri', valign:'middle' });
     s3.addShape(pptx.ShapeType.rect, { x:8.08, y:0.1, w:1.72, h:0.62, fill:{color:C.teal}, line:noBorder });
-    s3.addText(`${fmt2(mcMark)} / 20`, { x:8.08, y:0.1, w:1.72, h:0.62, fontSize:13, bold:true, color:C.white, align:'center', valign:'middle', fontFace:'Calibri' });
+    s3.addText(isTicketsTeam ? `${(mcMark != null ? (mcMark / 20 * 30).toFixed(1) : '—')} / 30` : `${fmt2(mcMark)} / 20`, { x:8.08, y:0.1, w:1.72, h:0.62, fontSize:13, bold:true, color:C.white, align:'center', valign:'middle', fontFace:'Calibri' });
 
     const mcSess = details['mock-call'] || [];
     const latestMC = mcSess.sort((a,b)=>new Date(b.submittedAt)-new Date(a.submittedAt))[0];
     const mcCom = { ...(latestMC?.aiScores||{}), ...(latestMC?.adminScores||{}) };
     const MC_CRIT2 = isTicketsTeam ? [
-      { key:'criterion_0', label:'Written Clarity',       tip:'Ensure written response is clear, concise, and easy for the customer to follow.' },
-      { key:'criterion_1', label:'Response Structure',    tip:'Use appropriate formatting, paragraphs, bullet points, and email salutation/closing.' },
-      { key:'criterion_2', label:'Grammar & Accuracy',    tip:'Correct tense usage; proper sentence construction and syntax throughout.' },
-      { key:'criterion_3', label:'Written Tone',          tip:'Maintain a helpful, customer-centric tone, avoiding negative or passive-aggressive language.' },
-      { key:'criterion_4', label:'Formatting Rules',      tip:'Strictly follow Zerodha written communication guidelines, greetings, and disclaimers.' }
+      { key:'criterion_0', label:'Tone & Empathy',       tip:'Maintained polite/professional tone; acknowledged customer\'s actual concern and policy rationale with empathy.' },
+      { key:'criterion_1', label:'Clarity',              tip:'Clear, consistent, non-contradictory explanation (no saying "disabled" and later "no restriction").' },
+      { key:'criterion_2', label:'Ownership',            tip:'Addressed customer\'s underlying questions, reasoning behind internal policies, and why they questioned it.' },
+      { key:'criterion_3', label:'Accuracy',             tip:'Correctly clarified internal safeguards, differentiated UI restrictions vs. manual support options.' },
+      { key:'criterion_4', label:'Customer Education',   tip:'Explained business rationale (e.g. preventing accidental takeover at lower price) instead of generic statements.' },
+      { key:'criterion_5', label:'Grammar & Language',   tip:'Correct grammar, spelling (no "inconvinence"), professional sentence construction, and no repetitive closing.' }
     ] : [
       { key:'callOpening',          label:'Call Opening',          tip:'Greet warmly, state your name & company, invite the customer\'s concern — all 4 elements.' },
       { key:'acknowledgment',       label:'Acknowledgment',        tip:'"I completely understand how frustrating this must be" — empathy always comes first.' },
@@ -4774,51 +4778,113 @@ window.Admin = (() => {
       }
     }
 
-    // ── Mock Call ─────────────────────────────────────────────────
+    // ── Mock Call / Mock Ticket ───────────────────────────────────
     const mc = scores['mock-call'];
     if (mc !== null && mc !== undefined) {
-      if (mc >= 75) {
-        strengths.push(`Strong call-handling skills — professional communication with good protocol adherence (Mock Call: ${mc}%)`);
-      } else if (mc >= 60) {
-        strengths.push(`Developing call management skills — core competencies present (Mock Call: ${mc}%)`);
+      const firstSess = Object.values(details).find(lst => lst && lst.length)?.[0];
+      const traineeName = firstSess ? firstSess.traineeName : null;
+      const traineeId = firstSess ? firstSess.traineeId : null;
+      const mgr = traineeId ? (_teamAssignments[traineeId] || _getAgentManager(traineeName)) : _getAgentManager(traineeName);
+      const isTicketsTeam = TICKET_MANAGERS.has(mgr) || (details['mock-call'] && details['mock-call'].some(s => s.module === 'written-comm'));
+
+      if (isTicketsTeam) {
+        // --- TICKETS TEAM (WRITTEN COMM) INSIGHTS ---
+        if (mc >= 75) {
+          strengths.push(`Strong written communication — professional response clarity and well-structured email responses (Mock Ticket: ${mc}%)`);
+        } else if (mc >= 60) {
+          strengths.push(`Developing written skills — basic structure and professional greeting/closing present (Mock Ticket: ${mc}%)`);
+        } else {
+          priorities.push(`Mock Ticket (${mc}%) — needs focused work on tone consistency, clarity of explanations, and business rationale`);
+        }
+
+        const mcSessions = (details['mock-call'] || []).sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+        const latestMC   = mcSessions[0];
+        if (latestMC) {
+          const cr = { ...(latestMC.aiScores || {}), ...(latestMC.adminScores || {}) };
+          const strong = [], weak = [];
+          const CRIT = [
+            { key: 'criterion_0', label: 'Tone & Empathy' },
+            { key: 'criterion_1', label: 'Written Clarity' },
+            { key: 'criterion_2', label: 'Ownership' },
+            { key: 'criterion_3', label: 'Explanation Accuracy' },
+            { key: 'criterion_4', label: 'Customer Education' },
+            { key: 'criterion_5', label: 'Grammar & Language' }
+          ];
+          CRIT.forEach(({ key, label }) => {
+            if (typeof cr[key] === 'number') (cr[key] >= 4 ? strong : weak).push(label);
+          });
+          if (strong.length) strengths.push(`Mock Ticket strengths: ${strong.join(', ')}`);
+          if (weak.length)   priorities.push(`Mock Ticket areas to improve: ${weak.join(', ')}`);
+
+          if (weak.includes('Tone & Empathy')) {
+            actions.push('Tone & Empathy: Avoid generic/repetitive apologies like "We regret the inconvenience caused". Always acknowledge the customer\'s specific concern about autonomy or policy rationale to show true empathy.');
+          }
+          if (weak.includes('Written Clarity')) {
+            actions.push('Written Clarity: Avoid contradictory statements (e.g. saying "option is disabled" and later "no restriction"). Be precise: explain that the Console interface disables self-service, but support can assist manually.');
+          }
+          if (weak.includes('Ownership')) {
+            actions.push('Ownership: Directly answer the customer\'s underlying question (e.g. why the decision is made on their behalf) rather than just stating policy rules or offering manual orders.');
+          }
+          if (weak.includes('Explanation Accuracy')) {
+            actions.push('Accuracy: Ensure clear distinction between UI restrictions and backend workarounds. Explain internal rules as safeguards rather than regulatory mandates where applicable.');
+          }
+          if (weak.includes('Customer Education')) {
+            actions.push('Customer Education: Avoid generic safeguard statements. Provide a clear business rationale (e.g., "This prevents accidental acceptance of a takeover at a lower price than prevailing market rate, protecting from financial disadvantage").');
+          }
+          if (weak.includes('Grammar & Language')) {
+            actions.push('Grammar & Language: Eliminate spelling errors (such as "inconvinence"), build concise sentences, and reduce repetitive template-like closing statements.');
+          }
+        }
+
+        if (actions.length === 0 && mc < 70) {
+          actions.push('Structured Response Practice: Use the Answer → Explain Rationale → Present Options structure for every ticket reply. Peer-review 3 draft replies daily before sending.');
+        }
+
       } else {
-        priorities.push(`Mock Call (${mc}%) — needs focused work on greeting structure, empathy language and call protocol`);
-      }
-
-      // Check individual criteria
-      const mcSessions = (details['mock-call'] || []).sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
-      const latestMC   = mcSessions[0];
-      if (latestMC) {
-        const cr = { ...(latestMC.aiScores || {}), ...(latestMC.adminScores || {}) };
-        const strong = [], weak = [];
-        const CRIT = [
-          { key: 'callOpening',          label: 'Call Opening'           },
-          { key: 'acknowledgment',        label: 'Acknowledgment & Empathy' },
-          { key: 'communicationClarity',  label: 'Communication Clarity' },
-          { key: 'callEssence',           label: 'Call Essence'          },
-          { key: 'holdProcedure',         label: 'Hold Procedure'        },
-          { key: 'extraMile',             label: 'Going the Extra Mile'  },
-          { key: 'callClosing',           label: 'Call Closing'          },
-        ];
-        CRIT.forEach(({ key, label }) => {
-          if (typeof cr[key] === 'number') (cr[key] >= 4 ? strong : weak).push(label);
-        });
-        if (strong.length) strengths.push(`Mock Call strengths: ${strong.join(', ')}`);
-        if (weak.length)   priorities.push(`Mock Call areas to improve: ${weak.join(', ')}`);
-
-        if (weak.includes('Call Opening')) {
-          actions.push('Call Opening: Memorise the full greeting script until automatic — "Good [morning/afternoon], thank you for calling [Company], this is [Name], how may I assist you today?" Practise aloud 10× daily.');
+        // --- REGULAR MOCK CALL INSIGHTS ---
+        if (mc >= 75) {
+          strengths.push(`Strong call-handling skills — professional communication with good protocol adherence (Mock Call: ${mc}%)`);
+        } else if (mc >= 60) {
+          strengths.push(`Developing call management skills — core competencies present (Mock Call: ${mc}%)`);
+        } else {
+          priorities.push(`Mock Call (${mc}%) — needs focused work on greeting structure, empathy language and call protocol`);
         }
-        if (weak.includes('Acknowledgment & Empathy')) {
-          actions.push('Empathy Language: Open every customer response with an empathy phrase. Practise these until natural: "I completely understand your concern" / "I can see how this is frustrating, let me sort this for you right away."');
-        }
-        if (weak.includes('Hold Procedure')) {
-          actions.push('Hold Protocol: Always follow 3 steps — (1) Ask permission: "May I place you on a brief hold?" (2) Give reason + time: "I need 2 minutes to check this for you." (3) Thank on return: "Thank you for holding." Role-play this 5× daily with a colleague.');
-        }
-      }
 
-      if (actions.filter(a => a.startsWith('Call') || a.startsWith('Mock') || a.startsWith('Empathy') || a.startsWith('Hold')).length === 0 && mc < 70) {
-        actions.push('Mock Call Practice: Role-play 3 full mock calls per week with a colleague — one person plays the customer, the other is the agent. Record and review together for missed protocol steps.');
+        // Check individual criteria
+        const mcSessions = (details['mock-call'] || []).sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+        const latestMC   = mcSessions[0];
+        if (latestMC) {
+          const cr = { ...(latestMC.aiScores || {}), ...(latestMC.adminScores || {}) };
+          const strong = [], weak = [];
+          const CRIT = [
+            { key: 'callOpening',          label: 'Call Opening'           },
+            { key: 'acknowledgment',        label: 'Acknowledgment & Empathy' },
+            { key: 'communicationClarity',  label: 'Communication Clarity' },
+            { key: 'callEssence',           label: 'Call Essence'          },
+            { key: 'holdProcedure',         label: 'Hold Procedure'        },
+            { key: 'extraMile',             label: 'Going the Extra Mile'  },
+            { key: 'callClosing',           label: 'Call Closing'          },
+          ];
+          CRIT.forEach(({ key, label }) => {
+            if (typeof cr[key] === 'number') (cr[key] >= 4 ? strong : weak).push(label);
+          });
+          if (strong.length) strengths.push(`Mock Call strengths: ${strong.join(', ')}`);
+          if (weak.length)   priorities.push(`Mock Call areas to improve: ${weak.join(', ')}`);
+
+          if (weak.includes('Call Opening')) {
+            actions.push('Call Opening: Memorise the full greeting script until automatic — "Good [morning/afternoon], thank you for calling [Company], this is [Name], how may I assist you today?" Practise aloud 10× daily.');
+          }
+          if (weak.includes('Acknowledgment & Empathy')) {
+            actions.push('Empathy Language: Open every customer response with an empathy phrase. Practise these until natural: "I completely understand your concern" / "I can see how this is frustrating, let me sort this for you right away."');
+          }
+          if (weak.includes('Hold Procedure')) {
+            actions.push('Hold Protocol: Always follow 3 steps — (1) Ask permission: "May I place you on a brief hold?" (2) Give reason + time: "I need 2 minutes to check this for you." (3) Thank on return: "Thank you for holding." Role-play this 5× daily with a colleague.');
+          }
+        }
+
+        if (actions.filter(a => a.startsWith('Call') || a.startsWith('Mock') || a.startsWith('Empathy') || a.startsWith('Hold')).length === 0 && mc < 70) {
+          actions.push('Mock Call Practice: Role-play 3 full mock calls per week with a colleague — one person plays the customer, the other is the agent. Record and review together for missed protocol steps.');
+        }
       }
     } else {
       // No mock call score yet
@@ -5872,13 +5938,11 @@ window.Admin = (() => {
     sel.dataset.populated = '1';
   }
 
-  // ── Generic Pick & Speak re-scorer ────────────────────────────────────────
+  // ── Generic Written Comm re-scorer ────────────────────────────────────────
   // Reads the manager from #rescore-manager-select.
-  // Value "__ALL__" → score every P&S session in the DB.
+  // Value "__ALL__" → score every Written Comm session in the DB.
   // Any other value  → score only that manager's agents.
-  // Uses SpeechEngine for all 12 parameters (same as new sessions in app.js),
-  // then overrides timeManagement with the duration-based scorer (4:40 target).
-  async function reScorePickSpeak() {
+  async function reScoreWrittenComm() {
     if (typeof SpeechEngine === 'undefined') {
       toast('SpeechEngine not loaded — cannot re-score', 'error'); return;
     }
@@ -5926,7 +5990,7 @@ window.Admin = (() => {
       return false;
     }
 
-    const btn   = $('btn-rescore-ps');
+    const btn   = $('btn-rescore-wc');
     const label = specificNames.length
       ? specificNames.map(n => n.split(' ').map(w => w[0].toUpperCase() + w.slice(1)).join(' ')).join(', ')
       : (isAll ? 'All Teams' : managerName);
@@ -5936,15 +6000,14 @@ window.Admin = (() => {
     if (agentInput) agentInput.disabled = true;
 
     try {
-      const PS_MODULES = new Set(['pick-speak', 'pick-speak-general', 'pick-speak-stock']);
       const allSessions = await DB.getAll('sessions');
       const targets = allSessions.filter(s =>
-        PS_MODULES.has(s.module) &&
+        s.module === 'written-comm' &&
         matchesTarget(s.traineeName)
       );
 
       if (!targets.length) {
-        toast(`No P&S sessions found for: ${label}`, 'warning');
+        toast(`No Written Comm sessions found for: ${label}`, 'warning');
         return;
       }
 
@@ -5955,48 +6018,13 @@ window.Admin = (() => {
         if (btn) btn.textContent = `⌛ ${done + 1}/${targets.length}`;
         try {
           const duration     = session.timeTaken || 0;
-          const hasTranscript = session.transcript && session.transcript.trim().length > 20;
+          const textToScore  = session.transcript || session.writtenText || '';
           let newAiScores = null;
 
-          if (hasTranscript) {
-            // SpeechEngine: produces all 12 parameters (same as new sessions in app.js)
-            const analysis  = SpeechEngine.analyze(session.transcript, duration);
-            newAiScores     = SpeechEngine.scoreSpeech(analysis, duration);
-            newAiScores._summary = SpeechEngine.generateCoachingSummary('pick-speak', newAiScores);
-
-            // Override timeManagement with the correct duration-based scorer (4:40 target, not 2-min)
-            if (duration > 0 && typeof ClaudeEvaluator !== 'undefined') {
-              const tm = ClaudeEvaluator.scoreTimeManagement(duration);
-              newAiScores.timeManagement = tm.score;
-              // Recalculate overall after override
-              const aiKeys = ['clarity','logicalFlow','relevance','grammar','vocabulary',
-                              'sentenceVariety','fluency','pace','fillerControl',
-                              'confidence','professionalism','timeManagement'];
-              const aiSum = aiKeys.reduce((s, k) => s + (newAiScores[k] || 0), 0);
-              newAiScores.overall = parseFloat(((aiSum / (aiKeys.length * 5)) * 100).toFixed(1));
-            }
+          if (textToScore.trim().length > 0) {
+            newAiScores = SpeechEngine.scoreWriting(textToScore, duration, session.topicTitle);
+            newAiScores._summary = SpeechEngine.generateCoachingSummary('written-comm', newAiScores);
             newAiScores._method = 'js-rescore';
-
-          } else if (duration > 0) {
-            // No transcript — only fix timeManagement, preserve all other existing scores
-            const existing = session.aiScores || {};
-            if (typeof ClaudeEvaluator !== 'undefined') {
-              const tm = ClaudeEvaluator.scoreTimeManagement(duration);
-              newAiScores = {
-                ...existing,
-                timeManagement: tm.score,
-                _method: existing._method || 'time-only'
-              };
-              // Recalculate overall if we have enough data
-              const aiKeys = ['clarity','logicalFlow','relevance','grammar','vocabulary',
-                              'sentenceVariety','fluency','pace','fillerControl',
-                              'confidence','professionalism','timeManagement'];
-              const vals = aiKeys.filter(k => newAiScores[k] != null);
-              if (vals.length >= 6) {
-                const aiSum = aiKeys.reduce((s, k) => s + (newAiScores[k] || 0), 0);
-                newAiScores.overall = parseFloat(((aiSum / (aiKeys.length * 5)) * 100).toFixed(1));
-              }
-            }
           }
 
           if (newAiScores && session.id) {
@@ -6033,17 +6061,14 @@ window.Admin = (() => {
       console.error('Re-score failed:', e);
       toast('Re-score failed: ' + e.message, 'error');
     } finally {
-      if (btn)        { btn.disabled = false; btn.textContent = '🔄 Re-score P&S'; }
+      if (btn)        { btn.disabled = false; btn.textContent = '🔄 Re-score Written'; }
       if (sel)          sel.disabled = false;
       if (agentInput)   agentInput.disabled = false;
     }
   }
 
-  // ── Reset P&S scores to pre-re-score originals ────────────────────────────
-  // Reads same dropdown / agent-names input as reScorePickSpeak.
-  // For each matching session that has aiScores._prev, restores aiScores = _prev.
-  // Sessions that were never re-scored (no _prev) are skipped.
-  async function resetPickSpeakScores() {
+  // ── Reset Written Comm scores to pre-re-score originals ──────────────────
+  async function resetWrittenScores() {
     const sel        = $('rescore-manager-select');
     const agentInput = $('rescore-agent-names');
     const managerName = sel ? sel.value : '';
@@ -6082,26 +6107,24 @@ window.Admin = (() => {
 
     if (!confirm(`Reset AI scores back to original (pre-re-score) values for: ${label}?\n\nThis cannot be undone.`)) return;
 
-    const btn = $('btn-reset-ps');
+    const btn = $('btn-reset-wc');
     if (btn) { btn.disabled = true; btn.textContent = '⌛ Resetting…'; }
     if (sel) sel.disabled = true;
     if (agentInput) agentInput.disabled = true;
 
     try {
-      const PS_MODULES  = new Set(['pick-speak', 'pick-speak-general', 'pick-speak-stock']);
       const allSessions = await DB.getAll('sessions');
 
-      // Target all matching P&S sessions — those with _prev (backup exists) AND
-      // those without _prev but marked as 'claude-strict' (re-scored before backup feature)
+      // Target all matching Written Comm sessions — those with _prev (backup exists) OR js-rescore method
       const targets = allSessions.filter(s =>
-        PS_MODULES.has(s.module) &&
+        s.module === 'written-comm' &&
         matchesTarget(s.traineeName) &&
         s.aiScores &&
-        (s.aiScores._prev || s.aiScores._method === 'claude-strict')
+        (s.aiScores._prev || s.aiScores._method === 'js-rescore')
       );
 
       if (!targets.length) {
-        toast(`No re-scored P&S sessions found for: ${label} — nothing to reset`, 'warning');
+        toast(`No re-scored Written Comm sessions found for: ${label} — nothing to reset`, 'warning');
         return;
       }
 
@@ -6116,22 +6139,11 @@ window.Admin = (() => {
             // Backup exists — restore directly (strip _prev so it's a clean object)
             const { _prev, ...originalScores } = session.aiScores._prev;
             restoredScores = originalScores;
-          } else if (session.transcript && session.transcript.trim().length > 20) {
-            // No backup — re-score with SpeechEngine (all 12 params) + corrected timeManagement
+          } else if (session.transcript || session.writtenText) {
+            // No backup — re-score with standard SpeechEngine.scoreWriting
             const duration  = session.timeTaken || 0;
-            const analysis  = SpeechEngine.analyze(session.transcript, duration);
-            restoredScores  = SpeechEngine.scoreSpeech(analysis, duration);
-            restoredScores._summary = SpeechEngine.generateCoachingSummary('pick-speak', restoredScores);
-            if (duration > 0 && typeof ClaudeEvaluator !== 'undefined') {
-              const tm = ClaudeEvaluator.scoreTimeManagement(duration);
-              restoredScores.timeManagement = tm.score;
-              const aiKeys = ['clarity','logicalFlow','relevance','grammar','vocabulary',
-                              'sentenceVariety','fluency','pace','fillerControl',
-                              'confidence','professionalism','timeManagement'];
-              const aiSum = aiKeys.reduce((s, k) => s + (restoredScores[k] || 0), 0);
-              restoredScores.overall = parseFloat(((aiSum / (aiKeys.length * 5)) * 100).toFixed(1));
-            }
-            restoredScores._method = 'js-reset';
+            restoredScores  = SpeechEngine.scoreWriting(session.transcript || session.writtenText || '', duration, session.topicTitle);
+            restoredScores._summary = SpeechEngine.generateCoachingSummary('written-comm', restoredScores);
           }
 
           if (restoredScores && session.id) {
@@ -6148,7 +6160,7 @@ window.Admin = (() => {
 
       if (errors.length) {
         console.error('Reset errors:', errors);
-        toast(`Reset: ${restored} restored, ${errors.length} failed — see console`, 'warning');
+        toast(`${label}: ${restored} restored, ${errors.length} failed — see console`, 'warning');
       } else {
         toast(`Scores reset — ${restored}/${targets.length} sessions restored (${label})`, 'success');
       }
@@ -7142,8 +7154,8 @@ window.Admin = (() => {
     copyLetter,
     downloadTraineePPT,
     downloadMasterExcel,
-    reScorePickSpeak,
-    resetPickSpeakScores,
+    reScoreWrittenComm,
+    resetWrittenScores,
     // Assessments archive / multi-select / manager view
     switchAssessmentView,
     toggleSessionCheckbox,

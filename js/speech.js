@@ -274,30 +274,137 @@ const SpeechEngine = (() => {
     return scores;
   }
 
-  function scoreWriting(text, durationSeconds) {
+  function scoreWriting(text, durationSeconds, topicTitle) {
     const analysis = analyze(text, durationSeconds);
     const scores = {};
+    const lowerText = (text || '').toLowerCase();
+    const titleLower = (topicTitle || '').toLowerCase();
 
-    // Clarity: based on avg sentence length (15-25 words is ideal)
+    // --- HEURISTICS BASE SCORES ---
+    // 1. Tone & Empathy (criterion_0): count empathy words/phrases
+    const empathyPhrases = ['sorry', 'apologize', 'apologies', 'understand', 'inconvenience', 'concern', 'regret'];
+    let empathyCount = 0;
+    empathyPhrases.forEach(w => { if (lowerText.includes(w)) empathyCount++; });
+    let toneScore = empathyCount >= 3 ? 5 : empathyCount === 2 ? 4 : empathyCount === 1 ? 3 : 2;
+
+    // 2. Clarity (criterion_1): based on avg sentence length (12-25 words is ideal)
     const asl = analysis.avgWordsPerSentence;
-    if (asl >= 12 && asl <= 25) scores.clarity = 5;
-    else if (asl >= 8 && asl <= 30) scores.clarity = 4;
-    else if (asl >= 5 && asl <= 35) scores.clarity = 3;
-    else scores.clarity = 2;
+    let clarityScore = 2;
+    if (asl >= 12 && asl <= 25) clarityScore = 5;
+    else if (asl >= 8 && asl <= 30) clarityScore = 4;
+    else if (asl >= 5 && asl <= 35) clarityScore = 3;
 
-    // Structure: based on sentence count and word count
-    if (analysis.sentenceCount >= 5 && analysis.wordCount >= 80) scores.structure = 5;
-    else if (analysis.sentenceCount >= 3 && analysis.wordCount >= 50) scores.structure = 4;
-    else if (analysis.sentenceCount >= 2 && analysis.wordCount >= 30) scores.structure = 3;
-    else scores.structure = 2;
+    // 3. Ownership (criterion_2): based on sentence count and word count
+    let ownershipScore = 2;
+    if (analysis.sentenceCount >= 5 && analysis.wordCount >= 80) ownershipScore = 5;
+    else if (analysis.sentenceCount >= 3 && analysis.wordCount >= 50) ownershipScore = 4;
+    else if (analysis.sentenceCount >= 2 && analysis.wordCount >= 30) ownershipScore = 3;
 
-    // Tone: based on positive word usage
-    if (analysis.positiveCount >= 5) scores.tone = 5;
-    else if (analysis.positiveCount >= 3) scores.tone = 4;
-    else if (analysis.positiveCount >= 1) scores.tone = 3;
-    else scores.tone = 2;
+    // 4. Accuracy (criterion_3): positive helpful language / sentence variety
+    let accuracyScore = 2;
+    if (analysis.positiveCount >= 4) accuracyScore = 5;
+    else if (analysis.positiveCount >= 2) accuracyScore = 4;
+    else if (analysis.positiveCount >= 1) accuracyScore = 3;
 
-    scores.overall = parseFloat(((scores.clarity + scores.structure + scores.tone) / 3).toFixed(1));
+    // 5. Customer Education (criterion_4): business explanatory phrases
+    const explanatoryWords = ['because', 'due to', 'as', 'since', 'policy', 'tat', 'working days', 'safeguard', 'ensure', 'prevent'];
+    let explanationCount = 0;
+    explanatoryWords.forEach(w => { if (lowerText.includes(w)) explanationCount++; });
+    let edScore = explanationCount >= 3 ? 5 : explanationCount === 2 ? 4 : explanationCount === 1 ? 3 : 2;
+
+    // 6. Grammar & Language (criterion_5): vocabulary and grammar indicator (using uniqueWordRatio)
+    const uvr = analysis.uniqueWordRatio;
+    let langScore = 2;
+    if (uvr >= 0.7 && analysis.wordCount >= 50) langScore = 5;
+    else if (uvr >= 0.6 && analysis.wordCount >= 40) langScore = 4;
+    else if (uvr >= 0.5) langScore = 3;
+
+    // --- GENERAL STRICT PUNISHMENTS ---
+    // Spelling mistake "inconvinence" or "inconveninece"
+    if (lowerText.includes('inconvinence') || lowerText.includes('inconveninece')) {
+      langScore = Math.min(langScore, 2);
+      toneScore = Math.min(toneScore, 2);
+    }
+    // Repetitive canned empathy "regret the inconvenience caused"
+    if (lowerText.includes('regret the inconvenience caused') || lowerText.includes('regret the inconvenience')) {
+      toneScore = Math.min(toneScore, 3);
+    }
+    // Contradictions check: saying "disabled" or "blocked" and also saying "no restriction" or "unrestricted"
+    if ((lowerText.includes('disabled') || lowerText.includes('block')) && 
+        (lowerText.includes('no restriction') || lowerText.includes('without restriction'))) {
+      clarityScore = Math.min(clarityScore, 2);
+    }
+
+    // --- TOPIC-SPECIFIC STRICT EVALUATION ---
+    if (titleLower.includes('takeover') || titleLower.includes('insist')) {
+      // Topic: Takeover Offer – Client Insists Despite Higher Market Price
+      // Empathy: must address decision/autonomy
+      if (!lowerText.includes('decision') && !lowerText.includes('autonomy') && !lowerText.includes('behalf')) {
+        toneScore = Math.min(toneScore, 3);
+      }
+      // Clarity: must mention support/ticket/manual option
+      if (!lowerText.includes('support') && !lowerText.includes('ticket') && !lowerText.includes('manual') && !lowerText.includes('contact')) {
+        clarityScore = Math.min(clarityScore, 2);
+      }
+      // Ownership: must explain policy reason (preventing accidental acceptance at lower price / financial disadvantage)
+      const hasReason = lowerText.includes('prevent') || lowerText.includes('safeguard') || lowerText.includes('disadvantage') || lowerText.includes('lower than');
+      if (!hasReason) {
+        ownershipScore = Math.min(ownershipScore, 2);
+      }
+      // Accuracy: internal policy vs regulatory mandate
+      if (lowerText.includes('regulatory') || lowerText.includes('government rule') || lowerText.includes('sebi mandate')) {
+        accuracyScore = Math.min(accuracyScore, 2);
+      } else if (!lowerText.includes('internal') && !lowerText.includes('safeguard') && !lowerText.includes('policy')) {
+        accuracyScore = Math.min(accuracyScore, 3);
+      }
+      // Customer Education: financial disadvantage explanation
+      if (!lowerText.includes('financial') && !lowerText.includes('loss') && !lowerText.includes('disadvantage') && !lowerText.includes('prevailing')) {
+        edScore = Math.min(edScore, 2);
+      }
+    } else if (titleLower.includes('name change') || titleLower.includes('gazette')) {
+      // Topic: Name Change Dispute – Gazette Requirement
+      if (!lowerText.includes('gazette')) {
+        ownershipScore = Math.min(ownershipScore, 1);
+        clarityScore = Math.min(clarityScore, 2);
+      }
+      if (!lowerText.includes('sebi') && !lowerText.includes('cdsl') && !lowerText.includes('nsdl') && !lowerText.includes('depository') && !lowerText.includes('regulation')) {
+        edScore = Math.min(edScore, 2);
+      }
+    } else if (titleLower.includes('nav date') || titleLower.includes('dispute') || titleLower.includes('aggregator')) {
+      // Topic: NAV Date Dispute (Payment Aggregator Delay)
+      if (lowerText.includes('refund') && (lowerText.includes('will refund') || lowerText.includes('process refund') || lowerText.includes('compensate'))) {
+        // Promising refund when not allowed is a critical accuracy failure
+        accuracyScore = Math.min(accuracyScore, 1);
+      }
+      if (!lowerText.includes('sebi') && !lowerText.includes('realiz') && !lowerText.includes('amc')) {
+        edScore = Math.min(edScore, 2);
+      }
+      if (!lowerText.includes('audit') && !lowerText.includes('gateway') && !lowerText.includes('log') && !lowerText.includes('tat')) {
+        ownershipScore = Math.min(ownershipScore, 2);
+      }
+    } else if (titleLower.includes('ncrp') || titleLower.includes('lien')) {
+      // Topic: NCRP Lien – Delayed Payment Charges on Frozen Funds
+      if (!lowerText.includes('cyber') && !lowerText.includes('police') && !lowerText.includes('ncrp') && !lowerText.includes('directive')) {
+        edScore = Math.min(edScore, 2);
+      }
+      if (!lowerText.includes('noc')) {
+        ownershipScore = Math.min(ownershipScore, 3);
+      }
+      if (!lowerText.includes('charges') && !lowerText.includes('interest') && !lowerText.includes('debit')) {
+        accuracyScore = Math.min(accuracyScore, 3);
+      }
+    }
+
+    scores.criterion_0 = toneScore;
+    scores.criterion_1 = clarityScore;
+    scores.criterion_2 = ownershipScore;
+    scores.criterion_3 = accuracyScore;
+    scores.criterion_4 = edScore;
+    scores.criterion_5 = langScore;
+
+    // Overall: average of the 6 criteria out of 5 (so overall is <= 5, compatible with normalization)
+    const sum = scores.criterion_0 + scores.criterion_1 + scores.criterion_2 + scores.criterion_3 + scores.criterion_4 + scores.criterion_5;
+    scores.overall = parseFloat((sum / 6).toFixed(1));
     return scores;
   }
 
@@ -429,21 +536,26 @@ const SpeechEngine = (() => {
   }
 
   function _writingCoach(scores, title) {
-    // Covers both AI score keys (clarity/structure/tone) and admin score keys (criterion_0–4)
+    // Covers both legacy AI score keys (clarity/structure/tone) and the new 6 parameters
     const LABELS = {
       clarity:     'Clarity',        structure:    'Structure',  tone:         'Tone',
-      criterion_0: 'Clarity',        criterion_1:  'Structure',  criterion_2:  'Grammar',
-      criterion_3: 'Tone',           criterion_4:  'Professionalism'
+      criterion_0: 'Tone & Empathy',
+      criterion_1: 'Clarity',
+      criterion_2: 'Ownership',
+      criterion_3: 'Accuracy',
+      criterion_4: 'Customer Education',
+      criterion_5: 'Grammar & Language'
     };
     const ADVICE = {
       clarity:     'Use shorter sentences and active voice. Each paragraph should have one clear idea. Avoid ambiguous pronouns — state who did what explicitly.',
       structure:   'Follow a clear opening-body-close format. Use paragraph breaks and bullet points where appropriate to improve readability.',
       tone:        'Match your tone to your audience — professional but approachable. Avoid being too casual (slang) or overly formal (stiff language).',
-      criterion_0: 'Use shorter sentences and active voice. Each paragraph should have one clear idea. Avoid ambiguous pronouns — state who did what explicitly.',
-      criterion_1: 'Follow a clear opening-body-close format. Use paragraph breaks and bullet points where appropriate to improve readability.',
-      criterion_2: 'Review grammar rules for tense consistency and subject-verb agreement. Read your writing aloud to catch awkward phrasing before submitting.',
-      criterion_3: 'Match your tone to your audience — professional but approachable. Avoid slang, contractions in formal writing, and overly stiff language.',
-      criterion_4: 'Use formal language throughout. Begin with a clear subject line or heading, maintain structured paragraphs, and close with a courteous sign-off.'
+      criterion_0: 'Acknowledge the customer\'s specific concern and policy rationale with empathy. Avoid repetitive, canned apologetic phrases.',
+      criterion_1: 'Express ideas clearly and consistently. Avoid contradictions like saying an option is disabled and later stating there is no restriction.',
+      criterion_2: 'Answer the customer\'s actual underlying questions. Take full ownership of why a policy is in place rather than just stating rules.',
+      criterion_3: 'Ensure technical accuracy in your explanations. Clearly differentiate UI/Console limitations from manual support options.',
+      criterion_4: 'Educate the customer with strong business rationale. Explain how policy safeguards prevent unintended financial disadvantages.',
+      criterion_5: 'Maintain high language quality. Check for spelling errors (e.g. "inconvenience"), avoid run-on sentences, and reduce repetitive closings.'
     };
     return _buildSummary(scores, LABELS, ADVICE, title);
   }

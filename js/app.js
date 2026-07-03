@@ -1985,7 +1985,7 @@ const App = (() => {
       .join('\n\n');
 
     const analysis = SpeechEngine.analyze(traineeResponsesCombined, duration);
-    const aiScores = SpeechEngine.scoreWriting(traineeResponsesCombined, duration);
+    const aiScores = SpeechEngine.scoreWriting(traineeResponsesCombined, duration, _currentTopic?.title);
     aiScores._summary = SpeechEngine.generateCoachingSummary('written-comm', aiScores);
 
     try {
@@ -2074,7 +2074,7 @@ const App = (() => {
     clearInterval(_wcTimerInterval);
     const duration = Math.floor((Date.now() - _wcStartTime) / 1000);
     const analysis = SpeechEngine.analyze(traineeText, duration);
-    const aiScores = SpeechEngine.scoreWriting(traineeText, duration);
+    const aiScores = SpeechEngine.scoreWriting(traineeText, duration, _currentTopic?.title);
     aiScores._summary = SpeechEngine.generateCoachingSummary('written-comm', aiScores);
 
     try {
@@ -2106,7 +2106,14 @@ const App = (() => {
   function showWrittenCommResults(scores, text, analysis, duration) {
     showStep('written-comm', 'wc-step-results');
 
-    const labels = { clarity: 'Clarity', structure: 'Structure', tone: 'Tone' };
+    const labels = {
+      criterion_0: 'Tone & Empathy',
+      criterion_1: 'Clarity',
+      criterion_2: 'Ownership',
+      criterion_3: 'Accuracy',
+      criterion_4: 'Customer Education',
+      criterion_5: 'Grammar & Language'
+    };
     renderAIScores('wc-ai-scores', scores, labels);
 
     // Pills for writing

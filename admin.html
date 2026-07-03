@@ -236,16 +236,16 @@
             placeholder="Specific agents (optional, comma-separated)"
             style="border:1px solid #f97316;border-radius:6px;padding:0.35rem 0.7rem;font-size:0.82rem;color:#7c2d12;background:#fff7ed;width:260px"
             title="Leave blank to re-score the whole selected team. Enter comma-separated names to target specific agents only." />
-          <button id="btn-rescore-ps" class="btn-ghost"
+          <button id="btn-rescore-wc" class="btn-ghost"
             style="font-size:0.82rem;padding:0.45rem 1rem;white-space:nowrap;border-color:#f97316;color:#c2410c"
-            onclick="Admin.reScorePickSpeak()"
-            title="Re-evaluate P&S sessions with strict grammar/filler/time criteria">
-            🔄 Re-score P&amp;S
+            onclick="Admin.reScoreWrittenComm()"
+            title="Re-evaluate Written Communication sessions with the new parameters">
+            🔄 Re-score Written
           </button>
-          <button id="btn-reset-ps" class="btn-ghost"
+          <button id="btn-reset-wc" class="btn-ghost"
             style="font-size:0.82rem;padding:0.45rem 1rem;white-space:nowrap;border-color:#6b7280;color:#374151"
-            onclick="Admin.resetPickSpeakScores()"
-            title="Restore AI scores to the original values before any re-scoring was done">
+            onclick="Admin.resetWrittenScores()"
+            title="Restore Written Comm AI scores to the original values before any re-scoring was done">
             ↩ Reset Scores
           </button>
         </div>
@@ -761,9 +761,9 @@
 <script src="js/db.js?v=13"></script>
 <script src="js/db-patch.js?v=2"></script>
 <script src="js/recorder.js?v=6"></script>
-<script src="js/speech.js?v=6"></script>
+<script src="js/speech.js?v=8"></script>
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <script src="js/claude.js?v=17"></script>
-<script src="js/admin.js?v=63"></script>
+<script src="js/admin.js?v=65"></script>
 </body>
 </html>
