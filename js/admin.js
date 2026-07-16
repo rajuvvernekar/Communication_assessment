@@ -85,7 +85,7 @@ const MASTER_SCORES = {
   "himanshu singh rawat":            { selfAssessment: 9.081,  aiAudit: 3.865,  psScore:  9.86, lisScore: 14.20, mcScore: 11.00, gramScore:  9.25, totalScore: 57.26 },
   "aldrich frewin dsouza":           { selfAssessment: 8.649,  aiAudit: 3.800,  psScore:  null, lisScore:  null, mcScore:  null, gramScore:  null, totalScore: 12.45 },
   "surya hendry":                    { selfAssessment: 8.324,  aiAudit: 0.360,  psScore: 14.00, lisScore: 13.80, mcScore: 11.00, gramScore:  9.50, totalScore: 56.98 },
-  "mohd altaf bhutta":               { selfAssessment: 7.297,  aiAudit: 3.945,  psScore:  null, lisScore:  null, mcScore:  null, gramScore:  null, totalScore: 11.24 },
+  "mohd altaf bhutta":               { selfAssessment: 7.297,  aiAudit: 3.945,  psScore: 13.34, lisScore: 13.00, mcScore: 16.80, gramScore: 13.00, totalScore: 67.38 },
   "ashish yadav":                    { selfAssessment: 7.297,  aiAudit: 3.890,  psScore: 12.67, lisScore: 15.60, mcScore: 10.50, gramScore: 10.00, totalScore: 59.96 },
   "jayanthi maniram":                { selfAssessment: 7.676,  aiAudit: 3.965,  psScore: 12.66, lisScore: 14.20, mcScore:  8.50, gramScore:  7.00, totalScore: 54.00 },
   "tulsi shankar solanki":           { selfAssessment: 8.973,  aiAudit: 3.925,  psScore: 11.20, lisScore: 16.60, mcScore: 12.00, gramScore: 10.00, totalScore: 62.70 },
@@ -279,7 +279,7 @@ const MASTER_SCORES = {
   "adarsh singh gautam":             { selfAssessment: 7.945946, aiAudit: 4.05,  psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 12.0 },
   "ankita das":                      { selfAssessment: 9.135135, aiAudit: 3.96,  psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 13.10 },
   "girish a":                        { selfAssessment: 8.27027,  aiAudit: 3.825, psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 12.10 },
-  "gonegondla karanam venkata karthik": { selfAssessment: 8.216216, aiAudit: 3.725, psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 11.94 },
+  "gonegondla karanam venkata karthik": { selfAssessment: 8.216216, aiAudit: 3.725, psScore: 12.80, lisScore: 17.80, mcScore: 18.00, gramScore: 13.50, totalScore: 74.04 },
   "keyur p shah":                    { selfAssessment: 8.594595, aiAudit: 3.67,  psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 12.26 },
   "m kiran":                         { selfAssessment: 5.72973,  aiAudit: 3.725, psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 9.45 },
   "saqlain khalique shaikh":         { selfAssessment: 8.108108, aiAudit: 3.85,  psScore: null, lisScore: null, mcScore: null, gramScore: null, totalScore: 11.96 },
@@ -491,6 +491,9 @@ function _resolveAlias(name) {
 // Strategy 4: first+last token match — handles middle-name variants and split compound
 //             first names (e.g. "Sai Vishal Balse" ↔ "Saivishal Vinod Balse")
 function getMasterScores(name) {
+  if (window.Admin && window.Admin.isComm360Deleted && window.Admin.isComm360Deleted()) {
+    return null;
+  }
   if (!name) return null;
   const resolved = _resolveAlias(name);
   const key = resolved.trim().toLowerCase();
@@ -585,6 +588,7 @@ window.Admin = (() => {
   let _currentManagerDrill   = null;       // null = manager summary, string = drill into that manager
   let _agentManagerIndex     = null;       // built lazily from _MANAGER_AGENT_MAP
   let _selectedManagerNames  = new Set();  // manager names with checkboxes checked
+  let _comm360ReportDeleted  = false;
 
   // Convert legacy overall scores stored as raw /5 to /100
   function normalizeOverall(overall) {
@@ -887,6 +891,12 @@ window.Admin = (() => {
   // ---- App Init ----
   async function initApp() {
     bindSidebarNav();
+    try {
+      const deletedRec = await DB.get('settings', 'comm360ReportDeleted');
+      _comm360ReportDeleted = deletedRec && deletedRec.value === 'true';
+    } catch (e) {
+      console.warn('Failed to load comm360ReportDeleted setting:', e);
+    }
     await loadDashboard();
     await updatePendingBadge();
   }
@@ -4291,6 +4301,10 @@ window.Admin = (() => {
     if (btn) { btn.disabled = true; btn.textContent = '⌛ Generating…'; }
 
     try {
+      if (_comm360ReportDeleted) {
+        toast('No report records to export.', 'error');
+        return;
+      }
       const r2 = v => v != null ? parseFloat(parseFloat(v).toFixed(2)) : null;
 
       // Fetch all trainees and their sessions from DB for live scores
@@ -4695,6 +4709,8 @@ window.Admin = (() => {
       for (const s of sessions) await DB.del('sessions', s.id);
       const trainees = await DB.getAll('trainees');
       for (const t of trainees) await DB.del('trainees', t.id);
+      await DB.del('settings', 'comm360ReportDeleted');
+      await DB.del('settings', 'preservedReportScores');
       sessionStorage.removeItem('adminAuth');
       toast('All data cleared. Reloading...', '');
       setTimeout(() => location.reload(), 1200);
@@ -5773,6 +5789,9 @@ window.Admin = (() => {
   }
 
   async function _buildComm360Rows() {
+    if (_comm360ReportDeleted) {
+      return [];
+    }
     const liveMap = await _buildLiveScoreMap();
     const rows = [];
     Object.entries(_MANAGER_AGENT_MAP).forEach(([manager, agents]) => {
@@ -5860,6 +5879,19 @@ window.Admin = (() => {
     const count = $('comm360-count');
     if (!tbody) return;
 
+    const delBtn = $('btn-delete-comm360');
+    if (delBtn) {
+      if (_comm360ReportDeleted) {
+        delBtn.textContent = '🔄 Restore Report';
+        delBtn.className = 'btn-ghost';
+        delBtn.onclick = () => Admin.restoreEntireComm360Report();
+      } else {
+        delBtn.textContent = '🗑 Delete Report';
+        delBtn.className = 'btn-ghost btn-ghost-danger';
+        delBtn.onclick = () => Admin.deleteEntireComm360Report();
+      }
+    }
+
     if (!_comm360Filtered.length) {
       tbody.innerHTML = '<tr><td colspan="11" class="empty-state">No records found.</td></tr>';
       if (count) count.textContent = '';
@@ -5922,6 +5954,56 @@ window.Admin = (() => {
 
     tbody.innerHTML = html;
     if (count) count.textContent = `Showing ${_comm360Filtered.length} of ${_comm360AllRows.length} agent${_comm360AllRows.length !== 1 ? 's' : ''}`;
+  }
+
+
+  async function deleteEntireComm360Report() {
+    const step1 = confirm("⚠️ Are you sure you want to delete the ENTIRE Comm360 Master Report?\n\nThis will clear all historical master scores and preserved scores. (Live assessment sessions in the DB will remain intact).");
+    if (!step1) return;
+
+    const pin = prompt("Enter Admin Password to confirm deletion of the Comm360 Report:");
+    if (pin === null) return;
+
+    const pwRec = await DB.get('settings', 'adminPassword');
+    const correctPw = pwRec ? pwRec.value : 'admin123';
+    if (pin !== correctPw) {
+      alert("Invalid password.");
+      return;
+    }
+
+    try {
+      _comm360ReportDeleted = true;
+      await DB.put('settings', { key: 'comm360ReportDeleted', value: 'true' });
+      await DB.put('settings', { key: 'preservedReportScores', value: '{}' });
+      
+      _comm360AllRows = [];
+      _comm360Filtered = [];
+      _renderComm360Table();
+      
+      toast('Comm360 Master Report deleted.', 'success');
+    } catch (e) {
+      console.error('Delete comm360 report failed:', e);
+      toast('Deletion failed: ' + e.message, 'error');
+    }
+  }
+
+  async function restoreEntireComm360Report() {
+    const step1 = confirm("🔄 Are you sure you want to restore the Comm360 Master Report default scores?");
+    if (!step1) return;
+
+    try {
+      _comm360ReportDeleted = false;
+      await DB.put('settings', { key: 'comm360ReportDeleted', value: 'false' });
+      
+      _comm360AllRows = await _buildComm360Rows();
+      _comm360Filtered = [..._comm360AllRows];
+      _renderComm360Table();
+      
+      toast('Comm360 Master Report restored.', 'success');
+    } catch (e) {
+      console.error('Restore comm360 report failed:', e);
+      toast('Restoration failed: ' + e.message, 'error');
+    }
   }
 
 
@@ -7193,6 +7275,9 @@ window.Admin = (() => {
     // Comm360 Master Report
     filterComm360,
     searchComm360,
+    isComm360Deleted: () => _comm360ReportDeleted,
+    deleteEntireComm360Report,
+    restoreEntireComm360Report,
     // Manager Assessments
     loadMgrAssessments,
     renderMgrAssessments,
