@@ -6822,7 +6822,7 @@ window.Admin = (() => {
         });
       }
       if (!silent) toast('✅ NRI Stock Market topics seeded! Sets are now live.', 'success');
-      await await seedManagerTopics();
+      await seedManagerTopics();
     renderTopicsList();
     } catch (e) {
       if (!silent) toast('❌ Seed failed: ' + e.message, 'error');
@@ -7257,7 +7257,7 @@ window.Admin = (() => {
     try {
       await DB.forceReSeed();
       toast('Database defaults successfully re-seeded!', 'success');
-      await await seedManagerTopics();
+      await seedManagerTopics();
     renderTopicsList();
     } catch (e) {
       console.error('Force seed failed:', e);
