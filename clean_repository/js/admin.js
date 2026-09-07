@@ -775,11 +775,11 @@ window.Admin = (() => {
   // ---- Topics ----
   
   // ── Auto-seed Manager Topics into DB ───────────────────────
+    // ── Auto-seed Manager Topics into DB (Item-by-item verification) ───────────────────────
   async function seedManagerTopics() {
     try {
       const allTopics = await DB.getAll('topics');
-      const mgrTopics = allTopics.filter(t => t.module && t.module.startsWith('mgr-'));
-      if (mgrTopics.length >= 10) return; // Already seeded
+      const existingIds = new Set(allTopics.map(t => t.id));
 
       const MANAGER_SCENARIOS_POOL = [
         // Situation Room
@@ -820,9 +820,10 @@ window.Admin = (() => {
       ];
 
       for (const item of MANAGER_SCENARIOS_POOL) {
-        await DB.put('topics', item);
+        if (!existingIds.has(item.id)) {
+          await DB.put('topics', item);
+        }
       }
-      console.log(`Seeded ${MANAGER_SCENARIOS_POOL.length} manager topics into DB.`);
     } catch (e) {
       console.warn('seedManagerTopics failed:', e);
     }
@@ -844,12 +845,12 @@ window.Admin = (() => {
     renderTopicsList();
 
     document.querySelectorAll('.tab-btn').forEach(btn => {
-      btn.onclick = () => {
+      btn.onclick = async () => {
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         _topicsFilter = btn.dataset.module;
         await seedManagerTopics();
-    renderTopicsList();
+        renderTopicsList();
       };
     });
 
