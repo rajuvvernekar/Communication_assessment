@@ -1,0 +1,6825 @@
+'use strict';
+
+if (window.location.search.includes('mockDialogs=true')) {
+  window.confirm = function(msg) {
+    console.log('[Mock Confirm]', msg);
+    if (msg.includes('Delete') || msg.includes('delete') || msg.includes('clear') || msg.includes('Clear')) {
+      return true;
+    }
+    return false; // preserve in reports
+  };
+  window.prompt = function(msg) {
+    console.log('[Mock Prompt]', msg);
+    return 'admin123';
+  };
+}
+
+// ── Master score lookup — Source: "Communicate 360 Master Sheet (1).xlsx" ──
+// selfAssessment / aiAudit = weighted component scores
+// psScore=Pick&Speak/20, lisScore=Listening/20, mcScore=MockCall/20, gramScore=Grammar/25
+// totalScore = grand total out of 100 (all components weighted and summed)
+// v35: added individual module scores + 2 new aliases (suma manjunath, saneeth)
+// v36: replaced AI Audit nav/section with Comm360 Master Report (team filter + full scores table)
+// v38b: Vishal Shivsahay Singh gramScore updated (39.25/100 → 9.8125/25, total 22.09)
+// v39:  Per-turn voice recording for bot script turns in mock call topics
+// v41:  Fix botScriptAudio save — upload blobs to Storage, embed URLs in bot_script jsonb
+// v49:  reScoreSharuqPickSpeak — fuzzy name match, pass timeTaken, handle no-transcript sessions
+// v50:  reScoreSharuqPickSpeak — use DB.patch (ai_scores only) to avoid Supabase column errors
+// v51:  Final Score column: P&S keeps avg logic; mock/grammar/listening = admin final (AI fallback, no average)
+// v52:  reScorePickSpeak — generic for any manager or all teams; stricter Claude criteria in claude.js v14
+// v53:  reScorePickSpeak — specific agent names input; bypasses team filter when names are typed
+// v54:  resetPickSpeakScores — restore original scores from _prev backup stored inside aiScores
+// v55:  resetPickSpeakScores — balanced fallback: re-score with original criteria when no _prev exists
+// v56:  reScorePickSpeak — use SpeechEngine (all 12 params) + corrected timeManagement; no Claude API
+// v57:  Manager Assessments section: loadMgrAssessments, renderMgrAssessments, openMgrScoreModal, saveMgrScore
+// v58: Manager topic tabs in admin Topics section
+// v59: openMgrScoreModal — Situation Room two-section display + SR-specific criteria
+// v60: Fix "previous batch" + wrong scores for Anoop/Viraj/Sharuq teams:
+//      - getMasterScores: added strategy 4 — first+last token prefix match
+//      - matchFn: added same first+last token prefix match as pass 3
+//      - _TRAINEE_ALIASES: added 30+ entries for all 3 teams covering middle-name drops,
+//        compound-first-name splits (Sai Vishal↔Saivishal), and spelling variants
+const MASTER_SCORES = {};
+
+// Maps the name as stored in the DB (trainee.name) → canonical name used in _MANAGER_AGENT_MAP.
+// Keys are lowercase. Value is the correct canonical name (mixed-case, matching the map).
+const _TRAINEE_ALIASES = {};
+
+// Resolve a raw DB/session name to its canonical map name (if an alias exists).
+function _resolveAlias(name) {
+  if (!name) return name;
+  return _TRAINEE_ALIASES[name.trim().toLowerCase()] || name;
+}
+
+// Look up master scores by trainee name (case-insensitive; resolves aliases automatically).
+// Strategy 1: exact lowercase key
+// Strategy 2: compact (remove spaces)
+// Strategy 3: full alnum (strip non-alphanumeric)
+// Strategy 4: first+last token match — handles middle-name variants and split compound
+//             first names (e.g. "Sai Vishal Balse" ↔ "Saivishal Vinod Balse")
+function getMasterScores(name) {
+  if (window.Admin && window.Admin.isComm360Deleted && window.Admin.isComm360Deleted()) {
+    return null;
+  }
+  if (!name) return null;
+  const resolved = _resolveAlias(name);
+  const key = resolved.trim().toLowerCase();
+  const alnum = s => s.replace(/[^a-z0-9]/g, '');
+
+  if (MASTER_SCORES[key]) return MASTER_SCORES[key];
+
+  const compact = key.replace(/\s+/g, '');
+  const hit2 = Object.entries(MASTER_SCORES).find(([k]) => k.replace(/\s+/g, '') === compact)?.[1];
+  if (hit2) return hit2;
+
+  const normKey = alnum(key);
+  if (!normKey) return null;
+  const hit3 = Object.entries(MASTER_SCORES).find(([k]) => alnum(k) === normKey)?.[1];
+  if (hit3) return hit3;
+
+  // Strategy 4: first-token prefix + exact last-token match
+  // Catches "Sai Vishal Balse" → "Saivishal Vinod Balse",
+  //         "Ashwin Shet"      → "Ashwinkumar A Shet",
+  //         "Vaibhavi Balse"   → "Vaibhavi Vinod Balse", etc.
+  const inputToks = key.split(/\s+/).filter(Boolean);
+  if (inputToks.length >= 2) {
+    const firstIn = alnum(inputToks[0]);
+    const lastIn  = alnum(inputToks[inputToks.length - 1]);
+    if (firstIn && lastIn) {
+      const hit4 = Object.entries(MASTER_SCORES).find(([k]) => {
+        const kToks = k.split(/\s+/).filter(Boolean);
+        if (kToks.length < 2) return false;
+        const firstK = alnum(kToks[0]);
+        const lastK  = alnum(kToks[kToks.length - 1]);
+        if (lastIn !== lastK) return false;
+        const minLen = Math.min(firstIn.length, firstK.length);
+        if (minLen < 3) return false;
+        return firstIn === firstK || firstK.startsWith(firstIn) || firstIn.startsWith(firstK);
+      })?.[1];
+      if (hit4) return hit4;
+
+      // Strategy 5: character multiset overlap ≥85% on first token + exact last token
+      // Catches "snehal" ↔ "sneahaal" (all chars of "snehal" found in "sneahaal")
+      const hit5 = Object.entries(MASTER_SCORES).find(([k]) => {
+        const kToks = k.split(/\s+/).filter(Boolean);
+        if (kToks.length < 2) return false;
+        const firstK = alnum(kToks[0]);
+        const lastK  = alnum(kToks[kToks.length - 1]);
+        if (lastIn !== lastK) return false;
+        const minLen = Math.min(firstIn.length, firstK.length);
+        if (minLen < 4) return false;
+        const shorter = firstIn.length <= firstK.length ? firstIn : firstK;
+        const longer  = firstIn.length <= firstK.length ? firstK : firstIn;
+        const freq = {};
+        for (const c of longer) freq[c] = (freq[c] || 0) + 1;
+        let overlap = 0;
+        for (const c of shorter) { if (freq[c] > 0) { overlap++; freq[c]--; } }
+        return overlap / shorter.length >= 0.85;
+      })?.[1];
+      if (hit5) return hit5;
+    }
+  }
+
+  return null;
+}
+
+window.Admin = (() => {
+  // ---- State ----
+  let _editTopicId = null; // null = new, number = edit existing
+  let _callerAudioBlob = null;
+  let _callerRecording = false;
+  let _botScriptAudioBlobs = []; // per-turn audio blobs (null = use TTS)
+  let _botScriptRecording  = -1; // index of turn currently being recorded (-1 = none)
+  let _botScriptRecPromise = null;
+  let _scoringSessionId = null;
+  let _topicsFilter = 'all';
+  let _assessmentsFilter = { module: 'all', status: 'all', team: 'all' };
+  let _currentFilteredSessions = [];
+  let _teamAssignments = {};   // { traineeId: 'Team Name' }
+  let _activeTraineeIds = new Set(); // IDs of trainees currently in the DB
+  let _currentReportData = null; // { trainee, marks, scores, details }
+  let _cachedSessions  = [];   // all sessions from last loadAssessments call
+  let _cachedTopicMap  = {};   // topicId → topic from last loadAssessments call
+  let _selectedTraineeIds = new Set(); // trainee ids checked in the trainees table
+  let _allFilteredTrainees = [];       // trainees currently rendered in the table
+  // Assessments multi-select + archive
+  let _selectedSessionIds    = new Set(); // checked session ids
+  let _allRenderedSessions   = [];        // sessions currently in the table
+  let _viewArchive           = false;     // false = Active tab, true = Archive tab
+  let _archivedIds           = new Set(); // session IDs stored as archived (loaded from settings)
+  // AI Audit Scores section
+  let _allAuditRecords    = [];        // full list from DB
+  let _filteredAuditRecs  = [];        // after search filter
+  let _selectedAuditIds   = new Set(); // checked rows
+  // Manager-wise view state
+  let _currentManagerDrill   = null;       // null = manager summary, string = drill into that manager
+  let _agentManagerIndex     = null;       // built lazily from _MANAGER_AGENT_MAP
+  let _selectedManagerNames  = new Set();  // manager names with checkboxes checked
+  let _comm360ReportDeleted  = false;
+
+  // Convert legacy overall scores stored as raw /5 to /100
+  function normalizeOverall(overall) {
+    if (typeof overall !== 'number') return overall;
+    return overall <= 5 ? parseFloat(((overall / 5) * 100).toFixed(1)) : overall;
+  }
+
+  // ---- Ticket Team Managers Set ----
+  const TICKET_MANAGERS = new Set([
+    'Manager A', 'Manager B', 'Manager C'
+  ]);
+
+  // ---- Module metadata ----
+  const MODULE_LABELS = {
+    'pick-speak':          'Pick & Speak',
+    'pick-speak-general':  'P&S — General',
+    'pick-speak-stock':    'P&S — Stock Market',
+    'mock-call':           'Mock Call',
+    'role-play':           'Role Play',
+    'group-discussion':    'Group Discussion',
+    'written-comm':        'Written Comm.',
+    'grammar-assessment':  'Grammar Assessment',
+    'listening-assessment': 'Listening Assessment'
+  };
+
+  const MODULE_COLORS = {
+    'pick-speak':          '#3b82f6',
+    'pick-speak-general':  '#3b82f6',
+    'pick-speak-stock':    '#3b82f6',
+    'mock-call':           '#8b5cf6',
+    'role-play':           '#f97316',
+    'group-discussion':    '#10b981',
+    'written-comm':        '#0ea5e9',
+    'grammar-assessment':  '#7c3aed',
+    'listening-assessment': '#db2777'
+  };
+
+  const MODULE_BADGE_CLASS = {
+    'pick-speak':          'badge-ps',
+    'pick-speak-general':  'badge-ps',
+    'pick-speak-stock':    'badge-ps',
+    'mock-call':           'badge-mc',
+    'role-play':           'badge-rp',
+    'group-discussion':    'badge-gd',
+    'written-comm':        'badge-wc',
+    'grammar-assessment':  'badge-ga',
+    'listening-assessment': 'badge-la'
+  };
+
+  // ---- Score Bands (scores are out of 100) ----
+  const SCORE_BANDS = {
+    'pick-speak': [
+      { maxPct: 40, label: 'Needs Significant Improvement', cls: 'band-poor', icon: '⚠️',
+        feedback: 'Significant gaps across multiple areas. Focus on building clarity of thought, reducing filler words, improving pace, and using more varied vocabulary. Practice structured speaking with a clear opening, body, and close.' },
+      { maxPct: 60, label: 'Acceptable / Meets Expectations', cls: 'band-fair', icon: '📋',
+        feedback: 'Meets basic expectations. Work on reducing filler words (um, uh, like), improving sentence variety, and covering the topic more thoroughly within the time given.' },
+      { maxPct: 80, label: 'Good / Above Average', cls: 'band-good', icon: '👍',
+        feedback: 'Good command of language and delivery. Refine by increasing vocabulary variety, tightening logical flow, and maintaining a more consistent pace throughout.' },
+      { maxPct: Infinity, label: 'Excellent / Consistently Strong', cls: 'band-excellent', icon: '⭐',
+        feedback: 'Consistently strong performance across all areas! Excellent fluency, rich vocabulary, professional tone, and well-structured delivery. Keep practising to maintain this standard.' }
+    ],
+    'mock-call': [
+      { maxPct: 50, label: 'Needs Significant Improvement', cls: 'band-poor', icon: '⚠️',
+        feedback: 'Key call-handling elements are missing or insufficient. Prioritise training on greeting structure, acknowledging the customer with empathy, probing questions, and proper call closings.' },
+      { maxPct: 60, label: 'Acceptable / Meets Expectations', cls: 'band-fair', icon: '📋',
+        feedback: 'Basic call-handling demonstrated. Work on consistent empathy phrases, clearer communication without fillers, and following hold and closing procedures every time.' },
+      { maxPct: 70, label: 'Good / Above Average', cls: 'band-good', icon: '👍',
+        feedback: 'Good customer service skills shown. Minor refinements needed — ensure the extra mile is offered and all hold/closing steps are followed precisely.' },
+      { maxPct: Infinity, label: 'Excellent / Consistently Strong', cls: 'band-excellent', icon: '⭐',
+        feedback: 'Consistently strong call quality! Excellent adherence to protocol, genuine empathy throughout, and professional communication from opening to closing.' }
+    ]
+  };
+
+  function getBand(module, overallScore) {
+    // overallScore is 0-100
+    const bands = SCORE_BANDS[module];
+    if (!bands || overallScore === null || overallScore === undefined) return null;
+    return bands.find(b => overallScore < b.maxPct) || bands[bands.length - 1];
+  }
+
+  // Each criterion: { label, key, group?, desc?, scale135? }
+  // group: shown as a section header in the scoring form
+  // scale135: radio buttons 1 / 3 / 5 (Not Met / Partial / Fully Met)
+  // default: 1-5 slider
+  const SCORING_CRITERIA = {
+    'pick-speak': [
+      // ── 1. Content & Structure
+      { group: '1. Content & Structure', label: 'Clarity of Thought', key: 'clarity',
+        desc: 'Are ideas easy to understand? Is the message relevant to the topic?' },
+      { group: '1. Content & Structure', label: 'Logical Flow / Structure', key: 'logicalFlow',
+        desc: 'Clear opening, body, and closure; smooth transitions between points' },
+      { group: '1. Content & Structure', label: 'Relevance to Topic', key: 'relevance',
+        desc: 'Stays on topic; avoids unnecessary digressions' },
+      // ── 2. Language & Grammar
+      { group: '2. Language & Grammar', label: 'Grammar Accuracy', key: 'grammar',
+        desc: 'Correct tense usage; proper sentence construction' },
+      { group: '2. Language & Grammar', label: 'Vocabulary Appropriateness', key: 'vocabulary',
+        desc: 'Suitable word choice; avoids slang or informal language' },
+      { group: '2. Language & Grammar', label: 'Sentence Variety', key: 'sentenceVariety',
+        desc: 'Mix of simple and compound sentences; avoids repetitive patterns' },
+      // ── 3. Fluency & Delivery
+      { group: '3. Fluency & Delivery', label: 'Fluency', key: 'fluency',
+        desc: 'Minimal pauses or hesitation; natural speech rhythm' },
+      { group: '3. Fluency & Delivery', label: 'Pace of Speech', key: 'pace',
+        desc: 'Not too fast or slow; easy to follow' },
+      { group: '3. Fluency & Delivery', label: 'Filler Word Control', key: 'fillerControl',
+        desc: 'Limited use of "um," "uh," "actually," etc.' },
+      // ── 4. Pronunciation & Voice
+      { group: '4. Pronunciation & Voice', label: 'Pronunciation Clarity', key: 'pronunciation',
+        desc: 'Words are understandable; key terms pronounced correctly' },
+      { group: '4. Pronunciation & Voice', label: 'Intonation & Stress', key: 'intonation',
+        desc: 'Appropriate emphasis; avoids monotone delivery' },
+      { group: '4. Pronunciation & Voice', label: 'Volume & Audibility', key: 'volume',
+        desc: 'Clear and confident voice level' },
+      // ── 5. Confidence & Presence
+      { group: '5. Confidence & Presence', label: 'Confidence', key: 'confidence',
+        desc: 'Speaks without excessive self-correction; maintains composure' },
+      // ── 6. Professionalism
+      { group: '6. Professionalism', label: 'Tone & Professionalism', key: 'professionalism',
+        desc: 'Respectful and appropriate tone; no negative or casual expressions' },
+      { group: '6. Professionalism', label: 'Time Management', key: 'timeManagement',
+        desc: 'Completes within given time; balanced coverage of points' },
+    ],
+    'mock-call': [
+      { label: 'Call Opening',              key: 'callOpening',          desc: 'Greeting + self-intro + company intro + offer to assist (all 4 elements = 5)' },
+      { label: 'Acknowledgment',            key: 'acknowledgment',       desc: 'Acknowledged issue promptly with genuine empathy' },
+      { label: 'Communication Clarity',     key: 'communicationClarity', desc: 'Speech rate, grammar, tone, no fillers, no dead air' },
+      { label: 'Call Essence',              key: 'callEssence',          desc: 'Politeness, empathy, rapport building throughout' },
+      { label: 'Hold Procedure',            key: 'holdProcedure',        scale135: true, desc: 'Asked permission + reason + time expectation' },
+      { label: 'Extra Mile',                key: 'extraMile',            scale135: true, desc: 'Offered proactive help beyond the asked query' },
+      { label: 'Call Closing',              key: 'callClosing',          scale135: true, desc: 'Confirmed resolution + asked for anything else + branded close' }
+    ],
+    'role-play': [
+      { label: 'Empathy', key: 'criterion_0' },
+      { label: 'Assertiveness', key: 'criterion_1' },
+      { label: 'Resolution Approach', key: 'criterion_2' },
+      { label: 'Professionalism', key: 'criterion_3' }
+    ],
+    'group-discussion': [
+      { label: 'Participation Quality', key: 'criterion_0' },
+      { label: 'Argumentation', key: 'criterion_1' },
+      { label: 'Responsiveness', key: 'criterion_2' },
+      { label: 'Communication Clarity', key: 'criterion_3' }
+    ],
+    'written-comm': [
+      { label: 'Tone & Empathy', key: 'criterion_0', desc: 'Remained polite and professional; acknowledged customer\'s actual concern and policy rationale with empathy' },
+      { label: 'Clarity', key: 'criterion_1', desc: 'Clear, consistent, and non-contradictory explanation (no saying "disabled" and later "no restriction")' },
+      { label: 'Ownership', key: 'criterion_2', desc: 'Addressed customer\'s underlying questions, reasoning behind internal policies, and why they questioned it' },
+      { label: 'Accuracy', key: 'criterion_3', desc: 'Correctly clarified internal safeguards, differentiated UI restrictions vs. manual support options' },
+      { label: 'Customer Education', key: 'criterion_4', desc: 'Explained the business rationale/safeguards clearly instead of using generic statements' },
+      { label: 'Grammar & Language', key: 'criterion_5', desc: 'Grammar, spelling (e.g. no "inconvinence"), professional sentence construction, and no repetitive closing statements' }
+    ],
+    // Grammar/Listening Assessment is auto-scored — no manual sliders, just admin comment
+    'grammar-assessment':  [],
+    'listening-assessment': []
+  };
+
+  // ---- Helpers ----
+  function $(id) { return document.getElementById(id); }
+
+  function toast(msg, type = '') {
+    const el = document.createElement('div');
+    el.className = `toast ${type}`;
+    el.textContent = msg;
+    $('toast-container').appendChild(el);
+    setTimeout(() => {
+      el.style.animation = 'slide-out 0.25s ease forwards';
+      setTimeout(() => el.remove(), 300);
+    }, 3000);
+  }
+
+  function showSection(name) {
+    document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    const sec = $(`admin-${name}`);
+    if (sec) sec.classList.add('active');
+    document.querySelectorAll(`.nav-item[data-section="${name}"]`).forEach(n => n.classList.add('active'));
+  }
+
+  function formatDate(isoStr) {
+    if (!isoStr) return '—';
+    const d = new Date(isoStr);
+    return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) +
+      ' ' + d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function formatScore(score) {
+    if (score === null || score === undefined) return '—';
+    return typeof score === 'object' ? (score.overall ?? '—') : score;
+  }
+
+  function calcAdminAvg(adminScores) {
+    if (!adminScores) return null;
+    // If overall was already stored as /100, return it directly
+    if (typeof adminScores.overall === 'number') return adminScores.overall;
+    const vals = Object.entries(adminScores)
+      .filter(([k, v]) => k !== 'overall' && typeof v === 'number')
+      .map(([, v]) => v);
+    if (!vals.length) return null;
+    // Each criterion is 1-5; convert sum to 0-100
+    return parseFloat(((vals.reduce((a, b) => a + b, 0) / (vals.length * 5)) * 100).toFixed(1));
+  }
+
+  function statusBadge(status) {
+    const map = {
+      'pending': '<span class="badge badge-pending">Pending</span>',
+      'ai-evaluated': '<span class="badge badge-ai">AI Scored</span>',
+      'scored': '<span class="badge badge-scored">Scored</span>'
+    };
+    return map[status] || `<span class="badge">${status}</span>`;
+  }
+
+  function moduleBadge(module) {
+    return `<span class="module-badge ${MODULE_BADGE_CLASS[module] || ''}">${MODULE_LABELS[module] || module}</span>`;
+  }
+
+  // ---- Auth ----
+  function showAdminName() {
+    const name = sessionStorage.getItem('adminName');
+    const el = $('admin-logged-in-name');
+    const logoutBtn = $('btn-admin-logout');
+    if (name && el) {
+      el.textContent = `Signed in as ${name}`;
+      el.style.display = 'block';
+    }
+    if (logoutBtn) {
+      logoutBtn.style.display = '';
+      // Always bind here so it works whether session was restored or just logged in
+      logoutBtn.onclick = (e) => {
+        e.preventDefault();
+        sessionStorage.removeItem('adminAuth');
+        sessionStorage.removeItem('adminName');
+        location.reload();
+      };
+    }
+  }
+
+  function initAuth() {
+    const savedAuth = sessionStorage.getItem('adminAuth');
+    if (savedAuth === 'true') {
+      $('admin-auth-modal').classList.add('hidden');
+      $('admin-app').classList.remove('hidden');
+      showAdminName();
+      initApp();
+      return;
+    }
+
+    const usernameInput = $('admin-username-input');
+    const pwdInput = $('admin-pwd-input');
+    const btn = $('btn-admin-login');
+    const errEl = $('admin-pwd-error');
+
+    const doLogin = async () => {
+      const username = (usernameInput.value || '').trim().toLowerCase();
+      const password = pwdInput.value;
+      if (!username || !password) {
+        errEl.textContent = 'Please enter your username and password.';
+        errEl.classList.remove('hidden'); return;
+      }
+      btn.disabled = true; btn.textContent = 'Signing in…';
+      errEl.classList.add('hidden');
+
+      try {
+        // Load admin users from Supabase settings
+        const stored = await DB.get('settings', 'adminUsers');
+        let users = [];
+        try { users = JSON.parse(stored?.value || stored || '[]'); } catch (_) {}
+
+        const match = users.find(u =>
+          u.username.toLowerCase() === username && u.password === password
+        );
+
+        if (match) {
+          sessionStorage.setItem('adminAuth', 'true');
+          sessionStorage.setItem('adminName', match.username);
+          $('admin-auth-modal').classList.add('hidden');
+          $('admin-app').classList.remove('hidden');
+          showAdminName();
+          initApp();
+        } else {
+          errEl.textContent = 'Incorrect username or password.';
+          errEl.classList.remove('hidden');
+          pwdInput.value = '';
+          pwdInput.focus();
+        }
+      } catch (e) {
+        errEl.textContent = 'Login failed. Please try again.';
+        errEl.classList.remove('hidden');
+      } finally {
+        btn.disabled = false; btn.textContent = 'Sign In →';
+      }
+    };
+
+    usernameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+    pwdInput.addEventListener('keydown',      (e) => { if (e.key === 'Enter') doLogin(); });
+    btn.addEventListener('click', doLogin);
+  }
+
+  // ---- App Init ----
+  async function initApp() {
+    bindSidebarNav();
+    try {
+      const deletedRec = await DB.get('settings', 'comm360ReportDeleted');
+      _comm360ReportDeleted = deletedRec && deletedRec.value === 'true';
+    } catch (e) {
+      console.warn('Failed to load comm360ReportDeleted setting:', e);
+    }
+    await loadDashboard();
+    await updatePendingBadge();
+  }
+
+  function bindSidebarNav() {
+    document.querySelectorAll('.nav-item[data-section]').forEach(link => {
+      link.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const sec = link.dataset.section;
+        showSection(sec);
+        if (sec === 'dashboard') await loadDashboard();
+        else if (sec === 'trainees') await loadTrainees();
+        else if (sec === 'topics') await loadTopics();
+        else if (sec === 'assessments') await loadAssessments();
+        else if (sec === 'reports') await loadReportsDropdown();
+        else if (sec === 'comm360') await loadComm360Report();
+        else if (sec === 'mgr-assessments') await loadMgrAssessments();
+        else if (sec === 'settings') initSettings();
+      });
+    });
+  }
+
+  // ---- Dashboard ----
+  async function loadDashboard() {
+    const [trainees, sessions] = await Promise.all([DB.getAll('trainees'), DB.getAll('sessions')]);
+
+    $('stat-trainees').textContent = trainees.length;
+    $('stat-sessions').textContent = sessions.length;
+
+    const pending = sessions.filter(s => s.status === 'pending' || s.status === 'ai-evaluated').length;
+    $('stat-pending').textContent = pending;
+    await updatePendingBadge();
+
+    const scored = sessions.filter(s => s.adminScores);
+    const avgScore = scored.length
+      ? (scored.map(s => calcAdminAvg(s.adminScores)).filter(x => x !== null)
+          .reduce((a, b) => a + b, 0) / scored.length).toFixed(1)
+      : '—';
+    $('stat-avg-score').textContent = avgScore;
+
+    // Module breakdown
+    const breakdown = $('module-breakdown');
+    const counts = {};
+    sessions.forEach(s => { counts[s.module] = (counts[s.module] || 0) + 1; });
+    const maxCount = Math.max(...Object.values(counts), 1);
+
+    if (Object.keys(counts).length === 0) {
+      breakdown.innerHTML = '<div class="empty-state" style="padding:1rem">No sessions yet.</div>';
+    } else {
+      breakdown.innerHTML = Object.entries(counts).map(([mod, cnt]) => `
+        <div class="module-bar-row">
+          <span class="module-bar-label">${MODULE_LABELS[mod] || mod}</span>
+          <div class="module-bar-track">
+            <div class="module-bar-fill" style="width:${(cnt/maxCount*100).toFixed(0)}%;background:${MODULE_COLORS[mod]}"></div>
+          </div>
+          <span class="module-bar-count">${cnt}</span>
+        </div>`).join('');
+    }
+
+    // Recent activity
+    const recent = [...sessions].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt)).slice(0, 8);
+    const activityEl = $('recent-activity');
+    if (recent.length === 0) {
+      activityEl.innerHTML = '<div class="empty-state" style="padding:1rem">No recent activity.</div>';
+    } else {
+      activityEl.innerHTML = recent.map(s => `
+        <div class="activity-item">
+          <div class="activity-dot" style="background:${MODULE_COLORS[s.module]}"></div>
+          <div class="activity-text">
+            <strong>${s.traineeName}</strong> completed <em>${MODULE_LABELS[s.module]}</em>
+            ${s.adminScores ? `— scored ${calcAdminAvg(s.adminScores)}/100` : ''}
+          </div>
+          <span class="activity-time">${formatDate(s.submittedAt).split(' ')[0]}</span>
+        </div>`).join('');
+    }
+  }
+
+  async function updatePendingBadge() {
+    const sessions = await DB.getAll('sessions');
+    const pending = sessions.filter(s => s.status === 'pending' || s.status === 'ai-evaluated').length;
+    const badge = $('pending-badge');
+    badge.textContent = pending > 0 ? pending : '';
+  }
+
+  // ---- Trainees ----
+  // ---- Team Assignments (stored in settings table) ----
+  async function loadTeamAssignments() {
+    try {
+      const s = await DB.get('settings', 'team_assignments');
+      _teamAssignments = (s && s.value) ? JSON.parse(s.value) : {};
+    } catch (_) { _teamAssignments = {}; }
+  }
+
+  async function saveTeamAssignments() {
+    try {
+      await DB.put('settings', { key: 'team_assignments', value: JSON.stringify(_teamAssignments) });
+    } catch (e) { toast('Could not save team: ' + e.message, 'error'); }
+  }
+
+  async function setTraineeTeam(traineeId, teamName) {
+    const name = teamName.trim();
+    if (name) {
+      _teamAssignments[traineeId] = name;
+    } else {
+      delete _teamAssignments[traineeId];
+    }
+    await saveTeamAssignments();
+    populateTeamFilter();   // keep assessments dropdown in sync
+    toast(name ? `Assigned to "${name}"` : 'Team removed', 'success');
+  }
+
+  function populateTeamFilter() {
+    const sel = $('filter-team');
+    if (!sel) return;
+    // Only show teams for trainees that still exist — ignore stale deleted-trainee entries
+    const activeEntries = _activeTraineeIds.size > 0
+      ? Object.entries(_teamAssignments).filter(([id]) => _activeTraineeIds.has(id))
+      : Object.entries(_teamAssignments);
+    const teams = [...new Set(activeEntries.map(([, t]) => t))].sort();
+    const current = sel.value;
+    sel.innerHTML = '<option value="all">All Teams</option>' +
+      teams.map(t => `<option value="${t}"${t === current ? ' selected' : ''}>${t}</option>`).join('');
+  }
+
+  async function loadTrainees() {
+    await loadTeamAssignments();
+    const [trainees, sessions] = await Promise.all([DB.getAll('trainees'), DB.getAll('sessions')]);
+    _activeTraineeIds = new Set(trainees.map(t => t.id));
+    renderTraineesTable(trainees, sessions, '');
+    $('trainee-search').oninput = (e) => renderTraineesTable(trainees, sessions, e.target.value);
+  }
+
+  function renderTraineesTable(trainees, sessions, filter) {
+    const tbody = $('trainees-tbody');
+    const filtered = trainees.filter(t => t.name.toLowerCase().includes(filter.toLowerCase()));
+    const allTeams = [...new Set(Object.values(_teamAssignments))].sort();
+
+    // Reset selection state whenever the table re-renders
+    _selectedTraineeIds.clear();
+    _allFilteredTrainees = filtered;
+    _updateTraineeDeleteBtn();
+
+    if (filtered.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No trainees found.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = filtered.map(t => {
+      const ts = sessions.filter(s => s.traineeId === t.id);
+      const scored = ts.filter(s => s.adminScores);
+      const avg = scored.length
+        ? (scored.map(s => calcAdminAvg(s.adminScores)).filter(x => x !== null)
+            .reduce((a, b) => a + b, 0) / scored.length).toFixed(1)
+        : '—';
+      const lastActive = ts.length
+        ? formatDate([...ts].sort((a,b) => new Date(b.submittedAt)-new Date(a.submittedAt))[0].submittedAt).split(' ')[0]
+        : '—';
+      const currentTeam = _teamAssignments[t.id] || '';
+      const datalistId  = `tdl-${t.id.replace(/-/g,'')}`;
+
+      return `
+        <tr>
+          <td style="width:36px;text-align:center">
+            <input type="checkbox" class="trainee-cb" data-id="${t.id}"
+              onchange="Admin.toggleTraineeCheckbox('${t.id}', this.checked)" />
+          </td>
+          <td><strong>${t.name}</strong><br><small style="color:var(--text-muted)">${t.employee_id || ''}</small></td>
+          <td>${ts.length}</td>
+          <td>${lastActive}</td>
+          <td>${avg !== '—' ? avg + ' / 5' : '—'}</td>
+          <td>
+            <datalist id="${datalistId}">
+              ${allTeams.map(tm => `<option value="${tm}">`).join('')}
+            </datalist>
+            <input
+              type="text"
+              list="${datalistId}"
+              value="${currentTeam.replace(/"/g, '&quot;')}"
+              placeholder="Assign team…"
+              style="border:1px solid var(--border);border-radius:6px;padding:0.3rem 0.6rem;font-size:0.82rem;width:140px;font-family:inherit"
+              onblur="Admin.setTraineeTeam('${t.id}', this.value)"
+              onkeydown="if(event.key==='Enter'){this.blur()}"
+            />
+          </td>
+          <td>
+            <button class="btn-small" onclick="Admin.viewTraineeSessions('${t.id}')">View Sessions</button>
+          </td>
+        </tr>`;
+    }).join('');
+  }
+
+  // ---- Trainee selection helpers ----
+  function _updateTraineeDeleteBtn() {
+    const btn = $('btn-delete-selected-trainees');
+    if (!btn) return;
+    const n = _selectedTraineeIds.size;
+    btn.disabled = n === 0;
+    btn.textContent = n > 0 ? `🗑 Delete Selected (${n})` : '🗑 Delete Selected';
+  }
+
+  function toggleTraineeCheckbox(id, checked) {
+    if (checked) {
+      _selectedTraineeIds.add(id);
+    } else {
+      _selectedTraineeIds.delete(id);
+    }
+    _updateTraineeDeleteBtn();
+    // Sync select-all checkbox
+    const allCb = $('select-all-trainees');
+    if (allCb && _allFilteredTrainees.length > 0) {
+      const n = _selectedTraineeIds.size;
+      allCb.indeterminate = n > 0 && n < _allFilteredTrainees.length;
+      allCb.checked = n === _allFilteredTrainees.length;
+    }
+  }
+
+  function toggleAllTrainees(checked) {
+    _selectedTraineeIds.clear();
+    if (checked) _allFilteredTrainees.forEach(t => _selectedTraineeIds.add(t.id));
+    document.querySelectorAll('.trainee-cb').forEach(cb => { cb.checked = checked; });
+    _updateTraineeDeleteBtn();
+  }
+
+  // ---- Internal: delete trainees + their sessions ----
+  async function _doDeleteTrainees(ids) {
+    const allSessions = await DB.getAll('sessions');
+    const sessionIds = allSessions.filter(s => ids.includes(s.traineeId)).map(s => s.id);
+
+    // Cascade delete sessions then trainees
+    await Promise.all(sessionIds.map(sid => DB.del('sessions', sid)));
+    await Promise.all(ids.map(id => DB.del('trainees', id)));
+
+    // Clean up team assignments for deleted trainees so they don't ghost in the filter
+    let changed = false;
+    ids.forEach(id => {
+      if (_teamAssignments[id]) { delete _teamAssignments[id]; changed = true; }
+      _activeTraineeIds.delete(id);
+    });
+    if (changed) await saveTeamAssignments();
+
+    _selectedTraineeIds.clear();
+    _updateTraineeDeleteBtn();
+    toast(`Deleted ${ids.length} trainee${ids.length !== 1 ? 's' : ''} and ${sessionIds.length} session${sessionIds.length !== 1 ? 's' : ''}.`, 'success');
+    await updatePendingBadge();
+    await loadTrainees();
+  }
+
+  async function deleteSelectedTrainees() {
+    const ids = [..._selectedTraineeIds];
+    if (ids.length === 0) return;
+    const confirmed = confirm(
+      `⚠️ Delete ${ids.length} selected trainee${ids.length !== 1 ? 's' : ''}?\n\nThis will also permanently delete ALL their assessments, scores, and recordings.\n\nThis action cannot be undone.`
+    );
+    if (!confirmed) return;
+    await _doDeleteTrainees(ids);
+  }
+
+  async function deleteAllTrainees() {
+    const all = await DB.getAll('trainees');
+    if (!all.length) { toast('No trainees to delete.', ''); return; }
+    const step1 = confirm(
+      `⚠️ Delete ALL ${all.length} trainees?\n\nThis will permanently delete every trainee and ALL their assessments, scores, and recordings.\n\nThis action cannot be undone.`
+    );
+    if (!step1) return;
+    const step2 = confirm(
+      `Are you absolutely sure?\n\nAll ${all.length} trainees and their data will be deleted permanently.`
+    );
+    if (!step2) return;
+    await _doDeleteTrainees(all.map(t => t.id));
+  }
+
+  async function viewTraineeSessions(traineeId) {
+    showSection('assessments');
+    // Switch to assessments tab and filter by trainee
+    await loadAssessments(traineeId);
+  }
+
+  // ---- Topics ----
+  async function loadTopics() {
+    initTopicModal();
+
+    try {
+      const allTopics = await DB.getAll('topics');
+      const smqTopics = allTopics.filter(t => t.module === 'stock-market-mcq');
+      const hasSet4   = smqTopics.some(t => t.title && t.title.includes('Set 4'));
+      if (!smqTopics.length || !hasSet4) {
+        await seedStockMarketMcq(true);
+      }
+    } catch (_) {}
+
+    renderTopicsList();
+
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.onclick = () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        _topicsFilter = btn.dataset.module;
+        renderTopicsList();
+      };
+    });
+
+    $('btn-new-topic').onclick = () => openTopicModal(null);
+  }
+
+  // Extract the set name from a grammar topic title, e.g.
+  // "Grammar Set 3 — Section A: MCQ (40 Questions)" → "Grammar Set 3"
+  function extractGrammarSetName(title) {
+    const m = title.match(/^(.+?)\s+[—–-]+\s+Section/i);
+    return m ? m[1].trim() : title;
+  }
+
+  async function renderTopicsList() {
+    const topics = await DB.getAll('topics');
+    const filtered = topics.filter(t => matchesModuleFilter(t.module, _topicsFilter));
+    const container = $('topics-list');
+
+    if (filtered.length === 0) {
+      container.innerHTML = '<div class="empty-state" style="grid-column:1/-1;padding:2rem">No topics found. Create one with + New Topic.</div>';
+      return;
+    }
+
+    // Split grouped-module topics from the rest
+    const grammarTopics   = filtered.filter(t => t.module === 'grammar-assessment');
+    const listeningTopics = filtered.filter(t => t.module === 'listening-assessment');
+    const otherTopics     = filtered.filter(t => t.module !== 'grammar-assessment' && t.module !== 'listening-assessment');
+
+    // Group grammar topics by set name
+    const grammarSets = {};
+    grammarTopics.forEach(t => {
+      const setName = extractGrammarSetName(t.title);
+      if (!grammarSets[setName]) grammarSets[setName] = [];
+      grammarSets[setName].push(t);
+    });
+
+    // Group listening topics by set name (same title pattern)
+    const listeningSets = {};
+    listeningTopics.forEach(t => {
+      const setName = extractGrammarSetName(t.title); // regex works for listening too
+      if (!listeningSets[setName]) listeningSets[setName] = [];
+      listeningSets[setName].push(t);
+    });
+
+    // Render non-grammar topics as individual cards
+    const otherHtml = otherTopics.map(t => {
+      const isEnabled = t.enabled !== false;
+      return `
+      <div class="topic-card ${getModuleShort(t.module)}${isEnabled ? '' : ' topic-disabled'}">
+        <div class="topic-card-header">
+          <div style="min-width:0">
+            ${moduleBadge(t.module)}
+            <h4 style="margin-top:0.35rem">${t.title}</h4>
+          </div>
+          <button class="topic-toggle-btn${isEnabled ? ' on' : ''}"
+                  onclick="Admin.toggleTopicEnabled('${t.id}')"
+                  title="${isEnabled ? 'Click to disable' : 'Click to enable'}">
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            <span class="toggle-label">${isEnabled ? 'Live' : 'Off'}</span>
+          </button>
+        </div>
+        <p>${t.description || ''}</p>
+        ${t.checklist && t.checklist.length ? `<div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.5rem">${t.checklist.length} evaluation criteria</div>` : ''}
+        <div class="topic-card-actions">
+          <button class="btn-small primary" onclick="Admin.openTopicModal('${t.id}')">Edit</button>
+          <button class="btn-small danger" onclick="Admin.deleteTopic('${t.id}')">Delete</button>
+        </div>
+      </div>`;
+    }).join('');
+
+    // Render each grammar set as a single grouped card
+    const grammarHtml = Object.entries(grammarSets).map(([setName, sections]) => {
+      // Sort sections alphabetically (Section A, B, C)
+      sections.sort((a, b) => a.title.localeCompare(b.title));
+      const totalQ    = sections.reduce((s, t) => s + (t.checklist?.length || 0), 0);
+      const allLive   = sections.every(t => t.enabled !== false);
+      const anyLive   = sections.some(t => t.enabled !== false);
+      const liveState = allLive ? 'on' : (anyLive ? 'partial' : '');
+
+      const sectionRows = sections.map((t, i) => {
+        const secLabel  = t.title.match(/Section\s+\w+[^)—]*/i)?.[0] || `Section ${i + 1}`;
+        const qCount    = t.checklist?.length || 0;
+        const isEnabled = t.enabled !== false;
+        return `
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:0.5rem 0;border-top:1px solid var(--border)">
+            <div style="min-width:0">
+              <span style="font-size:0.82rem;font-weight:600;color:var(--text)">${secLabel}</span>
+              <span style="font-size:0.75rem;color:var(--text-muted);margin-left:0.5rem">${qCount} question${qCount !== 1 ? 's' : ''}</span>
+            </div>
+            <div style="display:flex;gap:0.4rem;flex-shrink:0;align-items:center">
+              <button class="topic-toggle-btn${isEnabled ? ' on' : ''}"
+                      onclick="Admin.toggleTopicEnabled('${t.id}')"
+                      title="${isEnabled ? 'Click to disable this section' : 'Click to enable this section'}"
+                      style="transform:scale(0.82);transform-origin:right center">
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                <span class="toggle-label">${isEnabled ? 'Live' : 'Off'}</span>
+              </button>
+              <button class="btn-small primary" onclick="Admin.openTopicModal('${t.id}')">Edit</button>
+              <button class="btn-small danger"  onclick="Admin.deleteTopic('${t.id}')">Delete</button>
+            </div>
+          </div>`;
+      }).join('');
+
+      // Build comma-separated section IDs for the set-level toggle
+      const setIds = sections.map(s => s.id).join("','");
+
+      return `
+      <div class="topic-card ga${allLive ? '' : ' topic-disabled'}" style="grid-column:span 1">
+        <div class="topic-card-header">
+          <div style="min-width:0">
+            ${moduleBadge('grammar-assessment')}
+            <h4 style="margin-top:0.35rem">${setName}</h4>
+          </div>
+          <button class="topic-toggle-btn${allLive ? ' on' : ''}"
+                  onclick="Admin.toggleGrammarSet(['${setIds}'])"
+                  title="${allLive ? 'Disable entire set' : 'Enable entire set'}">
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            <span class="toggle-label">${allLive ? 'Live' : anyLive ? 'Part' : 'Off'}</span>
+          </button>
+        </div>
+        <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.5rem">
+          ${sections.length} sections · ${totalQ} questions total · All MCQ
+        </div>
+        ${sectionRows}
+      </div>`;
+    }).join('');
+
+    // Render each listening set as a single grouped card (same pattern as grammar)
+    const LA_MARKS_LABEL = ['2 marks each', '5 marks each', '3 marks each'];
+    const listeningHtml = Object.entries(listeningSets).map(([setName, sections]) => {
+      sections.sort((a, b) => a.title.localeCompare(b.title));
+      const totalQ  = sections.reduce((s, t) => s + (t.checklist?.length || 0), 0);
+      const allLive = sections.every(t => t.enabled !== false);
+      const anyLive = sections.some(t => t.enabled !== false);
+      const setIds  = sections.map(s => s.id).join("','");
+
+      const sectionRows = sections.map((t, i) => {
+        const typeMatch  = t.title.match(/Section\s+\d+:\s*(\w+)/i);
+        const secLabel   = typeMatch ? `Section ${i + 1}: ${typeMatch[1]}` : `Section ${i + 1}`;
+        const qCount     = t.checklist?.length || 0;
+        const isEnabled  = t.enabled !== false;
+        const marksNote  = LA_MARKS_LABEL[i] || '';
+        return `
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:0.5rem 0;border-top:1px solid var(--border)">
+            <div style="min-width:0">
+              <span style="font-size:0.82rem;font-weight:600;color:var(--text)">${secLabel}</span>
+              <span style="font-size:0.75rem;color:var(--text-muted);margin-left:0.5rem">${qCount} Qs · ${marksNote}</span>
+            </div>
+            <div style="display:flex;gap:0.4rem;flex-shrink:0;align-items:center">
+              <button class="topic-toggle-btn${isEnabled ? ' on' : ''}"
+                      onclick="Admin.toggleTopicEnabled('${t.id}')"
+                      style="transform:scale(0.82);transform-origin:right center">
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                <span class="toggle-label">${isEnabled ? 'Live' : 'Off'}</span>
+              </button>
+              <button class="btn-small primary" onclick="Admin.openTopicModal('${t.id}')">Edit</button>
+              <button class="btn-small danger"  onclick="Admin.deleteTopic('${t.id}')">Delete</button>
+            </div>
+          </div>`;
+      }).join('');
+
+      return `
+      <div class="topic-card la${allLive ? '' : ' topic-disabled'}" style="grid-column:span 1">
+        <div class="topic-card-header">
+          <div style="min-width:0">
+            ${moduleBadge('listening-assessment')}
+            <h4 style="margin-top:0.35rem">${setName}</h4>
+          </div>
+          <button class="topic-toggle-btn${allLive ? ' on' : ''}"
+                  onclick="Admin.toggleGrammarSet(['${setIds}'])"
+                  title="${allLive ? 'Disable entire set' : 'Enable entire set'}">
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            <span class="toggle-label">${allLive ? 'Live' : anyLive ? 'Part' : 'Off'}</span>
+          </button>
+        </div>
+        <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.5rem">
+          ${sections.length} sections · ${totalQ} questions total · All MCQ · 100 marks
+        </div>
+        ${sectionRows}
+      </div>`;
+    }).join('');
+
+    container.innerHTML = otherHtml + grammarHtml + listeningHtml;
+  }
+
+  function getModuleShort(module) {
+    const map = { 'pick-speak': 'ps', 'pick-speak-general': 'ps', 'pick-speak-stock': 'ps', 'mock-call': 'mc', 'role-play': 'rp', 'group-discussion': 'gd', 'written-comm': 'wc', 'grammar-assessment': 'ga', 'listening-assessment': 'la' };
+    return map[module] || '';
+  }
+
+  async function toggleTopicEnabled(topicId) {
+    try {
+      const topic = await DB.get('topics', topicId);
+      if (!topic) return;
+      const nowEnabled = topic.enabled === false; // flip: false→true, undefined/true→false
+      await DB.patch('topics', topicId, { enabled: nowEnabled });
+      toast(nowEnabled ? '✅ Topic enabled — visible to users.' : '⏸ Topic disabled — hidden from users.', '');
+      renderTopicsList();
+    } catch (e) {
+      if (e.message && e.message.toLowerCase().includes('enabled')) {
+        toast('⚠ Missing DB column. Run supabase-add-enabled-column.sql in your Supabase SQL Editor first.', 'error');
+      } else {
+        toast('Failed: ' + e.message, 'error');
+      }
+    }
+  }
+
+  // Toggle ALL sections of a grammar set on or off together
+  async function toggleGrammarSet(ids) {
+    try {
+      // Determine new state: if the first section is currently disabled, enable all; else disable all
+      const first = await DB.get('topics', ids[0]);
+      if (!first) return;
+      const nowEnabled = first.enabled === false; // flip
+      for (const id of ids) {
+        await DB.patch('topics', id, { enabled: nowEnabled });
+      }
+      toast(nowEnabled ? '✅ Grammar set enabled — visible to trainees.' : '⏸ Grammar set disabled — hidden from trainees.', '');
+      renderTopicsList();
+    } catch (e) {
+      toast('Failed: ' + e.message, 'error');
+    }
+  }
+
+  // Fetch-based download (bypasses cross-origin download restriction)
+  async function downloadRecording(url, filename) {
+    try {
+      toast('Preparing download…', '');
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const blob = await resp.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    } catch (e) {
+      toast('Download failed: ' + e.message, 'error');
+    }
+  }
+
+  async function downloadAllRecordings() {
+    const sessions = _currentFilteredSessions.filter(s => s.recordingUrl);
+    if (!sessions.length) {
+      toast('No recordings available in the current view.', 'error');
+      return;
+    }
+    if (typeof JSZip === 'undefined') {
+      toast('JSZip not loaded — cannot create zip.', 'error');
+      return;
+    }
+    toast(`Packaging ${sessions.length} recording(s)… please wait.`, '');
+    try {
+      const zip = new JSZip();
+      await Promise.all(sessions.map(async s => {
+        const resp = await fetch(s.recordingUrl);
+        if (!resp.ok) return; // skip failed fetches silently
+        const blob = await resp.blob();
+        const ext = s.recordingUrl.includes('.webm') ? 'webm' : s.recordingUrl.includes('.mp4') ? 'mp4' : 'ogg';
+        const fname = `${(s.traineeName || 'unknown').replace(/\s+/g, '_')}-${s.module}-${(s.submittedAt || '').slice(0, 10)}.${ext}`;
+        zip.file(fname, blob);
+      }));
+      const content = await zip.generateAsync({ type: 'blob' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(content);
+      a.download = `commassess-recordings-${new Date().toISOString().slice(0, 10)}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      toast('Recordings downloaded!', 'success');
+    } catch (e) {
+      toast('Download failed: ' + e.message, 'error');
+    }
+  }
+
+  // Returns true if a topic/session module matches the active filter
+  function matchesModuleFilter(recordModule, filter) {
+    if (filter === 'all') return true;
+    // Assessments filter dropdown: 'pick-speak' = show all P&S sub-types together
+    if (filter === 'pick-speak') return recordModule === 'pick-speak' || recordModule === 'pick-speak-general' || recordModule === 'pick-speak-stock';
+    // Topics tab: split view
+    if (filter === 'pick-speak-stock') return recordModule === 'pick-speak-stock';
+    if (filter === 'pick-speak-general') return recordModule === 'pick-speak-general' || recordModule === 'pick-speak';
+    if (filter === 'grammar-assessment') return recordModule === 'grammar-assessment';
+    return recordModule === filter;
+  }
+
+  async function openTopicModal(topicId) {
+    _editTopicId = topicId;
+    _callerAudioBlob = null;
+    const modal = $('topic-modal');
+    modal.classList.remove('hidden');
+
+    if (topicId) {
+      const topic = await DB.get('topics', topicId);
+      $('topic-modal-title').textContent = 'Edit Topic';
+      $('topic-module').value = topic.module;
+      $('topic-title').value = topic.title || '';
+      $('topic-description').value = topic.description || '';
+      $('topic-scenario').value = topic.scenario || '';
+      _callerAudioBlob = topic.callerAudioBlob || null;
+
+      if (topic.module === 'grammar-assessment' || topic.module === 'listening-assessment' || topic.module === 'stock-market-mcq') {
+        // checklist holds question objects for grammar/listening/stock-market-mcq
+        const questions = (topic.checklist || []).filter(q => q && typeof q === 'object' && q.stem);
+        renderMcqQuestions(questions);
+        renderChecklistItems([]);
+      } else {
+        renderChecklistItems(topic.checklist || []);
+      }
+      renderBotScriptItems(topic.botScript || [], topic.botScriptAudio || []);
+
+      // Support both Storage URL (new) and legacy Blob
+      const callerUrl = topic.callerAudioUrl
+        || (_callerAudioBlob ? URL.createObjectURL(_callerAudioBlob) : null);
+      if (callerUrl) {
+        $('caller-preview-audio').src = callerUrl;
+        $('caller-preview-audio').classList.remove('hidden');
+        $('btn-clear-caller-audio').classList.remove('hidden');
+      }
+    } else {
+      $('topic-modal-title').textContent = 'New Topic';
+      $('topic-module').value = 'pick-speak-general';
+      $('topic-title').value = '';
+      $('topic-description').value = '';
+      $('topic-scenario').value = '';
+      $('caller-preview-audio').classList.add('hidden');
+      $('btn-clear-caller-audio').classList.add('hidden');
+      renderChecklistItems([]);
+      renderBotScriptItems([]);
+      $('mcq-questions-list').innerHTML = '';
+    }
+
+    toggleMockCallFields($('topic-module').value);
+    $('topic-module').onchange = (e) => toggleMockCallFields(e.target.value);
+  }
+
+  function toggleMockCallFields(module) {
+    const isMC  = module === 'mock-call';
+    const isWC  = module === 'written-comm';
+    const isMCQ = module === 'grammar-assessment' || module === 'listening-assessment' || module === 'stock-market-mcq';
+    $('topic-caller-audio-group').style.display = isMC ? '' : 'none';
+    $('topic-bot-script-group').style.display    = (isMC || isWC) ? '' : 'none';
+    $('topic-mcq-group').style.display           = isMCQ ? '' : 'none';
+    // For MCQ modules, hide scenario & checklist (replaced by MCQ editor)
+    const scenarioGroup   = $('topic-scenario').closest('.form-group');
+    const checklistGroup  = $('topic-checklist-group');
+    if (scenarioGroup)  scenarioGroup.style.display  = isMCQ ? 'none' : '';
+    if (checklistGroup) checklistGroup.style.display = isMCQ ? 'none' : '';
+    // If switching to an MCQ module, add one blank question to get started
+    if (isMCQ && $('mcq-questions-list') && $('mcq-questions-list').children.length === 0) {
+      addMcqQuestion();
+    }
+
+    // Toggle audio previews for existing rows in the UI
+    const rows = document.querySelectorAll('#bot-script-items .bot-script-turn-row');
+    rows.forEach(r => {
+      const audioRow = r.querySelector('.bst-audio-row');
+      if (audioRow) {
+        audioRow.style.display = isMC ? '' : 'none';
+      }
+    });
+  }
+
+  function _bstAudioRow(hasAudio, audioSrc, isMC) {
+    return `<div class="bst-audio-row" style="display: ${isMC ? '' : 'none'}">
+          <input type="file" class="bst-file-input" accept="audio/*" style="display:none" onchange="Admin.uploadBotTurnAudio(this)">
+          <button class="bst-rec-btn${hasAudio ? ' has-audio' : ''}" onclick="Admin.toggleBotTurnRec(this)">
+            ${hasAudio ? '🔄 Re-record' : '🎙 Record'}
+          </button>
+          <button class="bst-upload-btn${hasAudio ? ' has-audio' : ''}" onclick="this.closest('.bst-audio-row').querySelector('.bst-file-input').click()">
+            ${hasAudio ? '📂 Replace' : '📎 Upload'}
+          </button>
+          <audio class="bst-audio-preview${hasAudio ? '' : ' hidden'}" controls src="${audioSrc}"></audio>
+          <button class="bst-clear-btn${hasAudio ? '' : ' hidden'}" onclick="Admin.clearBotTurnAudio(this)">✕ Clear</button>
+          <span class="bst-rec-status"></span>
+        </div>`;
+  }
+
+  function renderBotScriptItems(lines = [], audioBlobs = []) {
+    _botScriptAudioBlobs = lines.map((_, i) => audioBlobs[i] || null);
+    const container = $('bot-script-items');
+    const total = lines.length;
+    const module = $('topic-module').value;
+    const isMC = module === 'mock-call';
+    container.innerHTML = lines.map((line, i) => {
+      const safe     = line.replace(/"/g, '&quot;');
+      const hasAudio = !!_botScriptAudioBlobs[i];
+      const audioSrc = hasAudio ? (_botScriptAudioBlobs[i] instanceof Blob ? URL.createObjectURL(_botScriptAudioBlobs[i]) : _botScriptAudioBlobs[i]) : '';
+      const isLast   = i === total - 1 && total > 1;
+      return `<div class="bot-script-turn-row">
+        <div class="bst-top">
+          <span class="bst-turn-num${isLast ? ' bst-turn-last' : ''}">Turn ${i + 1}${isLast ? ' — Last' : ''}</span>
+          <button class="btn-remove-item bst-remove" title="Remove" onclick="Admin.removeBotScriptRow(this)">✕</button>
+        </div>
+        <input type="text" class="bst-input" placeholder="e.g. I've been charged twice this month!" value="${safe}">
+        ${_bstAudioRow(hasAudio, audioSrc, isMC)}
+      </div>`;
+    }).join('');
+
+    $('btn-add-bot-line').onclick = () => {
+      const currentModule = $('topic-module').value;
+      const currentIsMC = currentModule === 'mock-call';
+      const idx = document.querySelectorAll('#bot-script-items .bot-script-turn-row').length;
+      _botScriptAudioBlobs.push(null);
+      $('bot-script-items').insertAdjacentHTML('beforeend', `
+        <div class="bot-script-turn-row">
+          <div class="bst-top">
+            <span class="bst-turn-num">Turn ${idx + 1}</span>
+            <button class="btn-remove-item bst-remove" title="Remove" onclick="Admin.removeBotScriptRow(this)">✕</button>
+          </div>
+          <input type="text" class="bst-input" placeholder="Customer line...">
+          ${_bstAudioRow(false, '', currentIsMC)}
+        </div>`);
+      _renumberBotRows();
+    };
+  }
+
+  function removeBotScriptRow(btn) {
+    const row  = btn.closest('.bot-script-turn-row');
+    const rows = Array.from(document.querySelectorAll('#bot-script-items .bot-script-turn-row'));
+    const idx  = rows.indexOf(row);
+    if (idx >= 0) _botScriptAudioBlobs.splice(idx, 1);
+    if (_botScriptRecording === idx) { Recorder.stop(); _botScriptRecording = -1; }
+    else if (_botScriptRecording > idx) _botScriptRecording--;
+    row.remove();
+    _renumberBotRows();
+  }
+
+  function _renumberBotRows() {
+    const rows = document.querySelectorAll('#bot-script-items .bot-script-turn-row');
+    rows.forEach((r, i) => {
+      const num    = r.querySelector('.bst-turn-num');
+      const isLast = i === rows.length - 1 && rows.length > 1;
+      if (num) {
+        num.textContent = `Turn ${i + 1}${isLast ? ' — Last' : ''}`;
+        num.classList.toggle('bst-turn-last', isLast);
+      }
+    });
+  }
+
+  // ── Per-turn voice recording ──
+  // Records via microphone and uploads the blob to the 'recordings' Supabase bucket
+  // (this bucket has confirmed anon-insert policy; 'caller-audio' bucket does not).
+  async function toggleBotTurnRec(btn) {
+    const row  = btn.closest('.bot-script-turn-row');
+    const rows = Array.from(document.querySelectorAll('#bot-script-items .bot-script-turn-row'));
+    const idx  = rows.indexOf(row);
+    if (idx < 0) return;
+
+    const statusEl  = row.querySelector('.bst-rec-status');
+    const uploadBtn = row.querySelector('.bst-upload-btn');
+
+    if (_botScriptRecording === idx) {
+      // ── STOP recording this turn ──
+      _botScriptRecording = -1;
+      Recorder.stop();
+      btn.textContent = '🎙 Record';
+      btn.classList.remove('recording');
+      btn.disabled = true;
+      if (uploadBtn) uploadBtn.disabled = true;
+      if (statusEl)  { statusEl.textContent = '⏳ Processing...'; statusEl.className = 'bst-rec-status'; }
+
+      let blob = null;
+      try { blob = await _botScriptRecPromise; } catch (e) { console.warn('Rec error:', e); }
+      _botScriptRecPromise = null;
+      btn.disabled = false;
+      if (uploadBtn) uploadBtn.disabled = false;
+
+      if (!blob || blob.size === 0) {
+        if (statusEl) { statusEl.textContent = '⚠ No audio captured — try again'; statusEl.className = 'bst-rec-status'; }
+        return;
+      }
+
+      // Upload to 'recordings' bucket (has anon-insert policy)
+      if (statusEl) { statusEl.textContent = '⏳ Uploading...'; statusEl.className = 'bst-rec-status'; }
+      try {
+        const sb       = DB.getClient();
+        const mimeType = blob.type || 'audio/webm';
+        const ext      = mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mp4') ? 'mp4' : 'webm';
+        const path     = `bot-script/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error: upErr } = await sb.storage.from('recordings').upload(path, blob, { contentType: mimeType });
+        if (upErr) throw upErr;
+        const { data: ud } = sb.storage.from('recordings').getPublicUrl(path);
+        const url = ud.publicUrl;
+
+        _botScriptAudioBlobs[idx] = url;
+
+        const audio  = row.querySelector('.bst-audio-preview');
+        const clrBtn = row.querySelector('.bst-clear-btn');
+        if (audio)   { audio.src = url; audio.classList.remove('hidden'); }
+        if (clrBtn)  clrBtn.classList.remove('hidden');
+        if (uploadBtn) { uploadBtn.textContent = '📂 Replace'; uploadBtn.classList.add('has-audio'); }
+        btn.textContent = '🔄 Re-record';
+        if (statusEl) { statusEl.textContent = '✓ Recorded'; statusEl.className = 'bst-rec-status'; }
+      } catch (e) {
+        console.error('Bot script rec upload failed:', e);
+        if (statusEl) { statusEl.textContent = '✗ Upload failed: ' + (e.message || e); statusEl.className = 'bst-rec-status'; }
+        btn.textContent = '🎙 Record';
+      }
+    } else {
+      // ── START recording this turn ──
+      // If another turn is already recording, stop and discard it
+      if (_botScriptRecording >= 0) {
+        Recorder.stop();
+        const recRows = Array.from(document.querySelectorAll('#bot-script-items .bot-script-turn-row'));
+        const prevRow = recRows[_botScriptRecording];
+        if (prevRow) {
+          const prevBtn = prevRow.querySelector('.bst-rec-btn');
+          const prevSt  = prevRow.querySelector('.bst-rec-status');
+          if (prevBtn) { prevBtn.textContent = '🎙 Record'; prevBtn.classList.remove('recording'); }
+          if (prevSt)  prevSt.textContent = '';
+        }
+        if (_botScriptRecPromise) _botScriptRecPromise.catch(() => {});
+        _botScriptRecPromise = null;
+        _botScriptRecording  = -1;
+      }
+
+      _botScriptRecording = idx;
+      btn.textContent = '⏹ Stop';
+      btn.classList.add('recording');
+      if (statusEl) { statusEl.textContent = '● Recording...'; statusEl.className = 'bst-rec-status recording'; }
+      try {
+        _botScriptRecPromise = Recorder.start();
+      } catch (e) {
+        _botScriptRecording  = -1;
+        _botScriptRecPromise = null;
+        btn.textContent = '🎙 Record';
+        btn.classList.remove('recording');
+        if (statusEl) { statusEl.textContent = '✗ Mic access denied'; statusEl.className = 'bst-rec-status'; }
+      }
+    }
+  }
+
+  // ── Per-turn file upload ──
+  // Uploads to the 'recordings' bucket (confirmed anon-insert policy).
+  async function uploadBotTurnAudio(input) {
+    const row  = input.closest('.bot-script-turn-row');
+    const rows = Array.from(document.querySelectorAll('#bot-script-items .bot-script-turn-row'));
+    const idx  = rows.indexOf(row);
+    if (idx < 0) return;
+
+    const file = input.files[0];
+    if (!file) return;
+
+    const statusEl  = row.querySelector('.bst-rec-status');
+    const uploadBtn = row.querySelector('.bst-upload-btn');
+
+    if (statusEl)  { statusEl.textContent = '⏳ Uploading...'; statusEl.className = 'bst-rec-status'; }
+    if (uploadBtn) { uploadBtn.disabled = true; uploadBtn.textContent = '⏳ Uploading...'; }
+
+    try {
+      const sb       = DB.getClient();
+      const mimeType = file.type || 'audio/mpeg';
+      const ext      = (file.name.split('.').pop() || 'mp3').toLowerCase();
+      const path     = `bot-script/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      // Use 'recordings' bucket — this has confirmed anon-insert policy
+      const { error } = await sb.storage.from('recordings').upload(path, file, { contentType: mimeType });
+      if (error) throw error;
+      const { data: ud } = sb.storage.from('recordings').getPublicUrl(path);
+      const url = ud.publicUrl;
+
+      _botScriptAudioBlobs[idx] = url;
+
+      const audio  = row.querySelector('.bst-audio-preview');
+      const clrBtn = row.querySelector('.bst-clear-btn');
+      const recBtn = row.querySelector('.bst-rec-btn');
+      if (audio)   { audio.src = url; audio.classList.remove('hidden'); }
+      if (clrBtn)  clrBtn.classList.remove('hidden');
+      if (recBtn)  { recBtn.textContent = '🔄 Re-record'; recBtn.classList.add('has-audio'); }
+      if (uploadBtn) { uploadBtn.disabled = false; uploadBtn.textContent = '📂 Replace'; uploadBtn.classList.add('has-audio'); }
+      if (statusEl)  { statusEl.textContent = '✓ Uploaded'; statusEl.className = 'bst-rec-status'; }
+    } catch (e) {
+      console.error('Bot audio upload error:', e);
+      if (statusEl)  { statusEl.textContent = '✗ Upload failed: ' + (e.message || e); statusEl.className = 'bst-rec-status'; }
+      if (uploadBtn) { uploadBtn.disabled = false; uploadBtn.textContent = _botScriptAudioBlobs[idx] ? '📂 Replace' : '📎 Upload'; }
+    }
+    input.value = ''; // reset so same file can be re-selected
+  }
+
+  function clearBotTurnAudio(btn) {
+    const row  = btn.closest('.bot-script-turn-row');
+    const rows = Array.from(document.querySelectorAll('#bot-script-items .bot-script-turn-row'));
+    const idx  = rows.indexOf(row);
+    if (idx >= 0) _botScriptAudioBlobs[idx] = null;
+
+    const audio     = row.querySelector('.bst-audio-preview');
+    const recBtn    = row.querySelector('.bst-rec-btn');
+    const uploadBtn = row.querySelector('.bst-upload-btn');
+    const statusEl  = row.querySelector('.bst-rec-status');
+    if (audio)     { audio.src = ''; audio.classList.add('hidden'); }
+    if (recBtn)    { recBtn.textContent = '🎙 Record'; recBtn.classList.remove('recording', 'has-audio'); }
+    if (uploadBtn) { uploadBtn.textContent = '📎 Upload'; uploadBtn.classList.remove('has-audio'); }
+    if (statusEl)  statusEl.textContent = '';
+    btn.classList.add('hidden');
+  }
+
+  function renderChecklistItems(items) {
+    const container = $('checklist-items');
+    container.innerHTML = '';
+    items.forEach(item => addChecklistItem(item));
+  }
+
+  function addChecklistItem(value = '') {
+    const container = $('checklist-items');
+    const row = document.createElement('div');
+    row.className = 'checklist-item-row';
+    row.innerHTML = `
+      <input type="text" placeholder="e.g. Greet professionally" value="${value.replace(/"/g, '&quot;')}">
+      <button class="btn-remove-item" title="Remove">✕</button>`;
+    row.querySelector('.btn-remove-item').onclick = () => row.remove();
+    container.appendChild(row);
+  }
+
+  // ── MCQ Question Editor (Grammar Assessment) ──
+
+  function renderMcqQuestions(questions = []) {
+    const container = $('mcq-questions-list');
+    container.innerHTML = '';
+    if (questions.length === 0) {
+      addMcqQuestion(); // start with one blank
+    } else {
+      questions.forEach(q => addMcqQuestion(q));
+    }
+  }
+
+  function addMcqQuestion(data = null) {
+    const container = $('mcq-questions-list');
+    const idx       = container.children.length;
+    const LABELS    = ['A', 'B', 'C', 'D'];
+    const defaultOptions = ['', '', '', ''];
+    const opts      = (data && data.options) ? data.options : defaultOptions;
+    const correct   = (data && typeof data.correct === 'number') ? data.correct : 0;
+    const stem      = (data && data.stem) ? data.stem.replace(/"/g, '&quot;') : '';
+    const expl      = (data && data.explanation) ? data.explanation.replace(/"/g, '&quot;') : '';
+
+    const block = document.createElement('div');
+    block.className = 'mcq-question-block';
+    block.innerHTML = `
+      <div class="mcq-question-header">
+        <span class="mcq-q-label">Question ${idx + 1}</span>
+        <button class="btn-remove-item" title="Remove question">✕ Remove</button>
+      </div>
+      <textarea class="mcq-stem-input" placeholder="Type the question or sentence here...">${stem}</textarea>
+      <div class="mcq-correct-hint">Mark the radio button (●) next to the correct answer:</div>
+      <div class="mcq-options-wrap">
+        ${LABELS.map((lbl, i) => `
+          <div class="mcq-option-row">
+            <input type="radio" name="mcq-correct-${idx}-${Date.now()}" class="mcq-correct-radio" value="${i}" ${correct === i ? 'checked' : ''}>
+            <span class="mcq-option-letter">${lbl}</span>
+            <input type="text" class="mcq-option-input" placeholder="Option ${lbl}" value="${(opts[i] || '').replace(/"/g, '&quot;')}">
+          </div>`).join('')}
+      </div>
+      <input type="text" class="mcq-explanation-input" placeholder="Explanation (shown to trainee after test — optional)" value="${expl}">`;
+
+    block.querySelector('.btn-remove-item').onclick = () => {
+      block.remove();
+      // Re-label remaining questions
+      Array.from(container.children).forEach((b, i) => {
+        const lbl = b.querySelector('.mcq-q-label');
+        if (lbl) lbl.textContent = `Question ${i + 1}`;
+      });
+    };
+
+    container.appendChild(block);
+  }
+
+  function initTopicModal() {
+    $('btn-add-checklist').onclick = () => addChecklistItem();
+    $('btn-add-mcq-question').onclick = () => addMcqQuestion();
+    $('btn-close-topic-modal').onclick = closeTopicModal;
+    $('btn-cancel-topic').onclick = closeTopicModal;
+    $('btn-save-topic').onclick = saveTopic;
+
+    // Caller audio recording in modal
+    initCallerRecorder();
+    $('btn-clear-caller-audio').onclick = () => {
+      _callerAudioBlob = null;
+      $('caller-preview-audio').src = '';
+      $('caller-preview-audio').classList.add('hidden');
+      $('btn-clear-caller-audio').classList.add('hidden');
+    };
+  }
+
+  function initCallerRecorder() {
+    let recPromise = null;
+    const btn = $('btn-record-caller');
+    const status = $('caller-rec-status');
+
+    btn.onclick = async () => {
+      if (!_callerRecording) {
+        _callerRecording = true;
+        btn.textContent = '⏹ Stop Recording';
+        btn.style.background = '#fef2f2';
+        status.textContent = '● Recording...';
+        status.className = 'recording';
+        recPromise = Recorder.start();
+        Recorder.startTimer(null, 0, null, null, true);
+      } else {
+        _callerRecording = false;
+        Recorder.stop();
+        let blob = null;
+        try { blob = await recPromise; } catch (e) {}
+        _callerAudioBlob = blob;
+        btn.textContent = '🎙 Re-record';
+        btn.style.background = '';
+        if (blob) {
+          const sizeMB = (blob.size / (1024 * 1024)).toFixed(1);
+          if (blob.size > 50 * 1024 * 1024) {
+            status.textContent = `⚠ Recording too large (${sizeMB} MB) — max 50 MB. Please re-record.`;
+            status.className = 'error';
+            _callerAudioBlob = null;
+          } else {
+            status.textContent = `✓ Recorded (${sizeMB} MB)`;
+            status.className = '';
+            const url = URL.createObjectURL(blob);
+            $('caller-preview-audio').src = url;
+            $('caller-preview-audio').classList.remove('hidden');
+            $('btn-clear-caller-audio').classList.remove('hidden');
+          }
+        } else {
+          status.textContent = '⚠ Recording failed — no audio captured.';
+          status.className = 'error';
+        }
+      }
+    };
+  }
+
+  function closeTopicModal() {
+    $('topic-modal').classList.add('hidden');
+    _editTopicId = null;
+    _callerAudioBlob = null;
+    _botScriptAudioBlobs = [];
+    _botScriptRecording  = -1;
+    _botScriptRecPromise = null;
+    if (_callerRecording) { Recorder.stop(); _callerRecording = false; }
+  }
+
+  async function saveTopic() {
+    const title  = $('topic-title').value.trim();
+    const module = $('topic-module').value;
+    if (!title) { toast('Please enter a title.', 'error'); return; }
+
+    let checklist;
+    if (module === 'grammar-assessment' || module === 'listening-assessment' || module === 'stock-market-mcq') {
+      // Collect MCQ questions from the editor blocks
+      const blocks = document.querySelectorAll('#mcq-questions-list .mcq-question-block');
+      const questions = [];
+      blocks.forEach(block => {
+        const stem = block.querySelector('.mcq-stem-input')?.value.trim() || '';
+        if (!stem) return; // skip blank questions
+        const options = Array.from(block.querySelectorAll('.mcq-option-input')).map(i => i.value.trim());
+        const correctRadio = block.querySelector('.mcq-correct-radio:checked');
+        const correct      = correctRadio ? parseInt(correctRadio.value) : 0;
+        const explanation  = block.querySelector('.mcq-explanation-input')?.value.trim() || '';
+        questions.push({ stem, options, correct, explanation });
+      });
+      if (!questions.length) {
+        toast('Please add at least one question.', 'error');
+        return;
+      }
+      checklist = questions; // stored as objects in the checklist field
+    } else {
+      checklist = Array.from(document.querySelectorAll('#checklist-items input'))
+        .map(i => i.value.trim()).filter(v => v);
+    }
+
+    const botScriptRows = Array.from(document.querySelectorAll('#bot-script-items .bot-script-turn-row'));
+    const rawTexts = [];
+    const rawAudio = [];
+    botScriptRows.forEach((r, i) => {
+      const text = r.querySelector('.bst-input')?.value.trim() || '';
+      if (text) { rawTexts.push(text); rawAudio.push(_botScriptAudioBlobs[i] || null); }
+    });
+
+    // Audio files are already uploaded to Storage at selection time (URL strings or null).
+    // Embed directly into botScript as {text, audioUrl} objects — no botScriptAudio key ever sent to DB.
+    const hasAudio  = rawAudio.some(Boolean);
+    const botScript = hasAudio
+      ? rawTexts.map((t, i) => ({ text: t, audioUrl: rawAudio[i] || null }))
+      : rawTexts;
+
+    const data = {
+      module,
+      title,
+      description: $('topic-description').value.trim(),
+      scenario:    (module === 'grammar-assessment' || module === 'listening-assessment') ? '' : $('topic-scenario').value.trim(),
+      checklist,
+      botScript,   // string[] when no audio, {text,audioUrl}[] when audio exists — NO botScriptAudio key
+      callerAudioBlob: _callerAudioBlob || null,
+      createdAt: new Date().toISOString()
+    };
+
+    try {
+      if (_editTopicId) {
+        data.id = _editTopicId;
+        await DB.put('topics', data);
+        toast('Topic updated!', 'success');
+      } else {
+        await DB.put('topics', data);
+        toast('Topic created!', 'success');
+      }
+      closeTopicModal();
+      renderTopicsList();
+    } catch (e) {
+      console.error('Save topic failed:', e);
+      // Build a helpful message: Supabase errors have .message + optional .hint / .details
+      const msg = [e.message, e.hint, e.details].filter(Boolean).join(' | ');
+      toast('Error saving topic: ' + (msg || String(e)), 'error');
+    }
+  }
+
+  async function deleteTopic(id) {
+    if (!confirm('Delete this topic? Sessions using it will still show, but new sessions can\'t use it.')) return;
+    await DB.del('topics', id);
+    toast('Topic deleted.', '');
+    renderTopicsList();
+  }
+
+  // ---- Enable / Disable all topics in the current tab filter ----
+  async function _setAllTopicsEnabled(enable) {
+    try {
+      const topics  = await DB.getAll('topics');
+      const targets = topics.filter(t => matchesModuleFilter(t.module, _topicsFilter));
+      if (!targets.length) { toast('No topics in the current view.', ''); return; }
+
+      const label = _topicsFilter === 'all' ? 'all topics' : `all ${_topicsFilter} topics`;
+      if (!confirm(`${enable ? 'Enable' : 'Disable'} ${label} (${targets.length} topic${targets.length !== 1 ? 's' : ''})?`)) return;
+
+      await Promise.all(targets.map(t =>
+        DB.patch('topics', t.id, { enabled: enable })
+      ));
+      toast(`${enable ? '✅ Enabled' : '⏸ Disabled'} ${targets.length} topic${targets.length !== 1 ? 's' : ''}.`, 'success');
+      renderTopicsList();
+    } catch (e) {
+      toast('Failed: ' + e.message, 'error');
+    }
+  }
+
+  function enableAllTopics()  { _setAllTopicsEnabled(true);  }
+  function disableAllTopics() { _setAllTopicsEnabled(false); }
+
+  // ---- Assessments ----
+  async function loadAssessments(filterTraineeId = null) {
+    const tbody = $('assessments-tbody');
+    let sessions, topics, teamRec, archivedRec, traineesData;
+    try {
+      [sessions, topics, teamRec, archivedRec, traineesData] = await Promise.all([
+        DB.getAll('sessions'),
+        DB.getAll('topics'),
+        DB.get('settings', 'team_assignments'),
+        DB.get('settings', 'archivedSessionIds'),
+        _activeTraineeIds.size === 0 ? DB.getAll('trainees') : Promise.resolve([])
+      ]);
+    } catch (e) {
+      console.error('loadAssessments DB error:', e);
+      if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="9" class="empty-state" style="color:#ef4444">
+          ⚠ Could not load assessments: ${e.message || e}<br>
+          <small>Check your Supabase configuration and RLS policies, then click Refresh.</small>
+        </td></tr>`;
+      }
+      return;
+    }
+
+    _teamAssignments = (teamRec && teamRec.value) ? JSON.parse(teamRec.value) : {};
+    if (traineesData.length) _activeTraineeIds = new Set(traineesData.map(t => t.id));
+    _archivedIds = new Set(archivedRec ? JSON.parse(archivedRec.value) : []);
+
+    populateTeamFilter();
+    _populateRescoreSelect();
+
+    const topicMap = {};
+    topics.forEach(t => { topicMap[t.id] = t; });
+
+    // Cache so saveScore can re-apply filters without a full reload
+    _cachedSessions = sessions;
+    _cachedTopicMap = topicMap;
+
+    // Reset selection state on fresh load
+    _selectedSessionIds.clear();
+    _updateSessionActionBtns();
+
+    // Update tab counts
+    _refreshArchiveCounts(sessions);
+
+    if (filterTraineeId) {
+      // Navigating from trainee view: show individual sessions, bypass manager summary
+      _currentManagerDrill = null;
+      _restoreIndividualSessionsHeader();
+      const filtered = sessions.filter(s => s.traineeId === filterTraineeId);
+      renderAssessmentsTable(filtered, topicMap);
+    } else {
+      // Normal load: reset drill state and show manager summary view
+      _currentManagerDrill = null;
+      const backBtn = $('btn-back-to-managers');
+      if (backBtn) backBtn.style.display = 'none';
+      applyAssessmentFilters(sessions, topicMap);
+    }
+
+    // Populate manager filter dropdown
+    const mgrSel = $('filter-manager');
+    if (mgrSel) {
+      mgrSel.innerHTML = '<option value="">All Managers</option>';
+      Object.keys(_MANAGER_AGENT_MAP).sort().forEach(m => {
+        mgrSel.innerHTML += `<option value="${m}">${m}</option>`;
+      });
+      mgrSel.value = _currentManagerDrill || '';
+      mgrSel.onchange = () => {
+        const m = mgrSel.value;
+        if (m) drillIntoManager(m);
+        else    backToManagers();
+      };
+    }
+
+    $('filter-module').onchange = () => {
+      _assessmentsFilter.module = $('filter-module').value;
+      applyAssessmentFilters(sessions, topicMap);
+    };
+    $('filter-status').onchange = () => {
+      _assessmentsFilter.status = $('filter-status').value;
+      applyAssessmentFilters(sessions, topicMap);
+    };
+    $('filter-team').onchange = () => {
+      _assessmentsFilter.team = $('filter-team').value;
+      applyAssessmentFilters(sessions, topicMap);
+    };
+    $('btn-refresh-assessments').onclick = () => loadAssessments();
+    $('btn-export-csv').onclick = () => downloadCSV();
+
+    initScoringModal();
+  }
+
+  async function downloadCSV() {
+    if (typeof XLSX === 'undefined') {
+      toast('⚠ Excel library not loaded yet. Please wait and try again.', 'error');
+      return;
+    }
+
+    const [sessions, trainees] = await Promise.all([DB.getAll('sessions'), DB.getAll('trainees')]);
+    const traineeMap = {};
+    trainees.forEach(t => { traineeMap[t.id] = t; });
+
+    const sorted = [...sessions].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+
+    // ── P&S: effective score per session = admin if scored, else AI.
+    //    avgOfAll = average of effective scores across ALL that trainee's P&S sessions.
+    //    bestId   = session with highest effective score (only that row shows avgOfAll).
+    const CSV_PS = new Set(['pick-speak', 'pick-speak-general', 'pick-speak-stock']);
+    const csvPsGrouped = {};
+    sorted.forEach(s => {
+      if (!CSV_PS.has(s.module)) return;
+      const aN  = s.adminScores ? (calcAdminAvg(s.adminScores)          ?? null) : null;
+      const iN  = s.aiScores    ? (normalizeOverall(s.aiScores.overall) ?? null) : null;
+      const eff = aN !== null ? aN : iN;
+      if (eff === null) return;
+      if (!csvPsGrouped[s.traineeId]) csvPsGrouped[s.traineeId] = [];
+      csvPsGrouped[s.traineeId].push({ id: s.id, eff });
+    });
+    const csvPsInfo = {}; // traineeId → { bestId, avgOfAll }
+    Object.entries(csvPsGrouped).forEach(([tid, list]) => {
+      const best     = list.reduce((a, b) => b.eff > a.eff ? b : a);
+      const avgOfAll = parseFloat((list.reduce((s, x) => s + x.eff, 0) / list.length).toFixed(1));
+      csvPsInfo[tid] = { bestId: best.id, avgOfAll };
+    });
+
+    // ── Build rows ──────────────────────────────────────────────
+    const headers = [
+      'Name', 'Employee ID', 'Module', 'Topic', 'Date',
+      'AI Score', 'Admin Score', 'Final Score',
+      'AI Coaching Summary', 'Admin Coaching Summary'
+    ];
+
+    const rows = sorted.map(s => {
+      const trainee   = traineeMap[s.traineeId] || {};
+      const name      = s.traineeName || trainee.name || '';
+      const empId     = trainee.employee_id || '';
+      const module    = MODULE_LABELS[s.module] || s.module || '';
+      const topic     = s.topicTitle || '';
+      const date      = s.submittedAt ? new Date(s.submittedAt).toLocaleDateString() : '';
+      const aiScore   = s.aiScores?.overall != null ? normalizeOverall(s.aiScores.overall) : '';
+      const admScore  = s.adminScores ? (calcAdminAvg(s.adminScores) ?? '') : '';
+      const csvAI    = aiScore  !== '' ? parseFloat(aiScore)  : null;
+      const csvAdmin = admScore !== '' ? parseFloat(admScore) : null;
+      // P&S: best session shows average of ALL sessions' effective scores; others → 'N/A'
+      // Non-P&S (mock call, grammar, listening): admin is final; if no admin, AI is final. No averaging.
+      let avgScore;
+      if (CSV_PS.has(s.module)) {
+        const info = csvPsInfo[s.traineeId];
+        avgScore = (info && s.id === info.bestId) ? info.avgOfAll : 'N/A';
+      } else {
+        avgScore = csvAdmin !== null ? csvAdmin : (csvAI !== null ? csvAI : '');
+      }
+      // Always regenerate fresh — avoids stale stored summaries with removed parameters
+      // Grammar / Listening Assessment: AI summary = section-by-section breakdown
+      let aiSummary = '';
+      if (s.module === 'grammar-assessment' || s.module === 'listening-assessment') {
+        try {
+          const parsed = JSON.parse(s.writtenText || '{}');
+          if (parsed.sections && Array.isArray(parsed.sections)) {
+            const isListening = s.module === 'listening-assessment';
+            const secBreakdown = parsed.sections.map((sec, i) => {
+              const label = isListening ? (sec.sectionType || `Sec ${i + 1}`) : `Sec ${String.fromCharCode(65 + i)}`;
+              return `${label}: ${sec.marksObtained ?? sec.correct ?? '?'}/${sec.maxMarks ?? sec.total ?? '?'}`;
+            }).join(' | ');
+            aiSummary = `Score: ${parsed.totalMarksObtained ?? parsed.totalCorrect ?? '?'}/${parsed.totalMaxMarks ?? parsed.totalQuestions ?? '?'} (${s.aiScores?.overall ?? '?'}%) — ${secBreakdown}`;
+          } else if (s.aiScores) {
+            const { correctAnswers, totalQuestions, overall } = s.aiScores;
+            aiSummary = `Score: ${correctAnswers ?? '?'} / ${totalQuestions ?? '?'} correct (${overall ?? '?'}%)`;
+          }
+        } catch (_) {
+          if (s.aiScores) {
+            const { correctAnswers, totalQuestions, overall } = s.aiScores;
+            aiSummary = `Score: ${correctAnswers ?? '?'} / ${totalQuestions ?? '?'} correct (${overall ?? '?'}%)`;
+          }
+        }
+      } else if (s.aiScores && typeof SpeechEngine !== 'undefined') {
+        aiSummary = SpeechEngine.generateCoachingSummary(s.module, s.aiScores);
+      }
+      const isAutoScoredModule = s.module === 'grammar-assessment' || s.module === 'listening-assessment' || s.module === 'stock-market-mcq';
+      const adminSummary = (s.adminScores && !isAutoScoredModule && typeof SpeechEngine !== 'undefined')
+        ? SpeechEngine.generateCoachingSummary(s.module, s.adminScores, 'admin')
+        : (s.adminScores && isAutoScoredModule ? 'Reviewed by admin' : '');
+      return [name, empId, module, topic, date, aiScore, admScore, avgScore, aiSummary, adminSummary];
+    });
+
+    // ── Build worksheet ─────────────────────────────────────────
+    const wsData = [headers, ...rows];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+    // Column widths (in characters)
+    ws['!cols'] = [
+      { wch: 22 }, // Name
+      { wch: 14 }, // Employee ID
+      { wch: 22 }, // Module
+      { wch: 30 }, // Topic
+      { wch: 12 }, // Date
+      { wch: 10 }, // AI Score
+      { wch: 12 }, // Admin Score
+      { wch: 11 }, // Avg Score
+      { wch: 55 }, // AI Coaching Summary
+      { wch: 55 }, // Admin Coaching Summary
+    ];
+
+    // Enable text wrap + top-align on all cells
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    for (let R = range.s.r; R <= range.e.r; R++) {
+      for (let C = range.s.c; C <= range.e.c; C++) {
+        const addr = XLSX.utils.encode_cell({ r: R, c: C });
+        if (!ws[addr]) continue;
+        ws[addr].s = {
+          alignment: { wrapText: true, vertical: 'top' },
+          font: R === 0 ? { bold: true } : {}
+        };
+      }
+    }
+
+    // ── Build workbook & download ────────────────────────────────
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Assessment Scores');
+    const fileName = `commassess-scores-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    XLSX.writeFile(wb, fileName, { cellStyles: true, bookSST: false });
+    toast('Excel file downloaded!', 'success');
+  }
+
+  // ---- NRI Stock Market — Wrong Answers Report ----
+  async function downloadSmqWrongAnswersReport() {
+    const sessions = await DB.getAll('sessions');
+    const smqSessions = sessions.filter(s => s.module === 'stock-market-mcq' && s.writtenText);
+
+    if (!smqSessions.length) {
+      toast('No NRI Stock Market test sessions found.', '');
+      return;
+    }
+
+    const LABELS = ['A', 'B', 'C', 'D'];
+
+    // Deduplicate sessions: one per trainee — keep the most recent submission
+    const latestByTrainee = {};
+    smqSessions.forEach(s => {
+      const key = (s.traineeName || 'Unknown').trim().toLowerCase();
+      const existing = latestByTrainee[key];
+      if (!existing || new Date(s.submittedAt) > new Date(existing.submittedAt)) {
+        latestByTrainee[key] = s;
+      }
+    });
+    const uniqueSessions = Object.values(latestByTrainee);
+    const totalAgents = uniqueSessions.length;
+
+    // Map: stem → { stem, options, correctIdx, explanation, seenNames:Set, count }
+    const wrongMap = {};
+
+    uniqueSessions.forEach(session => {
+      let parsed;
+      try { parsed = JSON.parse(session.writtenText); } catch { return; }
+      const answerRecord = Array.isArray(parsed) ? parsed : (parsed.answerRecord || []);
+      const agentKey = (session.traineeName || 'unknown').trim().toLowerCase();
+      answerRecord.forEach(ans => {
+        if (ans.isCorrect || !ans.stem) return;
+        if (!wrongMap[ans.stem]) {
+          wrongMap[ans.stem] = {
+            stem: ans.stem,
+            options: ans.options || [],
+            correctIdx: ans.correct,
+            explanation: ans.explanation || '',
+            seenNames: new Set(),
+            count: 0
+          };
+        }
+        // Count each agent only once per question
+        if (!wrongMap[ans.stem].seenNames.has(agentKey)) {
+          wrongMap[ans.stem].seenNames.add(agentKey);
+          wrongMap[ans.stem].count++;
+        }
+      });
+    });
+
+    const wrongQuestions = Object.values(wrongMap)
+      .sort((a, b) => b.count - a.count);
+
+    if (!wrongQuestions.length) {
+      toast('All agents answered every question correctly!', 'success');
+      return;
+    }
+    const date = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+
+    let doc = `# NRI Stock Market — Wrong Answers Report\n\n`;
+    doc += `**Agents who completed the test:** ${totalAgents}\n`;
+    doc += `**Questions missed by at least one agent:** ${wrongQuestions.length}\n`;
+    doc += `**Generated:** ${date}\n\n`;
+    doc += `---\n\n`;
+
+    wrongQuestions.forEach((q, i) => {
+      const pct = Math.round((q.count / totalAgents) * 100);
+      doc += `## Q${i + 1}. ${q.stem}\n\n`;
+      doc += `**Missed by:** ${q.count} of ${totalAgents} agent${totalAgents !== 1 ? 's' : ''} (${pct}%)\n\n`;
+
+      q.options.forEach((opt, idx) => {
+        const tick = idx === q.correctIdx ? ' ✅' : '';
+        doc += `- **${LABELS[idx] || idx})** ${opt}${tick}\n`;
+      });
+
+      doc += `\n**Correct Answer:** ${LABELS[q.correctIdx] || '?'}) ${q.options[q.correctIdx] || ''}\n\n`;
+      if (q.explanation) doc += `**Explanation:** ${q.explanation}\n\n`;
+
+      doc += `\n---\n\n`;
+    });
+
+    const blob = new Blob([doc], { type: 'text/markdown' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `NRI_Wrong_Answers_${new Date().toISOString().slice(0, 10)}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast(`✅ Report downloaded — ${wrongQuestions.length} question${wrongQuestions.length !== 1 ? 's' : ''} missed across ${totalAgents} agent${totalAgents !== 1 ? 's' : ''}.`, 'success');
+  }
+
+  function applyAssessmentFilters(sessions, topicMap) {
+    // First split by archive status (stored in settings, not a DB column)
+    let filtered = _viewArchive
+      ? sessions.filter(s => _archivedIds.has(s.id))
+      : sessions.filter(s => !_archivedIds.has(s.id));
+
+    filtered = filtered.filter(s => matchesModuleFilter(s.module, _assessmentsFilter.module));
+    if (_assessmentsFilter.status !== 'all') {
+      filtered = filtered.filter(s => s.status === _assessmentsFilter.status);
+    }
+    if (_assessmentsFilter.team !== 'all') {
+      filtered = filtered.filter(s => _teamAssignments[s.traineeId] === _assessmentsFilter.team);
+    }
+
+    if (_currentManagerDrill) {
+      _restoreIndividualSessionsHeader();
+      const drill = _currentManagerDrill;
+      // Resolve each session's manager using team-assignment (primary) or baked index (fallback)
+      const resolveSessionMgr = s => {
+        const assigned = _teamAssignments[s.traineeId];
+        return (assigned && _MANAGER_AGENT_MAP[assigned]) ? assigned : _getAgentManager(s.traineeName);
+      };
+      if (drill === '(No Manager Assigned)') {
+        filtered = filtered.filter(s => !resolveSessionMgr(s));
+      } else {
+        filtered = filtered.filter(s => resolveSessionMgr(s) === drill);
+      }
+      renderAssessmentsTable(filtered, topicMap);
+    } else {
+      // Default: manager summary view
+      renderManagerSummaryTable(filtered, topicMap);
+    }
+  }
+
+  // ---- Restore thead to individual-session columns ----
+  function _restoreIndividualSessionsHeader() {
+    const theadTr = $('assessments-thead-tr');
+    if (!theadTr) return;
+    theadTr.innerHTML = `
+      <th style="width:36px;text-align:center">
+        <input type="checkbox" id="select-all-sessions" onchange="Admin.toggleAllSessions(this.checked)" />
+      </th>
+      <th>Trainee</th>
+      <th>Module</th>
+      <th>Topic</th>
+      <th>Submitted</th>
+      <th>Status</th>
+      <th>AI Score</th>
+      <th>Admin Score</th>
+      <th>Final Score</th>
+      <th>Actions</th>`;
+  }
+
+  // ---- Manager summary table (default assessments view) ----
+  function renderManagerSummaryTable(sessions, topicMap) {
+    const theadTr = $('assessments-thead-tr');
+    const tbody   = $('assessments-tbody');
+
+    // Switch to manager-summary columns
+    if (theadTr) {
+      theadTr.innerHTML = `
+        <th style="width:36px;text-align:center"><input type="checkbox" id="select-all-managers" onchange="Admin.toggleAllManagers(this.checked)" /></th>
+        <th>Manager</th>
+        <th style="text-align:center">Agents (with sessions / total)</th>
+        <th style="text-align:center">Sessions</th>
+        <th style="text-align:right">Avg AI Score</th>
+        <th style="text-align:right">Avg Admin Score</th>
+        <th>Actions</th>`;
+    }
+
+    _allRenderedSessions = sessions;
+    _selectedSessionIds.clear();
+    _selectedManagerNames.clear();
+    _updateManagerActionBtns();
+    // hide session-level bulk buttons when in manager summary
+    const archBtn = $('btn-archive-selected');
+    const restBtn = $('btn-restore-selected');
+    if (archBtn) archBtn.style.display = 'none';
+    if (restBtn) restBtn.style.display = 'none';
+
+    if (!sessions.length) {
+      tbody.innerHTML = `<tr><td colspan="7" class="empty-state">${_viewArchive ? 'No archived assessments.' : 'No assessments found.'}</td></tr>`;
+      return;
+    }
+
+    // Group sessions by manager
+    // Primary: team assignment stored in settings (traineeId → managerName)
+    // Fallback: name-based lookup from _MANAGER_AGENT_MAP
+    const managerGroups = {};
+    const unassigned    = [];
+    sessions.forEach(s => {
+      const assigned = _teamAssignments[s.traineeId];
+      // Use team assignment if it's a known manager, else name-match (with alias resolution)
+      const mgr = (assigned && _MANAGER_AGENT_MAP[assigned])
+                ? assigned
+                : _getAgentManager(s.traineeName);
+      if (mgr) {
+        if (!managerGroups[mgr]) managerGroups[mgr] = [];
+        managerGroups[mgr].push(s);
+      } else {
+        unassigned.push(s);
+      }
+    });
+
+    const makeRow = (mgr, mgrSessions, isUnassigned) => {
+      const totalAgents        = isUnassigned ? '?' : ((_MANAGER_AGENT_MAP[mgr] || []).length);
+      const agentsWithSessions = new Set(mgrSessions.map(s => (s.traineeName || '').trim().toLowerCase())).size;
+      const agentsLabel        = isUnassigned ? agentsWithSessions : `${agentsWithSessions} / ${totalAgents}`;
+
+      const aiNums    = mgrSessions.map(s => s.aiScores    ? normalizeOverall(s.aiScores.overall) : null).filter(x => x !== null);
+      const adminNums = mgrSessions.map(s => s.adminScores ? calcAdminAvg(s.adminScores)           : null).filter(x => x !== null);
+      const avgAI    = aiNums.length    ? (aiNums.reduce((a, b) => a + b, 0)    / aiNums.length).toFixed(1)    : '—';
+      const avgAdmin = adminNums.length ? (adminNums.reduce((a, b) => a + b, 0) / adminNums.length).toFixed(1) : '—';
+
+      const safeMgr    = mgr.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      const archiveBtn = _viewArchive
+        ? `<button class="btn-small" onclick="event.stopPropagation();Admin.restoreAllManagerSessions('${safeMgr}')">↩ Restore All</button>`
+        : `<button class="btn-small" onclick="event.stopPropagation();Admin.archiveAllManagerSessions('${safeMgr}')">📁 Archive All</button>`;
+
+      return `<tr style="cursor:pointer" onclick="Admin.drillIntoManager('${safeMgr}')">
+        <td style="text-align:center" onclick="event.stopPropagation()">
+          ${!isUnassigned ? `<input type="checkbox" class="manager-cb" data-mgr="${mgr.replace(/"/g,'&quot;')}" onchange="Admin.toggleManagerCheckbox('${safeMgr}', this.checked)" />` : ''}
+        </td>
+        <td><strong style="color:var(--primary)">${mgr}</strong></td>
+        <td style="text-align:center">${agentsLabel}</td>
+        <td style="text-align:center;font-weight:600">${mgrSessions.length}</td>
+        <td style="text-align:right">${avgAI !== '—' ? avgAI + '/100' : '—'}</td>
+        <td style="text-align:right;font-weight:600;color:${avgAdmin !== '—' ? '#1d4ed8' : 'var(--text-muted)'}">${avgAdmin !== '—' ? avgAdmin + '/100' : '—'}</td>
+        <td style="display:flex;gap:0.4rem;flex-wrap:wrap">
+          <button class="btn-small primary" onclick="event.stopPropagation();Admin.drillIntoManager('${safeMgr}')">View Sessions</button>
+          ${!isUnassigned ? archiveBtn : ''}
+        </td>
+      </tr>`;
+    };
+
+    const rows = Object.entries(managerGroups)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([mgr, mgrSessions]) => makeRow(mgr, mgrSessions, false))
+      .join('');
+
+    const unassignedRow = unassigned.length ? makeRow('(No Manager Assigned)', unassigned, true) : '';
+
+    tbody.innerHTML = rows + unassignedRow;
+  }
+
+  // ---- Drill into a specific manager's sessions ----
+  function drillIntoManager(managerName) {
+    _currentManagerDrill = managerName;
+    const backBtn = $('btn-back-to-managers');
+    if (backBtn) {
+      backBtn.style.display = '';
+      backBtn.querySelector('button').textContent = `← Back to Managers  (${managerName})`;
+    }
+    const mgrSel = $('filter-manager');
+    if (mgrSel) mgrSel.value = managerName;
+    applyAssessmentFilters(_cachedSessions, _cachedTopicMap);
+  }
+
+  function backToManagers() {
+    _currentManagerDrill = null;
+    const backBtn = $('btn-back-to-managers');
+    if (backBtn) backBtn.style.display = 'none';
+    const mgrSel = $('filter-manager');
+    if (mgrSel) mgrSel.value = '';
+    applyAssessmentFilters(_cachedSessions, _cachedTopicMap);
+  }
+
+  // ---- Archive / Restore all sessions for a manager ----
+  // Resolve which manager a session belongs to — same logic used by renderManagerSummaryTable
+  function _resolveSessionManager(s) {
+    const assigned = _teamAssignments[s.traineeId];
+    return (assigned && _MANAGER_AGENT_MAP[assigned]) ? assigned : _getAgentManager(s.traineeName);
+  }
+
+  async function archiveAllManagerSessions(managerName) {
+    const ids = _cachedSessions
+      .filter(s => _resolveSessionManager(s) === managerName)
+      .filter(s => !_archivedIds.has(s.id))
+      .map(s => s.id);
+    if (!ids.length) { toast('No active sessions to archive for this manager.', ''); return; }
+    if (!confirm(`Archive all ${ids.length} active session${ids.length !== 1 ? 's' : ''} for ${managerName}?\n\nYou can restore them at any time from the Archive tab.`)) return;
+    try {
+      await _setSessionsArchived(ids, true);
+      toast(`Archived ${ids.length} session${ids.length !== 1 ? 's' : ''} for ${managerName}.`, 'success');
+    } catch (e) {
+      toast('Archive failed: ' + e.message, 'error');
+    }
+  }
+
+  async function restoreAllManagerSessions(managerName) {
+    const ids = _cachedSessions
+      .filter(s => _resolveSessionManager(s) === managerName)
+      .filter(s => _archivedIds.has(s.id))
+      .map(s => s.id);
+    if (!ids.length) { toast('No archived sessions to restore for this manager.', ''); return; }
+    if (!confirm(`Restore all ${ids.length} archived session${ids.length !== 1 ? 's' : ''} for ${managerName}?`)) return;
+    try {
+      await _setSessionsArchived(ids, false);
+      toast(`Restored ${ids.length} session${ids.length !== 1 ? 's' : ''} for ${managerName}.`, 'success');
+    } catch (e) {
+      toast('Restore failed: ' + e.message, 'error');
+    }
+  }
+
+  // ---- Manager checkbox multi-select ----
+  function toggleManagerCheckbox(mgrName, checked) {
+    if (checked) _selectedManagerNames.add(mgrName);
+    else         _selectedManagerNames.delete(mgrName);
+    _updateManagerActionBtns();
+    const allCb = $('select-all-managers');
+    if (allCb) {
+      const allCbs = document.querySelectorAll('.manager-cb');
+      const n = _selectedManagerNames.size;
+      allCb.indeterminate = n > 0 && n < allCbs.length;
+      allCb.checked       = allCbs.length > 0 && n === allCbs.length;
+    }
+  }
+
+  function toggleAllManagers(checked) {
+    _selectedManagerNames.clear();
+    document.querySelectorAll('.manager-cb').forEach(cb => {
+      cb.checked = checked;
+      if (checked) _selectedManagerNames.add(cb.dataset.mgr);
+    });
+    _updateManagerActionBtns();
+  }
+
+  function _updateManagerActionBtns() {
+    const archBtn = $('btn-archive-selected-managers');
+    const restBtn = $('btn-restore-selected-managers');
+    if (!archBtn || !restBtn) return;
+    const n = _selectedManagerNames.size;
+    if (_viewArchive) {
+      archBtn.style.display = 'none';
+      restBtn.style.display = '';
+      restBtn.disabled      = n === 0;
+      restBtn.textContent   = n > 0 ? `↩ Restore Selected (${n})` : '↩ Restore Selected';
+    } else {
+      restBtn.style.display = 'none';
+      archBtn.style.display = '';
+      archBtn.disabled      = n === 0;
+      archBtn.textContent   = n > 0 ? `📁 Archive Selected (${n})` : '📁 Archive Selected';
+    }
+  }
+
+  async function archiveSelectedManagers() {
+    const managers = [..._selectedManagerNames];
+    if (!managers.length) return;
+    const ids = _cachedSessions
+      .filter(s => managers.includes(_resolveSessionManager(s)))
+      .filter(s => !_archivedIds.has(s.id))
+      .map(s => s.id);
+    if (!ids.length) { toast('No active sessions found for selected managers.', ''); return; }
+    if (!confirm(`Archive all ${ids.length} active session${ids.length !== 1 ? 's' : ''} for ${managers.length} selected manager${managers.length !== 1 ? 's' : ''}?\n\nYou can restore them at any time from the Archive tab.`)) return;
+    try {
+      await _setSessionsArchived(ids, true);
+      _selectedManagerNames.clear();
+      toast(`Archived ${ids.length} session${ids.length !== 1 ? 's' : ''}.`, 'success');
+    } catch (e) {
+      toast('Archive failed: ' + e.message, 'error');
+    }
+  }
+
+  async function restoreSelectedManagers() {
+    const managers = [..._selectedManagerNames];
+    if (!managers.length) return;
+    const ids = _cachedSessions
+      .filter(s => managers.includes(_resolveSessionManager(s)))
+      .filter(s => _archivedIds.has(s.id))
+      .map(s => s.id);
+    if (!ids.length) { toast('No archived sessions found for selected managers.', ''); return; }
+    if (!confirm(`Restore all ${ids.length} archived session${ids.length !== 1 ? 's' : ''} for ${managers.length} selected manager${managers.length !== 1 ? 's' : ''}?`)) return;
+    try {
+      await _setSessionsArchived(ids, false);
+      _selectedManagerNames.clear();
+      toast(`Restored ${ids.length} session${ids.length !== 1 ? 's' : ''}.`, 'success');
+    } catch (e) {
+      toast('Restore failed: ' + e.message, 'error');
+    }
+  }
+
+  function renderAssessmentsTable(sessions, topicMap) {
+    const tbody = $('assessments-tbody');
+    const sorted = [...sessions].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+    _currentFilteredSessions = sorted; // track for Download All
+    _allRenderedSessions = sorted;     // track for select-all
+    _selectedSessionIds.clear();
+    _selectedManagerNames.clear();
+    _updateSessionActionBtns();
+    // hide manager-level bulk buttons when in session drill view
+    const mgrArchBtn = $('btn-archive-selected-managers');
+    const mgrRestBtn = $('btn-restore-selected-managers');
+    if (mgrArchBtn) mgrArchBtn.style.display = 'none';
+    if (mgrRestBtn) mgrRestBtn.style.display = 'none';
+
+    // Reset select-all checkbox
+    const allCb = $('select-all-sessions');
+    if (allCb) { allCb.checked = false; allCb.indeterminate = false; }
+
+    if (sorted.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="10" class="empty-state">${_viewArchive ? 'No archived assessments.' : 'No assessments found.'}</td></tr>`;
+      return;
+    }
+
+    // ── Pick & Speak: pre-compute per-trainee.
+    // Effective score per session = admin score if scored, else AI score.
+    // avgOfAll  = average of effective scores across ALL that trainee's P&S sessions.
+    // bestId    = session with the highest effective score (that row shows avgOfAll; rest → N/A).
+    const PS_MODULES = new Set(['pick-speak', 'pick-speak-general', 'pick-speak-stock']);
+    const psGrouped  = {}; // traineeId → [{ id, eff }]
+    sorted.forEach(s => {
+      if (!PS_MODULES.has(s.module)) return;
+      const adminNum = s.adminScores ? (calcAdminAvg(s.adminScores)          ?? null) : null;
+      const aiNum    = s.aiScores    ? (normalizeOverall(s.aiScores.overall) ?? null) : null;
+      const eff      = adminNum !== null ? adminNum : aiNum; // prefer admin
+      if (eff === null) return;
+      if (!psGrouped[s.traineeId]) psGrouped[s.traineeId] = [];
+      psGrouped[s.traineeId].push({ id: s.id, eff });
+    });
+    const psByTrainee = {}; // traineeId → { bestId, avgOfAll }
+    Object.entries(psGrouped).forEach(([tid, list]) => {
+      const best     = list.reduce((a, b) => b.eff > a.eff ? b : a);
+      const avgOfAll = parseFloat((list.reduce((s, x) => s + x.eff, 0) / list.length).toFixed(1));
+      psByTrainee[tid] = { bestId: best.id, avgOfAll };
+    });
+
+    tbody.innerHTML = sorted.map(s => {
+      const aiScore    = s.aiScores    ? (normalizeOverall(s.aiScores.overall) ?? '—') : '—';
+      const adminScore = s.adminScores ? (calcAdminAvg(s.adminScores)          ?? '—') : '—';
+      const isScored   = !!s.adminScores;
+
+      // For P&S: best-session row shows average of all sessions' effective scores; others → N/A
+      // For all other modules (mock call, grammar, listening): admin score is final;
+      //   if no admin score, AI score is final. No averaging.
+      let avgScore;
+      if (PS_MODULES.has(s.module)) {
+        const info = psByTrainee[s.traineeId];
+        avgScore = (info && s.id === info.bestId) ? info.avgOfAll : 'N/A';
+      } else {
+        const aiNum    = aiScore    !== '—' ? parseFloat(aiScore)    : null;
+        const adminNum = adminScore !== '—' ? parseFloat(adminScore) : null;
+        avgScore = adminNum !== null ? adminNum : (aiNum !== null ? aiNum : '—');
+      }
+      const ext = (s.recordingUrl || '').includes('.mp4') ? 'mp4' : (s.recordingUrl || '').includes('.ogg') ? 'ogg' : 'webm';
+      const dlFilename = `${(s.traineeName || 'recording').replace(/\s+/g, '_')}-${s.module}-${(s.submittedAt || '').slice(0, 10)}.${ext}`;
+      const dlBtn = s.recordingUrl
+        ? `<button class="btn-small" onclick="Admin.downloadRecording('${s.recordingUrl}', '${dlFilename}')">⬇ Recording</button>`
+        : '';
+
+      const archiveBtn = _viewArchive
+        ? `<button class="btn-small" onclick="Admin.restoreSingleSession('${s.id}', '${(s.traineeName || '').replace(/'/g, "\\'")}')">↩ Restore</button>`
+        : `<button class="btn-small" onclick="Admin.archiveSingleSession('${s.id}', '${(s.traineeName || '').replace(/'/g, "\\'")}')">📁 Archive</button>`;
+
+      return `
+        <tr class="${_archivedIds.has(s.id) ? 'session-archived' : ''}">
+          <td style="width:36px;text-align:center">
+            <input type="checkbox" class="session-cb" data-id="${s.id}"
+              onchange="Admin.toggleSessionCheckbox('${s.id}', this.checked)" />
+          </td>
+          <td><strong>${s.traineeName || '—'}</strong></td>
+          <td>${moduleBadge(s.module)}</td>
+          <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.topicTitle || '—'}</td>
+          <td style="white-space:nowrap">${formatDate(s.submittedAt).split(' ')[0]}</td>
+          <td>${statusBadge(isScored ? 'scored' : s.status)}</td>
+          <td>${aiScore    !== '—' ? aiScore    + '/100' : '—'}</td>
+          <td>${adminScore !== '—' ? adminScore + '/100' : '—'}</td>
+          <td style="font-weight:600;color:${avgScore === 'N/A' || avgScore === '—' ? 'var(--text-muted)' : '#1d4ed8'}">${avgScore !== '—' && avgScore !== 'N/A' ? avgScore + '/100' : avgScore}</td>
+          <td style="display:flex;gap:0.4rem;flex-wrap:wrap">
+            <button class="btn-small primary" onclick="Admin.openScoring('${s.id}')">
+              ${isScored ? 'Review' : 'Score'}
+            </button>
+            ${dlBtn}
+            ${archiveBtn}
+            <button class="btn-small danger" onclick="Admin.deleteSession('${s.id}', '${(s.traineeName || '').replace(/'/g, "\\'")}')">
+              🗑 Delete
+            </button>
+          </td>
+        </tr>`;
+    }).join('');
+  }
+
+  // Helper to preserve scores in settings before sessions are deleted from DB
+  async function _preserveScoresBeforeDeletion(sessions, alsoDeleteFromReports = false) {
+    try {
+      const rec = await DB.get('settings', 'preservedReportScores');
+      let preserved = {};
+      if (rec && rec.value) {
+        try {
+          preserved = JSON.parse(rec.value) || {};
+        } catch (_) {
+          preserved = {};
+        }
+      }
+      const r2 = v => Math.round(v * 100) / 100;
+      
+      sessions.forEach(s => {
+        if (!s.traineeName || !s.module) return;
+        const key = s.traineeName.toLowerCase().trim();
+        
+        if (alsoDeleteFromReports) {
+          if (preserved[key]) {
+            const mappedMod = s.module === 'pick-speak' || s.module === 'pick-speak-general' || s.module === 'pick-speak-stock' ? 'psScore'
+                            : s.module === 'listening-assessment' ? 'lisScore'
+                            : s.module === 'mock-call' ? 'mcScore'
+                            : s.module === 'grammar-assessment' ? 'gramScore'
+                            : null;
+            if (mappedMod) {
+              delete preserved[key][mappedMod];
+              if (Object.keys(preserved[key]).length === 0) {
+                delete preserved[key];
+              }
+            }
+          }
+        } else {
+          const score = effScore(s);
+          if (score != null) {
+            if (!preserved[key]) preserved[key] = {};
+            const mappedMod = s.module === 'pick-speak' || s.module === 'pick-speak-general' || s.module === 'pick-speak-stock' ? 'psScore'
+                            : s.module === 'listening-assessment' ? 'lisScore'
+                            : s.module === 'mock-call' ? 'mcScore'
+                            : s.module === 'grammar-assessment' ? 'gramScore'
+                            : null;
+            if (mappedMod) {
+              if (mappedMod === 'psScore')   preserved[key].psScore   = r2(score / 100 * 20);
+              if (mappedMod === 'lisScore')  preserved[key].lisScore  = r2(score / 100 * 20);
+              if (mappedMod === 'mcScore')   preserved[key].mcScore   = r2(score / 100 * 20);
+              if (mappedMod === 'gramScore') preserved[key].gramScore = r2(score / 100 * 25);
+            }
+          }
+        }
+      });
+      
+      await DB.put('settings', { key: 'preservedReportScores', value: JSON.stringify(preserved) });
+    } catch (err) {
+      console.warn('[DB] Failed to preserve scores:', err);
+    }
+  }
+
+  // ---- Delete Session ----
+  async function deleteSession(sessionId, traineeName) {
+    const confirmed = confirm(
+      `Delete this assessment?\n\nTrainee: ${traineeName || 'Unknown'}\n\nThis will remove the session details (recording & transcript) but PRESERVE the score in the reports.`
+    );
+    if (!confirmed) return;
+
+    let deleteFromReports = false;
+    const confirmReports = confirm(
+      `Do you also want to permanently delete this score from Reports and the Comm360 Master Sheet?\n\n(Warning: This requires separate admin confirmation)`
+    );
+    if (confirmReports) {
+      const pin = prompt("Enter Admin Password to confirm deletion from reports:");
+      const pwRec = await DB.get('settings', 'adminPassword');
+      const correctPw = pwRec ? pwRec.value : 'admin123';
+      if (pin === correctPw) {
+        deleteFromReports = true;
+      } else {
+        alert("Invalid password. The score will be preserved in reports.");
+      }
+    }
+
+    try {
+      const session = await DB.get('sessions', sessionId);
+      if (session) {
+        await _preserveScoresBeforeDeletion([session], deleteFromReports);
+      }
+      await DB.del('sessions', sessionId);
+      toast('Assessment deleted.', '');
+      loadAssessments();
+    } catch (e) {
+      console.error('Delete failed:', e);
+      toast('Failed to delete assessment.', 'error');
+    }
+  }
+
+  // ---- Delete All Sessions ----
+  async function deleteAllSessions() {
+    const allSessions = _cachedSessions.length ? _cachedSessions : await DB.getAll('sessions');
+
+    // Scope to the currently drilled-in manager, if any
+    const managerName = _currentManagerDrill;
+    if (!managerName) {
+      alert("Please select a specific manager first using the manager filter dropdown to delete assessments for their team.");
+      return;
+    }
+
+    const sessions = allSessions.filter(s => _resolveSessionManager(s) === managerName);
+
+    if (!sessions.length) {
+      toast(`No assessments found for ${managerName}.`, '');
+      return;
+    }
+
+    const label = `${managerName}'s team`;
+
+    const step1 = confirm(
+      `⚠️ Delete Assessments for ${label}?\n\nThis will remove the session details (recordings & transcripts) but PRESERVE the scores in the reports.`
+    );
+    if (!step1) return;
+
+    let deleteFromReports = false;
+    const confirmReports = confirm(
+      `Do you also want to permanently delete these scores from Reports and the Comm360 Master Sheet?\n\n(Warning: This requires separate admin confirmation)`
+    );
+    if (confirmReports) {
+      const pin = prompt("Enter Admin Password to confirm deletion from reports:");
+      const pwRec = await DB.get('settings', 'adminPassword');
+      const correctPw = pwRec ? pwRec.value : 'admin123';
+      if (pin === correctPw) {
+        deleteFromReports = true;
+      } else {
+        alert("Invalid password. The scores will be preserved in reports.");
+      }
+    }
+
+    const btn = $('btn-delete-all-assessments');
+    if (btn) { btn.disabled = true; btn.textContent = '🗑 Deleting…'; }
+
+    try {
+      await _preserveScoresBeforeDeletion(sessions, deleteFromReports);
+      const ids = sessions.map(s => s.id);
+      if (DB.isLocalStorage()) {
+        for (const id of ids) {
+          await DB.del('sessions', id);
+        }
+      } else {
+        const { error } = await DB.getClient()
+          .from('sessions')
+          .delete()
+          .in('id', ids);
+        if (error) throw error;
+      }
+
+      toast(`✅ ${sessions.length} assessment${sessions.length !== 1 ? 's' : ''} deleted${managerName ? ` for ${managerName}` : ''}.`, 'success');
+      await updatePendingBadge();
+      loadAssessments();
+    } catch (e) {
+      console.error('Delete all failed:', e);
+      toast('Failed to delete assessments: ' + e.message, 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '🗑 Delete All'; }
+    }
+  }
+
+  // ---- Deduplicate sessions for a specific trainee ----
+  // Keeps the most recent session per module, deletes all older duplicates.
+  // Call from browser console: Admin.deduplicateTraineeSessions('Mehul')
+  async function deduplicateTraineeSessions(nameFragment) {
+    const all = await DB.getAll('sessions');
+    const needle = nameFragment.trim().toLowerCase();
+    const matched = all.filter(s => s.traineeName && s.traineeName.toLowerCase().includes(needle));
+
+    if (!matched.length) {
+      toast(`No sessions found matching "${nameFragment}".`, '');
+      return;
+    }
+
+    // Group by module, keep latest per group, collect the rest for deletion
+    const groups = {};
+    matched.forEach(s => {
+      if (!groups[s.module]) groups[s.module] = [];
+      groups[s.module].push(s);
+    });
+
+    const toDelete = [];
+    Object.entries(groups).forEach(([mod, sessions]) => {
+      if (sessions.length <= 1) return;
+      sessions.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+      toDelete.push(...sessions.slice(1)); // keep index 0 (newest), delete the rest
+    });
+
+    if (!toDelete.length) {
+      toast(`No duplicates found for "${nameFragment}".`, '');
+      return;
+    }
+
+    const traineeName = matched[0].traineeName;
+    if (!confirm(`Delete ${toDelete.length} duplicate session(s) for "${traineeName}"?\n\nThe most recent entry per module will be kept. This cannot be undone.`)) return;
+
+    try {
+      for (const s of toDelete) await DB.del('sessions', s.id);
+      toast(`✅ Deleted ${toDelete.length} duplicate session(s) for "${traineeName}".`, 'success');
+      await updatePendingBadge();
+      loadAssessments();
+    } catch (e) {
+      toast('Failed to delete duplicates: ' + e.message, 'error');
+    }
+  }
+
+  // ---- Scoring Modal ----
+  function initScoringModal() {
+    $('btn-close-scoring').onclick = closeScoringModal;
+    $('btn-save-score').onclick = saveScore;
+  }
+
+  async function openScoring(sessionId) {
+    _scoringSessionId = sessionId;
+    const session = await DB.get('sessions', sessionId);
+    if (!session) return;
+
+    const modal = $('scoring-modal');
+    modal.classList.remove('hidden');
+
+    $('scoring-trainee').textContent = session.traineeName;
+    $('scoring-module-badge').textContent = MODULE_LABELS[session.module] || session.module;
+    $('scoring-module-badge').className = `module-badge ${MODULE_BADGE_CLASS[session.module] || ''}`;
+    $('scoring-topic').textContent = session.topicTitle || '—';
+    $('scoring-date').textContent = formatDate(session.submittedAt);
+
+    const isWritten   = session.module === 'written-comm';
+    const isGrammar   = session.module === 'grammar-assessment';
+    const isListening = session.module === 'listening-assessment';
+    const isSmq       = session.module === 'stock-market-mcq';
+    const isMCQ       = isGrammar || isListening || isSmq;
+
+    // Show correct left-panel section based on module type
+    if (isMCQ) {
+      $('scoring-audio-section').classList.add('hidden');
+      $('scoring-transcript-section').classList.add('hidden');
+      $('scoring-written-section').classList.add('hidden');
+      $('scoring-mcq-section').classList.remove('hidden');
+
+      // Render MCQ results — supports new multi-section format and legacy flat format
+      try {
+        const LABELS     = ['A', 'B', 'C', 'D'];
+        const parsed     = JSON.parse(session.writtenText || '{}');
+        const isMultiSec = parsed && parsed.sections && Array.isArray(parsed.sections);
+
+        if (isMultiSec) {
+          // ── New format with weighted marks (A=1pt, B/C=2pts, total=100)
+          const { sections, totalMarksObtained, totalMaxMarks, scoreOutOf100,
+                  totalCorrect, totalQuestions } = parsed;
+          const score   = totalMarksObtained ?? totalCorrect ?? 0;
+          const maxScore = totalMaxMarks ?? totalQuestions ?? 0;
+          const pctShow = scoreOutOf100 ?? (maxScore > 0 ? Math.round((score / maxScore) * 100) : 0);
+          $('scoring-mcq-score').innerHTML =
+            `<strong style="font-size:1.05rem">Total Score: ${score} / ${maxScore} marks (${pctShow}%)</strong>`;
+
+          const accentColor = isListening ? '#db2777' : '#7c3aed';
+          const accentBg    = isListening ? '#fdf2f8' : '#f5f3ff';
+          $('scoring-mcq-review').innerHTML = sections.map((sec, secIdx) => {
+            const secLabel    = isListening
+              ? (sec.sectionType ? `Section ${secIdx + 1}: ${sec.sectionType}` : `Section ${secIdx + 1}`)
+              : `Section ${String.fromCharCode(65 + secIdx)}`;
+            const mObtained   = sec.marksObtained ?? sec.correct ?? 0;
+            const mMax        = sec.maxMarks ?? sec.total ?? 0;
+            const mPerQ       = sec.marksPerQ ?? 1;
+            const rows = (sec.answerRecord || []).map((item, i) => {
+              // Written-answer questions (fill-blank / rewrite)
+              if (item.type === 'fill-blank' || item.type === 'rewrite') {
+                const acceptedStr = (item.acceptedAnswers || []).join(' / ');
+                const userText    = item.userAnswer || '(no answer)';
+                return `<div class="mcq-scoring-item ${item.isCorrect ? 'mcq-correct' : 'mcq-wrong'}">
+                  <strong>${i + 1}. ${item.stem}</strong><br>
+                  ${item.isCorrect
+                    ? `✅ <strong>"${userText}"</strong> <em style="color:#059669">(+${mPerQ} mark${mPerQ > 1 ? 's' : ''})</em>`
+                    : `❌ Your answer: <strong>"${userText}"</strong><br>✔ Accepted: <em style="color:#7c3aed">${acceptedStr}</em>`}
+                  ${item.explanation ? `<br><em style="font-size:0.78rem;color:#64748b">💡 ${item.explanation}</em>` : ''}
+                </div>`;
+              }
+              // MCQ questions
+              const userLbl    = item.userAnswer >= 0 ? LABELS[item.userAnswer] : '—';
+              const correctLbl = LABELS[item.correct];
+              return `<div class="mcq-scoring-item ${item.isCorrect ? 'mcq-correct' : 'mcq-wrong'}">
+                <strong>${i + 1}. ${item.stem}</strong><br>
+                ${item.isCorrect ? `✅ <strong>${userLbl}) ${item.options?.[item.userAnswer] || '—'}</strong> <em style="color:#059669">(+${mPerQ} mark${mPerQ > 1 ? 's' : ''})</em>` : `❌ Your answer: <strong>${userLbl}) ${item.options?.[item.userAnswer] || '—'}</strong> · Correct: <strong>${correctLbl}) ${item.options?.[item.correct] || '—'}</strong>`}
+                ${item.explanation ? `<br><em style="font-size:0.78rem;color:#64748b">💡 ${item.explanation}</em>` : ''}
+              </div>`;
+            }).join('');
+            return `<div style="margin-bottom:1.25rem">
+              <div style="font-weight:700;color:${accentColor};padding:0.5rem 0.75rem;background:${accentBg};border-radius:6px;margin-bottom:0.5rem;display:flex;justify-content:space-between;align-items:center">
+                <span>${secLabel} — ${sec.correct}/${sec.total} correct</span>
+                <span style="background:${accentColor};color:#fff;padding:0.15rem 0.6rem;border-radius:999px;font-size:0.82rem">${mObtained} / ${mMax} marks</span>
+              </div>
+              ${rows}
+            </div>`;
+          }).join('');
+        } else {
+          // ── Flat format: bare array (grammar legacy) or SMQ object { answerRecord, correct, total }
+          const answerRecord = Array.isArray(parsed) ? parsed : (parsed.answerRecord || []);
+          const correct = parsed.correct != null ? parsed.correct : answerRecord.filter(a => a.isCorrect).length;
+          const total   = parsed.total   != null ? parsed.total   : answerRecord.length;
+          const pct     = parsed.scoreOutOf100 ?? (total > 0 ? Math.round((correct / total) * 100) : 0);
+          $('scoring-mcq-score').textContent = `Score: ${correct} / ${total} marks (${pct}%)`;
+          $('scoring-mcq-review').innerHTML  = answerRecord.map((item, i) => {
+            const userLbl    = item.userAnswer >= 0 ? LABELS[item.userAnswer] : '—';
+            const correctLbl = LABELS[item.correct];
+            return `<div class="mcq-scoring-item ${item.isCorrect ? 'mcq-correct' : 'mcq-wrong'}">
+              <strong>${i + 1}. ${item.stem}</strong><br>
+              ${item.isCorrect ? '✅' : '❌'} Your answer: <strong>${userLbl}) ${item.options?.[item.userAnswer] || '—'}</strong>
+              ${!item.isCorrect ? ` · Correct: <strong>${correctLbl}) ${item.options?.[item.correct] || '—'}</strong>` : ''}
+              ${item.explanation ? `<br><em style="font-size:0.78rem;color:#64748b">💡 ${item.explanation}</em>` : ''}
+            </div>`;
+          }).join('');
+        }
+      } catch (e) {
+        $('scoring-mcq-score').textContent = 'Could not parse MCQ results.';
+        $('scoring-mcq-review').innerHTML  = '';
+      }
+    } else if (isWritten) {
+      $('scoring-audio-section').classList.add('hidden');
+      $('scoring-transcript-section').classList.add('hidden');
+      $('scoring-written-section').classList.remove('hidden');
+      $('scoring-mcq-section').classList.add('hidden');
+      $('scoring-written-text').textContent = session.writtenText || session.transcript || '';
+    } else {
+      $('scoring-written-section').classList.add('hidden');
+      $('scoring-mcq-section').classList.add('hidden');
+      $('scoring-audio-section').classList.remove('hidden');
+      $('scoring-transcript-section').classList.remove('hidden');
+
+      const audioEl = $('scoring-audio');
+      // Support both Storage URL (new) and legacy Blob
+      const recUrl = session.recordingUrl
+        || (session.recordingBlob ? URL.createObjectURL(session.recordingBlob) : null);
+      if (recUrl) {
+        audioEl.src = recUrl;
+      } else {
+        audioEl.src = '';
+        $('scoring-audio-section').innerHTML = '<h4>Recording</h4><p style="color:var(--text-muted);font-size:0.85rem">No recording available.</p>';
+      }
+      $('scoring-transcript').textContent = session.transcript || 'No transcript available.';
+    }
+
+    // AI scores display
+    const aiDisplay = $('scoring-ai-scores-display');
+    aiDisplay.innerHTML = '';
+    if (session.aiScores) {
+      // Grammar/Listening assessment: show a simple score summary, not individual criteria bars
+      if (isMCQ) {
+        const { overall, correctAnswers, totalQuestions, marksObtained, totalMarks } = session.aiScores;
+        const accentColor  = isSmq ? '#059669' : (isListening ? '#db2777' : '#7c3aed');
+        const accentBorder = isSmq ? '#a7f3d0' : (isListening ? '#fbcfe8' : '#ddd6fe');
+        const accentBg2    = isSmq ? '#ecfdf5' : (isListening ? '#fdf2f8' : '#f5f3ff');
+        const accentDark   = isSmq ? '#065f46' : (isListening ? '#be185d' : '#6d28d9');
+        const marks  = marksObtained ?? correctAnswers;
+        const maxMrk = totalMarks ?? totalQuestions;
+        const scoreDisplay = marks != null ? `${marks} / ${maxMrk ?? '?'} marks` : `${overall ?? '?'}%`;
+        aiDisplay.innerHTML = `
+          <div style="background:${accentBg2};border:1px solid ${accentBorder};border-radius:8px;padding:0.75rem;text-align:center;margin-bottom:0.5rem">
+            <div style="font-size:1.5rem;font-weight:800;color:${accentColor}">${scoreDisplay}</div>
+            <div style="font-size:0.85rem;color:${accentDark};font-weight:600">${overall ?? '?'}% — Auto-graded</div>
+          </div>`;
+      } else {
+      // Build label map from SCORING_CRITERIA for this module
+      const moduleCriteria = SCORING_CRITERIA[session.module] || [];
+      const labelMap = {};
+      moduleCriteria.forEach(c => { labelMap[c.key.replace('criterion_', '')] = c.label; });
+      // Also include common JS score keys
+      const jsKeys = {
+        fluency: 'Fluency', vocabulary: 'Vocabulary', contentCoverage: 'Content Coverage',
+        clarity: 'Clarity', structure: 'Structure', tone: 'Tone',
+        callOpening: 'Call Opening', acknowledgment: 'Acknowledgment',
+        activeListening: 'Active Listening & Probing', communicationClarity: 'Communication Clarity',
+        callEssence: 'Call Essence', holdProcedure: 'Hold Procedure',
+        extraMile: 'Extra Mile', callClosing: 'Call Closing'
+      };
+      const reasons = session.aiScores._reasons || {};
+      const aiMethod = session.aiScores._method;
+      if (aiMethod) {
+        aiDisplay.innerHTML += `<div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.5rem">
+          ${aiMethod === 'claude' ? '🤖 Claude AI scored' : '📊 Phrase-analysis scored'}</div>`;
+      }
+      Object.entries(session.aiScores).forEach(([k, v]) => {
+        if (k === 'overall' || k.startsWith('_') || typeof v !== 'number') return;
+        const label = jsKeys[k] || k;
+        const reason = reasons[k] ? `<div class="score-reason">${reasons[k]}</div>` : '';
+        aiDisplay.innerHTML += `
+          <div class="ai-score-row">
+            <span class="score-label">AI: ${label}</span>
+            <div class="score-bar"><div class="score-bar-fill" style="width:${((v/5)*100).toFixed(0)}%"></div></div>
+            <span class="score-val">${v}/5</span>
+          </div>${reason}`;
+      });
+      // For Pick & Speak, show the 3 voice criteria that AI cannot score from text
+      if (session.module === 'pick-speak') {
+        const manualCriteria = [
+          { key: 'pronunciation', label: 'Pronunciation Clarity' },
+          { key: 'intonation',    label: 'Intonation & Stress'   },
+          { key: 'volume',        label: 'Volume & Audibility'   },
+        ];
+        const adminScores = session.adminScores || {};
+        aiDisplay.innerHTML += `<div style="font-size:0.72rem;color:var(--text-muted);margin:0.75rem 0 0.25rem;font-weight:600;letter-spacing:0.03em">🎧 REQUIRES AUDIO REVIEW</div>`;
+        manualCriteria.forEach(({ key, label }) => {
+          const adminVal = adminScores[key] !== undefined ? `${adminScores[key]}/5` : 'not yet scored';
+          aiDisplay.innerHTML += `
+            <div class="ai-score-row" style="opacity:0.7;background:#fafafa">
+              <span class="score-label" style="color:var(--text-muted)">🎧 ${label}</span>
+              <div class="score-bar" style="background:#e2e8f0"><div class="score-bar-fill" style="width:0%"></div></div>
+              <span class="score-val" style="font-size:0.72rem;color:var(--text-muted)">${adminVal}</span>
+            </div>`;
+        });
+      }
+      } // end else (non-grammar)
+
+      if (!isGrammar && session.aiScores.overall !== undefined) {
+        const _overallPct = normalizeOverall(session.aiScores.overall);
+        aiDisplay.innerHTML += `
+          <div class="ai-score-row" style="background:#eff6ff;border:1px solid #dbeafe;margin-top:0.25rem">
+            <span class="score-label" style="font-weight:800">AI Overall</span>
+            <div class="score-bar"><div class="score-bar-fill" style="width:${_overallPct.toFixed(0)}%;background:#3b82f6"></div></div>
+            <span class="score-val" style="color:#3b82f6">${_overallPct}/100</span>
+          </div>`;
+      }
+
+      // Always regenerate fresh — never use stored _summary (MCQ modules have no text summary)
+      if (!isMCQ) {
+        const coachingSummary = typeof SpeechEngine !== 'undefined'
+          ? SpeechEngine.generateCoachingSummary(session.module, session.aiScores)
+          : '';
+        if (coachingSummary) {
+          aiDisplay.innerHTML += `
+            <div style="margin-top:0.75rem">
+              <div style="font-size:0.72rem;font-weight:700;color:#1d4ed8;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:0.35rem">
+                AI Coaching Summary
+              </div>
+              <pre style="white-space:pre-wrap;font-family:inherit;font-size:0.8rem;line-height:1.7;background:#eff6ff;border:1px solid #bfdbfe;border-left:3px solid #3b82f6;border-radius:6px;padding:0.75rem 0.875rem;margin:0;color:var(--text)">${coachingSummary}</pre>
+            </div>`;
+        }
+      }
+    }
+
+    // Admin coaching summary (if session already has admin scores) — always regenerate fresh
+    if (session.adminScores) {
+      const adminSummary = typeof SpeechEngine !== 'undefined'
+        ? SpeechEngine.generateCoachingSummary(session.module, session.adminScores, 'admin')
+        : '';
+      if (adminSummary) {
+        aiDisplay.innerHTML += `
+          <div style="margin-top:0.75rem">
+            <div style="font-size:0.72rem;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:0.35rem">
+              ✅ Admin Coaching Summary
+            </div>
+            <pre style="white-space:pre-wrap;font-family:inherit;font-size:0.8rem;line-height:1.7;background:#f0fdf4;border:1px solid #bbf7d0;border-left:3px solid #22c55e;border-radius:6px;padding:0.75rem 0.875rem;margin:0;color:var(--text)">${adminSummary}</pre>
+          </div>`;
+      }
+    }
+
+    // Scoring criteria — with category group headers
+    const criteria = SCORING_CRITERIA[session.module] || [];
+    const criteriaContainer = $('scoring-criteria');
+    criteriaContainer.innerHTML = '';
+    let lastGroup = null;
+
+    // Grammar Assessment / Listening Assessment: show auto-graded details and direct score editing input
+    if (isGrammar || isListening) {
+      const currentAdminScore = session.adminScores?.overall ?? session.aiScores?.overall ?? '';
+      criteriaContainer.innerHTML = `
+        <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:0.875rem;font-size:0.85rem;color:#5b21b6;margin-bottom:1rem">
+          <strong>📊 Auto-graded Assessment</strong><br>
+          This test is auto-graded based on correct answers. The default score is ${session.aiScores?.overall ?? 0}%. You can edit the final score below.
+        </div>
+        <div class="criterion-row" style="margin-top:1rem">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-weight:600">Admin Score (%):</span>
+            <input type="number" id="admin-score-input" min="0" max="100" value="${currentAdminScore}" 
+              style="width: 80px; padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem;"
+              oninput="Admin.updateAdminScoreDisplay(this.value)" />
+          </div>
+        </div>`;
+      $('scoring-total-display').textContent = currentAdminScore;
+    }
+
+    criteria.forEach((criterion, idx) => {
+      const key = criterion.key;
+      const existingVal = session.adminScores ? (session.adminScores[key] ?? 3) : 3;
+
+      // Insert category group header when group changes
+      if (criterion.group && criterion.group !== lastGroup) {
+        criteriaContainer.innerHTML += `<div class="criterion-group-header">${criterion.group}</div>`;
+        lastGroup = criterion.group;
+      }
+
+      if (criterion.scale135) {
+        // 1/3/5 radio buttons
+        const optionDefs = [
+          { val: 1, label: '✗ Not Met' },
+          { val: 3, label: '~ Partial' },
+          { val: 5, label: '✓ Fully Met' }
+        ];
+        const optionsHTML = optionDefs.map(opt => {
+          const selected = existingVal === opt.val ? `selected-${opt.val}` : '';
+          return `<label class="scale-135-option ${selected}" id="opt-label-${idx}-${opt.val}" onclick="Admin.selectScale135(${idx}, ${opt.val})">
+            <input type="radio" name="scale135-${idx}" value="${opt.val}" ${existingVal === opt.val ? 'checked' : ''}>
+            <span>${opt.label}</span>
+          </label>`;
+        }).join('');
+        criteriaContainer.innerHTML += `
+          <div class="criterion-row" id="criterion-row-${idx}">
+            <div class="criterion-label">
+              <span>${criterion.label}</span>
+              <span class="criterion-val" id="cval-${idx}">${existingVal}/5</span>
+            </div>
+            ${criterion.desc ? `<div class="criterion-desc">${criterion.desc}</div>` : ''}
+            <div class="scale-135-group" id="scale135-${idx}">${optionsHTML}</div>
+          </div>`;
+      } else {
+        // Standard 1-5 slider
+        const stars = '★'.repeat(existingVal) + '☆'.repeat(5 - existingVal);
+        criteriaContainer.innerHTML += `
+          <div class="criterion-row" id="criterion-row-${idx}">
+            <div class="criterion-label">
+              <span>${criterion.label}</span>
+              <span class="criterion-val" id="cval-${idx}">${existingVal}/5</span>
+            </div>
+            ${criterion.desc ? `<div class="criterion-desc">${criterion.desc}</div>` : ''}
+            <input type="range" min="1" max="5" value="${existingVal}" class="criterion-slider"
+              id="slider-${idx}" oninput="Admin.updateCriterionDisplay(${idx}, this.value)" />
+            <div class="criterion-stars" id="cstars-${idx}">${stars}</div>
+          </div>`;
+      }
+    });
+
+    $('scoring-comment').value = session.adminComment || '';
+    updateScoringTotal(session.module, session.adminScores);
+
+    // AI band classification in left panel
+    const aiBandEl = $('scoring-ai-band');
+    if (aiBandEl) {
+      if (session.aiScores && session.aiScores.overall !== undefined) {
+        const _aiBandPct = normalizeOverall(session.aiScores.overall);
+        const band = getBand(session.module, _aiBandPct);
+        const pct = Math.round(_aiBandPct);
+        if (band) {
+          aiBandEl.innerHTML = `
+            <div class="band-card ${band.cls}" style="margin-bottom:0">
+              <div class="band-header">
+                <span class="band-icon">${band.icon}</span>
+                <div class="band-info">
+                  <div class="band-label" style="font-size:0.78rem">${band.label}</div>
+                  <div class="band-score" style="font-size:0.72rem">AI: ${_aiBandPct}/100</div>
+                </div>
+              </div>
+              <div class="band-feedback" style="font-size:0.72rem">${band.feedback}</div>
+            </div>`;
+          // Store band feedback for "Use AI feedback" button
+          aiBandEl.dataset.bandFeedback = `[AI Assessment: ${band.label} — ${pct}/100]\n${band.feedback}`;
+        } else {
+          aiBandEl.innerHTML = '';
+        }
+      } else {
+        aiBandEl.innerHTML = '';
+      }
+    }
+
+    // "Use AI feedback" button — populates comment with AI band feedback
+    const useAiFeedbackBtn = $('btn-use-ai-feedback');
+    if (useAiFeedbackBtn) {
+      useAiFeedbackBtn.onclick = () => {
+        const bandFeedback = aiBandEl ? aiBandEl.dataset.bandFeedback : '';
+        if (bandFeedback) {
+          const existing = $('scoring-comment').value.trim();
+          $('scoring-comment').value = existing
+            ? existing + '\n\n' + bandFeedback
+            : bandFeedback;
+        } else {
+          toast('No AI feedback available for this session.', '');
+        }
+      };
+    }
+  }
+
+  function updateCriterionDisplay(idx, val) {
+    val = parseInt(val);
+    $(`cval-${idx}`).textContent = `${val}/5`;
+    $(`cstars-${idx}`).textContent = '★'.repeat(val) + '☆'.repeat(5 - val);
+    collectAndUpdateTotal();
+  }
+
+  function selectScale135(idx, val) {
+    val = parseInt(val);
+    // Update visual state
+    [1, 3, 5].forEach(v => {
+      const lbl = $(`opt-label-${idx}-${v}`);
+      if (lbl) {
+        lbl.classList.remove('selected-1', 'selected-3', 'selected-5');
+        if (v === val) lbl.classList.add(`selected-${val}`);
+      }
+    });
+    // Check the radio
+    const radio = document.querySelector(`input[name="scale135-${idx}"][value="${val}"]`);
+    if (radio) radio.checked = true;
+    $(`cval-${idx}`).textContent = `${val}/5`;
+    collectAndUpdateTotal();
+  }
+
+  function _bandColor(cls) {
+    return cls === 'band-poor' ? '#dc2626' : cls === 'band-fair' ? '#a16207' : cls === 'band-good' ? '#16a34a' : '#7c3aed';
+  }
+
+  function collectAndUpdateTotal() {
+    const rows = document.querySelectorAll('[id^="criterion-row-"]');
+    const vals = [];
+    rows.forEach((row, idx) => {
+      const slider = $(`slider-${idx}`);
+      if (slider) { vals.push(parseInt(slider.value)); return; }
+      const radio = document.querySelector(`input[name="scale135-${idx}"]:checked`);
+      if (radio) vals.push(parseInt(radio.value));
+    });
+    if (!vals.length) return;
+    // Each criterion 1-5 → overall out of 100
+    const total = ((vals.reduce((a, b) => a + b, 0) / (vals.length * 5)) * 100).toFixed(1);
+    $('scoring-total-display').textContent = total;
+
+    // Update live admin band inline
+    const inlineEl = $('admin-band-inline');
+    if (inlineEl && _scoringSessionId) {
+      const badge = $('scoring-module-badge');
+      const moduleKey = badge
+        ? [...Object.entries({ 'pick-speak': 'Pick & Speak', 'mock-call': 'Mock Call', 'role-play': 'Role Play', 'group-discussion': 'Group Discussion', 'written-comm': 'Written Comm.' })].find(([, v]) => v === badge.textContent)?.[0]
+        : null;
+      if (moduleKey && SCORE_BANDS[moduleKey]) {
+        const band = getBand(moduleKey, parseFloat(total));
+        if (band) {
+          inlineEl.textContent = `— ${band.icon} ${band.label}`;
+          inlineEl.style.color = _bandColor(band.cls);
+        }
+      }
+    }
+  }
+
+  function updateScoringTotal(module, existing) {
+    if (module === 'grammar-assessment' || module === 'listening-assessment') return; // handled separately in openScoring
+    const criteria = SCORING_CRITERIA[module] || [];
+    let total;
+    if (existing && typeof existing.overall === 'number') {
+      total = existing.overall.toFixed(1);
+    } else if (existing && criteria.length) {
+      const vals = criteria.map(c => existing[c.key] ?? 3);
+      total = ((vals.reduce((a, b) => a + b, 0) / (vals.length * 5)) * 100).toFixed(1);
+    } else {
+      total = '60.0';
+    }
+    $('scoring-total-display').textContent = total;
+
+    const inlineEl = $('admin-band-inline');
+    if (inlineEl && SCORE_BANDS[module]) {
+      const band = getBand(module, parseFloat(total));
+      if (band) {
+        inlineEl.textContent = `— ${band.icon} ${band.label}`;
+        inlineEl.style.color = _bandColor(band.cls);
+      }
+    }
+  }
+
+  function updateAdminScoreDisplay(val) {
+    const parsed = parseFloat(val);
+    if (!isNaN(parsed)) {
+      $('scoring-total-display').textContent = parsed.toFixed(1);
+    } else {
+      $('scoring-total-display').textContent = '—';
+    }
+  }
+
+  async function saveScore() {
+    const session = await DB.get('sessions', _scoringSessionId);
+    if (!session) return;
+
+    const criteria    = SCORING_CRITERIA[session.module] || [];
+    const adminScores = {};
+
+    // Grammar/Listening Assessment is auto-scored — read custom score entered by admin, fallback to auto-graded score
+    if (session.module === 'grammar-assessment' || session.module === 'listening-assessment') {
+      const inputEl = $('admin-score-input');
+      const inputVal = inputEl ? parseFloat(inputEl.value) : null;
+      adminScores.overall = (inputVal !== null && !isNaN(inputVal)) ? inputVal : (session.aiScores?.overall ?? 0);
+    } else {
+      criteria.forEach((criterion, i) => {
+        const key = criterion.key;
+        if (criterion.scale135) {
+          const radio = document.querySelector(`input[name="scale135-${i}"]:checked`);
+          if (radio) adminScores[key] = parseInt(radio.value);
+        } else {
+          const slider = $(`slider-${i}`);
+          if (slider) adminScores[key] = parseInt(slider.value);
+        }
+      });
+
+      // Compute overall out of 100 and store it
+      const vals = criteria.map(c => adminScores[c.key] ?? 3);
+      adminScores.overall = parseFloat(((vals.reduce((a, b) => a + b, 0) / (vals.length * 5)) * 100).toFixed(1));
+    }
+
+    // Generate and store coaching summary from admin scores
+    if (typeof SpeechEngine !== 'undefined') {
+      const adminSummary = SpeechEngine.generateCoachingSummary(session.module, adminScores, 'admin');
+      if (adminSummary) adminScores._summary = adminSummary;
+    }
+
+    session.adminScores = adminScores;
+    session.adminComment = $('scoring-comment').value.trim();
+    session.status = 'scored';
+
+    await DB.put('sessions', session);
+    toast('Scores saved!', 'success');
+    await updatePendingBadge();
+
+    // Update the cached session entry so the table reflects new scores
+    const idx = _cachedSessions.findIndex(s => s.id === session.id);
+    if (idx !== -1) _cachedSessions[idx] = session;
+    else _cachedSessions.push(session);
+
+    // Re-render using the current filter — list stays exactly as the admin left it
+    applyAssessmentFilters(_cachedSessions, _cachedTopicMap);
+
+    // Close the modal automatically
+    closeScoringModal();
+  }
+
+  function closeScoringModal() {
+    $('scoring-modal').classList.add('hidden');
+    _scoringSessionId = null;
+  }
+
+  // ---- Reports ----
+  async function loadReportsDropdown() {
+    // Load both trainees and team assignments (Reports may open before Assessments)
+    const [trainees, teamRec] = await Promise.all([
+      DB.getAll('trainees'),
+      DB.get('settings', 'team_assignments')
+    ]);
+    if (teamRec && teamRec.value) {
+      try { _teamAssignments = JSON.parse(teamRec.value); } catch (_) {}
+    }
+
+    const mgrSelect    = $('report-manager-select');
+    const agentSelect  = $('report-trainee-select');
+    if (!mgrSelect || !agentSelect) return;
+
+    // Populate manager list from the full map (all 28 managers, regardless of sessions)
+    mgrSelect.innerHTML = '<option value="">— Choose a manager —</option>';
+    Object.keys(_MANAGER_AGENT_MAP).sort().forEach(mgr => {
+      mgrSelect.innerHTML += `<option value="${mgr}">${mgr}</option>`;
+    });
+
+    agentSelect.disabled = true;
+    agentSelect.innerHTML = '<option value="">— Choose an agent —</option>';
+
+    mgrSelect.onchange = () => {
+      const mgr = mgrSelect.value;
+      $('report-content').classList.add('hidden');
+      agentSelect.innerHTML = '<option value="">— Choose an agent —</option>';
+
+      if (!mgr) { agentSelect.disabled = true; return; }
+      agentSelect.disabled = false;
+
+      const norm    = n => n.trim().toLowerCase().replace(/\s+/g, ' ');
+      const alnum   = n => n.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+
+      // Trainees explicitly assigned to this manager (their own choice during registration)
+      const assignedToMgr = trainees.filter(t => _teamAssignments[t.id] === mgr);
+      const usedTraineeIds = new Set();
+
+      const agentNames = (_MANAGER_AGENT_MAP[mgr] || []).slice().sort();
+      agentNames.forEach(agentName => {
+        const agentAlnum = alnum(agentName);
+        const agentToks  = agentName.trim().toLowerCase().split(/\s+/).filter(Boolean);
+        // Match t.name against agentName:
+        // Pass 1 — strict alnum (exact match after stripping non-alphanumeric)
+        // Pass 2 — alias → canonical → alnum
+        // Pass 3 — first+last token prefix: handles middle-name differences and split
+        //           compound first names e.g. "Sai Vishal Balse" ↔ "Saivishal Vinod Balse",
+        //           "Vaibhavi Balse" ↔ "Vaibhavi Vinod Balse", "Ankush Chougule" ↔ "Ankush Ajay Chougule"
+        const matchFn = t => {
+          if (alnum(t.name)                === agentAlnum) return true;
+          if (alnum(_resolveAlias(t.name)) === agentAlnum) return true;
+          const tToks = t.name.trim().toLowerCase().split(/\s+/).filter(Boolean);
+          if (tToks.length >= 2 && agentToks.length >= 2) {
+            const firstT = alnum(tToks[0]), firstA = alnum(agentToks[0]);
+            const lastT  = alnum(tToks[tToks.length - 1]);
+            const lastA  = alnum(agentToks[agentToks.length - 1]);
+            if (lastT === lastA) {
+              // Pass 3: first-token prefix (Sai Vishal ↔ Saivishal, Ashwin ↔ Ashwinkumar)
+              const minLen = Math.min(firstT.length, firstA.length);
+              if (minLen >= 3 && (firstT === firstA || firstA.startsWith(firstT) || firstT.startsWith(firstA))) {
+                return true;
+              }
+              // Pass 4: character multiset overlap on first token (≥85% of shorter in longer)
+              // Catches vowel insertions/transpositions: "snehal" ↔ "sneahaal"
+              if (minLen >= 4) {
+                const shorter = firstT.length <= firstA.length ? firstT : firstA;
+                const longer  = firstT.length <= firstA.length ? firstA : firstT;
+                const freq = {};
+                for (const c of longer) freq[c] = (freq[c] || 0) + 1;
+                let overlap = 0;
+                for (const c of shorter) { if (freq[c] > 0) { overlap++; freq[c]--; } }
+                if (overlap / shorter.length >= 0.85) return true;
+              }
+            }
+          }
+          return false;
+        };
+        // Pass 1: match across all trainees
+        let trainee = trainees.find(t => !usedTraineeIds.has(t.id) && matchFn(t));
+        // Pass 2: widen to assigned-manager trainees (catches wrong-but-close registrations)
+        if (!trainee) {
+          trainee = assignedToMgr.find(t => !usedTraineeIds.has(t.id) && matchFn(t));
+        }
+        if (trainee && !usedTraineeIds.has(trainee.id)) {
+          usedTraineeIds.add(trainee.id);
+          agentSelect.innerHTML += `<option value="${trainee.id}">${agentName}</option>`;
+        } else {
+          // No match — use master scores if available (previous-batch agent)
+          const ms = getMasterScores(agentName);
+          if (ms && ms.totalScore > 0) {
+            agentSelect.innerHTML += `<option value="__ms__${agentName}" style="color:#6366f1">${agentName} ★ (prev. batch)</option>`;
+          } else {
+            agentSelect.innerHTML += `<option value="" disabled style="color:#94a3b8">${agentName} (no sessions yet)</option>`;
+          }
+        }
+      });
+
+      // Show any assigned trainees whose name didn't match any map agent (name typos, etc.)
+      assignedToMgr.filter(t => !usedTraineeIds.has(t.id)).forEach(t => {
+        agentSelect.innerHTML += `<option value="${t.id}">${t.name}</option>`;
+      });
+    };
+
+    agentSelect.onchange = async () => {
+      const id = agentSelect.value;
+      if (!id) { $('report-content').classList.add('hidden'); return; }
+      if (id.startsWith('__ms__')) {
+        await loadSyntheticReport(id.slice(6));
+      } else {
+        await loadTraineeReport(id);
+      }
+    };
+  }
+
+  // ── Letter-report insight builder ─────────────────────────────
+  function buildLetterInsights(scores, details, totalMark) {
+    const r2 = v => parseFloat(v.toFixed(2));
+    const ps = scores['pick-speak'];
+    const mc = scores['mock-call'];
+    const ga = scores['grammar-assessment'];
+    const la = scores['listening-assessment'];
+
+    // Resolve if this trainee belongs to the Tickets team
+    const firstSess = Object.values(details).find(lst => lst && lst.length)?.[0];
+    const traineeName = firstSess ? firstSess.traineeName : null;
+    const traineeId = firstSess ? firstSess.traineeId : null;
+    const mgr = traineeId ? (_teamAssignments[traineeId] || _getAgentManager(traineeName)) : _getAgentManager(traineeName);
+    const isTicketsTeam = TICKET_MANAGERS.has(mgr) || scores['written-comm'] != null || details['written-comm'] != null;
+
+    const modNames = {
+      'pick-speak': 'Pick & Speak',
+      'mock-call':  isTicketsTeam ? 'Mock Ticket' : 'Mock Call',
+      'grammar-assessment': 'Grammar',
+      'listening-assessment': 'Listening'
+    };
+    const available = Object.entries(scores).filter(([, v]) => v != null).sort(([, a], [, b]) => b - a);
+    const bestMod   = available[0]?.[0];
+    const overall   = totalMark ?? 0;
+
+    // ── Strengths paragraph ──
+    let strengthPara = '';
+    const subStrengths = [];
+
+    // P&S sub-criteria
+    const bestPS = (details['pick-speak'] || []).reduce((b, s) => {
+      const e = effScore(s), be = b ? effScore(b) : -1;
+      return (e !== null && e > (be ?? -1)) ? s : b;
+    }, null);
+    if (bestPS?.aiScores) {
+      const ai = bestPS.aiScores;
+      if (typeof ai.fluency        === 'number' && ai.fluency        >= 4) subStrengths.push('spoken fluency');
+      if (typeof ai.vocabulary     === 'number' && ai.vocabulary     >= 4) subStrengths.push('vocabulary');
+      if (typeof ai.contentCoverage === 'number' && ai.contentCoverage >= 4) subStrengths.push('content coverage and logical flow');
+    }
+    // Mock call sub-criteria
+    const latestMC = (details['mock-call'] || []).sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt))[0];
+    if (latestMC) {
+      const cr = { ...(latestMC.aiScores || {}), ...(latestMC.adminScores || {}) };
+      if (isTicketsTeam) {
+        if (typeof cr.criterion_0 === 'number' && cr.criterion_0 >= 4) subStrengths.push('tone and empathy');
+        if (typeof cr.criterion_1 === 'number' && cr.criterion_1 >= 4) subStrengths.push('written clarity');
+        if (typeof cr.criterion_2 === 'number' && cr.criterion_2 >= 4) subStrengths.push('ownership in resolution');
+        if (typeof cr.criterion_3 === 'number' && cr.criterion_3 >= 4) subStrengths.push('explanation accuracy');
+        if (typeof cr.criterion_4 === 'number' && cr.criterion_4 >= 4) subStrengths.push('customer education');
+        if (typeof cr.criterion_5 === 'number' && cr.criterion_5 >= 4) subStrengths.push('grammar and language quality');
+      } else {
+        if (typeof cr.callOpening         === 'number' && cr.callOpening         >= 4) subStrengths.push('professional call opening');
+        if (typeof cr.acknowledgment      === 'number' && cr.acknowledgment      >= 4) subStrengths.push('empathy and acknowledgment');
+        if (typeof cr.communicationClarity === 'number' && cr.communicationClarity >= 4) subStrengths.push('communication clarity');
+        if (typeof cr.callEssence         === 'number' && cr.callEssence         >= 4) subStrengths.push('call essence and warmth');
+        if (typeof cr.callClosing         === 'number' && cr.callClosing         >= 4) subStrengths.push('professional call closing');
+      }
+    }
+    if (la >= 70) subStrengths.push('listening comprehension');
+    if (ga >= 75) subStrengths.push('grammatical precision');
+
+    if (overall >= 72) {
+      strengthPara = `You are among the stronger performers in this program${bestMod ? `, with particularly good results in ${modNames[bestMod]}` : ''}. ${subStrengths.length ? `Your performance reflects real strengths in ${subStrengths.slice(0, 3).join(', ')}.` : 'Your consistent performance reflects a high standard of professional communication.'}`;
+    } else if (overall >= 55) {
+      strengthPara = `You demonstrate a solid foundation in professional communication${bestMod ? `, with ${modNames[bestMod]} being your strongest area` : ''}. ${subStrengths.length ? `Specific strengths include ${subStrengths.slice(0, 2).join(' and ')}.` : 'With focused practice, you can build significantly on this foundation.'}`;
+    } else {
+      strengthPara = `You have engaged actively in the Communicate 360 program${bestMod ? ` and show early promise in ${modNames[bestMod]}` : ''}. Your participation across all assessments forms the starting point for meaningful growth.`;
+    }
+
+    // ── Priority bullets ──
+    const priorityBullets = [];
+    const addedParams = new Set();
+
+    // P&S — find the weakest sub-criteria
+    if (bestPS?.aiScores && ps != null) {
+      const PS_CRIT = [
+        { key: 'fluency',         label: 'Fluency',         mod: 'Pick & Speak' },
+        { key: 'vocabulary',      label: 'Vocabulary',      mod: 'Pick & Speak' },
+        { key: 'contentCoverage', label: 'Content Coverage', mod: 'Pick & Speak' },
+      ];
+      PS_CRIT.filter(c => typeof bestPS.aiScores[c.key] === 'number' && bestPS.aiScores[c.key] < 3.5)
+        .sort((a, b) => bestPS.aiScores[a.key] - bestPS.aiScores[b.key])
+        .slice(0, 2)
+        .forEach(c => { priorityBullets.push({ param: c.label, desc: `This is the highest-impact area for your ${c.mod}.` }); addedParams.add(c.key); });
+    } else if (ps != null && ps < 60) {
+      priorityBullets.push({ param: 'Spoken Delivery', desc: 'Focus on structure, fluency and topic depth in Pick & Speak.' });
+    }
+
+    // Mock Call — weakest criteria
+    if (latestMC) {
+      const cr = { ...(latestMC.aiScores || {}), ...(latestMC.adminScores || {}) };
+      const MC_CRIT = isTicketsTeam ? [
+        { key: 'criterion_0', label: 'Tone & Empathy',       mod: 'Mock Tickets' },
+        { key: 'criterion_1', label: 'Written Clarity',      mod: 'Mock Tickets' },
+        { key: 'criterion_2', label: 'Ownership',            mod: 'Mock Tickets' },
+        { key: 'criterion_3', label: 'Explanation Accuracy', mod: 'Mock Tickets' },
+        { key: 'criterion_4', label: 'Customer Education',   mod: 'Mock Tickets' },
+        { key: 'criterion_5', label: 'Grammar & Language',   mod: 'Mock Tickets' },
+      ] : [
+        { key: 'callOpening',          label: 'Call Opening',           mod: 'Mock Calls' },
+        { key: 'acknowledgment',        label: 'Acknowledgment',         mod: 'Mock Calls' },
+        { key: 'communicationClarity',  label: 'Communication Clarity',  mod: 'Mock Calls' },
+        { key: 'callEssence',           label: 'Call Essence',           mod: 'Mock Calls' },
+        { key: 'holdProcedure',         label: 'Hold Procedure',         mod: 'Mock Calls' },
+        { key: 'extraMile',             label: 'Going the Extra Mile',   mod: 'Mock Calls' },
+        { key: 'callClosing',           label: 'Call Closing',           mod: 'Mock Calls' },
+      ];
+      MC_CRIT.filter(c => typeof cr[c.key] === 'number' && cr[c.key] < 3.5)
+        .sort((a, b) => cr[a.key] - cr[b.key])
+        .slice(0, 2)
+        .forEach(c => { priorityBullets.push({ param: c.label, desc: `This is the highest-impact area for your ${c.mod}.` }); });
+    } else if (mc == null) {
+      priorityBullets.push({ param: isTicketsTeam ? 'Mock Ticket' : 'Mock Call', desc: 'Assessment pending — your score will be updated once reviewed by your manager.' });
+    } else if (mc < 60) {
+      priorityBullets.push({ param: isTicketsTeam ? 'Written Response' : 'Call Handling', desc: isTicketsTeam ? 'Focus on response clarity, structure and tone.' : 'Focus on consistent greeting structure, empathy language and hold procedure.' });
+    }
+
+    // Grammar — weakest section
+    if (ga != null && ga < 75) {
+      const latestGA = (details['grammar-assessment'] || []).sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt))[0];
+      let gaAdded = false;
+      if (latestGA) {
+        try {
+          const parsed = JSON.parse(latestGA.writtenText || '{}');
+          if (parsed.sections) {
+            const weakSec = parsed.sections
+              .filter(sec => sec.maxMarks > 0 && (sec.marksObtained / sec.maxMarks) < 0.65)
+              .sort((a, b) => (a.marksObtained / a.maxMarks) - (b.marksObtained / b.maxMarks))[0];
+            if (weakSec) {
+              const letter = weakSec.title?.match(/Section\s+([A-C])/i)?.[1];
+              const GRAM_LABEL = {
+                A: { param: 'Grammar — Tense, Articles & Basic Grammar Rules',   desc: 'Practise identifying correct tense forms (past/present/future), and using articles (a/an/the) in context.' },
+                B: { param: 'Grammar — Prepositions & Conjunctions',             desc: 'Focus on articles (a/an/the), prepositions (in/on/at/to/for) and conjunctions (and/but/so/because) in fill-in-the-blank exercises.' },
+                C: { param: 'Grammar — Sentence Rewriting & Tense Correction',   desc: 'Practise rewriting sentences with correct tense, subject-verb agreement and modal verbs (should/could/would).' }
+              };
+              const gi = GRAM_LABEL[letter] || { param: 'Grammar', desc: 'Focus on prepositions, conjunctions and tense correction through daily practice.' };
+              priorityBullets.push(gi);
+              gaAdded = true;
+            }
+          }
+        } catch (_) {}
+      }
+      if (!gaAdded) priorityBullets.push({ param: 'Grammar', desc: 'Focus on conditionals, prepositions and subject-verb agreement.' });
+    }
+
+    // Listening — weakest section
+    if (la != null && la < 70) {
+      const latestLA = (details['listening-assessment'] || []).sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt))[0];
+      if (latestLA) {
+        try {
+          const parsed = JSON.parse(latestLA.writtenText || '{}');
+          if (parsed.sections) {
+            const weakSec = parsed.sections
+              .filter(sec => sec.maxMarks > 0 && (sec.marksObtained / sec.maxMarks) < 0.65)
+              .sort((a, b) => (a.marksObtained / a.maxMarks) - (b.marksObtained / b.maxMarks))[0];
+            if (weakSec) {
+              const type = weakSec.sectionType || 'Listening';
+              priorityBullets.push({ param: `Listening — ${type}`, desc: `Active listening practice with ${type.toLowerCase()} material will improve this section significantly.` });
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    // Priority intro paragraph
+    let priorityIntro = '';
+    if (overall >= 70) {
+      priorityIntro = 'You communicate with structure and precision. The missing layer is warmth and consistency in the areas below. We recommend prioritizing:';
+    } else if (overall >= 50) {
+      priorityIntro = 'To strengthen your overall communication profile, we recommend focusing on the following areas:';
+    } else {
+      priorityIntro = 'To build a stronger communication foundation, prioritize the following areas in your daily practice:';
+    }
+
+    // ── Action plan ──
+    const { actions } = buildAgentInsights(scores, details);
+    const actionIntro = overall >= 65
+      ? 'We suggest the following routines to build on your Key Strengths:'
+      : 'We suggest the following targeted practices to address your priority areas:';
+
+    // ── Closing ──
+    const closing1 = 'Consistent practice of these focused actions will help you achieve greater consistency and impact in your communication.';
+    const closing2 = overall >= 70 ? 'You have made excellent progress. Keep up the momentum.'
+      : overall >= 50 ? 'You are on the right track. Stay committed to daily practice.'
+      : 'Every step of deliberate practice builds lasting improvement. Keep going.';
+
+    return { strengthPara, priorityIntro, priorityBullets, actionIntro, actions, closing1, closing2 };
+  }
+
+  // ── Render the letter into #report-letter-card ─────────────────
+  function renderTraineeLetter(trainee, marks, insights) {
+    const card = $('report-letter-card');
+    if (!card) return;
+    const { lisMark, psMark, gaMark, mcMark, totalMark } = marks;
+    const { strengthPara, priorityIntro, priorityBullets, actionIntro, actions, closing1, closing2 } = insights;
+
+    const mgr = _teamAssignments[trainee.id] || _getAgentManager(trainee.name);
+    const isTicketsTeam = TICKET_MANAGERS.has(mgr) || (priorityBullets && priorityBullets.some(b => b.param.includes('Ticket') || b.param.includes('written') || b.param.includes('Response')));
+
+    const fmt = (v, max) => v != null
+      ? `<strong>${v.toFixed(2)} / ${max}</strong>`
+      : `<strong style="color:#94a3b8">Not attempted / ${max}</strong>`;
+
+    const priorityList = priorityBullets.length
+      ? `<ul>${priorityBullets.map(b => `<li><strong>${b.param}:</strong> ${b.desc}</li>`).join('')}</ul>`
+      : '<p style="color:var(--text-muted)">No specific priority areas — maintain your current standards.</p>';
+
+    const actionList = actions.length
+      ? `<ul>${actions.map(a => `<li>${a}</li>`).join('')}</ul>`
+      : '<ul><li>Continue participating actively in all assessment modules.</li></ul>';
+
+    card.innerHTML = `
+      <div class="lrc-print-btn-wrap">
+        <button id="lrc-copy-btn" class="btn-secondary" style="font-size:0.8rem;padding:0.4rem 0.9rem" onclick="Admin.copyLetter()">📋 Copy to Clipboard</button>
+        <button id="lrc-ppt-btn" class="btn-primary" style="font-size:0.8rem;padding:0.4rem 0.9rem;margin-left:0.5rem" onclick="Admin.downloadTraineePPT()">⬇ Download PPT</button>
+      </div>
+
+      <div id="lrc-letter-body">
+      <p class="lrc-salutation">Dear ${trainee.name},</p>
+      <p>Thank you for your active participation in the recent <strong>Communicate 360</strong> training program. Please find below the summary of your performance assessment:</p>
+
+      <h2 class="lrc-h2">Overall Performance Summary</h2>
+      <p class="lrc-total">Total Score: ${totalMark != null ? totalMark.toFixed(2) : '—'} / 100</p>
+      <ul class="lrc-score-list">
+        <li>Listening: ${fmt(lisMark, 20)}</li>
+        <li>Pick &amp; Speak: ${fmt(psMark, 20)}</li>
+        <li>Grammar: ${fmt(gaMark, 25)}</li>
+        <li>${isTicketsTeam ? 'Mock Ticket' : 'Mock Call'}: ${isTicketsTeam ? (mcMark != null ? `<strong>${(mcMark / 20 * 30).toFixed(1)}/30 (${(mcMark / 20 * 5).toFixed(1)}/5)</strong>` : `<strong style="color:#94a3b8">Not attempted / 30</strong>`) : fmt(mcMark, 20)}</li>
+      </ul>
+      <p style="font-size:0.82rem;color:var(--text-muted);margin-top:0.3rem;margin-bottom:0.1rem"><em>* AI &amp; Manager evaluation scores are taken into consideration and carry a weightage of 15% in the total score.</em></p>
+
+      <h2 class="lrc-h2">Key Strengths</h2>
+      <p>${strengthPara}</p>
+
+      <h2 class="lrc-h2">Priority Areas for Development</h2>
+      <p>${priorityIntro}</p>
+      ${priorityList}
+
+      <h2 class="lrc-h2">Your Action Plan</h2>
+      <p>${actionIntro}</p>
+      ${actionList}
+
+      <p style="margin-top:1.25rem">${closing1}</p>
+      <p style="margin-top:0.5rem"><strong>${closing2}</strong></p>
+      </div>
+    `;
+  }
+
+  // ================================================================
+  //  PPT REPORT GENERATION (PptxGenJS)
+  // ================================================================
+
+  // Returns array of { lines: [...] } — short bullet lines for the right content panel.
+  // Left panel shows only "Step N"; right panel shows these lines at 11pt white.
+  function buildRoadmapSteps(name, scores, details, marks) {
+    const steps = [];
+    const { psMark, lisMark, gaMark, mcMark } = marks;
+
+    // ── Pick & Speak ──────────────────────────────────────────────────────────
+    const psSessions = details['pick-speak'] || [];
+    const bestPS = psSessions.reduce((b, s) => {
+      const e = effScore(s), be = b ? effScore(b) : -1;
+      return (e !== null && e > (be ?? -1)) ? s : b;
+    }, null);
+    const psAI = bestPS?.aiScores || {};
+    const PS_LINES = {
+      fluency:        'Speak for 1 minute non-stop on any topic — flow matters more than perfection',
+      pace:           'Record yourself and listen back; aim for 120–140 WPM for clear, natural delivery',
+      logicalFlow:    'Structure every response: clear opening → developed middle → strong close',
+      clarity:        'Use short sentences (10–15 words) — one idea per sentence, avoid jargon',
+      confidence:     'Replace hedge phrases ("I think", "sort of") with confident, direct statements',
+      fillerControl:  'Replace "um / uh / like" with a deliberate pause — silence sounds confident',
+      vocabulary:     'Introduce one new professional term per response; read financial content daily',
+      professionalism:'Use formal language throughout; open and close with structured, courteous phrases'
+    };
+    const weakPS = Object.entries(psAI)
+      .filter(([k, v]) => PS_LINES[k] && typeof v === 'number' && v < 4)
+      .sort(([,a],[,b]) => a - b);
+    if (weakPS.length || (psMark != null && psMark < 15)) {
+      const lines = weakPS.slice(0, 3).map(([k]) => PS_LINES[k]);
+      if (lines.length < 2) {
+        lines.push('Structure every response: clear opening → developed middle → strong close');
+        lines.push('Record a 2-minute talk daily on a workplace topic and self-review');
+      }
+      steps.push({ lines });
+    }
+
+    // ── Mock Call ─────────────────────────────────────────────────────────────
+    const mcSess = details['mock-call'] || [];
+    const latestMC = [...mcSess].sort((a,b) => new Date(b.submittedAt) - new Date(a.submittedAt))[0];
+    const mcCom = { ...(latestMC?.aiScores||{}), ...(latestMC?.adminScores||{}) };
+    const MC_LINES = {
+      callOpening:          '"Good morning/afternoon, [Company], this is [Name], how may I assist?" — all 4 elements, every call',
+      acknowledgment:       'Acknowledge before solving: "I completely understand how frustrating this must be"',
+      communicationClarity: 'Avoid jargon; use short sentences and confirm understanding: "Does that make sense?"',
+      callEssence:          'Use positive words throughout: "certainly", "happy to help", "absolutely"',
+      holdProcedure:        '"May I place you on hold for 2 minutes while I check?" — permission + reason + time',
+      extraMile:            'After resolving: offer one proactive tip or related info the customer did not ask for',
+      callClosing:          '"Is there anything else I can help you with?" then a warm sign-off — every call'
+    };
+    const weakMC = Object.entries(mcCom)
+      .filter(([k, v]) => MC_LINES[k] && typeof v === 'number' && v < 4)
+      .sort(([,a],[,b]) => a - b);
+    if (weakMC.length || (mcMark != null && mcMark < 15)) {
+      const lines = weakMC.slice(0, 3).map(([k]) => MC_LINES[k]);
+      if (lines.length < 2) {
+        lines.push('Role-play 3 full mock calls per week and identify missed protocol steps');
+        lines.push('Practice the call opening 10 times daily until it becomes automatic');
+      }
+      steps.push({ lines });
+    }
+
+    // ── Listening ─────────────────────────────────────────────────────────────
+    if (lisMark != null && lisMark < 15) {
+      const laSess = details['listening-assessment'] || [];
+      const latestLA = [...laSess].sort((a,b) => new Date(b.submittedAt) - new Date(a.submittedAt))[0];
+      const weakLA = (latestLA?.aiScores?.sections || []).filter(s => s.pct < 60);
+      const lines = [
+        'Listen to a 5-min audio clip; pause and write 5 key points without replaying',
+        'Watch short video clips and capture specific details: names, numbers, sequence',
+        'Avoid assumptions — verify exactly what you heard before forming a response'
+      ];
+      if (weakLA.length) lines.unshift(`Needs consistency in: ${weakLA.slice(0,2).map(s=>s.title.split('—')[0].trim()).join(' & ')}`);
+      steps.push({ lines: lines.slice(0, 4) });
+    }
+
+    // ── Grammar ───────────────────────────────────────────────────────────────
+    const gaSess = details['grammar-assessment'] || [];
+    const latestGA = [...gaSess].sort((a,b) => new Date(b.submittedAt) - new Date(a.submittedAt))[0];
+    const gaSecs  = latestGA?.aiScores?.sections || [];
+    const weakGA  = gaSecs.filter(s => s.pct < 65).sort((a,b) => a.pct - b.pct);
+    const GRAM_LINES = {
+      A: [
+        'Take 10 grammar MCQ tests daily and review every wrong answer carefully',
+        'Tense drill: write 3 sentences each in simple, continuous and perfect tense daily',
+        'Articles review: a/an/the — practice with fill-in-the-blank exercises every morning',
+        '📖 Read aloud daily  🎙 Record & self-correct  ✍ Keep an error notebook'
+      ],
+      B: [
+        'Study prepositions: in/on/at for time and place — use each in 5 real sentences daily',
+        'Articles drill: a (consonant sound), an (vowel sound), the (specific/known noun)',
+        'Conjunctions practice: and (addition), but (contrast), so (result), because (reason)',
+        '📖 Read aloud daily  🎙 Record & self-correct  ✍ Keep an error notebook'
+      ],
+      C: [
+        'Rewrite 5 incorrect sentences daily — focus on tense consistency throughout',
+        'Subject–verb agreement: singular subject = singular verb; plural = plural verb',
+        'Modal verbs: should (advice), could (possibility), would (conditional/polite)',
+        '📖 Read aloud daily  🎙 Record & self-correct  ✍ Keep an error notebook'
+      ]
+    };
+    const topLetter = (weakGA[0]?.title || '').match(/Section\s+([A-C])/i)?.[1]?.toUpperCase() || '';
+    const gramLines = GRAM_LINES[topLetter] || [
+      'Understand the right usage of articles (a/an/the) and prepositions (in/on/at/to/for)',
+      'Concepts: subject + verb agreement; sentence structure; tense consistency',
+      'Practise fill-in-the-blank and sentence rewriting exercises daily',
+      '📖 Read aloud daily  🎙 Record & self-correct  ✍ Keep an error notebook'
+    ];
+    if (weakGA.length || (gaMark != null && gaMark < 18)) {
+      steps.push({ lines: gramLines });
+    }
+
+    // ── Pad to minimum 3 steps ────────────────────────────────────────────────
+    while (steps.length < 3) {
+      steps.push({ lines: [
+        'Dedicate 20 minutes daily: 5 min listening drill, 5 min grammar, 10 min speaking',
+        'Record yourself weekly and compare to previous recordings to measure progress',
+        'Consistency over intensity — small daily practice compounds into lasting skill'
+      ]});
+    }
+    return steps.slice(0, 4);
+  }
+
+  async function generateTraineePPT(trainee, marks, scores, details) {
+    if (typeof PptxGenJS === 'undefined') { toast('PptxGenJS library not loaded', 'error'); return; }
+
+    const C = { navy:'14195A', teal:'028090', mint:'02C39A', lightBg:'F0F4F8', darkNav:'1E2761',
+      amber:'F39C12', green:'27AE60', red:'E74C3C', orange:'E67E22', white:'FFFFFF',
+      muted:'64748B', light:'A0B4C8', label:'CCDDEE', denom:'9BB0C8', divider:'E2E8F0', sidebar:'1E2D6B' };
+
+    const { lisMark, psMark, gaMark, mcMark, totalMark } = marks;
+    const W = 10, H = 5.625, name = trainee.name;
+
+    const sColor = (v, max) => { if (v==null) return C.muted; const p=(v/max)*100; return p>=75?C.green:p>=50?C.amber:C.red; };
+    const fmt2  = v => v != null ? v.toFixed(2) : '—';
+    const noBorder = { type: 'none' };
+
+    const pptx = new PptxGenJS();
+    pptx.layout = 'LAYOUT_16x9';
+
+    // ── SLIDE 1 — Cover ─────────────────────────────────────────────────────────
+    const s1 = pptx.addSlide();
+    s1.background = { color: C.navy };
+    // Left mint stripe
+    s1.addShape(pptx.ShapeType.rect, { x:0, y:0, w:0.18, h:H, fill:{color:C.mint}, line:noBorder });
+    // Top-right teal circle (decorative)
+    s1.addShape(pptx.ShapeType.ellipse, { x:6.4, y:-0.55, w:4.3, h:4.3, fill:{color:C.mint}, line:noBorder });
+    // Navy overlay square (creates window-in-circle effect)
+    s1.addShape(pptx.ShapeType.rect, { x:7.25, y:0.82, w:2.5, h:2.5, fill:{color:C.navy}, line:noBorder });
+    // Total score circle
+    s1.addShape(pptx.ShapeType.ellipse, { x:7.55, y:0.92, w:1.9, h:1.9, fill:{color:C.darkNav}, line:noBorder });
+    // Total score text
+    s1.addText('Total Score',         { x:7.55, y:1.02, w:1.9, h:0.28, fontSize:9,  bold:true, color:C.label, align:'center', fontFace:'Calibri' });
+    s1.addText(fmt2(totalMark),        { x:7.55, y:1.28, w:1.9, h:0.62, fontSize:30, bold:true, color:C.white, align:'center', fontFace:'Calibri' });
+    s1.addText('/ 100',                { x:7.55, y:1.9,  w:1.9, h:0.28, fontSize:11, color:C.denom, align:'center', fontFace:'Calibri' });
+    const mgr = _teamAssignments[trainee.id] || _getAgentManager(trainee.name);
+    const isTicketsTeam = TICKET_MANAGERS.has(mgr);
+
+    // Main text
+    s1.addText('Performance Assessment Report', { x:0.45, y:0.55, w:6.6, h:0.32, fontSize:13, color:C.light, fontFace:'Calibri' });
+    s1.addText(name,                            { x:0.45, y:0.88, w:6.5, h:1.1,  fontSize:name.length > 18 ? 34 : 42, bold:true, color:C.white, fontFace:'Calibri', breakLine:true });
+    s1.addText(isTicketsTeam ? 'Communication & Written Skills Evaluation' : 'Communication & Call Centre Skills Evaluation', { x:0.45, y:2.55, w:6.5, h:0.38, fontSize:13, color:C.light, fontFace:'Calibri' });
+    // 4 score cards
+    const cards = [
+      { label:'Pick & Speak', score:psMark, max:20 },
+      { label:'Listening',    score:lisMark, max:20 },
+      { label:isTicketsTeam ? 'Mock Ticket' : 'Mock Call', score:mcMark,  max:20 },
+      { label:'Grammar',      score:gaMark,  max:25 }
+    ];
+    const cXs = [0.3, 2.58, 4.86, 7.14], cW=2.1, cH=1.55, cY=3.55;
+    cards.forEach((c, i) => {
+      s1.addShape(pptx.ShapeType.rect, { x:cXs[i], y:cY, w:cW, h:cH, fill:{color:C.darkNav}, line:noBorder });
+      s1.addText(c.label, { x:cXs[i]+0.1, y:cY+0.12, w:cW-0.2, h:0.26, fontSize:9, bold:true, color:C.label, align:'center', fontFace:'Calibri' });
+      s1.addText(c.score!=null ? c.score.toFixed(2) : 'N/A', { x:cXs[i]+0.1, y:cY+0.36, w:cW-0.2, h:0.68, fontSize:26, bold:true, color:sColor(c.score,c.max), align:'center', fontFace:'Calibri' });
+      s1.addText(`/ ${c.max}`, { x:cXs[i]+0.1, y:cY+1.08, w:cW-0.2, h:0.32, fontSize:12, color:C.denom, align:'center', fontFace:'Calibri' });
+    });
+    // Footer
+    s1.addShape(pptx.ShapeType.rect, { x:0, y:H-0.42, w:W, h:0.42, fill:{color:C.teal}, line:noBorder });
+    s1.addText('Confidential  |  Individual Coaching Report  |  * AI & Manager scores included (15% weightage)', { x:0.3, y:H-0.4, w:W-0.6, h:0.36, fontSize:9, color:C.white, align:'center', fontFace:'Calibri', valign:'middle' });
+
+    // ── SLIDE 2 — Pick & Speak ───────────────────────────────────────────────────
+    const s2 = pptx.addSlide();
+    s2.background = { color: C.lightBg };
+    s2.addShape(pptx.ShapeType.rect, { x:0, y:0, w:W, h:0.82, fill:{color:C.teal}, line:noBorder });
+    s2.addText('🎤  Pick & Speak Feedback', { x:0.25, y:0.08, w:7.6, h:0.66, fontSize:20, bold:true, color:C.white, fontFace:'Calibri', valign:'middle' });
+    s2.addShape(pptx.ShapeType.rect, { x:8.08, y:0.1, w:1.72, h:0.62, fill:{color:C.darkNav}, line:noBorder });
+    s2.addText(`${fmt2(psMark)} / 20`, { x:8.08, y:0.1, w:1.72, h:0.62, fontSize:13, bold:true, color:C.mint, align:'center', valign:'middle', fontFace:'Calibri' });
+
+    const psSessions = details['pick-speak'] || [];
+    // Pick session with highest effective score
+    const bestPS = psSessions.reduce((b, s) => {
+      const e = effScore(s), be = b ? effScore(b) : -1;
+      return (e !== null && e > (be ?? -1)) ? s : b;
+    }, null);
+    // Merge aiScores + adminScores — union of all available criteria (adminScores override where both exist)
+    const psAI = { ...(bestPS?.aiScores || {}), ...(bestPS?.adminScores || {}) };
+    const PS_CRIT = [
+      { key:'fluency',        label:'Fluency',              tip:'Practice speaking on random topics for 1 minute non-stop. Focus on flow, not perfection.' },
+      { key:'pace',           label:'Pace & Delivery',       tip:'Record yourself. Target 100–150 WPM for clear conversational delivery.' },
+      { key:'logicalFlow',    label:'Logical Flow',          tip:'Use "first / then / finally" to structure responses. Open, develop, close clearly.' },
+      { key:'clarity',        label:'Clarity of Expression', tip:'Use short sentences (10–20 words) with a single idea per sentence.' },
+      { key:'confidence',     label:'Confidence',            tip:'Replace "I think" / "sort of" with confident statements. Pause instead of using fillers.' },
+      { key:'fillerControl',  label:'Filler Word Control',   tip:'Replace "um / uh / like" with a deliberate pause — silence sounds more confident.' },
+      { key:'vocabulary',     label:'Vocabulary',            tip:'Introduce one new professional term per response. Read industry content daily.' },
+      { key:'professionalism',label:'Professionalism',       tip:'Avoid slang. Use formal language and close with structured, courteous phrases.' },
+      { key:'contentCoverage',label:'Content Coverage',      tip:'Cover the topic thoroughly — relevant examples, well-developed ideas, clear conclusion.' },
+      { key:'timeManagement', label:'Time Management',       tip:'Practice pacing: cover your key points within the allotted time without rushing.' },
+      { key:'sentenceVariety',label:'Sentence Variety',      tip:'Mix short punchy sentences with longer ones. Vary your sentence structure to keep listeners engaged.' }
+    ];
+    // Show ONLY criteria with actual scores (no N/A cards); sort worst-first so priority is obvious
+    const displayPS = PS_CRIT
+      .filter(c => typeof psAI[c.key] === 'number')
+      .sort((a, b) => (psAI[a.key] ?? 5) - (psAI[b.key] ?? 5))
+      .slice(0, 6);
+    const priorityPS = displayPS[0]?.label || 'Communication Delivery';
+
+    s2.addShape(pptx.ShapeType.rect, { x:0, y:0.82, w:W, h:0.5, fill:{color:C.amber}, line:noBorder });
+    s2.addText(`🎯  Priority Action: Start with '${priorityPS}' — highest-impact area to address first`, { x:0.25, y:0.82, w:W-0.5, h:0.5, fontSize:12, bold:true, color:C.white, fontFace:'Calibri', valign:'middle' });
+
+    const psCardW=4.68, psCardH=0.76, psGap=0.07, psStartY=1.41;
+    if (displayPS.length === 0) {
+      // No detailed criteria available — show a single info card
+      s2.addShape(pptx.ShapeType.rect, { x:0.22, y:psStartY, w:W-0.44, h:0.76, fill:{color:C.white}, line:{color:C.divider,pt:0.75} });
+      s2.addShape(pptx.ShapeType.rect, { x:0.22, y:psStartY, w:0.08, h:0.76, fill:{color:C.muted}, line:noBorder });
+      s2.addText('No detailed breakdown available for this session.', { x:0.40, y:psStartY+0.08, w:W-0.7, h:0.56, fontSize:11, color:C.muted, fontFace:'Calibri', valign:'middle' });
+    } else {
+      displayPS.forEach((c, idx) => {
+        const col=idx%2, row=Math.floor(idx/2);
+        const cx=(col===0)?0.22:5.1, cy=psStartY+row*(psCardH+psGap);
+        const score = psAI[c.key];
+        const sc = score >= 4 ? C.teal : C.amber;
+        s2.addShape(pptx.ShapeType.rect, { x:cx, y:cy, w:psCardW, h:psCardH, fill:{color:C.white}, line:{color:C.divider,pt:0.75} });
+        s2.addShape(pptx.ShapeType.rect, { x:cx, y:cy, w:0.08, h:psCardH, fill:{color:sc}, line:noBorder });
+        s2.addText(c.label,          { x:cx+0.15, y:cy+0.06, w:psCardW-0.9, h:0.3, fontSize:11, bold:true, color:C.darkNav, fontFace:'Calibri' });
+        s2.addText(`${score}/5`,     { x:cx+psCardW-0.78, y:cy+0.06, w:0.65, h:0.3, fontSize:11, bold:true, color:sc, align:'right', fontFace:'Calibri' });
+        s2.addText(c.tip,            { x:cx+0.15, y:cy+0.35, w:psCardW-0.28, h:0.35, fontSize:8.5, color:C.muted, wrap:true, fontFace:'Calibri' });
+      });
+    }
+
+    // ── SLIDE 3 — Mock Call / Ticket ─────────────────────────────────────────────
+    const s3 = pptx.addSlide();
+    s3.background = { color: C.lightBg };
+    s3.addShape(pptx.ShapeType.rect, { x:0, y:0, w:W, h:0.82, fill:{color:C.darkNav}, line:noBorder });
+    s3.addText(isTicketsTeam ? '📝  Mock Ticket Feedback' : '📞  Mock Call Feedback', { x:0.25, y:0.08, w:7.6, h:0.66, fontSize:20, bold:true, color:C.white, fontFace:'Calibri', valign:'middle' });
+    s3.addShape(pptx.ShapeType.rect, { x:8.08, y:0.1, w:1.72, h:0.62, fill:{color:C.teal}, line:noBorder });
+    s3.addText(isTicketsTeam ? `${(mcMark != null ? (mcMark / 20 * 30).toFixed(1) : '—')} / 30` : `${fmt2(mcMark)} / 20`, { x:8.08, y:0.1, w:1.72, h:0.62, fontSize:13, bold:true, color:C.white, align:'center', valign:'middle', fontFace:'Calibri' });
+
+    const mcSess = details['mock-call'] || [];
+    const latestMC = mcSess.sort((a,b)=>new Date(b.submittedAt)-new Date(a.submittedAt))[0];
+    const mcCom = { ...(latestMC?.aiScores||{}), ...(latestMC?.adminScores||{}) };
+    const MC_CRIT2 = isTicketsTeam ? [
+      { key:'criterion_0', label:'Tone & Empathy',       tip:'Maintained polite/professional tone; acknowledged customer\'s actual concern and policy rationale with empathy.' },
+      { key:'criterion_1', label:'Clarity',              tip:'Clear, consistent, non-contradictory explanation (no saying "disabled" and later "no restriction").' },
+      { key:'criterion_2', label:'Ownership',            tip:'Addressed customer\'s underlying questions, reasoning behind internal policies, and why they questioned it.' },
+      { key:'criterion_3', label:'Accuracy',             tip:'Correctly clarified internal safeguards, differentiated UI restrictions vs. manual support options.' },
+      { key:'criterion_4', label:'Customer Education',   tip:'Explained business rationale (e.g. preventing accidental takeover at lower price) instead of generic statements.' },
+      { key:'criterion_5', label:'Grammar & Language',   tip:'Correct grammar, spelling (no "inconvinence"), professional sentence construction, and no repetitive closing.' }
+    ] : [
+      { key:'callOpening',          label:'Call Opening',          tip:'Greet warmly, state your name & company, invite the customer\'s concern — all 4 elements.' },
+      { key:'acknowledgment',       label:'Acknowledgment',        tip:'"I completely understand how frustrating this must be" — empathy always comes first.' },
+      { key:'communicationClarity', label:'Communication Clarity', tip:'Short sentences, professional tone, zero fillers. Confirm understanding at key points.' },
+      { key:'callEssence',          label:'Call Essence',          tip:'Use "certainly", "happy to help", "absolutely" throughout to build genuine warmth.' },
+      { key:'holdProcedure',        label:'Hold Procedure',        tip:'Ask permission, state expected wait time, thank them on return — every time.' },
+      { key:'extraMile',            label:'Extra Mile',            tip:'Proactively share a useful tip or related info beyond the specific query asked.' },
+      { key:'callClosing',          label:'Call Closing',          tip:'"Is there anything else I can help you with?" + warm sign-off — every call.' }
+    ];
+    // Show ONLY scored criteria (no N/A cards); worst-first so priority is obvious
+    const displayMC = [...MC_CRIT2]
+      .filter(c => typeof mcCom[c.key] === 'number')
+      .sort((a, b) => (mcCom[a.key] ?? 5) - (mcCom[b.key] ?? 5))
+      .slice(0, 6);
+    const priorityMC = displayMC[0]?.label || (isTicketsTeam ? 'Response Clarity' : 'Call Handling');
+
+    s3.addShape(pptx.ShapeType.rect, { x:0, y:0.82, w:W/2, h:0.5, fill:{color:C.green}, line:noBorder });
+    s3.addText('✨  Development Areas (prioritised):', { x:0.1, y:0.82, w:W/2-0.15, h:0.5, fontSize:10, bold:true, color:C.white, fontFace:'Calibri', valign:'middle' });
+    s3.addShape(pptx.ShapeType.rect, { x:W/2, y:0.82, w:W/2, h:0.5, fill:{color:C.amber}, line:noBorder });
+    s3.addText(`🎯  Priority: '${priorityMC}' — highest-impact area`, { x:W/2+0.1, y:0.82, w:W/2-0.2, h:0.5, fontSize:10, bold:true, color:C.white, fontFace:'Calibri', valign:'middle' });
+
+    const mcCols=[0.15,3.42,6.69], mcCW=3.08, mcCH=0.84, mcCGap=0.08, mcStartY=1.42;
+    if (displayMC.length === 0) {
+      s3.addShape(pptx.ShapeType.rect, { x:0.15, y:mcStartY, w:W-0.3, h:0.84, fill:{color:C.white}, line:{color:C.divider,pt:0.75} });
+      s3.addShape(pptx.ShapeType.rect, { x:0.15, y:mcStartY, w:0.08, h:0.84, fill:{color:C.muted}, line:noBorder });
+      s3.addText('No detailed breakdown available for this session.', { x:0.33, y:mcStartY+0.10, w:W-0.6, h:0.60, fontSize:11, color:C.muted, fontFace:'Calibri', valign:'middle' });
+    } else {
+      displayMC.forEach((c, idx) => {
+        const col=idx%3, row=Math.floor(idx/3);
+        const cx=mcCols[col], cy=mcStartY+row*(mcCH+mcCGap);
+        const score = mcCom[c.key];
+        const sc = score >= 4 ? C.teal : C.amber;
+        s3.addShape(pptx.ShapeType.rect, { x:cx, y:cy, w:mcCW, h:mcCH, fill:{color:C.white}, line:{color:C.divider,pt:0.75} });
+        s3.addShape(pptx.ShapeType.rect, { x:cx, y:cy, w:0.08, h:mcCH, fill:{color:sc}, line:noBorder });
+        s3.addText(c.label,        { x:cx+0.15, y:cy+0.07, w:mcCW-0.85, h:0.3, fontSize:10.5, bold:true, color:C.darkNav, fontFace:'Calibri' });
+        s3.addText(`${score}/5`,   { x:cx+mcCW-0.72, y:cy+0.07, w:0.6, h:0.3, fontSize:10.5, bold:true, color:sc, align:'right', fontFace:'Calibri' });
+        s3.addText(c.tip,          { x:cx+0.15, y:cy+0.37, w:mcCW-0.25, h:0.42, fontSize:8, color:C.muted, wrap:true, fontFace:'Calibri' });
+      });
+    }
+
+    // ── SLIDE 4 — Listening & Grammar ────────────────────────────────────────────
+    const s4 = pptx.addSlide();
+    s4.background = { color: C.lightBg };
+    s4.addShape(pptx.ShapeType.rect, { x:0, y:0, w:W, h:0.82, fill:{color:C.navy}, line:noBorder });
+    s4.addText('👂  Listening & Grammar Feedback', { x:0.25, y:0.08, w:W-0.5, h:0.66, fontSize:20, bold:true, color:C.white, fontFace:'Calibri', valign:'middle' });
+    s4.addShape(pptx.ShapeType.rect, { x:4.87, y:0.9, w:0.06, h:H-1.05, fill:{color:C.divider}, line:noBorder });
+
+    // LEFT — Listening
+    const laSess2 = details['listening-assessment'] || [];
+    const latestLA = laSess2.sort((a,b)=>new Date(b.submittedAt)-new Date(a.submittedAt))[0];
+    const laSecs   = latestLA?.aiScores?.sections || [];
+    const laStrong = laSecs.filter(s=>s.pct>=60).map(s=>`✓ Good performance in ${s.title}`);
+    const laWeak   = laSecs.filter(s=>s.pct<60).map(s=>`→ ${s.title} — needs focused practice`);
+    if (!laSecs.length) { laStrong.push('✓ Demonstrates ability to follow spoken instructions'); laWeak.push('→ Focus on capturing finer details while listening'); laWeak.push('→ Avoid assumptions; verify before responding'); }
+
+    s4.addShape(pptx.ShapeType.rect, { x:0.18, y:0.9, w:4.55, h:0.42, fill:{color:C.teal}, line:noBorder });
+    s4.addText(`👂  Listening · ${fmt2(lisMark)} / 20`, { x:0.22, y:0.9, w:4.5, h:0.42, fontSize:12, bold:true, color:C.white, valign:'middle', fontFace:'Calibri' });
+    let laY=1.38;
+    laStrong.slice(0,2).forEach(txt=>{ s4.addShape(pptx.ShapeType.rect,{x:0.18,y:laY,w:4.55,h:0.44,fill:{color:C.white},line:{color:C.divider,pt:0.5}}); s4.addShape(pptx.ShapeType.rect,{x:0.18,y:laY,w:0.08,h:0.44,fill:{color:C.green},line:noBorder}); s4.addText(txt,{x:0.32,y:laY+0.04,w:4.3,h:0.36,fontSize:9.5,color:C.darkNav,fontFace:'Calibri',wrap:true,insetT:0.02,insetB:0.02}); laY+=0.49; });
+    s4.addShape(pptx.ShapeType.rect, { x:0.18, y:laY, w:4.55, h:0.29, fill:{color:C.amber}, line:noBorder });
+    s4.addText('Areas of Improvement', { x:0.22, y:laY, w:4.5, h:0.29, fontSize:9.5, bold:true, color:C.white, valign:'middle', fontFace:'Calibri' });
+    laY+=0.33;
+    laWeak.slice(0,3).forEach(txt=>{ s4.addShape(pptx.ShapeType.rect,{x:0.18,y:laY,w:4.55,h:0.44,fill:{color:C.white},line:{color:C.divider,pt:0.5}}); s4.addShape(pptx.ShapeType.rect,{x:0.18,y:laY,w:0.08,h:0.44,fill:{color:C.amber},line:noBorder}); s4.addText(txt,{x:0.32,y:laY+0.04,w:4.3,h:0.36,fontSize:9.5,color:C.darkNav,fontFace:'Calibri',wrap:true,insetT:0.02,insetB:0.02}); laY+=0.49; });
+
+    // RIGHT — Grammar
+    const GRAM_TOPICS2 = { 'A':'Multiple Choice — Tense, Articles, Basic Grammar Rules', 'B':'Fill in the Blanks — Articles (a/an/the), Prepositions, Conjunctions', 'C':'Sentence Rewriting — Tense Correction, Subject-Verb Agreement' };
+    const gaSess2 = details['grammar-assessment'] || [];
+    const latestGA2 = gaSess2.sort((a,b)=>new Date(b.submittedAt)-new Date(a.submittedAt))[0];
+    const gaSecs2   = latestGA2?.aiScores?.sections || [];
+    const gaStrong  = gaSecs2.filter(s=>s.pct>=60).map(s=>`✓ Good performance in ${s.title}`);
+    const gaWeak    = gaSecs2.filter(s=>s.pct<60).map(s=>{const l=(s.title||'').match(/Section\s+([A-C])/i)?.[1]?.toUpperCase()||'';return `→ ${GRAM_TOPICS2[l]||s.title}`;});
+    if (!gaSecs2.length) { gaStrong.push('✓ Shows understanding of basic grammar concepts'); gaWeak.push('→ Articles (a/an/the) and Prepositions (in/on/at)'); gaWeak.push('→ Sentence rewriting and tense correction'); }
+
+    s4.addShape(pptx.ShapeType.rect, { x:5.05, y:0.9, w:4.75, h:0.42, fill:{color:C.darkNav}, line:noBorder });
+    s4.addText(`📝  Grammar · ${fmt2(gaMark)} / 25`, { x:5.09, y:0.9, w:4.7, h:0.42, fontSize:12, bold:true, color:C.white, valign:'middle', fontFace:'Calibri' });
+    let gaY=1.38;
+    gaStrong.slice(0,2).forEach(txt=>{ s4.addShape(pptx.ShapeType.rect,{x:5.05,y:gaY,w:4.75,h:0.44,fill:{color:C.white},line:{color:C.divider,pt:0.5}}); s4.addShape(pptx.ShapeType.rect,{x:5.05,y:gaY,w:0.08,h:0.44,fill:{color:C.green},line:noBorder}); s4.addText(txt,{x:5.19,y:gaY+0.04,w:4.5,h:0.36,fontSize:9.5,color:C.darkNav,fontFace:'Calibri',wrap:true,insetT:0.02,insetB:0.02}); gaY+=0.49; });
+    s4.addShape(pptx.ShapeType.rect, { x:5.05, y:gaY, w:4.75, h:0.29, fill:{color:C.amber}, line:noBorder });
+    s4.addText('Areas of Improvement', { x:5.09, y:gaY, w:4.7, h:0.29, fontSize:9.5, bold:true, color:C.white, valign:'middle', fontFace:'Calibri' });
+    gaY+=0.33;
+    gaWeak.slice(0,3).forEach(txt=>{ s4.addShape(pptx.ShapeType.rect,{x:5.05,y:gaY,w:4.75,h:0.44,fill:{color:C.white},line:{color:C.divider,pt:0.5}}); s4.addShape(pptx.ShapeType.rect,{x:5.05,y:gaY,w:0.08,h:0.44,fill:{color:C.amber},line:noBorder}); s4.addText(txt,{x:5.19,y:gaY+0.04,w:4.5,h:0.36,fontSize:9.5,color:C.darkNav,fontFace:'Calibri',wrap:true,insetT:0.02,insetB:0.02}); gaY+=0.49; });
+
+    // ── SLIDE 5 — Overall Diagnosis ──────────────────────────────────────────────
+    const s5 = pptx.addSlide();
+    s5.background = { color: C.lightBg };
+    s5.addShape(pptx.ShapeType.rect, { x:0, y:0, w:W, h:0.82, fill:{color:C.navy}, line:noBorder });
+    s5.addText('Overall Diagnosis', { x:0.25, y:0.08, w:W-0.5, h:0.66, fontSize:20, bold:true, color:C.white, fontFace:'Calibri', valign:'middle' });
+
+    const tot = totalMark ?? 0;
+    const modMap = [['Pick & Speak',(psMark??0)/20*100],['Listening',(lisMark??0)/20*100],['Grammar',(gaMark??0)/25*100],['Mock Call',(mcMark??0)/20*100]];
+    const bestMod = [...modMap].sort(([,a],[,b])=>b-a)[0]?.[0];
+    const weakMod = [...modMap].sort(([,a],[,b])=>a-b)[0]?.[0];
+    let overallLines, insightLines;
+    if (tot >= 70) {
+      overallLines = [
+        `${name} demonstrates consistently high communication standards across all assessment modules.`,
+        `${bestMod} stands out as the strongest area, reflecting strong preparation and professional delivery.`,
+        `Overall performance is above average and ready for advanced client-facing responsibilities.`
+      ];
+      insightLines = [
+        `The foundation is solid — focus now on converting good scores into excellent ones.`,
+        `${weakMod} offers the biggest opportunity for improvement with targeted daily practice.`,
+        `Schedule weekly self-review sessions to catch and correct micro-patterns early.`
+      ];
+    } else if (tot >= 55) {
+      overallLines = [
+        `${name} shows a solid foundation across the Communicate 360 assessment modules.`,
+        `${bestMod ? `${bestMod} stands out as the strongest area, indicating clear natural aptitude.` : 'Active participation has laid the groundwork for measurable improvement.'}`,
+        `With structured and consistent effort, the gap to high performance is well within reach.`
+      ];
+      insightLines = [
+        `${weakMod} is the highest-priority area — targeted practice here will yield the fastest gains.`,
+        `A consistent 15–20 minute daily routine covering grammar, listening and speaking will compound quickly.`,
+        `Focus on quality of practice, not just quantity — self-correct every error and track weekly progress.`
+      ];
+    } else {
+      overallLines = [
+        `${name} has actively engaged with the Communicate 360 program across all assessment modules.`,
+        `${bestMod ? `Early promise is visible in ${bestMod} — this is the foundation to build on.` : 'The foundation is being built — consistency now will accelerate future progress.'}`,
+        `Dedicated daily practice is needed to convert participation into consistent, measurable skill.`
+      ];
+      insightLines = [
+        `Start with the fundamentals: active listening, structured speaking and daily grammar review.`,
+        `${weakMod} needs the most immediate attention — commit to focused 20-minute daily practice sessions.`,
+        `Track weekly progress and celebrate small wins — every consistent session builds real momentum.`
+      ];
+    }
+    const overallTxt = overallLines.join('\n');
+    const insightTxt = insightLines.join('\n');
+
+    s5.addShape(pptx.ShapeType.rect, { x:0.28, y:1.05, w:W-0.56, h:1.9, fill:{color:C.white}, line:{color:C.divider,pt:1} });
+    s5.addShape(pptx.ShapeType.rect, { x:0.28, y:1.05, w:0.1,   h:1.9, fill:{color:C.green},  line:noBorder });
+    s5.addText('Overall Assessment', { x:0.48, y:1.1, w:W-0.88, h:0.34, fontSize:12, bold:true, color:C.navy, fontFace:'Calibri' });
+    s5.addText(overallTxt, { x:0.48, y:1.48, w:W-0.88, h:1.4, fontSize:11, color:C.darkNav, wrap:true, fontFace:'Calibri', valign:'top', lineSpacingMultiple:1.35 });
+
+    s5.addShape(pptx.ShapeType.rect, { x:0.28, y:3.12, w:W-0.56, h:1.93, fill:{color:C.white}, line:{color:C.divider,pt:1} });
+    s5.addShape(pptx.ShapeType.rect, { x:0.28, y:3.12, w:0.1,    h:1.93, fill:{color:C.orange}, line:noBorder });
+    s5.addText('Core Insight', { x:0.48, y:3.17, w:W-0.88, h:0.34, fontSize:12, bold:true, color:C.navy, fontFace:'Calibri' });
+    s5.addText(insightTxt, { x:0.48, y:3.55, w:W-0.88, h:1.44, fontSize:11, color:C.darkNav, wrap:true, fontFace:'Calibri', valign:'top', lineSpacingMultiple:1.35 });
+
+    // ── SLIDE 6 — Development Roadmap ────────────────────────────────────────────
+    // Layout matches reference PPT exactly:
+    //   Left teal panel  x=0.45 w=1.30 — only "Step N" centred
+    //   Right dark panel x=1.85 w=7.50 — short bullet lines 11pt white
+    //   Row gap = 0.08", footer at y=5.23
+    const s6 = pptx.addSlide();
+    s6.background = { color: C.navy };
+    // Mint left stripe (full height)
+    s6.addShape(pptx.ShapeType.rect, { x:0, y:0, w:0.18, h:H, fill:{color:C.mint}, line:noBorder });
+    // Title
+    s6.addText('🚀  Development Roadmap', { x:0.45, y:0.13, w:9.00, h:0.65, fontSize:26, bold:true, color:C.white, fontFace:'Calibri', valign:'middle' });
+
+    const steps = buildRoadmapSteps(name, scores, details, marks);
+    const n = steps.length;
+    const rowGap  = 0.08;
+    const areaY   = 0.91;
+    const footerY = 5.23;
+    const totalH  = footerY - areaY;                          // 4.32"
+    const stepH   = (totalH - rowGap * (n - 1)) / n;         // distribute evenly
+
+    steps.forEach((step, i) => {
+      const sY      = areaY + i * (stepH + rowGap);
+      const labelY  = sY + (stepH - 0.40) / 2;               // vertically centre "Step N"
+      const content = step.lines.join('\n');
+
+      // Row background (dark navy sidebar)
+      s6.addShape(pptx.ShapeType.rect, { x:0.45, y:sY, w:9.10, h:stepH, fill:{color:C.sidebar}, line:noBorder });
+      // Left teal panel
+      s6.addShape(pptx.ShapeType.rect, { x:0.45, y:sY, w:1.30, h:stepH, fill:{color:C.teal},    line:noBorder });
+      // Step label — centred in left panel
+      s6.addText(`Step ${i + 1}`, { x:0.45, y:labelY, w:1.30, h:0.40, fontSize:11, bold:true, color:C.white, align:'center', fontFace:'Calibri', valign:'middle' });
+      // Bullet lines — right content panel
+      // Font 10.5pt + lineSpacing 1.1 + explicit small insets ensure 4 lines never overflow
+      // into the next row's background rect (verified: 4×10.5pt×1.1 = 0.64" < 0.88" box)
+      s6.addText(content, { x:1.85, y:sY + 0.08, w:7.50, h:stepH - 0.14, fontSize:10.5, color:C.white, fontFace:'Calibri', valign:'top', wrap:true, lineSpacingMultiple:1.1, insetT:0.04, insetB:0.03 });
+    });
+
+    // Footer bar
+    s6.addShape(pptx.ShapeType.rect, { x:0, y:footerY, w:W, h:0.40, fill:{color:C.teal}, line:noBorder });
+    s6.addText(`Consistent practice is the key. You've got this, ${name}! 💪`, { x:0.30, y:footerY + 0.03, w:9.00, h:0.35, fontSize:11, bold:true, color:C.white, align:'center', fontFace:'Calibri', valign:'middle' });
+
+    const filename = `${name.replace(/\s+/g,'_')}_Performance_Report.pptx`;
+    await pptx.writeFile({ fileName: filename });
+  }
+
+  async function downloadTraineePPT() {
+    if (!_currentReportData) { toast('Please select a trainee first', 'error'); return; }
+    const btn = document.getElementById('lrc-ppt-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '⌛ Generating…'; }
+    try {
+      const { trainee, marks, scores, details } = _currentReportData;
+      await generateTraineePPT(trainee, marks, scores, details);
+    } catch (e) {
+      console.error('PPT generation failed:', e);
+      toast('PPT generation failed: ' + e.message, 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '⬇ Download PPT'; }
+    }
+  }
+
+  // ── Comms 360 Master Report — Excel Download ─────────────────────────────
+  // Exports all agents from _MANAGER_AGENT_MAP with their master scores and
+  // any live DB scores, grouped by manager.
+  async function downloadMasterExcel() {
+    if (typeof XLSX === 'undefined') { toast('XLSX library not loaded', 'error'); return; }
+    const btn = $('btn-master-excel');
+    if (btn) { btn.disabled = true; btn.textContent = '⌛ Generating…'; }
+
+    try {
+      if (_comm360ReportDeleted) {
+        toast('No report records to export.', 'error');
+        return;
+      }
+      const r2 = v => v != null ? parseFloat(parseFloat(v).toFixed(2)) : null;
+
+      // Fetch all trainees and their sessions from DB for live scores
+      const allTrainees = await DB.getAll('trainees');
+      const traineeByName = {};
+      for (const t of allTrainees) {
+        traineeByName[t.name?.toLowerCase().trim()] = t;
+      }
+
+      const headers = [
+        'Manager', 'Agent Name',
+        'Self Assessment (/20)', 'AI Audit (/5)',
+        'Pick & Speak (/20)', 'Listening (/20)', 'Mock Call / Ticket (/20)', 'Grammar (/25)',
+        'Total Score (/100)'
+      ];
+
+      const rows = [headers];
+
+      for (const [manager, agents] of Object.entries(_MANAGER_AGENT_MAP)) {
+        for (const agentName of agents) {
+          const ms  = getMasterScores(agentName);
+          const key = agentName.toLowerCase().trim();
+          const t   = traineeByName[key] ||
+                      Object.entries(traineeByName).find(([k]) => k.replace(/\s+/g,'') === key.replace(/\s+/g,''))?.[1];
+
+          // Live DB module scores
+          let livePct = {};
+          if (t) {
+            const sessions = await DB.getByIndex('sessions', 'traineeId', t.id);
+            const { scores } = computeAgentScores(t.id, sessions);
+            livePct = scores;
+          }
+
+          const saSc  = ms?.selfAssessment ?? null;
+          const aiSc  = ms?.aiAudit       ?? null;
+
+          const psMark  = livePct['pick-speak']           != null ? r2(livePct['pick-speak']           / 100 * 20) : (ms?.psScore   ?? null);
+          const lisMark = livePct['listening-assessment'] != null ? r2(livePct['listening-assessment'] / 100 * 20) : (ms?.lisScore  ?? null);
+          const mcMark  = livePct['mock-call']            != null ? r2(livePct['mock-call']            / 100 * 20) : (ms?.mcScore   ?? null);
+          const gaMark  = livePct['grammar-assessment']   != null ? r2(livePct['grammar-assessment']   / 100 * 25) : (ms?.gramScore ?? null);
+
+          // Total: always recompute from components for accuracy
+          const masterHasAll = ms?.psScore != null && ms?.lisScore != null && ms?.mcScore != null && ms?.gramScore != null;
+          const hasLive = ['pick-speak','listening-assessment','grammar-assessment','mock-call'].some(k => livePct[k] != null);
+          let total;
+          if (masterHasAll && !hasLive && ms?.totalScore > 0) {
+            total = r2(ms.totalScore);
+          } else {
+            const parts = [saSc, aiSc, psMark, lisMark, mcMark, gaMark].filter(x => x != null);
+            total = parts.length ? r2(parts.reduce((a, b) => a + b, 0)) : null;
+          }
+
+          rows.push([
+            manager, agentName,
+            r2(saSc), r2(aiSc),
+            psMark, lisMark, mcMark, gaMark,
+            total
+          ]);
+        }
+      }
+
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+
+      // Style header row
+      const range = XLSX.utils.decode_range(ws['!ref']);
+      for (let C = range.s.c; C <= range.e.c; C++) {
+        const addr = XLSX.utils.encode_cell({ r: 0, c: C });
+        if (!ws[addr]) continue;
+        ws[addr].s = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '1A3C5E' } }, alignment: { horizontal: 'center' } };
+      }
+
+      // Set column widths
+      ws['!cols'] = [
+        { wch: 22 }, { wch: 30 },
+        { wch: 22 }, { wch: 14 },
+        { wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 16 },
+        { wch: 18 }
+      ];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Comms 360 Master Report');
+      XLSX.writeFile(wb, `Comms360_Master_Report_${new Date().toISOString().slice(0,10)}.xlsx`, { cellStyles: true });
+      toast('Excel downloaded!', 'success');
+    } catch (e) {
+      console.error('Excel export failed:', e);
+      toast('Export failed: ' + e.message, 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '⬇ Download Comms 360 Excel'; }
+    }
+  }
+
+  async function copyLetter() {
+    const body = document.getElementById('lrc-letter-body');
+    const btn  = document.getElementById('lrc-copy-btn');
+    if (!body || !btn) return;
+
+    try {
+      // Build a plain-text version for apps that only accept text
+      const plainText = body.innerText;
+
+      // Try rich (HTML) copy first so Word / Outlook / Gmail paste with formatting
+      if (window.ClipboardItem) {
+        const htmlBlob  = new Blob([body.innerHTML], { type: 'text/html' });
+        const textBlob  = new Blob([plainText],      { type: 'text/plain' });
+        await navigator.clipboard.write([new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })]);
+      } else {
+        // Fallback: plain text
+        await navigator.clipboard.writeText(plainText);
+      }
+
+      btn.textContent = '✅ Copied!';
+      setTimeout(() => { btn.textContent = '📋 Copy to Clipboard'; }, 2500);
+    } catch (err) {
+      console.error('Copy failed:', err);
+      btn.textContent = '❌ Copy failed';
+      setTimeout(() => { btn.textContent = '📋 Copy to Clipboard'; }, 2500);
+    }
+  }
+
+  async function loadTraineeReport(traineeId) {
+    const [trainee, sessions, preservedRec] = await Promise.all([
+      DB.get('trainees', traineeId),
+      DB.getByIndex('sessions', 'traineeId', traineeId),
+      DB.get('settings', 'preservedReportScores')
+    ]);
+    if (!trainee) return;
+    $('report-content').classList.remove('hidden');
+
+    // ── Module scores ──
+    const { scores, details } = computeAgentScores(traineeId, sessions);
+    const r2 = v => v != null ? parseFloat(v.toFixed(2)) : null;
+
+    // Fetch master scores for fallback (modules not recorded in the DB)
+    const ms = getMasterScores(_resolveAlias(trainee.name));
+
+    // Fetch preserved report scores
+    const preserved = preservedRec && preservedRec.value ? JSON.parse(preservedRec.value) : {};
+    const pr = preserved[trainee.name.toLowerCase().trim()] || {};
+
+    const lisMark = scores['listening-assessment'] != null
+      ? r2(scores['listening-assessment'] / 100 * 20)
+      : (pr.lisScore != null ? r2(pr.lisScore) : (ms?.lisScore  != null ? r2(ms.lisScore)  : null));
+    const psMark  = scores['pick-speak'] != null
+      ? r2(scores['pick-speak']  / 100 * 20)
+      : (pr.psScore != null ? r2(pr.psScore) : (ms?.psScore   != null ? r2(ms.psScore)   : null));
+    const gaMark  = scores['grammar-assessment'] != null
+      ? r2(scores['grammar-assessment'] / 100 * 25)
+      : (pr.gramScore != null ? r2(pr.gramScore) : (ms?.gramScore != null ? r2(ms.gramScore) : null));
+    const mcMark  = scores['mock-call'] != null
+      ? r2(scores['mock-call']   / 100 * 20)
+      : (pr.mcScore != null ? r2(pr.mcScore) : (ms?.mcScore   != null ? r2(ms.mcScore)   : null));
+
+    // ── Total score ──
+    // Use ms.totalScore ONLY when master has ALL module components.
+    // Teams like Sadique Raza have psScore/lis/mc/gramScore = null in master,
+    // so their ms.totalScore is just SA+AI (~10-14). In that case we must
+    // recompute from SA + AI (master) + live module marks (DB preferred, master fallback).
+    const masterHasAllModules = ms?.psScore != null && ms?.lisScore != null &&
+                                 ms?.mcScore != null && ms?.gramScore != null;
+    const hasLiveModuleData   = ['pick-speak','listening-assessment','grammar-assessment','mock-call']
+                                  .some(k => scores[k] != null);
+
+    let totalMark = null;
+    if (masterHasAllModules && !hasLiveModuleData && ms?.totalScore > 0) {
+      // Exact pre-computed Excel total — most accurate for fully-scored trainees
+      totalMark = r2(ms.totalScore);
+    } else {
+      // Recompute from all available components: SA + AI + each module mark
+      const saScore = ms?.selfAssessment ?? null;
+      const aiScore = ms?.aiAudit       ?? null;
+      const parts   = [saScore, aiScore, lisMark, psMark, gaMark, mcMark].filter(x => x != null);
+      totalMark = parts.length ? r2(parts.reduce((a, b) => a + b, 0)) : null;
+    }
+
+    // For insight generation: supplement DB percentages with master-score percentages
+    // for any module the trainee didn't attempt in the app
+    const insightScores = { ...scores };
+    if (insightScores['listening-assessment']  == null && ms?.lisScore  != null) insightScores['listening-assessment']  = r2(ms.lisScore  / 20 * 100);
+    if (insightScores['pick-speak']            == null && ms?.psScore   != null) insightScores['pick-speak']            = r2(ms.psScore   / 20 * 100);
+    if (insightScores['grammar-assessment']    == null && ms?.gramScore != null) insightScores['grammar-assessment']    = r2(ms.gramScore / 25 * 100);
+    if (insightScores['mock-call']             == null && ms?.mcScore   != null) insightScores['mock-call']             = r2(ms.mcScore   / 20 * 100);
+
+    // ── Render letter ──
+    const insights = buildLetterInsights(insightScores, details, totalMark);
+    renderTraineeLetter(trainee, { lisMark, psMark, gaMark, mcMark, totalMark }, insights);
+    _currentReportData = { trainee, marks: { lisMark, psMark, gaMark, mcMark, totalMark }, scores: insightScores, details };
+
+    // ── Session history table ── (same P&S avg logic as before)
+    const PS_MODS = new Set(['pick-speak', 'pick-speak-general', 'pick-speak-stock']);
+    const rPsList = [];
+    sessions.forEach(s => {
+      if (!PS_MODS.has(s.module)) return;
+      const aN = s.adminScores ? (calcAdminAvg(s.adminScores) ?? null) : null;
+      const iN = s.aiScores    ? (normalizeOverall(s.aiScores.overall) ?? null) : null;
+      const eff = aN !== null ? aN : iN;
+      if (eff !== null) rPsList.push({ id: s.id, eff });
+    });
+    let rPsBestId = null, rPsAvgOfAll = null;
+    if (rPsList.length) {
+      rPsBestId   = rPsList.reduce((a, b) => b.eff > a.eff ? b : a).id;
+      rPsAvgOfAll = parseFloat((rPsList.reduce((s, x) => s + x.eff, 0) / rPsList.length).toFixed(1));
+    }
+
+    const tbody = $('report-sessions-tbody');
+    tbody.innerHTML = sessions.length === 0
+      ? `<tr><td colspan="6" class="empty-state">No sessions yet.</td></tr>`
+      : sessions.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt)).map(s => {
+          const rAI   = s.aiScores    ? (normalizeOverall(s.aiScores.overall) ?? null) : null;
+          const rAdm  = s.adminScores ? (calcAdminAvg(s.adminScores)          ?? null) : null;
+          let rAvg;
+          if (PS_MODS.has(s.module)) {
+            rAvg = (s.id === rPsBestId && rPsAvgOfAll !== null) ? rPsAvgOfAll : 'N/A';
+          } else {
+            // Mock call, grammar, listening: admin is final; if no admin, AI is final. No averaging.
+            rAvg = rAdm !== null ? rAdm : (rAI !== null ? rAI : '—');
+          }
+          return `<tr>
+            <td>${moduleBadge(s.module)}</td>
+            <td>${s.topicTitle || '—'}</td>
+            <td>${formatDate(s.submittedAt).split(' ')[0]}</td>
+            <td>${rAI  !== null ? rAI  + '/100' : '—'}</td>
+            <td>${rAdm !== null ? rAdm + '/100' : '—'}</td>
+            <td style="font-weight:600;color:${rAvg === 'N/A' || rAvg === '—' ? 'var(--text-muted)' : '#1d4ed8'}">${rAvg !== '—' && rAvg !== 'N/A' ? rAvg + '/100' : rAvg}</td>
+          </tr>`;
+        }).join('');
+  }
+
+  async function loadSyntheticReport(agentName) {
+    const ms = getMasterScores(agentName);
+    if (!ms) { toast('No score data found for ' + agentName, 'error'); return; }
+    $('report-content').classList.remove('hidden');
+
+    const r2 = v => v != null ? parseFloat(v.toFixed(2)) : null;
+
+    // Individual module marks directly from master sheet (already weighted to out-of-max)
+    const psMark  = ms.psScore   != null ? r2(ms.psScore)   : null;
+    const lisMark = ms.lisScore  != null ? r2(ms.lisScore)  : null;
+    const mcMark  = ms.mcScore   != null ? r2(ms.mcScore)   : null;
+    const gaMark  = ms.gramScore != null ? r2(ms.gramScore) : null;
+
+    // Use pre-computed ms.totalScore only when master has ALL module components.
+    // Otherwise recompute from SA + AI + module marks (Sadique Raza team fix).
+    const masterHasAllMods = ms.psScore != null && ms.lisScore != null &&
+                              ms.mcScore != null && ms.gramScore != null;
+    let totalMark;
+    if (masterHasAllMods && ms.totalScore > 0) {
+      totalMark = r2(ms.totalScore);
+    } else {
+      const parts = [ms.selfAssessment, ms.aiAudit, psMark, lisMark, mcMark, gaMark].filter(x => x != null);
+      totalMark = parts.length ? r2(parts.reduce((a, b) => a + b, 0)) : null;
+    }
+
+    // Convert weighted marks back to 0-100 percentages for insight generation
+    const synScores = {};
+    if (psMark  != null) synScores['pick-speak']            = r2(psMark  / 20 * 100);
+    if (lisMark != null) synScores['listening-assessment']  = r2(lisMark / 20 * 100);
+    if (mcMark  != null) synScores['mock-call']             = r2(mcMark  / 20 * 100);
+    if (gaMark  != null) synScores['grammar-assessment']    = r2(gaMark  / 25 * 100);
+
+    const insights = buildLetterInsights(synScores, {}, totalMark);
+    const syntheticTrainee = { name: agentName };
+    renderTraineeLetter(syntheticTrainee, { lisMark, psMark, gaMark, mcMark, totalMark }, insights);
+    _currentReportData = { trainee: syntheticTrainee, marks: { lisMark, psMark, gaMark, mcMark, totalMark }, scores: synScores, details: {} };
+
+    const tbody = $('report-sessions-tbody');
+    tbody.innerHTML = `<tr><td colspan="6" class="empty-state" style="color:var(--text-muted)">
+      Previous batch data — session recordings were not retained.<br>
+      <small>Total score: <strong>${totalMark ?? '—'} / 100</strong> (from master sheet)</small>
+    </td></tr>`;
+  }
+
+  function drawRadarChart(trainee, sessions, modAvgs) {
+    const canvas = $('report-radar');
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    const cx = W / 2, cy = H / 2, r = Math.min(W, H) / 2 - 30;
+
+    ctx.clearRect(0, 0, W, H);
+
+    const modules = Object.keys(MODULE_LABELS);
+    const angles = modules.map((_, i) => (i / modules.length) * Math.PI * 2 - Math.PI / 2);
+    const avgMap = {};
+    modAvgs.forEach(m => { avgMap[m.module] = m.avg; });
+
+    // Draw grid
+    [1, 2, 3, 4, 5].forEach(level => {
+      ctx.beginPath();
+      modules.forEach((_, i) => {
+        const ratio = level / 5;
+        const x = cx + r * ratio * Math.cos(angles[i]);
+        const y = cy + r * ratio * Math.sin(angles[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      });
+      ctx.closePath();
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    });
+
+    // Draw axes
+    modules.forEach((_, i) => {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + r * Math.cos(angles[i]), cy + r * Math.sin(angles[i]));
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.stroke();
+    });
+
+    // Draw data
+    if (modAvgs.length > 0) {
+      ctx.beginPath();
+      modules.forEach((mod, i) => {
+        const val = avgMap[mod] || 0;
+        const ratio = val / 5;
+        const x = cx + r * ratio * Math.cos(angles[i]);
+        const y = cy + r * ratio * Math.sin(angles[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      });
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(59,130,246,0.15)';
+      ctx.fill();
+      ctx.strokeStyle = '#3b82f6';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Dots
+      modules.forEach((mod, i) => {
+        const val = avgMap[mod] || 0;
+        const ratio = val / 5;
+        const x = cx + r * ratio * Math.cos(angles[i]);
+        const y = cy + r * ratio * Math.sin(angles[i]);
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = '#3b82f6';
+        ctx.fill();
+      });
+    }
+
+    // Labels
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.fillStyle = '#64748b';
+    ctx.textAlign = 'center';
+    modules.forEach((mod, i) => {
+      const lx = cx + (r + 22) * Math.cos(angles[i]);
+      const ly = cy + (r + 22) * Math.sin(angles[i]);
+      const isTkt = trainee && (TICKET_MANAGERS.has(_teamAssignments[trainee.id]) || TICKET_MANAGERS.has(_getAgentManager(trainee.name)));
+      const short = { 'pick-speak': 'P&S', 'mock-call': isTkt ? 'Ticket' : 'Call', 'role-play': 'Role', 'group-discussion': 'GD', 'written-comm': 'Written' };
+      ctx.fillText(short[mod] || mod, lx, ly + 4);
+    });
+  }
+
+  // ---- Settings ----
+  function initSettings() {
+    $('btn-save-pwd').onclick = async () => {
+      const np = $('new-pwd').value;
+      const cp = $('confirm-pwd').value;
+      const msg = $('pwd-msg');
+      if (!np) { msg.textContent = 'Please enter a new password.'; msg.style.color = 'red'; return; }
+      if (np !== cp) { msg.textContent = 'Passwords do not match.'; msg.style.color = 'red'; return; }
+      try {
+        const currentAdmin = sessionStorage.getItem('adminName') || 'admin';
+        const stored = await DB.get('settings', 'adminUsers');
+        let users = [];
+        try { users = JSON.parse(stored?.value || stored || '[]'); } catch (_) {}
+        
+        let userIdx = users.findIndex(u => u.username.toLowerCase() === currentAdmin.toLowerCase());
+        if (userIdx > -1) {
+          users[userIdx].password = np;
+        } else {
+          users.push({ username: currentAdmin, password: np });
+        }
+        await DB.put('settings', { key: 'adminUsers', value: JSON.stringify(users) });
+        await DB.put('settings', { key: 'adminPassword', value: np });
+        
+        $('new-pwd').value = '';
+        $('confirm-pwd').value = '';
+        msg.textContent = 'Password updated successfully!';
+        msg.style.color = 'green';
+        toast('Password saved!', 'success');
+      } catch (e) {
+        msg.textContent = 'Failed to update password: ' + e.message;
+        msg.style.color = 'red';
+      }
+    };
+
+    // Claude AI Scoring — now proxied via Cloudflare Worker (key is server-side)
+    const apiStatus = $('api-key-status');
+    if (apiStatus) {
+      const proxyUrl = CONFIG.CLAUDE_PROXY_URL || '';
+      if (proxyUrl && !proxyUrl.includes('YOUR_WORKER')) {
+        apiStatus.textContent = '✓ Cloudflare Worker proxy configured — AI scoring is active.';
+        apiStatus.style.color = 'green';
+      } else {
+        apiStatus.textContent = '⚠ Cloudflare Worker URL not set in config.js — using JS phrase analysis fallback.';
+        apiStatus.style.color = '#b45309';
+      }
+    }
+
+    $('btn-clear-data').onclick = async () => {
+      if (!confirm('This will delete ALL trainee sessions and assessment data. Topics will be re-seeded. Continue?')) return;
+      const sessions = await DB.getAll('sessions');
+      for (const s of sessions) await DB.del('sessions', s.id);
+      const trainees = await DB.getAll('trainees');
+      for (const t of trainees) await DB.del('trainees', t.id);
+      await DB.del('settings', 'comm360ReportDeleted');
+      await DB.del('settings', 'preservedReportScores');
+      sessionStorage.removeItem('adminAuth');
+      toast('All data cleared. Reloading...', '');
+      setTimeout(() => location.reload(), 1200);
+    };
+  }
+
+  // ---- Init ----
+  async function init() {
+    await DB.init();
+    initAuth();
+  }
+
+  // ================================================================
+  //  ALL AGENTS REPORT
+  // ================================================================
+
+  const PS_MODS_REPORT = new Set(['pick-speak', 'pick-speak-general', 'pick-speak-stock']);
+
+  // Helper: given a list of P&S sessions for one trainee, return the average effective score
+  function psAvgEff(sessions) {
+    const effs = sessions.map(s => {
+      const aN = s.adminScores ? (calcAdminAvg(s.adminScores) ?? null) : null;
+      const iN = s.aiScores    ? (normalizeOverall(s.aiScores.overall) ?? null) : null;
+      return aN !== null ? aN : iN;
+    }).filter(x => x !== null);
+    if (!effs.length) return null;
+    return parseFloat((effs.reduce((a, b) => a + b, 0) / effs.length).toFixed(1));
+  }
+
+  // Helper: effective score for a single session
+  function effScore(s) {
+    const aN = s.adminScores ? (calcAdminAvg(s.adminScores) ?? null) : null;
+    const iN = s.aiScores    ? (normalizeOverall(s.aiScores.overall) ?? null) : null;
+    return aN !== null ? aN : iN;
+  }
+
+  // ---- Rule-based insight generator ----
+  function buildAgentInsights(scores, details) {
+    const strengths  = [];
+    const priorities = [];
+    const actions    = [];
+
+    // ── Pick & Speak ──────────────────────────────────────────────
+    const ps = scores['pick-speak'];
+    if (ps !== null && ps !== undefined) {
+      if (ps >= 80) {
+        strengths.push(`Excellent spoken communication — delivers clear, structured and fluent responses (P&S: ${ps}%)`);
+      } else if (ps >= 65) {
+        strengths.push(`Above-average spoken delivery with good topic command (P&S: ${ps}%)`);
+      } else {
+        priorities.push(`Spoken communication (Pick & Speak: ${ps}%) — structure, delivery and vocabulary need development`);
+      }
+
+      // Sub-criteria from AI scores of the best P&S session
+      const bestPS = (details['pick-speak'] || []).reduce((b, s) => {
+        const e = effScore(s); const be = effScore(b);
+        return (e !== null && (be === null || e > be)) ? s : b;
+      }, details['pick-speak']?.[0] || null);
+
+      if (bestPS?.aiScores) {
+        const ai = bestPS.aiScores;
+        const subStrong = [], subWeak = [];
+        if (typeof ai.fluency        === 'number') (ai.fluency        >= 4 ? subStrong : subWeak).push('Fluency');
+        if (typeof ai.vocabulary     === 'number') (ai.vocabulary     >= 4 ? subStrong : subWeak).push('Vocabulary');
+        if (typeof ai.contentCoverage === 'number') (ai.contentCoverage >= 4 ? subStrong : subWeak).push('Content Coverage');
+
+        if (subStrong.length) strengths.push(`P&S strengths: ${subStrong.join(', ')}`);
+        if (subWeak.length)   priorities.push(`P&S sub-areas to improve: ${subWeak.join(', ')}`);
+
+        if (subWeak.includes('Fluency')) {
+          actions.push('Spoken Fluency: Record a 2-minute talk on any topic every day, replay it and count filler words (um, uh, like, you know). Target zero fillers within 2 weeks.');
+        }
+        if (subWeak.includes('Vocabulary')) {
+          actions.push('Vocabulary Building: Read one financial news article (Economic Times / Mint) daily — highlight 5 unfamiliar words, look them up and use each in a sentence by end of day.');
+        }
+        if (subWeak.includes('Content Coverage')) {
+          actions.push('Content Structure: Practice the PREP method (Point → Reason → Example → Point) for every Pick & Speak topic. Prepare 5 topics per week using this framework before attempting them.');
+        }
+      } else if (ps < 70) {
+        actions.push('Pick & Speak: Practice 10-minute structured talks daily using the PREP framework (Point, Reason, Example, Point) — record yourself and review for clarity and completeness.');
+      }
+    }
+
+    // ── Mock Call / Mock Ticket ───────────────────────────────────
+    const mc = scores['mock-call'];
+    if (mc !== null && mc !== undefined) {
+      const firstSess = Object.values(details).find(lst => lst && lst.length)?.[0];
+      const traineeName = firstSess ? firstSess.traineeName : null;
+      const traineeId = firstSess ? firstSess.traineeId : null;
+      const mgr = traineeId ? (_teamAssignments[traineeId] || _getAgentManager(traineeName)) : _getAgentManager(traineeName);
+      const isTicketsTeam = TICKET_MANAGERS.has(mgr) || (details['mock-call'] && details['mock-call'].some(s => s.module === 'written-comm'));
+
+      if (isTicketsTeam) {
+        // --- TICKETS TEAM (WRITTEN COMM) INSIGHTS ---
+        if (mc >= 75) {
+          strengths.push(`Strong written communication — professional response clarity and well-structured email responses (Mock Ticket: ${mc}%)`);
+        } else if (mc >= 60) {
+          strengths.push(`Developing written skills — basic structure and professional greeting/closing present (Mock Ticket: ${mc}%)`);
+        } else {
+          priorities.push(`Mock Ticket (${mc}%) — needs focused work on tone consistency, clarity of explanations, and business rationale`);
+        }
+
+        const mcSessions = (details['mock-call'] || []).sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+        const latestMC   = mcSessions[0];
+        if (latestMC) {
+          const cr = { ...(latestMC.aiScores || {}), ...(latestMC.adminScores || {}) };
+          const strong = [], weak = [];
+          const CRIT = [
+            { key: 'criterion_0', label: 'Tone & Empathy' },
+            { key: 'criterion_1', label: 'Written Clarity' },
+            { key: 'criterion_2', label: 'Ownership' },
+            { key: 'criterion_3', label: 'Explanation Accuracy' },
+            { key: 'criterion_4', label: 'Customer Education' },
+            { key: 'criterion_5', label: 'Grammar & Language' }
+          ];
+          CRIT.forEach(({ key, label }) => {
+            if (typeof cr[key] === 'number') (cr[key] >= 4 ? strong : weak).push(label);
+          });
+          if (strong.length) strengths.push(`Mock Ticket strengths: ${strong.join(', ')}`);
+          if (weak.length)   priorities.push(`Mock Ticket areas to improve: ${weak.join(', ')}`);
+
+          if (weak.includes('Tone & Empathy')) {
+            actions.push('Tone & Empathy: Avoid generic/repetitive apologies like "We regret the inconvenience caused". Always acknowledge the customer\'s specific concern about autonomy or policy rationale to show true empathy.');
+          }
+          if (weak.includes('Written Clarity')) {
+            actions.push('Written Clarity: Avoid contradictory statements (e.g. saying "option is disabled" and later "no restriction"). Be precise: explain that the Console interface disables self-service, but support can assist manually.');
+          }
+          if (weak.includes('Ownership')) {
+            actions.push('Ownership: Directly answer the customer\'s underlying question (e.g. why the decision is made on their behalf) rather than just stating policy rules or offering manual orders.');
+          }
+          if (weak.includes('Explanation Accuracy')) {
+            actions.push('Accuracy: Ensure clear distinction between UI restrictions and backend workarounds. Explain internal rules as safeguards rather than regulatory mandates where applicable.');
+          }
+          if (weak.includes('Customer Education')) {
+            actions.push('Customer Education: Avoid generic safeguard statements. Provide a clear business rationale (e.g., "This prevents accidental acceptance of a takeover at a lower price than prevailing market rate, protecting from financial disadvantage").');
+          }
+          if (weak.includes('Grammar & Language')) {
+            actions.push('Grammar & Language: Eliminate spelling errors (such as "inconvinence"), build concise sentences, and reduce repetitive template-like closing statements.');
+          }
+        }
+
+        if (actions.length === 0 && mc < 70) {
+          actions.push('Structured Response Practice: Use the Answer → Explain Rationale → Present Options structure for every ticket reply. Peer-review 3 draft replies daily before sending.');
+        }
+
+      } else {
+        // --- REGULAR MOCK CALL INSIGHTS ---
+        if (mc >= 75) {
+          strengths.push(`Strong call-handling skills — professional communication with good protocol adherence (Mock Call: ${mc}%)`);
+        } else if (mc >= 60) {
+          strengths.push(`Developing call management skills — core competencies present (Mock Call: ${mc}%)`);
+        } else {
+          priorities.push(`Mock Call (${mc}%) — needs focused work on greeting structure, empathy language and call protocol`);
+        }
+
+        // Check individual criteria
+        const mcSessions = (details['mock-call'] || []).sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+        const latestMC   = mcSessions[0];
+        if (latestMC) {
+          const cr = { ...(latestMC.aiScores || {}), ...(latestMC.adminScores || {}) };
+          const strong = [], weak = [];
+          const CRIT = [
+            { key: 'callOpening',          label: 'Call Opening'           },
+            { key: 'acknowledgment',        label: 'Acknowledgment & Empathy' },
+            { key: 'communicationClarity',  label: 'Communication Clarity' },
+            { key: 'callEssence',           label: 'Call Essence'          },
+            { key: 'holdProcedure',         label: 'Hold Procedure'        },
+            { key: 'extraMile',             label: 'Going the Extra Mile'  },
+            { key: 'callClosing',           label: 'Call Closing'          },
+          ];
+          CRIT.forEach(({ key, label }) => {
+            if (typeof cr[key] === 'number') (cr[key] >= 4 ? strong : weak).push(label);
+          });
+          if (strong.length) strengths.push(`Mock Call strengths: ${strong.join(', ')}`);
+          if (weak.length)   priorities.push(`Mock Call areas to improve: ${weak.join(', ')}`);
+
+          if (weak.includes('Call Opening')) {
+            actions.push('Call Opening: Memorise the full greeting script until automatic — "Good [morning/afternoon], thank you for calling [Company], this is [Name], how may I assist you today?" Practise aloud 10× daily.');
+          }
+          if (weak.includes('Acknowledgment & Empathy')) {
+            actions.push('Empathy Language: Open every customer response with an empathy phrase. Practise these until natural: "I completely understand your concern" / "I can see how this is frustrating, let me sort this for you right away."');
+          }
+          if (weak.includes('Hold Procedure')) {
+            actions.push('Hold Protocol: Always follow 3 steps — (1) Ask permission: "May I place you on a brief hold?" (2) Give reason + time: "I need 2 minutes to check this for you." (3) Thank on return: "Thank you for holding." Role-play this 5× daily with a colleague.');
+          }
+        }
+
+        if (actions.filter(a => a.startsWith('Call') || a.startsWith('Mock') || a.startsWith('Empathy') || a.startsWith('Hold')).length === 0 && mc < 70) {
+          actions.push('Mock Call Practice: Role-play 3 full mock calls per week with a colleague — one person plays the customer, the other is the agent. Record and review together for missed protocol steps.');
+        }
+      }
+    } else {
+      // No mock call score yet
+      priorities.push('Mock Call — assessment pending; complete at least one scored mock call session to build profile');
+    }
+
+    // ── Grammar Assessment ────────────────────────────────────────
+    const ga = scores['grammar-assessment'];
+    if (ga !== null && ga !== undefined) {
+      if (ga >= 80) {
+        strengths.push(`Excellent grammatical accuracy across MCQ, fill-in-blank and sentence correction (Grammar: ${ga}%)`);
+      } else if (ga >= 65) {
+        strengths.push(`Good grammar foundation with solid MCQ performance (Grammar: ${ga}%)`);
+      } else {
+        priorities.push(`Grammar (${ga}%) — gaps in conditional structures, preposition use or error recognition`);
+      }
+
+      // Section breakdown
+      const gaSessions = (details['grammar-assessment'] || []).sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+      const latestGA   = gaSessions[0];
+      if (latestGA) {
+        try {
+          const parsed = JSON.parse(latestGA.writtenText || '{}');
+          if (parsed.sections) {
+            const secLabels = { 0: 'Section A (MCQ)', 1: 'Section B (Fill-in-blank)', 2: 'Section C (Sentence Correction)' };
+            const weakSecs  = parsed.sections
+              .filter((sec, i) => sec.maxMarks > 0 && (sec.marksObtained / sec.maxMarks) < 0.6)
+              .map((sec, i) => {
+                const letter = sec.title?.match(/Section\s+([A-C])/i)?.[1];
+                const idx    = letter ? letter.charCodeAt(0) - 65 : i;
+                const pct    = Math.round((sec.marksObtained / sec.maxMarks) * 100);
+                return `${secLabels[idx] || `Section ${letter || i + 1}`} (${pct}%)`;
+              });
+            if (weakSecs.length) priorities.push(`Grammar weak sections: ${weakSecs.join(', ')}`);
+          }
+        } catch (_) {}
+      }
+
+      if (ga < 75) {
+        actions.push('Grammar Practice: Complete 15 targeted grammar exercises per week covering conditionals, prepositions, tenses and subject-verb agreement. Review every incorrect answer explanation before moving on — understanding the rule matters more than the score.');
+      }
+    }
+
+    // ── Listening Assessment ──────────────────────────────────────
+    const la = scores['listening-assessment'];
+    if (la !== null && la !== undefined) {
+      if (la >= 80) {
+        strengths.push(`Outstanding comprehension — follows complex audio, video, call and reading content with accuracy (Listening: ${la}%)`);
+      } else if (la >= 65) {
+        strengths.push(`Good listening comprehension for audio and video content (Listening: ${la}%)`);
+      } else {
+        priorities.push(`Listening comprehension (${la}%) — needs improvement in processing audio, calls and reading material under time pressure`);
+      }
+
+      // Section breakdown
+      const laSessions = (details['listening-assessment'] || []).sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+      const latestLA   = laSessions[0];
+      if (latestLA) {
+        try {
+          const parsed = JSON.parse(latestLA.writtenText || '{}');
+          if (parsed.sections) {
+            const weakSecs = parsed.sections
+              .filter(sec => sec.maxMarks > 0 && (sec.marksObtained / sec.maxMarks) < 0.6)
+              .map(sec => {
+                const pct = Math.round((sec.marksObtained / sec.maxMarks) * 100);
+                return `${sec.sectionType || sec.title || 'Section'} (${pct}%)`;
+              });
+            if (weakSecs.length) priorities.push(`Listening weak sections: ${weakSecs.join(', ')}`);
+          }
+        } catch (_) {}
+      }
+
+      if (la < 75) {
+        actions.push('Active Listening: Listen to a 5-minute financial news podcast (ET Money / Broker Varsity audio) each day. Pause at the end, write a 5-point summary without replaying. Then re-listen and compare — close the gaps in what you missed.');
+      }
+    }
+
+    // ── Fallback strengths / generic actions ─────────────────────
+    if (strengths.length === 0) {
+      strengths.push('Shows commitment to professional development by completing communication assessments');
+    }
+    if (actions.length === 0) {
+      actions.push('Schedule a 30-minute self-review session every week — replay recordings, rework grammar corrections and re-listen to sections where marks were dropped.');
+    }
+    // Cap to 3 actions
+    return { strengths, priorities, actions: actions.slice(0, 3) };
+  }
+
+  // ---- Compute per-trainee module scores from sessions ----
+  function computeAgentScores(traineeId, allSessions) {
+    const ts = allSessions.filter(s => s.traineeId === traineeId);
+    const scores  = {};
+    const details = {};
+
+    // P&S
+    const psSess = ts.filter(s => PS_MODS_REPORT.has(s.module));
+    if (psSess.length) {
+      const avg = psAvgEff(psSess);
+      if (avg !== null) { scores['pick-speak'] = avg; details['pick-speak'] = psSess; }
+    }
+
+    // Mock Call
+    const mcSess = ts.filter(s => s.module === 'mock-call');
+    if (mcSess.length) {
+      const effs = mcSess.map(effScore).filter(x => x !== null);
+      if (effs.length) {
+        scores['mock-call'] = parseFloat((effs.reduce((a, b) => a + b, 0) / effs.length).toFixed(1));
+        details['mock-call'] = mcSess;
+      }
+    }
+
+    // Written Comm (Mock Ticket)
+    const wcSess = ts.filter(s => s.module === 'written-comm');
+    if (wcSess.length) {
+      const effs = wcSess.map(effScore).filter(x => x !== null);
+      if (effs.length) {
+        scores['written-comm'] = parseFloat((effs.reduce((a, b) => a + b, 0) / effs.length).toFixed(1));
+        details['written-comm'] = wcSess;
+      }
+    }
+
+    // Tickets team check: replace mock-call with written-comm
+    const mgr = _teamAssignments[traineeId] || _getAgentManager(ts.find(s => s.traineeId === traineeId)?.traineeName);
+    const isTicketsTeam = TICKET_MANAGERS.has(mgr) || scores['written-comm'] != null;
+    if (isTicketsTeam) {
+      if (scores['written-comm'] != null) {
+        scores['mock-call'] = scores['written-comm'];
+        details['mock-call'] = details['written-comm'];
+      }
+      delete scores['written-comm'];
+      delete details['written-comm'];
+    }
+
+    // Grammar: take admin score if present, otherwise latest session's auto-graded score. No averaging.
+    const gaSess = ts.filter(s => s.module === 'grammar-assessment');
+    if (gaSess.length) {
+      const sortedGa = [...gaSess].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+      const scoredSess = sortedGa.find(s => s.adminScores && s.adminScores.overall != null);
+      const targetSess = scoredSess || sortedGa[0];
+      const scoreVal = effScore(targetSess);
+      if (scoreVal != null) {
+        scores['grammar-assessment'] = scoreVal;
+        details['grammar-assessment'] = gaSess;
+      }
+    }
+
+    // Listening: take admin score if present, otherwise latest session's auto-graded score. No averaging.
+    const laSess = ts.filter(s => s.module === 'listening-assessment');
+    if (laSess.length) {
+      const sortedLa = [...laSess].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+      const scoredSess = sortedLa.find(s => s.adminScores && s.adminScores.overall != null);
+      const targetSess = scoredSess || sortedLa[0];
+      const scoreVal = effScore(targetSess);
+      if (scoreVal != null) {
+        scores['listening-assessment'] = scoreVal;
+        details['listening-assessment'] = laSess;
+      }
+    }
+
+    const available = Object.values(scores).filter(v => v != null);
+    const overall   = available.length
+      ? parseFloat((available.reduce((a, b) => a + b, 0) / available.length).toFixed(1))
+      : null;
+
+    return { scores, details, overall };
+  }
+
+  // ---- Render the full report ----
+  function renderAllAgentsReport(agentRows) {
+    const container = $('all-agents-report');
+    if (!container) return;
+
+    if (!agentRows.length) {
+      container.innerHTML = `<p style="padding:1rem;color:var(--text-muted)">No assessments found for Pick &amp; Speak, Mock Call, Grammar or Listening.</p>`;
+      container.classList.remove('hidden');
+      return;
+    }
+
+    const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
+
+    const scoreColor = v => v == null ? '#94a3b8' : v >= 70 ? '#059669' : v >= 50 ? '#d97706' : '#dc2626';
+    const scoreBand  = v => v == null ? '—' : v >= 70 ? 'On Track' : v >= 50 ? 'Developing' : 'Needs Attention';
+    const fmtScore   = v => v != null ? `${v}%` : '—';
+
+    // ── Summary table ─────────────────────────────────────────────
+    const summaryRows = agentRows.map(({ trainee, scores, overall }) => `
+      <tr>
+        <td><strong>${trainee.name}</strong>${trainee.employee_id ? `<br><span style="font-size:0.75rem;color:var(--text-muted)">${trainee.employee_id}</span>` : ''}</td>
+        <td style="text-align:center;font-weight:600;color:${scoreColor(scores['pick-speak'])}">${fmtScore(scores['pick-speak'])}</td>
+        <td style="text-align:center;font-weight:600;color:${scoreColor(scores['mock-call'])}">${scores['mock-call'] != null ? fmtScore(scores['mock-call']) : '<span style="color:#94a3b8;font-size:0.8rem">Pending</span>'}</td>
+        <td style="text-align:center;font-weight:600;color:${scoreColor(scores['grammar-assessment'])}">${fmtScore(scores['grammar-assessment'])}</td>
+        <td style="text-align:center;font-weight:600;color:${scoreColor(scores['listening-assessment'])}">${fmtScore(scores['listening-assessment'])}</td>
+        <td style="text-align:center;font-weight:800;font-size:1rem;color:${scoreColor(overall)}">${fmtScore(overall)}</td>
+      </tr>`).join('');
+
+    // ── Individual agent cards ────────────────────────────────────
+    const cards = agentRows.map(({ trainee, scores, overall, insights }) => {
+      const isTkt = trainee && (TICKET_MANAGERS.has(_teamAssignments[trainee.id]) || TICKET_MANAGERS.has(_getAgentManager(trainee.name)));
+      const modules = [
+        { key: 'pick-speak',          label: 'Pick & Speak',  color: '#3b82f6' },
+        { key: 'mock-call',           label: isTkt ? 'Mock Ticket' : 'Mock Call', color: '#8b5cf6', pending: scores['mock-call'] == null },
+        { key: 'grammar-assessment',  label: 'Grammar',       color: '#7c3aed' },
+        { key: 'listening-assessment',label: 'Listening',     color: '#db2877' },
+      ];
+
+      const scorePills = modules.map(m => `
+        <div class="aar-pill">
+          <div class="aar-pill-score" style="color:${m.pending ? '#94a3b8' : scoreColor(scores[m.key])}">${m.pending ? 'Pending' : fmtScore(scores[m.key])}</div>
+          <div class="aar-pill-label">${m.label}</div>
+        </div>`).join('');
+
+      const ul = items => items.length
+        ? items.map(x => `<li>${x}</li>`).join('')
+        : '<li style="color:var(--text-muted)">Complete more assessments to populate this section</li>';
+
+      return `
+        <div class="aar-card">
+          <div class="aar-card-header">
+            <div>
+              <div class="aar-name">${trainee.name}</div>
+              ${trainee.employee_id ? `<div class="aar-emp">${trainee.employee_id}</div>` : ''}
+            </div>
+            <div class="aar-overall-wrap">
+              <div class="aar-overall-score" style="color:${scoreColor(overall)}">${fmtScore(overall)}</div>
+              <div class="aar-overall-band"  style="color:${scoreColor(overall)}">${scoreBand(overall)}</div>
+            </div>
+          </div>
+
+          <div class="aar-pills">${scorePills}</div>
+
+          <div class="aar-sections-grid">
+            <div class="aar-section aar-strengths">
+              <div class="aar-section-title">✅ Key Strengths</div>
+              <ul>${ul(insights.strengths)}</ul>
+            </div>
+            <div class="aar-section aar-priorities">
+              <div class="aar-section-title">🎯 Priority Areas</div>
+              <ul>${ul(insights.priorities)}</ul>
+            </div>
+          </div>
+
+          <div class="aar-section aar-actions">
+            <div class="aar-section-title">📋 Action Plan</div>
+            <ol>${insights.actions.map(a => `<li>${a}</li>`).join('')}</ol>
+          </div>
+        </div>`;
+    }).join('');
+
+    container.innerHTML = `
+      <div style="margin-top:1.5rem" id="aar-report-body">
+        <div class="aar-report-topbar">
+          <div>
+            <div class="aar-report-title">All Agents Communication Report</div>
+            <div class="aar-report-sub">Generated on ${today} &nbsp;·&nbsp; Modules: Pick &amp; Speak · Mock Call / Ticket · Grammar · Listening &nbsp;·&nbsp; Mock Call / Ticket scores shown as AI scores where admin has not yet scored</div>
+          </div>
+          <button class="btn-secondary aar-print-btn" onclick="window.print()">🖨 Print / Save PDF</button>
+        </div>
+
+        <div class="card" style="overflow-x:auto;margin-bottom:1.5rem">
+          <table class="data-table" style="min-width:560px">
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th style="text-align:center">Pick &amp; Speak</th>
+                <th style="text-align:center">Mock Call / Ticket</th>
+                <th style="text-align:center">Grammar</th>
+                <th style="text-align:center">Listening</th>
+                <th style="text-align:center">Overall</th>
+              </tr>
+            </thead>
+            <tbody>${summaryRows}</tbody>
+          </table>
+        </div>
+
+        ${cards}
+      </div>`;
+    container.classList.remove('hidden');
+  }
+
+  // ---- Entry point ----
+  async function generateAllAgentsReport() {
+    const btn = $('btn-all-agents-report');
+    if (btn) { btn.disabled = true; btn.textContent = '⌛ Generating…'; }
+    try {
+      const [trainees, sessions] = await Promise.all([DB.getAll('trainees'), DB.getAll('sessions')]);
+      const TARGET = new Set(['pick-speak', 'pick-speak-general', 'pick-speak-stock', 'mock-call', 'grammar-assessment', 'listening-assessment']);
+
+      const agentRows = trainees
+        .filter(t => sessions.some(s => s.traineeId === t.id && TARGET.has(s.module)))
+        .map(trainee => {
+          const { scores, details, overall } = computeAgentScores(trainee.id, sessions);
+          const insights = buildAgentInsights(scores, details);
+          return { trainee, scores, overall, insights };
+        })
+        .sort((a, b) => (b.overall ?? -1) - (a.overall ?? -1)); // best performers first
+
+      renderAllAgentsReport(agentRows);
+    } catch (e) {
+      console.error('generateAllAgentsReport error:', e);
+      toast('Could not generate report: ' + e.message, 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Generate Report'; }
+    }
+  }
+
+  // ================================================================
+  // ================================================================
+  //  MANAGER → AGENT MAP  (28 managers, 326 agents from Excel)
+  // ================================================================
+  // Updated v37: Harish Bhat D removed; Leepha Joseph added; all teams updated per new Excel
+  const _MANAGER_AGENT_MAP = {};
+
+  // Reverse index: agentName.toLowerCase() → managerName (built lazily)
+  // Alias variants (e.g. "naveenkumar") are baked in at build time so lookups are direct O(1) hits.
+  function _buildAgentManagerIndex() {
+    const idx = {};
+    const alnum = s => s.replace(/[^a-z0-9]/g, '');
+
+    // Primary: all canonical names from the map
+    for (const [mgr, agents] of Object.entries(_MANAGER_AGENT_MAP)) {
+      for (const agent of agents) {
+        const k = agent.toLowerCase();
+        idx[k] = mgr;
+        idx[k.replace(/\s+/g, '')] = mgr;   // compact variant
+        idx[alnum(k)]               = mgr;   // alnum variant
+      }
+    }
+
+    // Aliases: bake every DB-name variant directly into the index
+    for (const [aliasLower, canonical] of Object.entries(_TRAINEE_ALIASES)) {
+      const canonicalKey = canonical.toLowerCase();
+      const mgr = idx[canonicalKey] || idx[canonicalKey.replace(/\s+/g,'')] || idx[alnum(canonicalKey)];
+      if (mgr) {
+        idx[aliasLower] = mgr;
+        idx[aliasLower.replace(/\s+/g, '')] = mgr;
+        idx[alnum(aliasLower)]               = mgr;
+      }
+    }
+    return idx;
+  }
+
+  function _getAgentManager(name) {
+    if (!_agentManagerIndex) _agentManagerIndex = _buildAgentManagerIndex();
+    if (!name) return null;
+    const key   = name.trim().toLowerCase();
+    const alnum = s => s.replace(/[^a-z0-9]/g, '');
+    return _agentManagerIndex[key]
+        || _agentManagerIndex[key.replace(/\s+/g, '')]
+        || _agentManagerIndex[alnum(key)]
+        || null;
+  }
+
+  // ================================================================
+  //  ASSESSMENTS — ARCHIVE / MULTI-SELECT
+  // ================================================================
+
+  function _refreshArchiveCounts(sessions) {
+    const activeCount   = sessions.filter(s => !_archivedIds.has(s.id)).length;
+    const archiveCount  = sessions.filter(s =>  _archivedIds.has(s.id)).length;
+    const activeSpan    = $('count-active-sessions');
+    const archiveSpan   = $('count-archive-sessions');
+    if (activeSpan)  activeSpan.textContent  = activeCount  ? `(${activeCount})`  : '';
+    if (archiveSpan) archiveSpan.textContent = archiveCount ? `(${archiveCount})` : '';
+  }
+
+  function _updateSessionActionBtns() {
+    const n       = _selectedSessionIds.size;
+    const archBtn = $('btn-archive-selected');
+    const restBtn = $('btn-restore-selected');
+    if (!archBtn || !restBtn) return;
+    if (_viewArchive) {
+      archBtn.style.display = 'none';
+      restBtn.style.display = '';
+      restBtn.disabled      = n === 0;
+      restBtn.textContent   = n > 0 ? `↩ Restore Selected (${n})` : '↩ Restore Selected';
+    } else {
+      restBtn.style.display = 'none';
+      archBtn.style.display = '';
+      archBtn.disabled      = n === 0;
+      archBtn.textContent   = n > 0 ? `📁 Archive Selected (${n})` : '📁 Archive Selected';
+    }
+  }
+
+  function switchAssessmentView(showArchive) {
+    _viewArchive = showArchive;
+    _currentManagerDrill = null; // always reset drill when switching tabs
+    _selectedSessionIds.clear();
+    const backBtn = $('btn-back-to-managers');
+    if (backBtn) backBtn.style.display = 'none';
+    const mgrSel = $('filter-manager');
+    if (mgrSel) mgrSel.value = '';
+    // Update tab styling
+    const activeTab   = $('tab-active-sessions');
+    const archiveTab  = $('tab-archive-sessions');
+    if (activeTab)  activeTab.classList.toggle('active',  !showArchive);
+    if (archiveTab) archiveTab.classList.toggle('active',  showArchive);
+    _updateSessionActionBtns();
+    applyAssessmentFilters(_cachedSessions, _cachedTopicMap);
+  }
+
+  function toggleSessionCheckbox(id, checked) {
+    if (checked) _selectedSessionIds.add(id);
+    else         _selectedSessionIds.delete(id);
+    _updateSessionActionBtns();
+    const allCb = $('select-all-sessions');
+    if (allCb && _allRenderedSessions.length > 0) {
+      const n = _selectedSessionIds.size;
+      allCb.indeterminate = n > 0 && n < _allRenderedSessions.length;
+      allCb.checked       = n === _allRenderedSessions.length;
+    }
+  }
+
+  function toggleAllSessions(checked) {
+    _selectedSessionIds.clear();
+    if (checked) _allRenderedSessions.forEach(s => _selectedSessionIds.add(s.id));
+    document.querySelectorAll('.session-cb').forEach(cb => { cb.checked = checked; });
+    _updateSessionActionBtns();
+  }
+
+  // Load archived session IDs from the settings table (no schema change required)
+  async function _loadArchivedIds() {
+    try {
+      const rec = await DB.get('settings', 'archivedSessionIds');
+      _archivedIds = new Set(rec ? JSON.parse(rec.value) : []);
+    } catch (e) {
+      _archivedIds = new Set();
+    }
+  }
+
+  async function _saveArchivedIds() {
+    await DB.put('settings', { key: 'archivedSessionIds', value: JSON.stringify([..._archivedIds]) });
+  }
+
+  async function _setSessionsArchived(ids, archive) {
+    if (archive) {
+      ids.forEach(id => _archivedIds.add(id));
+    } else {
+      ids.forEach(id => _archivedIds.delete(id));
+    }
+    await _saveArchivedIds();
+    _refreshArchiveCounts(_cachedSessions);
+    _selectedSessionIds.clear();
+    applyAssessmentFilters(_cachedSessions, _cachedTopicMap);
+    await updatePendingBadge();
+  }
+
+  async function archiveSelectedSessions() {
+    const ids = [..._selectedSessionIds];
+    if (!ids.length) return;
+    if (!confirm(`Move ${ids.length} assessment${ids.length !== 1 ? 's' : ''} to Archive?\n\nYou can restore them at any time from the Archive tab.`)) return;
+    try {
+      await _setSessionsArchived(ids, true);
+      toast(`${ids.length} assessment${ids.length !== 1 ? 's' : ''} moved to Archive.`, 'success');
+    } catch (e) {
+      toast('Archive failed: ' + e.message, 'error');
+    }
+  }
+
+  async function restoreSelectedSessions() {
+    const ids = [..._selectedSessionIds];
+    if (!ids.length) return;
+    if (!confirm(`Restore ${ids.length} assessment${ids.length !== 1 ? 's' : ''} back to Active?`)) return;
+    try {
+      await _setSessionsArchived(ids, false);
+      toast(`${ids.length} assessment${ids.length !== 1 ? 's' : ''} restored to Active.`, 'success');
+    } catch (e) {
+      toast('Restore failed: ' + e.message, 'error');
+    }
+  }
+
+  async function archiveSingleSession(id, name) {
+    try {
+      await _setSessionsArchived([id], true);
+      toast(`Archived assessment for ${name}.`, 'success');
+    } catch (e) {
+      toast('Archive failed: ' + e.message, 'error');
+    }
+  }
+
+  async function restoreSingleSession(id, name) {
+    try {
+      await _setSessionsArchived([id], false);
+      toast(`Restored assessment for ${name}.`, 'success');
+    } catch (e) {
+      toast('Restore failed: ' + e.message, 'error');
+    }
+  }
+
+  // ================================================================
+  //  AI AUDIT SCORES SECTION
+  //  Data stored in settings table (key: aiAuditScores) — no extra table needed
+  // ================================================================
+
+  const _AI_AUDIT_KEY = 'aiAuditScores';
+  const _AI_AUDIT_SEED = [];
+
+  async function _aiAuditLoad() {
+    const rec = await DB.get('settings', _AI_AUDIT_KEY);
+    if (rec && rec.value) return JSON.parse(rec.value);
+    return null; // not seeded yet
+  }
+
+  async function _aiAuditSave(records) {
+    await DB.put('settings', { key: _AI_AUDIT_KEY, value: JSON.stringify(records) });
+  }
+
+  async function loadAiAuditScores() {
+    const tbody = $('ai-audit-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Loading…</td></tr>';
+    try {
+      let data = await _aiAuditLoad();
+      if (data === null) {
+        // First visit — seed from embedded data
+        data = _AI_AUDIT_SEED;
+        await _aiAuditSave(data);
+      }
+      _allAuditRecords   = data;
+      _filteredAuditRecs = [...data];
+      _selectedAuditIds.clear();
+      _renderAuditTable();
+    } catch (e) {
+      if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="empty-state" style="color:var(--danger)">Failed to load AI Audit Scores: ' + e.message + '</td></tr>';
+      console.error('loadAiAuditScores:', e);
+    }
+  }
+
+  function filterAiAudit(query) {
+    const q = (query || '').trim().toLowerCase();
+    _filteredAuditRecs = q
+      ? _allAuditRecords.filter(r => r.name.toLowerCase().includes(q))
+      : [..._allAuditRecords];
+    _selectedAuditIds.clear();
+    _renderAuditTable();
+  }
+
+  // Build a single audit row's HTML (shared by flat + grouped render)
+  function _auditRowHtml(r, idx) {
+    return `
+      <tr id="audit-row-${r.id}">
+        <td style="width:36px;text-align:center">
+          <input type="checkbox" class="audit-cb" data-id="${r.id}"
+            onchange="Admin.toggleAuditCheckbox('${r.id}', this.checked)" />
+        </td>
+        <td style="color:var(--text-muted);font-size:0.8rem">${idx}</td>
+        <td style="font-weight:500">${r.name}</td>
+        <td style="text-align:right" id="self-score-cell-${r.id}">
+          <span id="self-score-display-${r.id}" style="color:var(--text-muted)">
+            ${r.selfAssessmentScore != null ? Number(r.selfAssessmentScore).toFixed(4) : '—'}
+          </span>
+          <span id="self-score-edit-${r.id}" style="display:none;align-items:center;gap:0.4rem;justify-content:flex-end">
+            <input type="number" id="self-score-input-${r.id}" step="0.0001" min="0" max="100"
+              value="${r.selfAssessmentScore != null ? r.selfAssessmentScore : ''}"
+              style="width:90px;padding:0.2rem 0.4rem;border:1px solid var(--text-muted);border-radius:4px;font-size:0.875rem;text-align:right" />
+            <button onclick="Admin.saveSelfScore('${r.id}')" class="btn-primary" style="padding:0.2rem 0.6rem;font-size:0.8rem">Save</button>
+            <button onclick="Admin.cancelSelfScoreEdit('${r.id}')" class="btn-ghost" style="padding:0.2rem 0.5rem;font-size:0.8rem">✕</button>
+          </span>
+        </td>
+        <td style="text-align:right" id="audit-score-cell-${r.id}">
+          <span id="audit-score-display-${r.id}" style="font-weight:600;color:var(--primary)">
+            ${r.aiAuditScore != null ? Number(r.aiAuditScore).toFixed(4) : '—'}
+          </span>
+          <span id="audit-score-edit-${r.id}" style="display:none;align-items:center;gap:0.4rem;justify-content:flex-end">
+            <input type="number" id="audit-score-input-${r.id}" step="0.0001" min="0" max="100"
+              value="${r.aiAuditScore != null ? r.aiAuditScore : ''}"
+              style="width:90px;padding:0.2rem 0.4rem;border:1px solid var(--primary);border-radius:4px;font-size:0.875rem;text-align:right" />
+            <button onclick="Admin.saveAuditScore('${r.id}')" class="btn-primary" style="padding:0.2rem 0.6rem;font-size:0.8rem">Save</button>
+            <button onclick="Admin.cancelAuditEdit('${r.id}')" class="btn-ghost" style="padding:0.2rem 0.5rem;font-size:0.8rem">✕</button>
+          </span>
+        </td>
+        <td style="text-align:center">
+          <div style="display:flex;gap:0.3rem;justify-content:center">
+            <button onclick="Admin.editSelfScore('${r.id}')" title="Edit Self Assessment Score"
+              style="background:none;border:none;cursor:pointer;font-size:1rem;padding:0.2rem">✏️</button>
+            <button onclick="Admin.editAuditScore('${r.id}')" title="Edit AI Audit Score"
+              style="background:none;border:none;cursor:pointer;font-size:1rem;padding:0.2rem">🎯</button>
+            <button onclick="Admin.deleteSingleAuditScore('${r.id}', '${r.name.replace(/'/g,"&#39;")}')" title="Delete"
+              style="background:none;border:none;cursor:pointer;font-size:1rem;padding:0.2rem">🗑</button>
+          </div>
+        </td>
+      </tr>`;
+  }
+
+  function _renderAuditTable() {
+    const tbody = $('ai-audit-tbody');
+    const count = $('ai-audit-count');
+    const allCb = $('select-all-audit');
+    if (!tbody) return;
+
+    if (allCb) { allCb.checked = false; allCb.indeterminate = false; }
+    _updateAuditDeleteBtn();
+
+    if (!_filteredAuditRecs.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No records found.</td></tr>';
+      if (count) count.textContent = '';
+      return;
+    }
+
+    // Group records by manager
+    const managerGroups = {};
+    const unassigned    = [];
+    _filteredAuditRecs.forEach(r => {
+      const mgr = _getAgentManager(r.name);
+      if (mgr) {
+        if (!managerGroups[mgr]) managerGroups[mgr] = [];
+        managerGroups[mgr].push(r);
+      } else {
+        unassigned.push(r);
+      }
+    });
+
+    let html = '';
+    let globalIdx = 0;
+
+    const renderSection = (managerName, records) => {
+      const selfVals = records.map(r => r.selfAssessmentScore).filter(v => v != null && !isNaN(v) && v !== 0);
+      const aiVals   = records.map(r => r.aiAuditScore).filter(v => v != null && !isNaN(v) && v !== 0);
+      const avgSelf  = selfVals.length ? (selfVals.reduce((a, b) => a + b, 0) / selfVals.length).toFixed(3) : '—';
+      const avgAI    = aiVals.length   ? (aiVals.reduce((a, b) => a + b, 0)   / aiVals.length).toFixed(3)   : '—';
+
+      html += `<tr style="background:#eef2ff;border-top:2px solid #c7d2fe">
+        <td colspan="3" style="font-weight:700;color:#3730a3;font-size:0.88rem;padding:0.45rem 0.75rem">
+          👤 ${managerName}
+          <span style="font-weight:400;color:var(--text-muted);font-size:0.78rem;margin-left:0.5rem">(${records.length} agent${records.length !== 1 ? 's' : ''})</span>
+        </td>
+        <td style="text-align:right;font-size:0.78rem;color:var(--text-muted);font-weight:600;background:#eef2ff">Avg: ${avgSelf}</td>
+        <td style="text-align:right;font-size:0.78rem;color:#3730a3;font-weight:600;background:#eef2ff">Avg: ${avgAI}</td>
+        <td style="background:#eef2ff"></td>
+      </tr>`;
+
+      records.forEach(r => {
+        globalIdx++;
+        html += _auditRowHtml(r, globalIdx);
+      });
+    };
+
+    Object.entries(managerGroups).sort(([a], [b]) => a.localeCompare(b)).forEach(([mgr, recs]) => {
+      renderSection(mgr, recs);
+    });
+    if (unassigned.length) {
+      renderSection('(No Manager Assigned)', unassigned);
+    }
+
+    tbody.innerHTML = html;
+    if (count) count.textContent = `Showing ${_filteredAuditRecs.length} of ${_allAuditRecords.length} record${_allAuditRecords.length !== 1 ? 's' : ''}`;
+  }
+
+  function _updateAuditDeleteBtn() {
+    const btn = $('btn-delete-selected-audit');
+    if (!btn) return;
+    const n = _selectedAuditIds.size;
+    btn.disabled = n === 0;
+    btn.textContent = n > 0 ? `🗑 Delete Selected (${n})` : '🗑 Delete Selected';
+  }
+
+  function toggleAuditCheckbox(id, checked) {
+    if (checked) _selectedAuditIds.add(id);
+    else         _selectedAuditIds.delete(id);
+    _updateAuditDeleteBtn();
+    const allCb = $('select-all-audit');
+    if (allCb && _filteredAuditRecs.length > 0) {
+      const n = _selectedAuditIds.size;
+      allCb.indeterminate = n > 0 && n < _filteredAuditRecs.length;
+      allCb.checked = n === _filteredAuditRecs.length;
+    }
+  }
+
+  function toggleAllAudit(checked) {
+    _selectedAuditIds.clear();
+    if (checked) _filteredAuditRecs.forEach(r => _selectedAuditIds.add(r.id));
+    document.querySelectorAll('.audit-cb').forEach(cb => { cb.checked = checked; });
+    _updateAuditDeleteBtn();
+  }
+
+  function editAuditScore(id) {
+    const display = $(`audit-score-display-${id}`);
+    const editEl  = $(`audit-score-edit-${id}`);
+    if (!display || !editEl) return;
+    display.style.display = 'none';
+    editEl.style.display  = 'inline-flex';
+    const input = $(`audit-score-input-${id}`);
+    if (input) { input.focus(); input.select(); }
+  }
+
+  function cancelAuditEdit(id) {
+    const display = $(`audit-score-display-${id}`);
+    const editEl  = $(`audit-score-edit-${id}`);
+    if (!display || !editEl) return;
+    display.style.display = '';
+    editEl.style.display  = 'none';
+  }
+
+  // ---- Self Assessment Score inline edit ----
+  function editSelfScore(id) {
+    const display = $(`self-score-display-${id}`);
+    const editEl  = $(`self-score-edit-${id}`);
+    if (!display || !editEl) return;
+    display.style.display = 'none';
+    editEl.style.display  = 'inline-flex';
+    const input = $(`self-score-input-${id}`);
+    if (input) { input.focus(); input.select(); }
+  }
+
+  function cancelSelfScoreEdit(id) {
+    const display = $(`self-score-display-${id}`);
+    const editEl  = $(`self-score-edit-${id}`);
+    if (!display || !editEl) return;
+    display.style.display = '';
+    editEl.style.display  = 'none';
+  }
+
+  async function saveSelfScore(id) {
+    const input = $(`self-score-input-${id}`);
+    if (!input) return;
+    const val = parseFloat(input.value);
+    if (isNaN(val)) { toast('Please enter a valid number.', 'error'); return; }
+    try {
+      const rec  = _allAuditRecords.find(r => r.id === id);
+      const recF = _filteredAuditRecs.find(r => r.id === id);
+      if (rec)  rec.selfAssessmentScore  = val;
+      if (recF) recF.selfAssessmentScore = val;
+      await _aiAuditSave(_allAuditRecords);
+      const display = $(`self-score-display-${id}`);
+      if (display) display.textContent = val.toFixed(4);
+      cancelSelfScoreEdit(id);
+      toast('Self Assessment Score updated.', 'success');
+    } catch (e) {
+      console.error('saveSelfScore:', e);
+      toast('Failed to save: ' + e.message, 'error');
+    }
+  }
+
+  async function saveAuditScore(id) {
+    const input = $(`audit-score-input-${id}`);
+    if (!input) return;
+    const val = parseFloat(input.value);
+    if (isNaN(val)) { toast('Please enter a valid number.', 'error'); return; }
+    try {
+      const rec  = _allAuditRecords.find(r => r.id === id);
+      const recF = _filteredAuditRecs.find(r => r.id === id);
+      if (rec)  rec.aiAuditScore  = val;
+      if (recF) recF.aiAuditScore = val;
+      await _aiAuditSave(_allAuditRecords);
+      const display = $(`audit-score-display-${id}`);
+      if (display) display.textContent = val.toFixed(4);
+      cancelAuditEdit(id);
+      toast('AI Audit Score updated.', 'success');
+    } catch (e) {
+      console.error('saveAuditScore:', e);
+      toast('Failed to save: ' + e.message, 'error');
+    }
+  }
+
+  async function deleteSingleAuditScore(id, name) {
+    if (!confirm(`Delete entry for "${name}"?\n\nThis action cannot be undone.`)) return;
+    try {
+      _allAuditRecords   = _allAuditRecords.filter(r => r.id !== id);
+      _filteredAuditRecs = _filteredAuditRecs.filter(r => r.id !== id);
+      _selectedAuditIds.delete(id);
+      await _aiAuditSave(_allAuditRecords);
+      _renderAuditTable();
+      toast(`Deleted entry for ${name}.`, 'success');
+    } catch (e) {
+      toast('Delete failed: ' + e.message, 'error');
+    }
+  }
+
+  async function deleteSelectedAuditScores() {
+    const ids = [..._selectedAuditIds];
+    if (!ids.length) return;
+    if (!confirm(`Delete ${ids.length} selected record${ids.length !== 1 ? 's' : ''}?\n\nThis action cannot be undone.`)) return;
+    try {
+      _allAuditRecords   = _allAuditRecords.filter(r => !ids.includes(r.id));
+      _filteredAuditRecs = _filteredAuditRecs.filter(r => !ids.includes(r.id));
+      _selectedAuditIds.clear();
+      await _aiAuditSave(_allAuditRecords);
+      _renderAuditTable();
+      toast(`Deleted ${ids.length} record${ids.length !== 1 ? 's' : ''}.`, 'success');
+    } catch (e) {
+      toast('Delete failed: ' + e.message, 'error');
+    }
+  }
+
+  async function deleteAllAuditScores() {
+    if (!_allAuditRecords.length) { toast('No records to delete.', ''); return; }
+    const step1 = confirm(`⚠️ Delete ALL ${_allAuditRecords.length} AI Audit Score records?\n\nThis action cannot be undone.`);
+    if (!step1) return;
+    const step2 = confirm(`Are you absolutely sure? All ${_allAuditRecords.length} records will be permanently removed.`);
+    if (!step2) return;
+    try {
+      _allAuditRecords   = [];
+      _filteredAuditRecs = [];
+      _selectedAuditIds.clear();
+      await _aiAuditSave([]);
+      _renderAuditTable();
+      toast('All AI Audit Score records deleted.', 'success');
+    } catch (e) {
+      toast('Delete failed: ' + e.message, 'error');
+    }
+  }
+
+
+  // ================================================================
+  //  COMM360 MASTER REPORT SECTION
+  // ================================================================
+
+  const _TICKET_TEAM_MANAGERS = new Set([
+    'Manager A', 'Manager B', 'Manager C'
+  ]);
+
+  let _comm360AllRows    = [];
+  let _comm360Filtered   = [];
+  let _comm360TeamFilter = 'all';
+  let _comm360SearchQ    = '';
+
+  // Build live DB score lookup: canonicalName → { psScore, lisScore, mcScore, gramScore }
+  async function _buildLiveScoreMap() {
+    const r2 = v => Math.round(v * 100) / 100;
+    try {
+      const [trainees, sessions, preservedRec] = await Promise.all([
+        DB.getAll('trainees'),
+        DB.getAll('sessions'),
+        DB.get('settings', 'preservedReportScores')
+      ]);
+      const liveMap = {};
+      trainees.forEach(trainee => {
+        const canonical = _resolveAlias(trainee.name);
+        const { scores } = computeAgentScores(trainee.id, sessions);
+        const live = {};
+        if (scores['pick-speak']         != null) live.psScore   = r2(scores['pick-speak']         / 100 * 20);
+        if (scores['listening-assessment'] != null) live.lisScore = r2(scores['listening-assessment'] / 100 * 20);
+        if (scores['mock-call']          != null) live.mcScore   = r2(scores['mock-call']          / 100 * 20);
+        if (scores['grammar-assessment'] != null) live.gramScore = r2(scores['grammar-assessment'] / 100 * 25);
+        if (Object.keys(live).length) liveMap[canonical.toLowerCase()] = live;
+      });
+
+      // Merge preserved report scores (e.g. from deleted assessments)
+      const preserved = preservedRec && preservedRec.value ? JSON.parse(preservedRec.value) : {};
+      for (const [key, scores] of Object.entries(preserved)) {
+        const lowKey = key.toLowerCase().trim();
+        if (!liveMap[lowKey]) liveMap[lowKey] = {};
+        if (liveMap[lowKey].psScore == null && scores.psScore != null)     liveMap[lowKey].psScore   = scores.psScore;
+        if (liveMap[lowKey].lisScore == null && scores.lisScore != null)   liveMap[lowKey].lisScore  = scores.lisScore;
+        if (liveMap[lowKey].mcScore == null && scores.mcScore != null)     liveMap[lowKey].mcScore   = scores.mcScore;
+        if (liveMap[lowKey].gramScore == null && scores.gramScore != null) liveMap[lowKey].gramScore = scores.gramScore;
+      }
+
+      return liveMap;
+    } catch (e) {
+      console.warn('Comm360 live score load failed:', e);
+      return {};
+    }
+  }
+
+  async function _buildComm360Rows() {
+    if (_comm360ReportDeleted) {
+      return [];
+    }
+    const liveMap = await _buildLiveScoreMap();
+    const rows = [];
+    Object.entries(_MANAGER_AGENT_MAP).forEach(([manager, agents]) => {
+      const team = _TICKET_TEAM_MANAGERS.has(manager) ? 'Tickets' : 'Calls';
+      agents.forEach(agentName => {
+        const key = agentName.toLowerCase();
+        const ms  = getMasterScores(agentName); // uses alias resolution + fuzzy match
+        const live = liveMap[key] || {};
+
+        // SA / AI always from MASTER_SCORES (manually uploaded, not in DB sessions)
+        const selfAssessment = ms ? ms.selfAssessment : null;
+        const aiAudit        = ms ? ms.aiAudit        : null;
+
+        // Module scores: prefer live DB, fall back to MASTER_SCORES historical
+        const psScore   = live.psScore   != null ? live.psScore   : (ms ? ms.psScore   : null);
+        const lisScore  = live.lisScore  != null ? live.lisScore  : (ms ? ms.lisScore  : null);
+        const mcScore   = live.mcScore   != null ? live.mcScore   : (ms ? ms.mcScore   : null);
+        const gramScore = live.gramScore != null ? live.gramScore : (ms ? ms.gramScore : null);
+
+        // Recompute total from components so live scores flow through
+        const parts = [selfAssessment, aiAudit, psScore, lisScore, mcScore, gramScore].filter(v => v != null);
+        const totalScore = parts.length ? parseFloat(parts.reduce((a, b) => a + b, 0).toFixed(2)) : null;
+
+        rows.push({ name: agentName, manager, team, selfAssessment, aiAudit, psScore, lisScore, mcScore, gramScore, totalScore });
+      });
+    });
+    rows.sort((a, b) => a.manager.localeCompare(b.manager) || a.name.localeCompare(b.name));
+    return rows;
+  }
+
+  async function loadComm360Report() {
+    const tbody = $('comm360-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="11" class="empty-state">Loading…</td></tr>';
+    _comm360TeamFilter = 'all';
+    _comm360SearchQ    = '';
+    ['all', 'calls', 'tickets'].forEach(t => {
+      const btn = $(`comm360-filter-${t}`);
+      if (btn) btn.className = t === 'all' ? 'btn-primary' : 'btn-ghost';
+    });
+    const searchEl = $('comm360-search');
+    if (searchEl) searchEl.value = '';
+    _comm360AllRows  = await _buildComm360Rows();
+    _comm360Filtered = [..._comm360AllRows];
+    _renderComm360Table();
+  }
+
+  function filterComm360(team) {
+    _comm360TeamFilter = team;
+    ['all', 'calls', 'tickets'].forEach(t => {
+      const btn = $(`comm360-filter-${t}`);
+      if (btn) btn.className = t === team ? 'btn-primary' : 'btn-ghost';
+    });
+    _applyComm360Filter();
+  }
+
+  function searchComm360(query) {
+    _comm360SearchQ = (query || '').trim().toLowerCase();
+    _applyComm360Filter();
+  }
+
+  function _applyComm360Filter() {
+    let rows = _comm360AllRows;
+    if (_comm360TeamFilter !== 'all') {
+      const target = _comm360TeamFilter === 'calls' ? 'Calls' : 'Tickets';
+      rows = rows.filter(r => r.team === target);
+    }
+    if (_comm360SearchQ) {
+      rows = rows.filter(r =>
+        r.name.toLowerCase().includes(_comm360SearchQ) ||
+        r.manager.toLowerCase().includes(_comm360SearchQ)
+      );
+    }
+    _comm360Filtered = rows;
+    _renderComm360Table();
+  }
+
+  function _c360fmt(val, dec) {
+    if (val == null || isNaN(val)) return '<span style="color:var(--text-muted)">—</span>';
+    return Number(val).toFixed(dec != null ? dec : 2);
+  }
+
+  function _renderComm360Table() {
+    const tbody = $('comm360-tbody');
+    const count = $('comm360-count');
+    if (!tbody) return;
+
+    const delBtn = $('btn-delete-comm360');
+    if (delBtn) {
+      if (_comm360ReportDeleted) {
+        delBtn.textContent = '🔄 Restore Report';
+        delBtn.className = 'btn-ghost';
+        delBtn.onclick = () => Admin.restoreEntireComm360Report();
+      } else {
+        delBtn.textContent = '🗑 Delete Report';
+        delBtn.className = 'btn-ghost btn-ghost-danger';
+        delBtn.onclick = () => Admin.deleteEntireComm360Report();
+      }
+    }
+
+    if (!_comm360Filtered.length) {
+      tbody.innerHTML = '<tr><td colspan="11" class="empty-state">No records found.</td></tr>';
+      if (count) count.textContent = '';
+      return;
+    }
+
+    const groups = {};
+    _comm360Filtered.forEach(r => {
+      if (!groups[r.manager]) groups[r.manager] = [];
+      groups[r.manager].push(r);
+    });
+
+    let html = '';
+    let idx  = 0;
+
+    Object.entries(groups).sort(([a], [b]) => a.localeCompare(b)).forEach(([manager, recs]) => {
+      const team = recs[0].team;
+      const teamBadge = team === 'Tickets'
+        ? '<span style="background:#d1fae5;color:#065f46;font-size:0.7rem;padding:0.1rem 0.4rem;border-radius:4px;margin-left:0.4rem">🎫 Tickets</span>'
+        : '<span style="background:#dbeafe;color:#1e3a8a;font-size:0.7rem;padding:0.1rem 0.4rem;border-radius:4px;margin-left:0.4rem">📞 Calls</span>';
+      const psRecs = recs.filter(r => r.psScore != null);
+      const avgPs  = psRecs.length
+        ? (psRecs.reduce((a, r) => a + r.psScore, 0) / psRecs.length).toFixed(2)
+        : '—';
+
+      html += `<tr style="background:#eef2ff;border-top:2px solid #c7d2fe">
+        <td colspan="4" style="font-weight:700;color:#3730a3;font-size:0.88rem;padding:0.45rem 0.75rem">
+          👤 ${manager}${teamBadge}
+          <span style="font-weight:400;color:var(--text-muted);font-size:0.78rem;margin-left:0.5rem">(${recs.length} agent${recs.length !== 1 ? 's' : ''})</span>
+        </td>
+        <td colspan="2" style="background:#eef2ff"></td>
+        <td style="text-align:right;font-size:0.78rem;color:#3730a3;font-weight:600;background:#eef2ff">Avg: ${avgPs}</td>
+        <td colspan="3" style="background:#eef2ff"></td>
+      </tr>`;
+
+      recs.forEach(r => {
+        idx++;
+        const teamCell = r.team === 'Tickets'
+          ? '<span style="background:#d1fae5;color:#065f46;font-size:0.7rem;padding:0.1rem 0.4rem;border-radius:4px">🎫</span>'
+          : '<span style="background:#dbeafe;color:#1e3a8a;font-size:0.7rem;padding:0.1rem 0.4rem;border-radius:4px">📞</span>';
+        const totalColor = r.totalScore == null ? 'inherit'
+          : r.totalScore >= 60 ? 'var(--success)'
+          : r.totalScore >= 40 ? 'var(--warning)'
+          : 'var(--danger)';
+        html += `<tr>
+          <td style="color:var(--text-muted);font-size:0.8rem;text-align:center">${idx}</td>
+          <td style="font-weight:500">${r.name}</td>
+          <td style="color:var(--text-muted);font-size:0.85rem">${r.manager}</td>
+          <td style="text-align:center">${teamCell}</td>
+          <td style="text-align:right">${_c360fmt(r.selfAssessment)}</td>
+          <td style="text-align:right;color:var(--primary);font-weight:600">${_c360fmt(r.aiAudit)}</td>
+          <td style="text-align:right">${_c360fmt(r.psScore)}</td>
+          <td style="text-align:right">${_c360fmt(r.lisScore)}</td>
+          <td style="text-align:right">${_c360fmt(r.mcScore)}</td>
+          <td style="text-align:right">${_c360fmt(r.gramScore)}</td>
+          <td style="text-align:right;font-weight:700;color:${totalColor}">${_c360fmt(r.totalScore)}</td>
+        </tr>`;
+      });
+    });
+
+    tbody.innerHTML = html;
+    if (count) count.textContent = `Showing ${_comm360Filtered.length} of ${_comm360AllRows.length} agent${_comm360AllRows.length !== 1 ? 's' : ''}`;
+  }
+
+
+  async function deleteEntireComm360Report() {
+    const step1 = confirm("⚠️ Are you sure you want to delete the ENTIRE Comm360 Master Report?\n\nThis will clear all historical master scores and preserved scores. (Live assessment sessions in the DB will remain intact).");
+    if (!step1) return;
+
+    const pin = prompt("Enter Admin Password to confirm deletion of the Comm360 Report:");
+    if (pin === null) return;
+
+    const pwRec = await DB.get('settings', 'adminPassword');
+    const correctPw = pwRec ? pwRec.value : 'admin123';
+    if (pin !== correctPw) {
+      alert("Invalid password.");
+      return;
+    }
+
+    try {
+      _comm360ReportDeleted = true;
+      await DB.put('settings', { key: 'comm360ReportDeleted', value: 'true' });
+      await DB.put('settings', { key: 'preservedReportScores', value: '{}' });
+      
+      _comm360AllRows = [];
+      _comm360Filtered = [];
+      _renderComm360Table();
+      
+      toast('Comm360 Master Report deleted.', 'success');
+    } catch (e) {
+      console.error('Delete comm360 report failed:', e);
+      toast('Deletion failed: ' + e.message, 'error');
+    }
+  }
+
+  async function restoreEntireComm360Report() {
+    const step1 = confirm("🔄 Are you sure you want to restore the Comm360 Master Report default scores?");
+    if (!step1) return;
+
+    try {
+      _comm360ReportDeleted = false;
+      await DB.put('settings', { key: 'comm360ReportDeleted', value: 'false' });
+      
+      _comm360AllRows = await _buildComm360Rows();
+      _comm360Filtered = [..._comm360AllRows];
+      _renderComm360Table();
+      
+      toast('Comm360 Master Report restored.', 'success');
+    } catch (e) {
+      console.error('Restore comm360 report failed:', e);
+      toast('Restoration failed: ' + e.message, 'error');
+    }
+  }
+
+
+  // ── Populate the re-score manager dropdown ────────────────────────────────
+  function _populateRescoreSelect() {
+    const sel = $('rescore-manager-select');
+    if (!sel || sel.dataset.populated) return;
+    Object.keys(_MANAGER_AGENT_MAP).sort().forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = m;
+      sel.appendChild(opt);
+    });
+    sel.dataset.populated = '1';
+  }
+
+  // ── Generic Written Comm re-scorer ────────────────────────────────────────
+  // Reads the manager from #rescore-manager-select.
+  // Value "__ALL__" → score every Written Comm session in the DB.
+  // Any other value  → score only that manager's agents.
+  async function reScoreWrittenComm() {
+    if (typeof SpeechEngine === 'undefined') {
+      toast('SpeechEngine not loaded — cannot re-score', 'error'); return;
+    }
+
+    const sel         = $('rescore-manager-select');
+    const agentInput  = $('rescore-agent-names');
+    const managerName = sel ? sel.value : '';
+
+    // Parse specific agent names if provided (comma-separated)
+    const rawAgentStr = (agentInput ? agentInput.value : '').trim();
+    const specificNames = rawAgentStr
+      ? rawAgentStr.split(',').map(n => n.trim().toLowerCase()).filter(Boolean)
+      : [];
+
+    // If specific names are entered, skip team validation — target those agents directly
+    // If no specific names, a team must be selected
+    if (!specificNames.length && !managerName) {
+      toast('Select a team or enter specific agent names first', 'warning');
+      return;
+    }
+
+    const isAll = managerName === '__ALL__';
+
+    // Build team set when no specific names given
+    let teamSet = null; // null = match everything (All Teams mode)
+    if (!specificNames.length && !isAll) {
+      const agents = _MANAGER_AGENT_MAP[managerName] || [];
+      if (!agents.length) { toast(`No agents found for "${managerName}"`, 'error'); return; }
+      teamSet = new Set(agents.map(n => n.toLowerCase().trim()));
+    }
+
+    // Fuzzy match helper — checks against specificNames first, then teamSet
+    function matchesTarget(name) {
+      if (!name) return false;
+      const n = name.toLowerCase().trim();
+      if (specificNames.length) {
+        // Specific-names mode: check if this session's trainee matches any of the given names
+        return specificNames.some(target => n.includes(target) || target.includes(n));
+      }
+      if (!teamSet) return true; // All Teams
+      if (teamSet.has(n)) return true;
+      for (const m of teamSet) {
+        if (m.includes(n) || n.includes(m)) return true;
+      }
+      return false;
+    }
+
+    const btn   = $('btn-rescore-wc');
+    const label = specificNames.length
+      ? specificNames.map(n => n.split(' ').map(w => w[0].toUpperCase() + w.slice(1)).join(' ')).join(', ')
+      : (isAll ? 'All Teams' : managerName);
+
+    if (btn) { btn.disabled = true; btn.textContent = '⌛ Re-scoring…'; }
+    if (sel) sel.disabled = true;
+    if (agentInput) agentInput.disabled = true;
+
+    try {
+      const allSessions = await DB.getAll('sessions');
+      const targets = allSessions.filter(s =>
+        s.module === 'written-comm' &&
+        matchesTarget(s.traineeName)
+      );
+
+      if (!targets.length) {
+        toast(`No Written Comm sessions found for: ${label}`, 'warning');
+        return;
+      }
+
+      let done = 0, updated = 0;
+      const errors = [];
+
+      for (const session of targets) {
+        if (btn) btn.textContent = `⌛ ${done + 1}/${targets.length}`;
+        try {
+          const duration     = session.timeTaken || 0;
+          const textToScore  = session.transcript || session.writtenText || '';
+          let newAiScores = null;
+
+          if (textToScore.trim().length > 0) {
+            newAiScores = SpeechEngine.scoreWriting(textToScore, duration, session.topicTitle);
+            newAiScores._summary = SpeechEngine.generateCoachingSummary('written-comm', newAiScores);
+            newAiScores._method = 'js-rescore';
+          }
+
+          if (newAiScores && session.id) {
+            // Preserve original scores as _prev (only first time — never overwrite the original)
+            if (session.aiScores && !session.aiScores._prev) {
+              newAiScores._prev = session.aiScores;
+            } else if (session.aiScores && session.aiScores._prev) {
+              newAiScores._prev = session.aiScores._prev;
+            }
+            // patch — only writes ai_scores, never touches admin_scores
+            await DB.patch('sessions', session.id, { aiScores: newAiScores });
+            updated++;
+          } else if (!session.id) {
+            errors.push(`${session.traineeName}: missing session ID`);
+          }
+        } catch (e) {
+          errors.push(`${session.traineeName}: ${e.message}`);
+          console.error(`Re-score failed for ${session.traineeName}:`, e);
+        }
+        done++;
+        await new Promise(r => setTimeout(r, 100)); // small delay for UI updates
+      }
+
+      if (errors.length) {
+        console.error('Re-score errors:', errors);
+        toast(`${label}: ${updated} updated, ${errors.length} failed — see console`, 'warning');
+      } else {
+        toast(`Re-scoring complete — ${updated}/${targets.length} sessions updated (${label})`, 'success');
+      }
+
+      await loadAssessments();
+
+    } catch (e) {
+      console.error('Re-score failed:', e);
+      toast('Re-score failed: ' + e.message, 'error');
+    } finally {
+      if (btn)        { btn.disabled = false; btn.textContent = '🔄 Re-score Written'; }
+      if (sel)          sel.disabled = false;
+      if (agentInput)   agentInput.disabled = false;
+    }
+  }
+
+  // ── Reset Written Comm scores to pre-re-score originals ──────────────────
+  async function resetWrittenScores() {
+    const sel        = $('rescore-manager-select');
+    const agentInput = $('rescore-agent-names');
+    const managerName = sel ? sel.value : '';
+
+    const rawAgentStr  = (agentInput ? agentInput.value : '').trim();
+    const specificNames = rawAgentStr
+      ? rawAgentStr.split(',').map(n => n.trim().toLowerCase()).filter(Boolean)
+      : [];
+
+    if (!specificNames.length && !managerName) {
+      toast('Select a team or enter specific agent names first', 'warning');
+      return;
+    }
+
+    const isAll   = managerName === '__ALL__';
+    let teamSet   = null;
+    if (!specificNames.length && !isAll) {
+      const agents = _MANAGER_AGENT_MAP[managerName] || [];
+      if (!agents.length) { toast(`No agents found for "${managerName}"`, 'error'); return; }
+      teamSet = new Set(agents.map(n => n.toLowerCase().trim()));
+    }
+
+    function matchesTarget(name) {
+      if (!name) return false;
+      const n = name.toLowerCase().trim();
+      if (specificNames.length) return specificNames.some(t => n.includes(t) || t.includes(n));
+      if (!teamSet) return true;
+      if (teamSet.has(n)) return true;
+      for (const m of teamSet) { if (m.includes(n) || n.includes(m)) return true; }
+      return false;
+    }
+
+    const label = specificNames.length
+      ? specificNames.map(n => n.split(' ').map(w => w[0].toUpperCase() + w.slice(1)).join(' ')).join(', ')
+      : (isAll ? 'All Teams' : managerName);
+
+    if (!confirm(`Reset AI scores back to original (pre-re-score) values for: ${label}?\n\nThis cannot be undone.`)) return;
+
+    const btn = $('btn-reset-wc');
+    if (btn) { btn.disabled = true; btn.textContent = '⌛ Resetting…'; }
+    if (sel) sel.disabled = true;
+    if (agentInput) agentInput.disabled = true;
+
+    try {
+      const allSessions = await DB.getAll('sessions');
+
+      // Target all matching Written Comm sessions — those with _prev (backup exists) OR js-rescore method
+      const targets = allSessions.filter(s =>
+        s.module === 'written-comm' &&
+        matchesTarget(s.traineeName) &&
+        s.aiScores &&
+        (s.aiScores._prev || s.aiScores._method === 'js-rescore')
+      );
+
+      if (!targets.length) {
+        toast(`No re-scored Written Comm sessions found for: ${label} — nothing to reset`, 'warning');
+        return;
+      }
+
+      let done = 0, restored = 0;
+      const errors = [];
+      for (const session of targets) {
+        if (btn) btn.textContent = `⌛ ${done + 1}/${targets.length}`;
+        try {
+          let restoredScores = null;
+
+          if (session.aiScores._prev) {
+            // Backup exists — restore directly (strip _prev so it's a clean object)
+            const { _prev, ...originalScores } = session.aiScores._prev;
+            restoredScores = originalScores;
+          } else if (session.transcript || session.writtenText) {
+            // No backup — re-score with standard SpeechEngine.scoreWriting
+            const duration  = session.timeTaken || 0;
+            restoredScores  = SpeechEngine.scoreWriting(session.transcript || session.writtenText || '', duration, session.topicTitle);
+            restoredScores._summary = SpeechEngine.generateCoachingSummary('written-comm', restoredScores);
+          }
+
+          if (restoredScores && session.id) {
+            await DB.patch('sessions', session.id, { aiScores: restoredScores });
+            restored++;
+          }
+        } catch (e) {
+          errors.push(`${session.traineeName}: ${e.message}`);
+          console.error(`Reset failed for ${session.traineeName}:`, e);
+        }
+        done++;
+        await new Promise(r => setTimeout(r, 80)); // small UI tick
+      }
+
+      if (errors.length) {
+        console.error('Reset errors:', errors);
+        toast(`${label}: ${restored} restored, ${errors.length} failed — see console`, 'warning');
+      } else {
+        toast(`Scores reset — ${restored}/${targets.length} sessions restored (${label})`, 'success');
+      }
+
+      await loadAssessments();
+
+    } catch (e) {
+      console.error('Reset failed:', e);
+      toast('Reset failed: ' + e.message, 'error');
+    } finally {
+      if (btn)        { btn.disabled = false; btn.textContent = '↩ Reset Scores'; }
+      if (sel)          sel.disabled = false;
+      if (agentInput)   agentInput.disabled = false;
+    }
+  }
+
+  // ── Manager Assessments ──────────────────────────────────────────
+  let _mgrSessions = [];
+
+  async function loadMgrAssessments() {
+    try {
+      const all = await DB.getAll('sessions');
+      _mgrSessions = all.filter(s => s.module && s.module.startsWith('mgr-'));
+      renderMgrAssessments();
+      // Update badge
+      const pending = _mgrSessions.filter(s => !s.adminScores).length;
+      const badge = document.getElementById('mgr-pending-badge');
+      if (badge) badge.textContent = pending > 0 ? pending : '0';
+    } catch (e) {
+      console.error('loadMgrAssessments error:', e);
+    }
+  }
+
+  function renderMgrAssessments() {
+    const moduleFilter = document.getElementById('mgr-filter-module') ? document.getElementById('mgr-filter-module').value : 'all';
+    const statusFilter = document.getElementById('mgr-filter-status') ? document.getElementById('mgr-filter-status').value : 'all';
+
+    let sessions = _mgrSessions;
+    if (moduleFilter !== 'all') sessions = sessions.filter(s => s.module === moduleFilter);
+    if (statusFilter === 'pending') sessions = sessions.filter(s => !s.adminScores);
+    if (statusFilter === 'scored')  sessions = sessions.filter(s =>  s.adminScores);
+
+    const tbody = document.getElementById('mgr-assessments-tbody');
+    if (!tbody) return;
+
+    if (!sessions.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No manager assessments yet.</td></tr>';
+      return;
+    }
+
+    const MGR_MODULE_LABELS = {
+      'mgr-situation-room':     '🎯 Situation Room',
+      'mgr-transcript-autopsy': '📋 Transcript Autopsy',
+      'mgr-mock-call':          '📞 Mock Call',
+      'mgr-feedback':           '💬 Feedback',
+      'mgr-eq':                 '🧠 Emotional Intelligence',
+      'mgr-listening-tone':     '🎧 Listening & Tone',
+      'mgr-management-skills':  '📊 Management Skills',
+    };
+
+    // Sort newest first
+    const sorted = [...sessions].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+
+    tbody.innerHTML = sorted.map(s => {
+      const aiScore    = s.aiScores    && s.aiScores.overall    != null ? s.aiScores.overall    + '%' : '—';
+      const adminScore = s.adminScores && s.adminScores.overall != null ? s.adminScores.overall + '%' : '—';
+      const status     = s.adminScores
+        ? '<span class="badge badge-scored">Scored</span>'
+        : '<span class="badge badge-pending">Pending</span>';
+      const date = s.submittedAt
+        ? new Date(s.submittedAt).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })
+        : '—';
+      const topicDisplay = (s.topicTitle || '—').replace(/'/g, '&#39;');
+      return `<tr>
+        <td><strong>${s.traineeName || '—'}</strong></td>
+        <td>${MGR_MODULE_LABELS[s.module] || s.module}</td>
+        <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${topicDisplay}">${s.topicTitle || '—'}</td>
+        <td>${date}</td>
+        <td>${status}</td>
+        <td>${aiScore}</td>
+        <td>${adminScore}</td>
+        <td><button class="btn-ghost" style="font-size:0.8rem;padding:0.35rem 0.75rem"
+          onclick="Admin.openMgrScoreModal('${s.id}')">Score</button></td>
+      </tr>`;
+    }).join('');
+  }
+
+  async function openMgrScoreModal(sessionId) {
+    const session = _mgrSessions.find(s => s.id === sessionId);
+    if (!session) return;
+
+    const modal = document.getElementById('mgr-score-modal');
+    if (!modal) return;
+
+    modal.querySelector('#mgr-modal-name').textContent    = session.traineeName || '—';
+    modal.querySelector('#mgr-modal-module').textContent  = (session.module || '').replace('mgr-','').replace(/-/g,' ');
+    modal.querySelector('#mgr-modal-topic').textContent   = session.topicTitle  || '—';
+
+    const isMcq     = session.module === 'mgr-listening-tone';
+    const isSR      = session.module === 'mgr-situation-room';
+    const isWritten = ['mgr-transcript-autopsy','mgr-eq','mgr-management-skills'].includes(session.module);
+    const isFeedback = session.module === 'mgr-feedback';
+
+    const transcriptBox = modal.querySelector('#mgr-modal-transcript');
+
+    if (isSR) {
+      // Two-section Situation Room — writtenText is a JSON blob
+      let srData = null;
+      try { srData = JSON.parse(session.writtenText || 'null'); } catch (_) {}
+      if (srData) {
+        const secA = srData.sectionA || {};
+        const secB = srData.sectionB || {};
+        const esc  = t => (t || '').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        transcriptBox.innerHTML =
+          '<div style="margin-bottom:1rem">' +
+            '<div style="font-size:0.72rem;font-weight:800;letter-spacing:0.06em;color:#7c3aed;margin-bottom:0.4rem">SECTION A — WHAT WOULD YOU SAY?</div>' +
+            '<div style="font-size:0.8rem;color:#666;margin-bottom:0.3rem"><em>Prompt: ' + esc(secA.prompt) + '</em></div>' +
+            '<div style="white-space:pre-wrap;font-size:0.88rem;background:#f5f3ff;padding:0.75rem;border-radius:6px;border-left:3px solid #7c3aed">' + esc(secA.response || '(no response)') + '</div>' +
+          '</div>' +
+          '<div>' +
+            '<div style="font-size:0.72rem;font-weight:800;letter-spacing:0.06em;color:#dc2626;margin-bottom:0.4rem">SECTION B — THE WRONG RESPONSE ANALYSIS</div>' +
+            '<div style="font-size:0.75rem;font-weight:700;color:#666;margin:0.5rem 0 0.2rem">Errors Identified:</div>' +
+            '<div style="white-space:pre-wrap;font-size:0.88rem;background:#fef2f2;padding:0.75rem;border-radius:6px;border-left:3px solid #dc2626;margin-bottom:0.5rem">' + esc(secB.errors || '(none)') + '</div>' +
+            '<div style="font-size:0.75rem;font-weight:700;color:#666;margin-bottom:0.2rem">Why Each Error Made It Worse:</div>' +
+            '<div style="white-space:pre-wrap;font-size:0.88rem;background:#fffbeb;padding:0.75rem;border-radius:6px;border-left:3px solid #f59e0b;margin-bottom:0.5rem">' + esc(secB.impact || '(none)') + '</div>' +
+            '<div style="font-size:0.75rem;font-weight:700;color:#666;margin-bottom:0.2rem">Rewrite:</div>' +
+            '<div style="white-space:pre-wrap;font-size:0.88rem;background:#f0fdf4;padding:0.75rem;border-radius:6px;border-left:3px solid #10b981">' + esc(secB.rewrite || '(none)') + '</div>' +
+          '</div>';
+      } else {
+        transcriptBox.innerHTML = '<div style="color:var(--text-muted);font-style:italic">No response data found.</div>';
+      }
+    } else if (isWritten) {
+      transcriptBox.innerHTML = '<strong>Written Response:</strong><div style="white-space:pre-wrap;margin-top:0.5rem;font-size:0.9rem;max-height:240px;overflow-y:auto">' +
+        (session.writtenText || '(no text)').replace(/</g,'&lt;') + '</div>';
+    } else if (isMcq) {
+      const ai = session.aiScores || {};
+      transcriptBox.innerHTML = '<strong>Auto-Score:</strong> ' + (ai.correct || 0) + '/' + (ai.total || 5) + ' correct — ' + (ai.overall || 0) + '%';
+    } else {
+      transcriptBox.innerHTML = '<strong>Transcript:</strong><div style="white-space:pre-wrap;margin-top:0.5rem;font-size:0.9rem;max-height:200px;overflow-y:auto">' +
+        (session.transcript || '(no transcript)').replace(/</g,'&lt;') + '</div>';
+    }
+
+    // AI scores display
+    const aiBox = modal.querySelector('#mgr-modal-ai-scores');
+    if (session.aiScores && session.aiScores.overall != null) {
+      if (isSR) {
+        const sa = session.aiScores.sectionA || {};
+        const sb = session.aiScores.sectionB || {};
+        aiBox.innerHTML =
+          '<strong>AI Score: ' + session.aiScores.overall + '%</strong>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.3rem;margin-top:0.5rem;font-size:0.8rem">' +
+            '<span style="color:#7c3aed">A — Tone &amp; Empathy: <strong>' + (sa.toneEmpathy ?? '—') + '/5</strong></span>' +
+            '<span style="color:#7c3aed">A — Ownership: <strong>' + (sa.ownershipLanguage ?? '—') + '/5</strong></span>' +
+            '<span style="color:#7c3aed">A — Avoided Risky Lang: <strong>' + (sa.avoidedRiskyLanguage ?? '—') + '/5</strong></span>' +
+            '<span style="color:#dc2626">B — Error ID: <strong>' + (sb.errorIdentification ?? '—') + '/5</strong></span>' +
+            '<span style="color:#dc2626">B — Impact Explanation: <strong>' + (sb.impactExplanation ?? '—') + '/5</strong></span>' +
+            '<span style="color:#dc2626">B — Rewrite Quality: <strong>' + (sb.rewriteQuality ?? '—') + '/5</strong></span>' +
+          '</div>' +
+          (sa.whatNotToSay && !/clean/i.test(sa.whatNotToSay) ? '<div style="margin-top:0.4rem;font-size:0.78rem;color:#92400e;background:#fef9c3;padding:0.4rem 0.6rem;border-radius:4px">⚠ <strong>Risky language (A):</strong> ' + sa.whatNotToSay + '</div>' : '') +
+          (sb.keyMissed && !/all key/i.test(sb.keyMissed) ? '<div style="margin-top:0.3rem;font-size:0.78rem;color:#92400e;background:#fef9c3;padding:0.4rem 0.6rem;border-radius:4px">📝 <strong>Missed error (B):</strong> ' + sb.keyMissed + '</div>' : '');
+      } else {
+        aiBox.innerHTML = '<strong>AI Score: ' + session.aiScores.overall + '%</strong>';
+      }
+    } else {
+      aiBox.innerHTML = '';
+    }
+
+    // Scoring criteria inputs
+    const criteriaEl = modal.querySelector('#mgr-scoring-criteria');
+    const audioLabels   = ['Leadership Presence','Decision Quality','Communication Clarity','Empathy & EQ','Professionalism'];
+    const writtenLabels = ['Content Quality','Critical Thinking','Communication Clarity','Empathy & Insight','Action Orientation'];
+    const srLabels      = ['A — Tone & Empathy','A — Ownership Language','A — Avoided Risky Language','B — Error Identification','B — Impact Explanation','B — Rewrite Quality'];
+    const labels = isSR ? srLabels : (isWritten ? writtenLabels : audioLabels);
+    const existing = session.adminScores || {};
+
+    if (isMcq) {
+      criteriaEl.innerHTML = '<p style="color:var(--text-muted);font-size:0.9rem">This is an auto-scored MCQ assessment. You may add a comment below.</p>';
+    } else {
+      criteriaEl.innerHTML = labels.map((label, i) => {
+        const key = label.toLowerCase().replace(/[^a-z]/g, '');
+        const val = existing[key] != null ? existing[key] : (existing['score' + (i+1)] != null ? existing['score' + (i+1)] : '');
+        const color = isSR ? (i < 3 ? 'color:#5b21b6' : 'color:#991b1b') : '';
+        return '<div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem">' +
+          '<label style="min-width:220px;font-size:0.85rem;' + color + '">' + label + '</label>' +
+          '<input type="number" min="1" max="5" step="0.5" value="' + val + '" class="mgr-criteria-input" data-key="' + key + '" style="width:70px;border:1px solid var(--border);border-radius:6px;padding:0.35rem 0.5rem;font-size:0.9rem" />' +
+          '<span style="font-size:0.8rem;color:var(--text-muted)">(1–5)</span>' +
+          '</div>';
+      }).join('');
+    }
+
+    modal.querySelector('#mgr-admin-comment').value = session.adminComment || '';
+    modal.dataset.sessionId = sessionId;
+    modal.classList.remove('hidden');
+  }
+
+  async function saveMgrScore() {
+    const modal = document.getElementById('mgr-score-modal');
+    if (!modal) return;
+    const sessionId = modal.dataset.sessionId;
+    const session = _mgrSessions.find(s => s.id === sessionId);
+    if (!session) return;
+
+    const isMcq = session.module === 'mgr-listening-tone';
+    let adminScores = {};
+
+    if (!isMcq) {
+      const inputs = modal.querySelectorAll('.mgr-criteria-input');
+      let sum = 0, count = 0;
+      inputs.forEach(inp => {
+        const val = parseFloat(inp.value);
+        if (!isNaN(val)) { adminScores[inp.dataset.key] = val; sum += val; count++; }
+      });
+      adminScores.overall = count > 0 ? parseFloat(((sum / (count * 5)) * 100).toFixed(1)) : null;
+    } else {
+      adminScores = Object.assign({}, session.aiScores); // MCQ: admin score = AI score
+    }
+
+    const comment = modal.querySelector('#mgr-admin-comment').value.trim();
+
+    try {
+      await DB.patch('sessions', sessionId, { adminScores, adminComment: comment });
+      const idx = _mgrSessions.findIndex(s => s.id === sessionId);
+      if (idx >= 0) {
+        _mgrSessions[idx].adminScores  = adminScores;
+        _mgrSessions[idx].adminComment = comment;
+      }
+      renderMgrAssessments();
+      modal.classList.add('hidden');
+      toast('Manager score saved!', 'success');
+    } catch (e) {
+      alert('Error saving score: ' + e.message);
+    }
+  }
+
+  // ---- Seed: NRI Basics of Stock Market MCQ ----
+  async function seedStockMarketMcq(silent = false) {
+    const existing = await DB.getAll('topics');
+    const smqTopics = existing.filter(t => t.module === 'stock-market-mcq');
+
+    // Delete legacy topics that predate the Set 1 / Set 2 / Set 3 / Set 4 naming
+    const oldTopics = smqTopics.filter(t => !t.title || (!t.title.includes('Set 1') && !t.title.includes('Set 2') && !t.title.includes('Set 3') && !t.title.includes('Set 4')));
+    for (const old of oldTopics) {
+      try { await DB.del('topics', old.id); } catch (_) {}
+    }
+
+    const validTopics = smqTopics.filter(t => t.title && (t.title.includes('Set 1') || t.title.includes('Set 2') || t.title.includes('Set 3') || t.title.includes('Set 4')));
+    const hasSet1 = validTopics.some(t => t.title.includes('Set 1'));
+    const hasSet2 = validTopics.some(t => t.title.includes('Set 2'));
+    const hasSet3 = validTopics.some(t => t.title.includes('Set 3'));
+    const hasSet4 = validTopics.some(t => t.title.includes('Set 4'));
+
+    if (hasSet1 && hasSet2 && hasSet3 && hasSet4) {
+      if (!silent) toast('NRI Stock Market topics already exist — no action taken.', 'info');
+      return;
+    }
+
+    const set1Questions = [
+      { stem: "In which year and city was Broker founded?", options: ["2005, Mumbai","2008, Hyderabad","2010, Bengaluru","2012, Delhi"], correct: 2, explanation: "Broker was founded in 2010 in Bengaluru by Nithin Kamath and Nikhil Kamath." },
+      { stem: "Who are the founders of Broker?", options: ["Radhakishan Damani and Rakesh Jhunjhunwala","Nithin Kamath and Nikhil Kamath","Vijay Shekhar Sharma and Deepinder Goyal","Uday Kotak and Nandan Nilekani"], correct: 1, explanation: "Broker was founded by brothers Nithin Kamath and Nikhil Kamath." },
+      { stem: "Broker was the first to introduce which revolutionary brokerage model in India?", options: ["Full-service broking with relationship managers","Discount broking — a flat fee of Rs. 20 per trade regardless of order size","Free broking with no charges at all","Subscription-based broking model"], correct: 1, explanation: "Broker pioneered discount broking — a flat Rs. 20 per trade regardless of order size." },
+      { stem: "What was the major technological breakthrough that set Broker apart from traditional brokers?", options: ["Launching India's first mutual fund platform","Introducing phone-based trading","Launching Kite — a modern, fast, and lightweight trading platform","Launching a dedicated commodity exchange"], correct: 2, explanation: "Broker's Kite platform is widely regarded as a game-changer — fast, modern, and built in-house." },
+      { stem: "Broker grew entirely without external funding. This means it is a:", options: ["Government-owned enterprise","Venture capital-backed startup","Bootstrapped company — funded only by the founders and internal profits","Listed public company on NSE"], correct: 2, explanation: "Broker is bootstrapped — it has never raised external venture capital." },
+      { stem: "Which stock exchange was established in 1875 and is Asia's oldest exchange?", options: ["NSE","MCX","BSE","NCDEX"], correct: 2, explanation: "BSE (Bombay Stock Exchange), established in 1875, is Asia's oldest stock exchange." },
+      { stem: "What is the benchmark index of the NSE (National Stock Exchange)?", options: ["S&P BSE Sensex","Nifty 50","Nifty Bank","BSE 500"], correct: 1, explanation: "The Nifty 50 is the flagship index of the NSE, tracking the top 50 companies." },
+      { stem: "The S&P BSE Sensex tracks how many stocks?", options: ["50","100","30","200"], correct: 2, explanation: "The BSE Sensex tracks 30 of the largest and most actively traded stocks on the BSE." },
+      { stem: "NSE was established in which year and pioneered which capability?", options: ["1985, screen-based trading","1992, automated trading","1994, online trading","2000, algorithmic trading"], correct: 1, explanation: "NSE was established in 1992 and pioneered automated electronic trading in India." },
+      { stem: "In the IPO process, who is appointed as the lead manager?", options: ["SEBI","Stock Broker","Merchant Banker","Clearing Corporation"], correct: 2, explanation: "A Merchant Banker is appointed as the lead manager to manage the IPO process end-to-end." },
+      { stem: "What does DRHP stand for in the context of an IPO?", options: ["Direct Registered Holding Prospectus","Draft Red Herring Prospectus","Demat Registration and Holding Paper","Direct Rights and Holdings Proposal"], correct: 1, explanation: "DRHP stands for Draft Red Herring Prospectus — the preliminary IPO document filed with SEBI." },
+      { stem: "SEBI's role during its review of the DRHP is best described as:", options: ["Setting the IPO price","Vetting the financials of the company","Checking for full and fair disclosure only","Allocating shares to investors"], correct: 2, explanation: "SEBI checks that the DRHP provides full and fair disclosure — it does not verify financial accuracy." },
+      { stem: "The final document filed with the exchange that includes the price band is called:", options: ["DRHP","Prospectus Summary","Red Herring Prospectus (RHP)","Allotment Letter"], correct: 2, explanation: "The Red Herring Prospectus (RHP) is the final version of the IPO document, including the price band." },
+      { stem: "During the IPO live bidding phase, which mechanism blocks funds in an investor's bank account?", options: ["DDPI","eDIS","UPI-linked ASBA","TPIN"], correct: 2, explanation: "UPI-linked ASBA (Application Supported by Blocked Amount) blocks funds during IPO bidding." },
+      { stem: "For retail investors in an IPO, the allotment process is done via:", options: ["First come, first served","Proportional allotment","Lottery","Auction bidding"], correct: 2, explanation: "Retail IPO allotment is done via lottery when oversubscribed, ensuring fairness." },
+      { stem: "In the Secondary Market, when shares are traded between two investors, the company:", options: ["Receives a transaction fee","Issues new shares each time","Gets no money — only investors exchange ownership","Must approve each transaction"], correct: 2, explanation: "In the secondary market, only ownership transfers between investors — the company receives nothing." },
+      { stem: "What drives share price changes in the secondary market on a second-by-second basis?", options: ["SEBI directives","Company announcements only","Supply and demand — more buyers raises price, more sellers lowers price","Fixed periodic auctions"], correct: 2, explanation: "Share prices are driven purely by supply and demand dynamics in the secondary market." },
+      { stem: "SEBI stands for:", options: ["Stock Exchange Board of India","Securities and Exchange Board of India","Securities and Equity Bureau of India","Stock Equity and Brokerage Institution"], correct: 1, explanation: "SEBI — Securities and Exchange Board of India — is the regulator of the Indian securities market." },
+      { stem: "Which exchanges fall under SEBI's purview for Equities and Derivatives in India?", options: ["MCX and NCDEX","NSE and BSE","BSE and MCX","NSE and NCDEX"], correct: 1, explanation: "NSE and BSE are the two main exchanges for equities and derivatives, both regulated by SEBI." },
+      { stem: "MCX and NCDEX are specialized exchanges dealing in which market segment?", options: ["Equities","Government bonds","Commodities","Currency derivatives"], correct: 2, explanation: "MCX and NCDEX are commodity exchanges dealing in metals, energy, and agricultural products." },
+      { stem: "Stock Brokers are described as which Pillar of financial intermediaries?", options: ["Pillar 1 – The Gateway","Pillar 2 – The Record Keepers","Pillar 3 – The Guarantors","Pillar 4 – The Regulators"], correct: 0, explanation: "Stock Brokers are Pillar 1 — The Gateway — as they are the entry point for investors to the market." },
+      { stem: "Depositories (NSDL and CDSL) are described as:", options: ["Clearing Corporations","Secure digital vaults holding your electronic shares","Tax collection authorities","Broker subsidiaries"], correct: 1, explanation: "Depositories like NSDL and CDSL act as digital vaults, holding shares in dematerialised form." },
+      { stem: "Clearing Corporations ensure trades settle with zero defaults. They are:", options: ["Regulated directly by the Government of India","Wholly owned subsidiaries of exchanges","Private equity firms","Part of SEBI"], correct: 1, explanation: "Clearing Corporations (e.g., NSCCL) are wholly owned subsidiaries of their respective exchanges." },
+      { stem: "Brokers act as Depository Participants (DPs) to connect investors to:", options: ["SEBI","NSE and BSE","NSDL and CDSL","Clearing Corporations"], correct: 2, explanation: "As DPs, brokers like Broker connect investors to NSDL and CDSL for Demat services." },
+      { stem: "Buying equity in a company means you own:", options: ["A loan given to the company","A micro-fraction of that business","The right to vote only","A fixed return bond"], correct: 1, explanation: "Buying equity (shares) means you own a proportional fraction of the company as a shareholder." },
+      { stem: "Which correctly distinguishes Stocks from Shares?", options: ["They are exactly the same thing","Stock is general ownership; Shares are the specific units (e.g., 10 shares of Infosys)","Stocks are only for large companies; Shares for small","Stocks are traded on BSE; Shares on NSE"], correct: 1, explanation: "'Stock' refers to general ownership; 'shares' are the specific numbered units of that stock." },
+      { stem: "Derivatives are financial contracts whose value is:", options: ["Fixed by SEBI","Equal to the face value of the underlying stock","Derived from an underlying asset rather than owning it directly","Based on inflation rates"], correct: 2, explanation: "Derivatives derive their value from an underlying asset without direct ownership." },
+      { stem: "The Spot Market is where shares are bought and delivered:", options: ["After 30 days","Immediately or within the standard settlement cycle","Only during special sessions","Through futures contracts"], correct: 1, explanation: "The Spot (Cash) Market involves immediate buying/selling with settlement in the standard T+1 cycle." },
+      { stem: "The Golden Rule for new investors as per the presentation is:", options: ["Always diversify across 10 asset classes","Never trade complex instruments you do not fully understand — master the Spot Market first","Buy on dips and sell on highs","Always use a stop loss"], correct: 1, explanation: "The golden rule: master the Spot Market first before venturing into complex derivatives or F&O." },
+      { stem: "A Market Order executes at which price?", options: ["A price you specify in advance","The best available price at the moment of execution","The closing price of the previous day","The IPO price"], correct: 1, explanation: "A Market Order executes immediately at the best available market price — execution is guaranteed, price is not." },
+      { stem: "Which order type guarantees price but not execution?", options: ["Market Order","Stop Loss Market Order","Limit Order","Bracket Order"], correct: 2, explanation: "A Limit Order sets a specific price — it executes only if the market reaches that price." },
+      { stem: "A Stop Loss order is primarily used to:", options: ["Guarantee profit booking","Limit potential losses by triggering a sell at a defined price","Buy more shares when the price drops","Execute trades at opening bell only"], correct: 1, explanation: "A Stop Loss order automatically exits a position at a defined price to cap downside risk." },
+      { stem: "The first step in the Broker account opening process is:", options: ["Physical visit to a Broker branch","Submission of paper KYC forms","Digital Onboarding (E-KYC) using Aadhaar-linked mobile number","Calling the Broker helpline"], correct: 2, explanation: "Broker's process starts with E-KYC using your Aadhaar-linked mobile for OTP verification." },
+      { stem: "In-Person Verification (IPV) during Broker account opening is completed via:", options: ["A Broker executive visiting your home","A quick webcam video to confirm your presence — no physical visit required","Submission of a notarised document","Aadhaar OTP only"], correct: 1, explanation: "IPV at Broker is done digitally via a webcam video — no physical branch visit is required." },
+      { stem: "E-Sign with Aadhaar during account opening involves:", options: ["Wet signature on printed forms","Physical stamp paper","Digitally signing forms using an OTP sent to your Aadhaar-linked mobile","Biometric fingerprint scan at a CDSL branch"], correct: 2, explanation: "E-Sign uses an OTP sent to your Aadhaar-linked mobile to digitally authenticate and sign documents." },
+      { stem: "DDPI stands for:", options: ["Demat Debit and Pledge Instruction","Digital Delivery and Purchase Instruction","Demat Deposit and Proxy Instrument","Direct Debit and Pledge Index"], correct: 0, explanation: "DDPI stands for Demat Debit and Pledge Instruction — it replaces the older Power of Attorney (POA)." },
+      { stem: "DDPI allows the broker to access shares:", options: ["For any transaction the broker deems necessary","Only for specific, investor-initiated trades","For pledging shares without investor knowledge","Across all linked family accounts"], correct: 1, explanation: "DDPI is investor-initiated — it only allows the broker to debit shares for trades specifically placed by the investor." },
+      { stem: "If DDPI is not active, how must an investor authorize every sell transaction?", options: ["By calling the broker","Through the old Power of Attorney (POA)","Via eDIS — using a CDSL TPIN and OTP","By visiting the CDSL office"], correct: 2, explanation: "Without DDPI, investors must use eDIS with CDSL TPIN and OTP for each sell." },
+      { stem: "Under T+1 settlement, when do shares reach your Demat vault after a buy trade?", options: ["Same day (T)","One trading day after the trade (T+1)","Two trading days after the trade (T+2)","Three trading days after the trade (T+3)"], correct: 1, explanation: "India moved to T+1 settlement — shares are credited to your Demat account one trading day after the buy trade." },
+      { stem: "CMR (Client Master Report) is best described as:", options: ["A monthly brokerage statement","A tax filing document","The identity card for your Demat account detailing all core verified information","A report issued by SEBI"], correct: 2, explanation: "The CMR is the official identity document for your Demat account, containing all KYC-verified details." },
+      { stem: "Adding a nominee to your Demat account is:", options: ["Optional but recommended","An absolute regulatory requirement to ensure wealth transfers to heirs","Only required for accounts with more than Rs. 10 lakh","Applicable only for joint accounts"], correct: 1, explanation: "SEBI mandates nomination for all Demat accounts — it ensures shares pass to heirs without legal complications." },
+      { stem: "Short delivery occurs when a seller:", options: ["Sells at a price below the market","Sells shares but fails to deliver them to the exchange by the T+1 settlement deadline","Places a sell order after market hours","Sells more than 5% of their holding"], correct: 1, explanation: "Short delivery happens when a seller cannot deliver shares by the T+1 deadline." },
+      { stem: "When short delivery happens, what action does the Clearing Corporation take?", options: ["The trade is cancelled and reversed","The buyer automatically gets cash","A live auction is conducted to buy the missing shares on behalf of the defaulting seller","The exchange suspends the stock"], correct: 2, explanation: "The Clearing Corporation conducts an auction to procure the missing shares, charging the defaulting seller." },
+      { stem: "The penalty charged to the defaulting seller in a short delivery case can be up to:", options: ["5% of share value","10% of share value","20% of share value","50% of share value"], correct: 2, explanation: "The penalty for short delivery can be up to 20% of the share value." },
+      { stem: "If the auction for short-delivered shares is successful, when are the shares credited to the buyer?", options: ["T+1","T+2 (visible in Kite from T+3)","T+3","T+5"], correct: 1, explanation: "After a successful auction, shares reach the buyer at T+2 (reflected in Kite from T+3)." },
+      { stem: "If the auction completely fails, what happens to the buyer?", options: ["The buyer gets shares from the exchange inventory","The trade is reversed with no compensation","Cash is credited to the buyer trading account at the exchange close-out price","The buyer must wait for the next auction"], correct: 2, explanation: "If the auction fails, the Clearing Corporation credits cash to the buyer at the exchange close-out price." },
+      { stem: "How much short delivery margin does Broker block on T day?", options: ["50%","80%","100%","120% of the security value"], correct: 3, explanation: "Broker blocks 120% of the security value as short delivery margin on T day." },
+      { stem: "In Broker, the Gift Transfer feature is accessible via:", options: ["Kite mobile app only","Console > Portfolio > Holdings","The Broker branch office","CDSL directly"], correct: 1, explanation: "Gift Transfers are done through Console (console.Broker.com) under Portfolio > Holdings." },
+      { stem: "What is the charge for gifting shares in Broker?", options: ["Free of charge","Rs. 10 per security + GST","Rs. 25 per security per transaction + 18% GST","0.1% of transaction value"], correct: 2, explanation: "Broker charges Rs. 25 per security per gift transaction plus 18% GST." },
+      { stem: "For the sender, what is the tax implication of gifting shares?", options: ["10% long-term capital gains tax applies","No tax implication for the sender","Short-term capital gains tax applies","Gift tax of 5% is levied"], correct: 1, explanation: "Gifting shares has no tax implication for the sender — the tax obligation falls on the recipient." }
+    ];
+
+    const set2Questions = [
+      { stem: "An investor bought 50 shares at Rs. 100 and another 50 shares at Rs. 150. They sell 50 shares. Under FIFO, the cost basis of the sold shares is:", options: ["Rs. 150 each — the higher-priced lot","Rs. 100 each — the first lot purchased","Rs. 125 each — average of both lots","Determined randomly by the broker"], correct: 1, explanation: "FIFO (First In First Out): the earliest-purchased lot (Rs. 100) is treated as sold first." },
+      { stem: "A company has 5 crore shares outstanding with a current market price of Rs. 400 per share. Its market capitalisation is:", options: ["Rs. 2,000 crore","Rs. 400 crore","Rs. 20,000 crore","Rs. 800 crore"], correct: 0, explanation: "Market cap = Shares outstanding × Market price = 5 crore × Rs. 400 = Rs. 2,000 crore." },
+      { stem: "A company announces a 1:1 bonus issue. An investor currently holding 300 shares will hold after the bonus:", options: ["300 shares","450 shares","600 shares","900 shares"], correct: 2, explanation: "1:1 bonus means 1 additional share for every 1 held. 300 + 300 = 600 shares total." },
+      { stem: "A stock with a face value of Rs. 10 declares a 50% dividend. An investor holding 200 shares receives:", options: ["Rs. 100","Rs. 1,000","Rs. 5,000","Rs. 10,000"], correct: 1, explanation: "Dividend = 50% of Rs. 10 face value = Rs. 5 per share. 200 × Rs. 5 = Rs. 1,000." },
+      { stem: "Under India's current tax law, Long-Term Capital Gains (LTCG) on listed equity exceeding Rs. 1.25 lakh per year are taxed at:", options: ["0% — fully exempt","10% without indexation","12.5% without indexation","20% with indexation"], correct: 2, explanation: "Post July 2024 Budget: LTCG on equity is taxed at 12.5% (without indexation) above Rs. 1.25 lakh exemption." },
+      { stem: "Short-Term Capital Gains (STCG) on equity shares held for less than 12 months are taxed at:", options: ["10%","15%","20%","As per the investor's income tax slab"], correct: 2, explanation: "Post July 2024 Budget: STCG on equity is 20% (increased from the earlier 15%)." },
+      { stem: "If Nifty 50 falls 20% from the previous day's closing level during trading, the exchange:", options: ["Halts trading for 45 minutes only","Continues trading with enhanced margin requirements","Suspends trading for the remainder of the day","Alerts SEBI to intervene manually"], correct: 2, explanation: "A 20% index-level circuit breaker triggers a market-wide halt for the rest of the trading day." },
+      { stem: "An intraday trader at Broker does not close their open position before the market closes. Broker will:", options: ["Roll the position over to the next trading day","Auto square-off the position near market close","Keep it open indefinitely at no extra charge","Charge a SEBI-mandated overnight penalty"], correct: 1, explanation: "Broker auto squares off un-closed intraday positions to prevent unintended overnight delivery obligations." },
+      { stem: "Securities Transaction Tax (STT) on delivery-based equity purchases is charged at:", options: ["0.025% of turnover","0.1% of turnover","0.5% of turnover","1% of turnover"], correct: 1, explanation: "STT on delivery-based equity buy transactions is 0.1% of the total transaction value." },
+      { stem: "Normal equity trading hours on BSE and NSE are:", options: ["9:00 AM to 3:30 PM","9:15 AM to 3:30 PM","9:30 AM to 4:00 PM","10:00 AM to 4:30 PM"], correct: 1, explanation: "Continuous trading on BSE and NSE runs from 9:15 AM to 3:30 PM IST on all working days." },
+      { stem: "The Pre-Open session on NSE/BSE, used to discover the opening price, runs from:", options: ["9:00 AM to 9:08 AM for order entry","9:00 AM to 9:15 AM (order entry 9:00–9:08, matching 9:08–9:12)","8:30 AM to 9:00 AM","9:15 AM to 9:30 AM"], correct: 1, explanation: "The Pre-Open session runs 9:00–9:15 AM: order collection 9:00–9:08, price matching 9:08–9:12, buffer 9:12–9:15." },
+      { stem: "A stock's Earnings Per Share (EPS) is Rs. 20 and it trades at Rs. 400. Its Price-to-Earnings (P/E) ratio is:", options: ["10","20","40","8,000"], correct: 1, explanation: "P/E ratio = Market Price ÷ EPS = Rs. 400 ÷ Rs. 20 = 20." },
+      { stem: "A company's stock has a face value of Rs. 1 but trades at Rs. 3,500. The face value is most relevant for:", options: ["Setting intraday margin requirements","Calculating dividends and bonus issues","Determining exchange circuit limits","Daily mark-to-market settlement"], correct: 1, explanation: "Dividends are declared as a percentage of face value (e.g., '500% dividend' means Rs. 5 per share at Rs. 1 face value)." },
+      { stem: "A company does a 5:1 stock split. An investor holds 100 shares at Rs. 500 each. After the split, the investor has:", options: ["100 shares at Rs. 2,500 each","500 shares at Rs. 100 each","20 shares at Rs. 2,500 each","500 shares at Rs. 500 each"], correct: 1, explanation: "In a 5:1 split, shares multiply by 5 and price divides by 5. Total value (Rs. 50,000) stays unchanged." },
+      { stem: "In a rights issue, who is given the first right to subscribe for the newly issued shares?", options: ["Retail public through a fresh IPO process","Qualified Institutional Buyers (QIBs) only","Existing shareholders, in proportion to their current holding","Foreign Institutional Investors (FIIs)"], correct: 2, explanation: "A rights issue offers new shares exclusively to existing shareholders in proportion to their current holding." },
+      { stem: "A Nifty 50 ETF (Exchange Traded Fund) replicates the index by:", options: ["Outperforming Nifty 50 by picking the best stocks","Holding the same 50 stocks in the same proportion as the Nifty 50 index","Investing only in the top 5 Nifty stocks by weight","Holding mostly cash and buying futures"], correct: 1, explanation: "An ETF passively mirrors the index composition and proportion, aiming to match (not beat) its returns." },
+      { stem: "Broker Coin is used to invest in:", options: ["Gold and silver commodity ETFs","Direct mutual funds — eliminating distributor commission","US-listed stocks and ETFs","Corporate bonds and NCDs"], correct: 1, explanation: "Broker Coin is Broker's platform for investing in direct mutual fund plans, which carry lower expense ratios." },
+      { stem: "A GTT (Good Till Triggered) order in Broker Kite remains active for up to:", options: ["1 trading day only","7 calendar days","1 year from placement","Indefinitely until manually cancelled"], correct: 2, explanation: "GTT orders stay active for up to 1 year, automatically triggering when the price condition is met." },
+      { stem: "When you pledge shares in Broker to obtain trading margin, the pledged shares:", options: ["Are sold and cash is credited to your trading account","Remain in your Demat account but are marked as pledged collateral","Are transferred to Broker's own account","Must be physically lodged with the clearing corporation"], correct: 1, explanation: "Pledging creates a lien on shares — they stay in your Demat but are locked as collateral until unpledged." },
+      { stem: "When a company announces a share buyback, it generally signals:", options: ["The company is in financial difficulty and needs liquidity","Management believes shares are undervalued and returns surplus cash to shareholders","SEBI has mandated the repurchase","The company intends to delist from the exchange"], correct: 1, explanation: "A buyback typically signals that management finds the stock undervalued, and it returns value to shareholders." },
+      { stem: "The Nifty Bank index on NSE tracks:", options: ["All BSE and NSE-listed public sector banks","The 12 most liquid and largest banking stocks listed on NSE","Only private sector banks","The top 5 banks by market capitalisation"], correct: 1, explanation: "Nifty Bank comprises the 12 most liquid and capitalised banking stocks on the NSE." },
+      { stem: "Broker Varsity is best described as:", options: ["Broker's equity trading platform","A free, comprehensive stock market and financial education platform by Broker","Broker's direct mutual fund investment portal","An AI-based options analytics tool"], correct: 1, explanation: "Broker Varsity (varsity.Broker.com) provides free courses on equity, derivatives, and personal finance." },
+      { stem: "SEBI defines a 'Large Cap' company as one ranked within the top ___ Indian listed companies by full market capitalisation:", options: ["50","100","250","500"], correct: 1, explanation: "As per SEBI's circular, large cap companies are the top 100 firms by full market capitalisation on Indian exchanges." },
+      { stem: "In futures and options, 'Open Interest' refers to:", options: ["The total number of trades executed in that session","The total number of outstanding derivative contracts that have not yet been settled or closed","The interest payable on margin borrowed from the broker","The daily trading volume in the contract"], correct: 1, explanation: "Open Interest counts all active (open) contracts in the market — rising OI signals new money entering the market." },
+      { stem: "India VIX (Volatility Index) measures:", options: ["The daily percentage change in the Nifty 50","The market's expectation of Nifty 50 volatility over the next 30 calendar days","The total market capitalisation of all NSE-listed companies","The number of FII net buy/sell transactions in a session"], correct: 1, explanation: "India VIX is computed from Nifty option prices and reflects market participants' expectation of near-term volatility." },
+      { stem: "An NRI (Non-Resident Indian) who wants to invest in Indian equities must open:", options: ["A regular resident savings and Demat account","An NRE or NRO-linked Demat and trading account under FEMA guidelines","A US brokerage account with India access","A standard Broker account with no special designation"], correct: 1, explanation: "NRIs must route Indian equity investments through NRE or NRO accounts linked to a PIS (Portfolio Investment Scheme) account." },
+      { stem: "TDS (Tax Deducted at Source) on dividends paid by Indian companies is deducted when the dividend from a single company exceeds ___ per financial year:", options: ["Rs. 1,000","Rs. 5,000","Rs. 10,000","Rs. 50,000"], correct: 1, explanation: "TDS at 10% is applicable on dividends exceeding Rs. 5,000 per financial year from a single company." },
+      { stem: "A 'Bear Market' is typically defined as a market decline of:", options: ["5% or more from recent highs","10% or more over at least 2 months","20% or more from recent highs, sustained over time","Any week with more losing days than gaining days"], correct: 2, explanation: "A bear market is commonly defined as a 20% or greater decline from recent highs, sustained over months." },
+      { stem: "An investor holds only IT-sector stocks in their portfolio. The main risk of this approach is:", options: ["Systematic risk that affects the entire market equally","Concentration risk — all stocks may decline together on the same sector news","Currency risk from rupee depreciation","Settlement risk from T+1 failures"], correct: 1, explanation: "Holding a single sector creates concentration risk — a negative sector event affects the entire portfolio simultaneously." },
+      { stem: "Broker Sensibull is primarily a platform for:", options: ["Investing in direct mutual funds","Options trading — strategy builder, payoff graphs, and market analysis","Fundamental equity research and reports","Fixed income and bond investment"], correct: 1, explanation: "Sensibull (integrated with Broker) helps traders build options strategies, visualise payoffs, and find suitable option trades." },
+      { stem: "The key difference between a Rights Issue and an FPO (Follow-on Public Offer) is:", options: ["Rights Issues are for newly incorporated companies; FPOs are for existing listed ones","A Rights Issue offers shares to existing shareholders first; an FPO offers shares to the general public","Rights Issue shares are free; FPO shares are always at a premium","An FPO is regulated by RBI; a Rights Issue is regulated by SEBI"], correct: 1, explanation: "Rights Issues give existing shareholders the exclusive right to buy new shares first; FPOs are open to the general public." },
+      { stem: "A Futures contract obligates the buyer to:", options: ["Buy the underlying asset at the current spot price on the trade date","Buy the underlying asset at a pre-agreed price on a specified future date","Acquire the right (not obligation) to buy the underlying asset","Receive any dividends during the contract period"], correct: 1, explanation: "A futures contract is a binding obligation — both buyer and seller must complete the transaction at the agreed price and date." },
+      { stem: "Buying a Put option gives the holder the:", options: ["Right to buy the underlying asset at the strike price","Obligation to sell the underlying asset on expiry","Right to sell the underlying asset at the strike price","Right to receive dividends during the option's life"], correct: 2, explanation: "A Put option gives the buyer the right (not obligation) to SELL the underlying at the strike price before expiry." },
+      { stem: "In short selling, a trader:", options: ["Buys shares and holds them for a very short duration","Borrows and sells shares expecting the price to fall, then buys them back at a lower price to profit","Sells shares at a price lower than the prevailing market price","Sells only intraday positions without holding overnight"], correct: 1, explanation: "Short sellers borrow shares, sell them, hope the price falls, buy them back cheaper, and return them — pocketing the difference." },
+      { stem: "A 'liquid' stock is best described as one that:", options: ["Has a very high P/E ratio","Can be bought or sold quickly in large quantities without significantly moving the price","Consistently pays large dividends","Has a face value of Rs. 1"], correct: 1, explanation: "Liquidity means a stock has sufficient buyers and sellers that large trades don't materially impact its price." },
+      { stem: "Broker Streak allows traders to:", options: ["Invest directly in mutual funds without a distributor","Create, backtest, and deploy algorithmic trading strategies without coding","Access institutional equity research reports","Apply for IPOs and rights issues digitally"], correct: 1, explanation: "Broker Streak is a no-code algo trading platform for building, backtesting, and live-deploying rule-based strategies." },
+      { stem: "Preference shareholders receive dividends:", options: ["After equity shareholders and at a variable rate","Only if the company earns profits above a prescribed threshold","Before equity shareholders, at a fixed rate, regardless of profit levels","Only on the maturity/redemption of preference shares"], correct: 2, explanation: "Preference shares carry a fixed dividend that is paid before any dividend is declared for equity shareholders." },
+      { stem: "A REIT (Real Estate Investment Trust) allows retail investors to:", options: ["Directly own commercial office buildings","Invest in a pool of income-generating real estate through a SEBI-regulated security listed on the stock exchange","Earn tax-free rental income without any property ownership","Avail home loans at preferential interest rates"], correct: 1, explanation: "REITs pool investor money to own and operate real estate, and are listed on exchanges — giving small investors access to commercial property income." },
+      { stem: "A Systematic Investment Plan (SIP) in a mutual fund involves:", options: ["A one-time lump sum investment made once a year","Investing a fixed amount at regular intervals (weekly/monthly) regardless of current market levels","Investing only when markets fall below a threshold price","Locking funds in a fixed deposit managed by a mutual fund house"], correct: 1, explanation: "SIP invests a fixed sum periodically — this rupee-cost averaging approach reduces the impact of market timing." },
+      { stem: "A mutual fund's expense ratio of 1.2% is deducted:", options: ["As a one-time flat fee at the time of purchase","As a percentage of the fund's daily NAV, reducing the fund's NAV slightly each day","Only when units are redeemed by the investor","As an annual lump sum charged directly to the investor's bank account"], correct: 1, explanation: "The expense ratio is an annual fee expressed as a % of AUM, charged proportionally each day against the fund's NAV." },
+      { stem: "Rolling over a futures position means:", options: ["Converting an open futures position into an equivalent options position","Closing the current expiry month's contract and simultaneously opening the same position in the next expiry month","Automatically extending the same contract by one more month without closing it","Pledging the open futures position as collateral for additional margin"], correct: 1, explanation: "Rollover = squaring off the near-month contract and re-entering in the next month, to maintain the same market view." },
+      { stem: "The Securities Lending and Borrowing (SLB) mechanism allows:", options: ["Only share borrowing for short selling — lending is restricted","Only share lending by long-term holders — borrowing is restricted","Both lending (to earn a fee) and borrowing (for short selling) of securities","Only institutional investors to lend or borrow shares"], correct: 2, explanation: "SLB lets long-term holders lend idle shares for a fee, while short sellers borrow those shares to execute short positions." },
+      { stem: "If the Nifty 50 index falls 20% from the previous day's close during a trading session, exchange regulations require:", options: ["A temporary 45-minute trading halt only","Trading to continue with enhanced circuit limits applied to individual stocks","Market-wide trading to be suspended for the remainder of that trading day","SEBI to intervene and manually set circuit limits for all stocks"], correct: 2, explanation: "A 20% market-wide circuit breaker halts all trading for the rest of the trading day, with no resumption till next morning." },
+      { stem: "A mutual fund's NAV (Net Asset Value) is calculated:", options: ["Once a month based on the fund manager's portfolio assessment","At the end of every trading day, based on the current market value of all holdings divided by outstanding units","At the time of each individual buy or redeem transaction","Once a quarter after financial results are published"], correct: 1, explanation: "NAV = (Total assets – Liabilities) ÷ Outstanding units, calculated daily after market close for all open-ended funds." },
+      { stem: "Investing in a 'Direct' mutual fund plan (vs. a 'Regular' plan) gives you a higher return because:", options: ["The fund manager takes more risk on your behalf","The expense ratio is lower — no distributor commission is embedded in the NAV","The Direct plan is managed directly by the AMC, giving priority in execution","The lock-in period is shorter, providing more flexibility"], correct: 1, explanation: "Direct plans exclude distributor commissions from the expense ratio, resulting in a higher NAV growth over time." },
+      { stem: "A company earns a net profit of Rs. 100 crore and has 10 crore shares outstanding. Its Earnings Per Share (EPS) is:", options: ["Rs. 10","Rs. 100","Rs. 1,000","Rs. 10,000"], correct: 0, explanation: "EPS = Net Profit ÷ Shares Outstanding = Rs. 100 crore ÷ 10 crore = Rs. 10 per share." },
+      { stem: "A stock has a Beta of 1.5. If Nifty 50 rises 10%, this stock is expected to rise approximately:", options: ["7% (it moves less than the market)","15% (it moves 1.5× the market in the same direction)","10% (it tracks the market exactly)","5% (it moves one-third as much as the market)"], correct: 1, explanation: "Beta measures a stock's sensitivity to market moves. Beta 1.5 means the stock moves 1.5× the market's movement." },
+      { stem: "A Nifty 50 index fund has an expense ratio of 0.1% per year. If Nifty 50 returns 15% in a year, the investor earns approximately:", options: ["15.1%","15.0%","14.9%","10.0%"], correct: 2, explanation: "Net return ≈ index return − expense ratio = 15% − 0.1% = 14.9% (before taxes)." },
+      { stem: "A rights issue is announced in a 1:4 ratio. An investor currently holding 800 shares can subscribe to a maximum of:", options: ["200 new shares","400 new shares","800 new shares","3,200 new shares"], correct: 0, explanation: "1:4 ratio = 1 new share for every 4 held. 800 ÷ 4 = 200 new shares entitlement." },
+      { stem: "When pledged shares fall below the broker's required margin threshold, the investor typically receives:", options: ["An automatic closing of all open positions without any notice","A margin call — a notification to deposit additional funds or reduce open positions","A SEBI notice requiring closure of the trading account","A 30-day grace period with no penalty"], correct: 1, explanation: "A margin call is a broker's demand for more collateral. Failure to respond leads to the broker liquidating positions to recover margin." }
+    ];
+
+    try {
+
+      if (!hasSet1) {
+        await DB.put('topics', {
+          module: 'stock-market-mcq',
+          title: 'NRI Basics of Stock Market — Set 1',
+          description: 'MCQ assessment (Set 1) covering Broker, stock exchanges, SEBI, IPO, order types, account opening, settlement, short delivery, gift transfers, and FIFO. 50 questions, 1 mark each.',
+          scenario: '',
+          checklist: set1Questions,
+          bot_script: [],
+          enabled: true,
+          created_at: new Date().toISOString()
+        });
+      }
+      if (!hasSet2) {
+        await DB.put('topics', {
+          module: 'stock-market-mcq',
+          title: 'NRI Basics of Stock Market — Set 2',
+          description: 'MCQ assessment (Set 2) with simpler questions on Broker, BSE/NSE, SEBI, IPO, Demat accounts, order types, settlement, and compliance. 50 questions, 1 mark each.',
+          scenario: '',
+          checklist: set2Questions,
+          bot_script: [],
+          enabled: true,
+          created_at: new Date().toISOString()
+        });
+      }
+      if (!hasSet3) {
+        const set3Questions = [
+          { stem: "Which scenario correctly identifies when DP charges are NOT applicable at Broker?", options: ["When selling delivery shares held in demat","When buying delivery shares","When selling F&O contracts","Both B and C — DP charges only apply when DEMAT debit happens on share sell"], correct: 3, explanation: "DP charges are levied only when shares are debited from your demat account. Buying shares or selling F&O positions (no demat debit involved) do not attract DP charges." },
+          { stem: "An NRI trading under Non-PIS places a buy order for shares worth ₹30,000. What is the exact brokerage charged?", options: ["₹150","₹50","₹200","₹30"], correct: 0, explanation: "For NRI Non-PIS accounts at Broker, brokerage is 0.5% of the transaction value. 0.5% × ₹30,000 = ₹150." },
+          { stem: "A Kite client currently has 245 instruments in their watchlists and 24 watchlists. They try to create one more watchlist. What happens?", options: ["The system allows it since the 250-instrument limit isn't breached","The new watchlist is created successfully — 25 is the limit","The new watchlist fails — 25 is the maximum number of watchlists","Both limits are breached simultaneously"], correct: 2, explanation: "Kite allows a maximum of 25 watchlists per account. Once 25 watchlists exist, no further watchlists can be created regardless of instrument count." },
+          { stem: "What is the total AMC per year (including GST) for an NRI demat account at Broker?", options: ["₹500","₹540","₹590","₹600"], correct: 2, explanation: "Broker charges ₹500 per year as AMC for NRI demat accounts. With 18% GST, the total is ₹500 + ₹90 = ₹590 per year." },
+          { stem: "A client has holdings worth ₹9.5 lakh in a single Broker BSDA account. The next quarter their portfolio grows to ₹10.5 lakh. What happens to their AMC?", options: ["They continue paying ₹100 + GST","They still pay ₹0 as BSDA cap hasn't been formally revised","Their account is converted to non-BSDA and they pay ₹300 + GST per year","They must close the account immediately"], correct: 2, explanation: "BSDA (Basic Services Demat Account) requires the holder to have securities in only one DP and the value must stay within limits. Exceeding the ₹10 lakh cap triggers conversion to a regular (non-BSDA) account with standard AMC charges." },
+          { stem: "A company has 10 crore total shares. Promoters hold 72%, FIIs hold 18%, and the public holds 10%. What regulatory issue does this present?", options: ["FII holding is too high","Promoter holding exceeds SEBI threshold","Public shareholding is below the SEBI-mandated 25% minimum","No issue; SEBI has no minimum shareholding mandate"], correct: 2, explanation: "SEBI mandates a minimum public shareholding (MPS) of 25% for all listed companies. With only 10% public holding, this company is in violation and must reduce promoter holding to comply." },
+          { stem: "A client has 3 different brokers and holds securities worth ₹3.5 lakh. Does their Broker account qualify as BSDA?", options: ["Yes, holdings are below ₹4 lakh","No, they hold accounts at multiple brokers","Yes, BSDA qualification only checks holdings at Broker","No, minimum holding to qualify is ₹1 lakh"], correct: 1, explanation: "BSDA eligibility requires the investor to hold a demat account with only ONE depository participant. Having accounts at multiple brokers disqualifies them from BSDA, regardless of holding value." },
+          { stem: "An NRI client at Broker buys ₹5,00,000 worth of shares via PIS. What is the maximum brokerage they will be charged?", options: ["₹50","₹100","₹200","₹2,500"], correct: 2, explanation: "For NRI PIS accounts at Broker, brokerage is 0.5% of the transaction value, subject to a maximum of ₹200 per order. 0.5% of ₹5,00,000 = ₹2,500, but the cap of ₹200 applies." },
+          { stem: "Which Broker product serves as the back-office platform for P&L, holdings, and tax reports?", options: ["Kite","Console","Coin","Varsity"], correct: 1, explanation: "Console (console.Broker.com) is Broker's back-office platform providing P&L statements, holdings overview, tax reports (including capital gains), and account details." },
+          { stem: "You short a stock at Rs. 75. For you to make a profit, the stock should:", options: ["Move higher than Rs. 75","Stay exactly at Rs. 75","Move higher than Rs. 75 but lower than Rs. 80","Go to any price lower than Rs. 75"], correct: 3, explanation: "In a short position, you sell first and buy back later. Profit = selling price − buy-back price. For profit, the stock must fall below your shorting price of Rs. 75." },
+          { stem: "The Repo Rate is best described as:", options: ["The rate at which commercial banks lend money to retail customers","The rate at which commercial banks lend and borrow between each other","The rate at which commercial banks borrow money from the RBI","The rate at which the RBI borrows money from retail customers"], correct: 2, explanation: "The Repo Rate is the rate at which the RBI lends money to commercial banks (banks borrow from RBI by pledging government securities). It is the primary tool the RBI uses to control liquidity and inflation." },
+          { stem: "The Reverse Repo Rate is best described as:", options: ["The rate at which banks lend to retail customers","The rate at which banks borrow from each other","The deposit rate the RBI offers to banks when they park surplus funds with the RBI","The transaction fee applied by stock exchanges"], correct: 2, explanation: "The Reverse Repo Rate is the rate at which the RBI accepts deposits from commercial banks. When banks park surplus funds with the RBI overnight, they earn this rate." },
+          { stem: "A company offers a buyback of shares at a 20% premium to the market price. What should an investor ideally do?", options: ["Tender shares blindly and pocket the premium immediately","Blindly ignore the offer without reviewing corporate details","Evaluate the company's future prospects and then decide whether to tender or retain","Negotiate with the broker for a better premium rate"], correct: 2, explanation: "A buyback premium is attractive but should not be accepted blindly. If the company's future growth potential exceeds the 20% premium, retaining the shares may be more valuable long-term." },
+          { stem: "A trader selects CNC (Cash n Carry) and sells shares from their DEMAT account. When will they receive the full funds?", options: ["Shares are debited on T day; 100% funds are credited on the same day","80% of funds on the same day (T), remaining 20% on T+1 day","Shares are debited on T day; funds are completely received on T+2 day","100% of funds are received instantly on the same day"], correct: 1, explanation: "Under T+1 settlement: when you sell CNC shares, 80% of the sale proceeds are made available the same day (early pay-out), while the remaining 20% is credited on T+1 after settlement." },
+          { stem: "Goods and Services Tax (GST) on stock market transactions is applicable on:", options: ["Only the brokerage charged by the stockbroker","Only the transaction charges applicable by the Stock Exchanges","Brokerage, transaction charges, and SEBI charges — all attract 18% GST","Only the stamp duty costs"], correct: 2, explanation: "GST at 18% is levied on brokerage, exchange transaction charges, SEBI turnover charges, and DP charges. Stamp duty and STT are exempt from GST." },
+          { stem: "Once you place an order to buy a stock, how can you modify it and how many times?", options: ["25 times; you can modify only the price","250 times; you can modify only the quantity","20 times; you cannot modify the order details under any circumstances","25 times; you can modify both the price and quantity via the order book"], correct: 3, explanation: "Orders in Kite can be modified up to 25 times before execution. Both price and quantity can be changed via the Order Book as long as the order is still pending." },
+          { stem: "A trader has shorted 560 shares of SBI. To square off this position, the trader must:", options: ["Short an additional 560 shares under an intraday product type","Instruct the broker to move the shares to another depository participant","BUY 560 shares of SBI to close the short position","Place a limit sell order at the upper circuit price"], correct: 2, explanation: "Short positions are squared off by buying back the same quantity of shares. Buying 560 SBI shares closes the 560-share short position." },
+          { stem: "The last traded price of TCS is 1200. What happens when you place a market order to buy this stock?", options: ["The stock is bought at a guaranteed price below 1200","The stock will always be bought at a price higher than 1200","The stock is bought around the last traded price based on immediate market liquidity","Placing a market order is disabled due to volatility"], correct: 2, explanation: "A Market Order executes at the best available price at the moment of placement — typically close to the last traded price, but the exact price depends on current order book liquidity." },
+          { stem: "The stock price of Yes Bank is trading at 373. You wish to initiate a BUY only if the stock moves UP to 385. Which order type should you use?", options: ["Place an immediate market order","Place a limit buy order at 385","Place a stop-loss buy trigger order at 385","Place an upper circuit bracket order"], correct: 2, explanation: "To buy a stock only when it rises above the current price, use a Stop-Loss buy order with a trigger at 385. A regular limit buy at 385 would execute immediately at the lower current price, not at 385." },
+          { stem: "To be eligible to receive a corporate dividend, you need to be a shareholder on:", options: ["The dividend announcement date","The dividend declaration date","The record date","5 days prior to the record date"], correct: 2, explanation: "To receive a dividend, you must hold the shares on the Record Date. If you buy shares before the ex-dividend date, you'll be registered as a shareholder on the record date and receive the dividend." },
+          { stem: "When you want to accurately measure and evaluate investment returns over a multi-year period, you opt for:", options: ["Absolute Return","CAGR (Compounded Annual Growth Rate)","Either Absolute Return or CAGR seamlessly","Intraday Scalping Percentage"], correct: 1, explanation: "CAGR (Compounded Annual Growth Rate) normalizes returns across different time periods, making it the standard metric for comparing multi-year investment performance." },
+          { stem: "Which statement best describes the role of a Clearing Corporation?", options: ["Guarantee the structural settlement of funds and securities between counterparties","Help retail clients directly buy and execute transactions in the market","Store corporate securities in electronic DEMAT format vaults","Manage front-end trading terminal watchlists for retail participants"], correct: 0, explanation: "Clearing Corporations (e.g., NSCCL for NSE) act as the central counterparty to all trades, guaranteeing settlement of both funds and securities, and eliminating counterparty default risk." },
+          { stem: "Which best describes the 'greenshoe option' in the context of an IPO?", options: ["To completely withdraw the IPO filing at any point if demand is poor","An option to stabilize the market price by buying up to 15% of the shares from the market post-listing","To dynamically change the volume count of shares on offer day-to-day","To vary the price band boundaries based on initial retail bidder responses"], correct: 1, explanation: "The greenshoe option (over-allotment option) allows underwriters to buy up to 15% of the originally offered shares from the open market post-listing to stabilize the stock price during the initial trading period." },
+          { stem: "In corporate finance and reporting, CAPEX is best described as:", options: ["Funds required for marketing and consumer advertising campaigns","Funds required exclusively to repay long-standing institutional debt obligations","Funds deployed for capital expenditure towards long-term operational expansion and asset creation","Funds required to cover immediate day-to-day business operations"], correct: 2, explanation: "CAPEX (Capital Expenditure) refers to funds invested by a company in acquiring, upgrading, or maintaining physical or intangible long-term assets like machinery, buildings, or technology." },
+          { stem: "All else being equal, if the price of a certain product increases systematically over time, it can be attributed to:", options: ["The subjective greed level of the merchant or seller","A broad, unbacked increase in local consumer purchasing power","Inflation","Bearish market sentiment cycles"], correct: 2, explanation: "Sustained, systematic price increases across an economy are the definition of inflation — a rise in the general price level of goods and services over time." },
+          { stem: "During its formal monetary review sessions, the RBI directly reviews and calibrates which of the following rates?", options: ["Repo Rate, Reverse Repo Rate, and Cash Reserve Ratio (CRR)","Wholesale Price Index (WPI) and Consumer Price Index (CPI)","Industrial production data output numbers","Statutory direct corporate tax rate percentages"], correct: 0, explanation: "The RBI Monetary Policy Committee (MPC) directly controls the Repo Rate, Reverse Repo Rate, and CRR. WPI, CPI, and industrial data are inputs it monitors — not rates it sets." },
+          { stem: "Post a corporate stock split event, the formal nominal face value of the share changes.", options: ["True — the face value is divided proportionally by the split ratio","False — face value remains unchanged; only the number of shares changes"], correct: 0, explanation: "In a stock split, the face value is reduced in proportion to the split ratio. For example, in a 5:1 split, a share with face value Rs. 10 becomes Rs. 2, while the number of shares increases fivefold." },
+          { stem: "A transaction contract note is legally issued and sent to an investor by which entity?", options: ["The commercial bank linked to the trading account","The stockbroker","The Securities and Exchange Board of India (SEBI)","The National Stock Exchange clearing desk"], correct: 1, explanation: "A contract note is a legally binding document issued by the stockbroker to the client for every executed trade, confirming transaction details, charges, and taxes." },
+          { stem: "The 'Market Depth' feature inside an active trading terminal provides which real-time data?", options: ["Real-time buy bids and sell offer quotes at various price levels","Overall historic trading volume accumulated over the past calendar year","Absolute structural Open, High, Low, and Close price parameters of previous days","Current aggregate market capitalisation of the firm"], correct: 0, explanation: "Market Depth (Level 2 data) shows the live order book — the top 5 buy bids and top 5 sell offers at various price levels, giving traders a view of buying and selling pressure." },
+          { stem: "What is the primary function of an order book with respect to a trading terminal?", options: ["A layout to track historical stock prices","A layout to track daily opening prices","A system interface to keep track of pending and active orders placed by the client","An unchangeable book used to log only finalized, executed trades"], correct: 2, explanation: "The Order Book in a trading terminal displays all pending (open) orders placed by the client, allowing them to track, modify, or cancel orders before execution." },
+          { stem: "An Initial Public Offering (IPO) fundamentally helps uplift a company's public profile and aids in its operational growth.", options: ["True — it raises fresh capital, enhances visibility, and enables employee ESOPs","False — an IPO only dilutes promoter control with no operational benefit"], correct: 0, explanation: "An IPO raises fresh equity capital, improves the company's credibility and public profile, provides an exit for early investors, enables ESOP schemes for employees, and funds growth initiatives." },
+          { stem: "After a company lists its shares, which of the following pathways are open to promoters to raise additional equity capital?", options: ["Commercial bank fixed deposits and savings accounts","Intraday short selling via CNC product lines","Rights Issues, Offers for Sale (OFS), and Follow-on Public Offers (FPO)","Wholesale debt market bullion conversions"], correct: 2, explanation: "Once listed, a company can raise additional equity capital through Rights Issues (to existing shareholders), FPOs (to the public), or allow promoters to divest through OFS." },
+          { stem: "A corporate Rights Issue creates new shares offered to existing shareholders. What structural impact does this have on existing stock value?", options: ["It permanently locks the share price from dropping below the entry cost","It dilutes the ownership value and percentage of previously held shares","It automatically doubles the nominal face value of the stock","It triggers an immediate T+1 cash settlement into the client's bank account"], correct: 1, explanation: "A Rights Issue increases the total number of shares outstanding. Without a proportional increase in company value, each existing share represents a smaller ownership percentage — this is dilution." },
+          { stem: "The stock exchange allows a company to route capital divestments through an Offer for Sale (OFS) window primarily when:", options: ["The company needs fresh cash to fund a factory expansion project","The corporate board intends to issue free bonus stock rewards to retail traders","Promoters want to sell down their holdings and/or maintain minimum public shareholding requirements","The clearing corporation demands an emergency margin cash replenishment"], correct: 2, explanation: "OFS is a stock exchange mechanism used by promoters (or existing shareholders) to sell their shares to the public without issuing new shares, helping meet SEBI's minimum public shareholding norms." },
+          { stem: "Why do market participants follow technology sector blue-chip earnings guidance announcements so closely every quarter?", options: ["Guidance numbers contain audited historical profit and loss data points","Management forecasts are legally binding commitments that eliminate market risk","Guidance numbers reveal forward-looking management expectations that heavily influence broader market sentiment","Corporate guidance determines the exact GST rate applied to brokerage transactions"], correct: 2, explanation: "Earnings guidance represents management's forward-looking expectations for revenue and profit. Since major tech stocks have large index weights, their outlooks can swing entire market sentiment." },
+          { stem: "During an annual Union Budget, an increase in excise duties on cigarettes can drag down broader market indexes because:", options: ["Higher product prices automatically trigger an immediate stock split","The affected firm is forced to switch to the Wholesale Debt Market","The affected companies are index heavyweights, and a drop in their profitability causes participants to sell","An excise duty hike automatically expands the Cash Reserve Ratio (CRR)"], correct: 2, explanation: "Index-heavy companies like ITC are significantly impacted by excise duty hikes on cigarettes. When their earnings are expected to drop, institutions sell, dragging down indices where they have large weightages." },
+          { stem: "When commercial banks park surplus cash reserves with the Reserve Bank of India, what is their primary objective?", options: ["To maximize speculative returns through leveraged equity derivatives","Capital safety, because the central bank carries zero default risk","To bypass standard clearing corporation transaction fees","To trigger an automated stock split across public PSU bank shares"], correct: 1, explanation: "Banks park funds with the RBI primarily for safety — the RBI carries sovereign-level, zero-default risk. The Reverse Repo facility provides a risk-free parking option for surplus funds." },
+          { stem: "In both a corporate bonus issue and a corporate stock split, what happens to the investor's overall investment value?", options: ["It grows exponentially based on the split or bonus ratio","It is cut in half due to sudden market correction dynamics","It remains exactly the same before and after the corporate action takes effect","It is locked inside a broker pool account for a mandatory multi-year holding period"], correct: 2, explanation: "Both bonus issues and stock splits are accounting events. The number of shares increases but the price adjusts proportionally, keeping the total market value of the investor's holding unchanged." },
+          { stem: "A company is profitable and holds excess cash but decides not to declare an annual dividend. What is the most likely strategic reason?", options: ["The company is legally prohibited from distributing dividends during high-inflation cycles","Management intends to reduce the total number of outstanding public market shares","Management believes they can generate better long-term value by reinvesting that cash into new growth projects","The company needs to deposit those funds with the RBI to satisfy CRR rules"], correct: 2, explanation: "Companies often retain earnings (instead of paying dividends) when they believe the reinvestment returns — in new products, acquisitions, or R&D — exceed what shareholders could earn elsewhere." },
+          { stem: "Under the modern accelerated equity settlement cycle, what happens on settlement day when a client sells a stock?", options: ["Shares are transferred to a broker's pool account where they can be held for several weeks","Funds are entirely withheld by SEBI until an annual tax audit is completed","Earmarked shares are debited from the demat account and transferred to the clearing corporation for delivery","The stock is automatically converted into a leveraged futures contract position"], correct: 2, explanation: "Under T+1 settlement, earmarked shares are debited from the seller's demat account and transferred to the Clearing Corporation, which then credits them to the buyer's demat account on T+1." },
+          { stem: "A Depository Participant (DP) serves as an intermediary between an investor and the main depository. A DP is legally defined as a member of:", options: ["The front-end algorithmic trading desk network","The commercial banking clearing house syndicate","National Securities Depository Limited (NSDL) and/or Central Depository Services Limited (CDSL)","The S&P BSE Sensex index construction committee"], correct: 2, explanation: "A DP (e.g., Broker) is a SEBI-registered entity that has been admitted as a member of NSDL and/or CDSL, acting as the link between individual investors and the central depository." },
+          { stem: "The historical transition from physical paper share certificates to digital format stored inside a DEMAT account is known as:", options: ["Portfolio Hedging","Earmarking","Dematerialization","Book Building"], correct: 2, explanation: "Dematerialization is the process of converting physical paper share certificates into electronic form held in a Demat account with NSDL or CDSL." },
+          { stem: "Which of the following criteria is a valid parameter to evaluate when choosing a stockbroker?", options: ["The broker's personal ability to guarantee risk-free returns on options trades","Whether the broker holds a physical seat on the central banking policy committee","The simplicity of the platform, quality of support, and transparency of the broker's own financial health","The broker's direct authority to modify executed trades inside the trade book"], correct: 2, explanation: "When choosing a broker, key evaluation factors include platform usability, customer service quality, fee transparency, regulatory compliance, and the broker's own financial stability." },
+          { stem: "Which of the following points directly highlights a core objective of SEBI?", options: ["Setting weekly price targets for blue-chip technology stocks","Maximizing short-term speculative trading volumes for scalpers","Protecting retail investor interests and ensuring stock exchanges conduct business fairly","Managing the printing and distribution of paper currency notes"], correct: 2, explanation: "SEBI's core mandate includes protecting investor interests, promoting market development, and regulating the securities market to ensure fair, transparent, and efficient operations." },
+          { stem: "An investor who actively identifies quality companies beaten down by short-term negative market sentiment is classified as a:", options: ["Growth Investor","Value Investor","Scalp Trader","Day Trader"], correct: 1, explanation: "A Value Investor seeks stocks trading below their intrinsic value, often caused by temporary negative sentiment. The strategy involves patience — waiting for the market to recognise the company's true worth." },
+          { stem: "What is the standard term used to describe the very initial pool of capital raised by an entrepreneur from friends and family to jumpstart business operations?", options: ["Series A Venture Capital","Public Capitalization Float","The Seed Fund","Institutional Debt Debenture"], correct: 2, explanation: "Seed funding is the earliest stage of startup financing, typically from the founder, friends, and family. It funds initial product development and proof-of-concept before formal VC rounds." },
+          { stem: "How does a Private Equity (PE) investor fundamentally differ from an early-stage Venture Capitalist (VC)?", options: ["PE investors focus exclusively on day-trading near-expiry options contracts","PE investors only deploy small capital sums into unproven conceptual ideas","PE investors typically write larger cheques and invest in mature, established firms to take on less structural risk","PE investors operate under direct oversight of the clearing corporation ledger"], correct: 2, explanation: "PE investors target mature, established businesses with proven revenue streams, deploying large capital for growth or buyouts. VCs take higher risk by funding early-stage startups with unproven business models." },
+          { stem: "Apart from raising fresh CAPEX funds, what is another significant advantage a firm gains by going public via an IPO?", options: ["Gaining direct access to borrow interest-free cash from the RBI repo window","Eliminating all future corporate tax liabilities with the Ministry of Finance","Providing an exit route for early investors, rewarding employees via ESOPs, and improving visibility","Automatically protecting the stock from ever hitting a lower circuit limit"], correct: 2, explanation: "Beyond capital raising, an IPO provides early investors (VCs, PE firms) with a liquidity exit, allows employee ESOPs to be monetized, and significantly enhances the company's brand visibility and credibility." },
+          { stem: "The structured process where a company collects investor bids at various price points within a designated price band to find the optimal issue price is called:", options: ["Earmarking for Settlement","Portfolio Benchmarking","Book Building","Capital Asset Allocation"], correct: 2, explanation: "Book Building is the IPO price discovery process — investors bid within the price band, and the final issue price (cut-off price) is determined based on demand aggregated across all bids." },
+          { stem: "The highest price point a stock has ever traded since its primary stock exchange listing date is called its:", options: ["52-week High","All-time High","Upper Circuit Limit","Free Float Cap"], correct: 1, explanation: "The All-time High (ATH) is the highest price a stock has ever achieved since it began trading on the exchange. The 52-week high is a related but narrower metric covering only the past 12 months." },
+          { stem: "A swing trader typically holds a market position for what duration?", options: ["Less than sixty seconds within a single morning session","Exactly until the end of the same trading day before market close","Anywhere from a few days to several weeks to capture price momentum","A minimum of ten consecutive calendar years to match retirement horizons"], correct: 2, explanation: "Swing trading involves holding positions for days to weeks, aiming to capture short-to-medium-term price moves. It sits between day trading (intraday) and long-term investing in terms of holding period." }
+        ];
+        await DB.put('topics', {
+          module: 'stock-market-mcq',
+          title: 'NRI Basics of Stock Market — Set 3',
+          description: 'MCQ assessment (Set 3) covering advanced Broker features (DP charges, NRI accounts, BSDA, Console), corporate actions, RBI monetary policy, order types, CAPEX, SEBI objectives, and market concepts. 51 questions, 1 mark each.',
+          scenario: '',
+          checklist: set3Questions,
+          bot_script: [],
+          enabled: true,
+          created_at: new Date().toISOString()
+        });
+      }
+      if (!hasSet4) {
+        const set4Questions = [
+          { stem: "What is the maximum number of instruments that can be added to a single watchlist in Broker Kite?", options: ["25 instruments","50 instruments","75 instruments","100 instruments"], correct: 1, explanation: "Each watchlist in Kite supports up to 50 instruments. You can create up to 25 watchlists per account, giving a total capacity of 1,250 instrument slots across all watchlists." },
+          { stem: "An After Market Order (AMO) placed through Broker is submitted to the exchange:", options: ["Immediately in an after-hours OTC session","At the start of the next trading day at 9:15 AM","At 3:30 PM on the same day as placement","Only if confirmed by the broker manually"], correct: 1, explanation: "AMOs are placed outside regular market hours and are queued for submission at the next day's market open (9:15 AM). They are useful for investors who cannot monitor markets during live trading hours." },
+          { stem: "The 'ex-dividend date' for a stock means:", options: ["The date the company announces its dividend","The date the dividend is credited to shareholders","The cut-off date — buyers on or after this date do NOT receive the declared dividend","The date the dividend is recorded in company books"], correct: 2, explanation: "To receive a declared dividend, you must own the shares before the ex-dividend date. Buying on or after the ex-dividend date means you are not entitled to the current dividend." },
+          { stem: "A Cover Order in Broker Kite is:", options: ["A standard market order with no conditions","An intraday order paired with a compulsory stop-loss, enabling higher leverage","A bracket order with both a target price and stop-loss","An order type available only for commodity instruments"], correct: 1, explanation: "A Cover Order pairs an entry order with a mandatory stop-loss, limiting broker risk and allowing Broker to offer higher intraday leverage compared to a plain MIS order." },
+          { stem: "Under SEBI's Minimum Public Shareholding (MPS) rule, listed companies must maintain a minimum public float of:", options: ["10%","15%","25%","35%"], correct: 2, explanation: "SEBI mandates a minimum 25% public shareholding for all listed companies. Non-compliant companies must reduce promoter holdings via OFS, rights issues, or other SEBI-approved methods." },
+          { stem: "An ELSS (Equity Linked Savings Scheme) fund has a mandatory lock-in period of:", options: ["1 year","2 years","3 years","5 years"], correct: 2, explanation: "ELSS has the shortest lock-in (3 years) among all Section 80C instruments. After lock-in, units can be freely redeemed. Investments up to Rs. 1.5 lakh per year qualify for Section 80C tax deduction." },
+          { stem: "A Call option is 'In The Money' (ITM) when:", options: ["The option has no time value remaining","The strike price is above the current market price","The current market price is above the strike price","The option is trading at a loss"], correct: 2, explanation: "A Call option is ITM when the underlying's market price exceeds the strike price, giving it intrinsic value. Exercising an ITM call option yields an immediate gain before expiry." },
+          { stem: "In Futures trading, 'Mark to Market' (MTM) settlement means:", options: ["Final settlement happens only at contract expiry","Unrealised P&L on open futures positions is settled in cash at the end of every trading day","The full contract value is blocked as margin upfront","Settlement is calculated against the 52-week average price"], correct: 1, explanation: "MTM requires daily cash settlement of gains and losses on open futures positions. This protects the clearing corporation from accumulated losses and requires traders to maintain adequate margin at all times." },
+          { stem: "A 'Bulk Deal' on Indian stock exchanges is a transaction involving more than what percentage of a company's total shares?", options: ["0.5%","1%","2%","5%"], correct: 0, explanation: "SEBI defines a bulk deal as any single transaction exceeding 0.5% of a company's total equity shares. All bulk deals must be reported to the exchange by the end of the same trading day." },
+          { stem: "A 'Block Deal' differs from a bulk deal because block deals:", options: ["Have no minimum quantity threshold","Are executed in a dedicated window (8:45–9:00 AM) within ±1% of the previous close, minimum Rs. 10 crore","Require prior SEBI approval before execution","Are restricted to domestic institutional investors only"], correct: 1, explanation: "Block deals are executed in a special pre-market window (8:45–9:00 AM) at prices within ±1% of the reference price, with a minimum transaction size of Rs. 10 crore per deal." },
+          { stem: "When a stock hits its upper circuit limit during trading:", options: ["The stock is suspended for the rest of the day","Only sell orders are accepted — no new buy orders","Only buy orders are accepted — no new sell orders","The circuit limit automatically expands by 5%"], correct: 2, explanation: "At the upper circuit, the price cannot rise further. Buyers continue to place orders but no sellers offer shares at that level. Only buy orders queue — no sell orders execute." },
+          { stem: "A 'Systematic Transfer Plan' (STP) in mutual funds allows an investor to:", options: ["Reinvest dividends automatically into more units","Periodically move a fixed amount from one fund (typically liquid/debt) into another (typically equity)","Withdraw units systematically at regular intervals","Transfer the entire corpus to another AMC at no cost"], correct: 1, explanation: "STP lets investors gradually deploy lump-sum money from a liquid/debt fund into an equity fund, combining capital safety with the rupee-cost averaging benefit of staggered equity investment." },
+          { stem: "Dividend Yield of a stock is calculated as:", options: ["Annual Dividend per Share ÷ Current Market Price × 100","Total dividends paid ÷ Number of shares issued × 100","Annual Dividend per Share ÷ Face Value × 100","EPS × Dividend Payout Ratio × 100"], correct: 0, explanation: "Dividend Yield = (Annual Dividend per Share ÷ Current Market Price) × 100. It helps investors assess income return on their investment relative to the current stock price." },
+          { stem: "For an NRI investor, which accounts allow complete, unrestricted repatriation of funds back abroad?", options: ["Only NRO accounts","Only NRE accounts","Both NRE and FCNR accounts","All NRI accounts without restriction"], correct: 2, explanation: "NRE (Non-Resident External) and FCNR (Foreign Currency Non-Resident) accounts are fully repatriable. NRO accounts have restricted repatriation — up to USD 1 million per year after applicable taxes." },
+          { stem: "A 'New Fund Offer' (NFO) in mutual funds is:", options: ["A rights issue by an existing fund to existing unit holders","The first-time launch of a new fund scheme where units are offered at face value (typically Rs. 10)","A special offer where existing funds waive exit load for a limited period","A SEBI-mandated annual reset of fund NAV to Rs. 10"], correct: 1, explanation: "An NFO is a mutual fund's initial offering at face value (Rs. 10). After the NFO period closes, the fund invests the corpus and units trade at the evolving NAV based on portfolio performance." },
+          { stem: "SEBI's Insider Trading Regulations prohibit trades based on:", options: ["Published quarterly earnings reports","Unpublished Price Sensitive Information (UPSI) not yet disclosed to the public","Broker research reports available on paid subscription","Technical chart analysis and price patterns"], correct: 1, explanation: "UPSI includes undisclosed merger plans, pre-announcement earnings data, regulatory outcomes, or any material non-public information. Trading on UPSI is a criminal offence under SEBI regulations." },
+          { stem: "A company has 1 crore shares outstanding and EPS of Rs. 30. It issues a 2:1 bonus. The new EPS (profit unchanged) is:", options: ["Rs. 30","Rs. 15","Rs. 10","Rs. 60"], correct: 2, explanation: "A 2:1 bonus means 2 extra shares per 1 held — total shares triple from 1 crore to 3 crore. New EPS = Same Net Profit ÷ 3 crore shares = Rs. 30 ÷ 3 = Rs. 10 per share." },
+          { stem: "The 'Price to Book Value' (P/BV) ratio is calculated as:", options: ["Market Price per Share ÷ Book Value per Share","Earnings per Share ÷ Book Value per Share","Market Capitalisation ÷ Annual Revenue","Net Profit ÷ Total Equity"], correct: 0, explanation: "P/BV = Market Price per Share ÷ Book Value per Share. A P/BV below 1 may suggest undervaluation; above 1 reflects the market's premium for intangibles, brand, and growth prospects." },
+          { stem: "In a mutual fund, 'exit load' refers to:", options: ["An entry fee charged when you invest in the fund","A redemption fee charged if you exit the fund before a specified holding period","The fund manager's performance bonus deducted from returns","Annual GST charged on the expense ratio"], correct: 1, explanation: "Exit load is a penalty for early redemption, designed to discourage short-term trading in mutual funds. For example, a 1% exit load within 1 year means you receive 1% less of NAV on redemption." },
+          { stem: "'Open Interest' rising while futures price is also rising typically indicates:", options: ["Existing positions are being squared off — bearish signal","New short positions are being added — bearish signal","New long positions are being added — bullish confirmation of uptrend","Market participants are reducing exposure neutrally"], correct: 2, explanation: "Rising Open Interest + Rising Price = new money flowing into long positions, confirming uptrend strength. Falling OI + Rising Price suggests short covering, a weaker bullish signal." },
+          { stem: "The difference between 'Authorised Capital' and 'Paid-up Capital' of a company is:", options: ["Authorised capital is actual money received; paid-up capital is the maximum allowed","Authorised capital is the maximum share capital a company can issue; paid-up capital is what has actually been issued and paid for","They are the same term used in different regulatory contexts","Paid-up capital includes reserves; authorised capital does not"], correct: 1, explanation: "Authorised capital is the ceiling defined in the memorandum on how much share capital can be issued. Paid-up capital is the portion actually issued to and paid for by shareholders." },
+          { stem: "A company's 'Return on Equity' (ROE) measures:", options: ["The percentage of revenue converted to profit","How efficiently a company generates profit from shareholders' equity","Dividend yield relative to book value","The ratio of operating profit to total assets"], correct: 1, explanation: "ROE = Net Profit ÷ Shareholders' Equity × 100. It shows how much profit is generated per rupee of equity. Higher ROE generally signals more efficient use of shareholder funds." },
+          { stem: "Under SEBI's Takeover Code, a mandatory open offer is triggered when an acquirer's stake reaches or exceeds:", options: ["15%","25%","26%","51%"], correct: 1, explanation: "SEBI's Takeover Code requires a mandatory open offer to buy at least 26% more shares from public shareholders once the acquirer's holding reaches or crosses 25% in a listed company." },
+          { stem: "An 'Offer for Sale' (OFS) is primarily used by:", options: ["The company to raise fresh capital for expansion","Existing shareholders (typically promoters) to sell their existing shares to the public","The exchange to list shares of unlisted subsidiaries","SEBI to divest shares in defaulting companies"], correct: 1, explanation: "OFS allows promoters or large shareholders to sell their existing stakes via the exchange platform. No fresh capital goes to the company in an OFS — only ownership is transferred." },
+          { stem: "'Alpha' in investment returns represents:", options: ["The total annual return of a portfolio","The portion of return attributable to market movement","The excess return over a benchmark index, representing manager skill","The risk-free rate earned on government bonds"], correct: 2, explanation: "Alpha measures a portfolio's excess return relative to a benchmark. Alpha of +3% means the portfolio outperformed its benchmark by 3% — attributed to active management skill rather than market movement." },
+          { stem: "Securities Transaction Tax (STT) on intraday equity trades (non-delivery) is charged at:", options: ["0.1% on both buy and sell sides","0.025% on the sell side only","0.05% on both buy and sell sides","0.1% on the sell side only"], correct: 1, explanation: "For intraday equity trades, STT is 0.025% on the sell side only. For delivery-based trades, STT is 0.1% on both buy and sell sides." },
+          { stem: "A 'Debenture' issued by a company is:", options: ["A share of ownership with voting rights","A long-term debt instrument carrying a fixed interest rate","A government-guaranteed bond with no default risk","A derivative linked to the company's share price"], correct: 1, explanation: "Debentures are debt instruments issued by companies to raise loans. Debenture holders are creditors (not owners) and receive fixed interest (coupon) irrespective of company profits." },
+          { stem: "What happens to a share price on the ex-dividend date, all else being equal?", options: ["It rises by the dividend amount as demand increases","It remains unchanged as dividends are paid from profits","It falls approximately by the dividend amount since the stock now trades without the dividend entitlement","It is frozen by the exchange until dividend is paid out"], correct: 2, explanation: "On the ex-dividend date, the stock price theoretically drops by the dividend amount as new buyers are no longer entitled to it. This is a mechanical adjustment, not a sign of poor company performance." },
+          { stem: "'Compulsory Delisting' of a stock from an exchange occurs when:", options: ["The stock price falls below Rs. 1 for 30 consecutive days","SEBI or the exchange orders removal due to regulatory non-compliance, fraud, or prolonged non-operation","The promoter's holding exceeds 75% for two consecutive quarters","Market cap falls below the exchange minimum threshold for 90 days"], correct: 1, explanation: "Compulsory delisting is ordered by SEBI/exchange when a company fails to comply with listing norms, commits fraud, or fails to make required disclosures. It differs from voluntary (promoter-initiated) delisting." },
+          { stem: "Dollar Cost Averaging (DCA) as an investment strategy involves:", options: ["Only investing when a target currency strengthens","Investing a fixed amount at regular intervals regardless of current price","Doubling investment each time the stock falls 10%","Waiting to invest only at a specific target price"], correct: 1, explanation: "DCA (Rupee Cost Averaging in Indian context) invests a fixed amount at regular intervals. When prices are low, more units are bought; when high, fewer. This smoothens entry cost over time." },
+          { stem: "The Nifty Midcap 150 index tracks companies ranked:", options: ["1st to 150th by market cap on NSE","101st to 250th by full market capitalisation on NSE","Any 150 NSE companies not in Nifty 50","150 companies by trading volume, not market cap"], correct: 1, explanation: "Nifty Midcap 150 covers companies ranked 101–250 by full market cap, consistent with SEBI's categorisation: Top 100 = Large Cap, 101–250 = Mid Cap, beyond 250 = Small Cap." },
+          { stem: "Pledging shares with a broker allows an investor to:", options: ["Transfer ownership of shares to the broker permanently","Use existing shareholdings as collateral to get additional trading margin without selling the shares","Earn interest on idle shares parked with the broker","Enable automatic dividend reinvestment"], correct: 1, explanation: "Pledging creates a lien on shares — ownership stays with the investor, but the broker can use them as margin collateral. If margin is not maintained, the broker can sell pledged shares to recover dues." },
+          { stem: "A 'Rights Entitlement' (RE) that is tradeable on stock exchanges means:", options: ["Promoters have the right to retain their holding during an IPO","Shareholders can sell their rights entitlement to third parties who can then subscribe to the rights issue","A government certificate confirming investor rights compliance","A SEBI-mandated lock-in on rights issue shares"], correct: 1, explanation: "SEBI introduced tradeable Rights Entitlements so shareholders unwilling to subscribe can sell their entitlement. Buyers of REs can then exercise those rights to subscribe to shares in the issue." },
+          { stem: "The 'Price Band' in a book-built IPO refers to:", options: ["The maximum and minimum price the stock can trade at on listing day","The floor and ceiling price within which investors bid during the IPO","SEBI's mandated fair price range based on P/E ratio","The range between face value and IPO premium"], correct: 1, explanation: "In a book-built IPO, SEBI allows a price band (floor to cap) of up to 20%. Investors bid within this range; the final issue (cut-off) price is the highest price at which the issue is fully subscribed." },
+          { stem: "A Registrar and Transfer Agent (RTA) in an IPO is responsible for:", options: ["Setting the IPO price after collecting bids","Managing share allotment, maintaining the investor register, and processing refunds","Acting as the lead merchant banker managing the full IPO","Approving IPO filings on behalf of SEBI"], correct: 1, explanation: "RTAs (e.g., KFin Technologies, Link Intime) handle post-IPO operations: processing applications, allotting shares, crediting shares to demat accounts, and processing refunds for unsuccessful applicants." },
+          { stem: "A mutual fund's Total Expense Ratio (TER) of 1.5% per annum means:", options: ["1.5% of invested amount is charged upfront as a one-time fee","1.5% of investment is deducted annually in a lump sum","~0.004% is deducted daily from the fund's gross assets, reducing the NAV slightly each day","Your returns are capped at benchmark return minus 1.5%"], correct: 2, explanation: "TER is applied daily: 1.5% ÷ 365 ≈ 0.004% per day. It is deducted from the fund's total assets, reducing the NAV incrementally. Investors never pay it directly — it is embedded in the NAV." },
+          { stem: "A stock's '52-Week High' is:", options: ["The highest price the stock has ever traded since listing","The highest traded price over the past 52 weeks (approximately one year)","The highest price at which promoters bought shares in the last year","The highest price approved by SEBI for the stock in the past year"], correct: 1, explanation: "The 52-week high is the highest price traded in the last 52 weeks. Stocks near their 52-week high are often used as indicators of relative strength and momentum." },
+          { stem: "A company has a Debt-to-Equity (D/E) ratio of 0. This means:", options: ["The company is highly leveraged with maximum debt","The company has zero debt — entirely equity-financed","Debt and equity are equal","The company has not issued any equity shares"], correct: 1, explanation: "A D/E of 0 means no debt. While this implies low financial risk, it may mean the company is foregoing the tax benefit of debt (interest is tax-deductible). Optimal D/E varies widely by industry." },
+          { stem: "The Clearing Corporation for NSE trades in India is:", options: ["CDSL (Central Depository Services Limited)","NSDL (National Securities Depository Limited)","NSE Clearing Limited (formerly NSCCL)","SEBI's Settlement Division"], correct: 2, explanation: "NSE Clearing Limited (formerly NSCCL) is the clearing corporation for all NSE trades. It acts as the central counterparty — becoming the buyer to every seller and seller to every buyer, guaranteeing settlement." },
+          { stem: "If a stock's P/E is significantly lower than its industry peers, it may indicate:", options: ["The stock is definitely overvalued and should be sold","Potential undervaluation relative to peers — or genuine concerns about growth prospects, requiring further analysis","The company is paying higher dividends than peers","The company's EPS is higher than the sector average"], correct: 1, explanation: "A low P/E vs peers could signal undervaluation (an opportunity) or reflect legitimate concerns about earnings quality or growth. Context and fundamental analysis are always essential before concluding." },
+          { stem: "'Free Cash Flow' (FCF) for a company is:", options: ["Cash held in the company's current account","Operating cash flow minus capital expenditure — cash available to return to shareholders or reinvest","Total cash raised through IPOs and rights issues in a year","Revenue minus all operating costs before tax"], correct: 1, explanation: "FCF = Operating Cash Flow − CAPEX. It is the genuine surplus cash generated after sustaining and growing the asset base, and is a key metric for assessing dividend sustainability and company valuation." },
+          { stem: "Under SEBI's Takeover Code, what is the minimum percentage an acquirer must offer to buy from public shareholders in a mandatory open offer?", options: ["10%","15%","26%","51%"], correct: 2, explanation: "In a mandatory open offer triggered by crossing the 25% threshold, the acquirer must offer to buy at least 26% of total shares from public shareholders, giving them a fair exit at a SEBI-regulated price." },
+          { stem: "A 'Liquid Fund' in the mutual fund category primarily invests in:", options: ["Large-cap equity shares of highly liquid companies","Very short-term money market instruments with maturity up to 91 days","Long-term government bonds with active secondary market trading","A balanced mix of equity and short-term debt"], correct: 1, explanation: "Liquid funds invest in money market instruments (T-bills, CPs, CDs) maturing within 91 days. They offer high safety, minimal volatility, and quick redemption — ideal for parking short-term surplus funds." },
+          { stem: "What is 'Scalping' in trading?", options: ["Making very short-term trades (seconds to minutes) to profit from tiny price movements, closing all positions within minutes","Buying stocks during results season and holding for exactly one quarter","Short selling stocks and covering at the end of each week","A SEBI-prohibited arbitrage strategy between NSE and BSE prices"], correct: 0, explanation: "Scalpers execute dozens or hundreds of trades daily targeting micro price movements, holding for seconds to minutes. This requires ultra-fast execution, tight spreads, and very high transaction volumes." },
+          { stem: "A 'Qualified Institutional Buyer' (QIB) in Indian capital markets is:", options: ["Any retail investor with a net worth above Rs. 2 crore","SEBI-registered institutional entities (mutual funds, FIIs, insurance companies, banks) deemed financially sophisticated","Companies with paid-up capital above Rs. 100 crore","Brokers with more than Rs. 50 crore in client AUM"], correct: 1, explanation: "QIBs include mutual funds, FIIs/FPIs, SEBI-registered VCs, insurance companies, and scheduled commercial banks. They receive 50% of IPO allocation and are considered sophisticated enough to need fewer protections." },
+          { stem: "The 'Holding Period Return' (HPR) of an investment is:", options: ["(Ending Value + Dividends − Beginning Value) ÷ Beginning Value × 100","Only the capital gain portion, excluding dividends received","Annual return compounded over the holding period","Ending Value ÷ CAGR of the benchmark index"], correct: 0, explanation: "HPR = (Ending Value + Dividends − Beginning Value) ÷ Beginning Value × 100. It captures total return over any holding period, combining price appreciation and income received." },
+          { stem: "In an IPO, 'Anchor Investors' are:", options: ["Retail investors who apply for maximum lots in every IPO","SEBI-approved large QIBs who subscribe before the IPO opens at a fixed price, signalling confidence in the issue","The lead merchant banker who anchors the IPO process","NRI investors providing anchor capital through a fixed-rate bond"], correct: 1, explanation: "Anchor investors (large mutual funds, FIIs) subscribe before the IPO opens, at the final issue price. Their participation signals institutional confidence and helps stabilise demand for the offering." },
+          { stem: "'Systematic Risk' in investing refers to:", options: ["Risk specific to one company due to its business or management","Market-wide risk affecting all securities that cannot be eliminated through diversification (e.g., recession, rate hikes)","The risk of a broker defaulting on client funds","Operational risk from T+1 settlement failures"], correct: 1, explanation: "Systematic risk (market risk) is undiversifiable — it affects the entire market. Examples include interest rate changes, inflation, recessions, and geopolitical events. It is measured using Beta." },
+          { stem: "When a company undergoes 'Voluntary Delisting', the exit price for shareholders is determined by:", options: ["At least the face value of the shares","A reverse book-building process where 90% of public shareholders must tender shares before the price is accepted","The previous 6-month average market price set by the exchange","The IPO price plus simple interest at 8% per annum"], correct: 1, explanation: "In voluntary delisting, SEBI mandates a reverse book-building process. The discovered price is accepted only if 90% of public shareholders tender their shares, protecting minority investors from a forced below-market exit." }
+        ];
+        await DB.put('topics', {
+          module: 'stock-market-mcq',
+          title: 'NRI Basics of Stock Market — Set 4',
+          description: 'MCQ assessment (Set 4) covering moderate concepts: AMO, cover orders, ELSS, ITM options, MTM settlement, block deals, STP, dividend yield, NRI accounts, insider trading, P/BV, ROE, SEBI takeover code, OFS, alpha, STT, debentures, F&O open interest, DCA, midcap indices, pledging, rights entitlement, TER, FCF, liquid funds, QIBs, HPR, anchor investors, systematic risk. 50 questions, 1 mark each.',
+          scenario: '',
+          checklist: set4Questions,
+          bot_script: [],
+          enabled: true,
+          created_at: new Date().toISOString()
+        });
+      }
+      if (!silent) toast('✅ NRI Stock Market topics seeded! Sets are now live.', 'success');
+      await renderTopicsList();
+    } catch (e) {
+      if (!silent) toast('❌ Seed failed: ' + e.message, 'error');
+      else console.error('SMQ auto-seed failed:', e.message);
+    }
+  }
+
+  function applyAssessmentFilters(sessions, topicMap) {
+    // First split by archive status (stored in settings, not a DB column)
+    let filtered = _viewArchive
+      ? sessions.filter(s => _archivedIds.has(s.id))
+      : sessions.filter(s => !_archivedIds.has(s.id));
+
+    filtered = filtered.filter(s => matchesModuleFilter(s.module, _assessmentsFilter.module));
+    if (_assessmentsFilter.status !== 'all') {
+      filtered = filtered.filter(s => s.status === _assessmentsFilter.status);
+    }
+    if (_assessmentsFilter.team !== 'all') {
+      filtered = filtered.filter(s => _teamAssignments[s.traineeId] === _assessmentsFilter.team);
+    }
+
+    if (_currentManagerDrill) {
+      _restoreIndividualSessionsHeader();
+      const drill = _currentManagerDrill;
+      // Resolve each session's manager using team-assignment (primary) or baked index (fallback)
+      const resolveSessionMgr = s => {
+        const assigned = _teamAssignments[s.traineeId];
+        return (assigned && _MANAGER_AGENT_MAP[assigned]) ? assigned : _getAgentManager(s.traineeName);
+      };
+      if (drill === '(No Manager Assigned)') {
+        filtered = filtered.filter(s => !resolveSessionMgr(s));
+      } else {
+        filtered = filtered.filter(s => resolveSessionMgr(s) === drill);
+      }
+      renderAssessmentsTable(filtered, topicMap);
+    } else {
+      // Default: manager summary view
+      renderManagerSummaryTable(filtered, topicMap);
+    }
+  }
+
+  // ---- Restore thead to individual-session columns ----
+  function _restoreIndividualSessionsHeader() {
+    const theadTr = $('assessments-thead-tr');
+    if (!theadTr) return;
+    theadTr.innerHTML = `
+      <th style="width:36px;text-align:center">
+        <input type="checkbox" id="select-all-sessions" onchange="Admin.toggleAllSessions(this.checked)" />
+      </th>
+      <th>Trainee</th>
+      <th>Module</th>
+      <th>Topic</th>
+      <th>Submitted</th>
+      <th>Status</th>
+      <th>AI Score</th>
+      <th>Admin Score</th>
+      <th>Final Score</th>
+      <th>Actions</th>`;
+  }
+
+  // ---- Manager summary table (default assessments view) ----
+  function renderManagerSummaryTable(sessions, topicMap) {
+    const theadTr = $('assessments-thead-tr');
+    const tbody   = $('assessments-tbody');
+
+    // Switch to manager-summary columns
+    if (theadTr) {
+      theadTr.innerHTML = `
+        <th style="width:36px;text-align:center"><input type="checkbox" id="select-all-managers" onchange="Admin.toggleAllManagers(this.checked)" /></th>
+        <th>Manager</th>
+        <th style="text-align:center">Agents (with sessions / total)</th>
+        <th style="text-align:center">Sessions</th>
+        <th style="text-align:right">Avg AI Score</th>
+        <th style="text-align:right">Avg Admin Score</th>
+        <th>Actions</th>`;
+    }
+
+    _allRenderedSessions = sessions;
+    _selectedSessionIds.clear();
+    _selectedManagerNames.clear();
+    _updateManagerActionBtns();
+    // hide session-level bulk buttons when in manager summary
+    const archBtn = $('btn-archive-selected');
+    const restBtn = $('btn-restore-selected');
+    if (archBtn) archBtn.style.display = 'none';
+    if (restBtn) restBtn.style.display = 'none';
+
+    if (!sessions.length) {
+      tbody.innerHTML = `<tr><td colspan="7" class="empty-state">${_viewArchive ? 'No archived assessments.' : 'No assessments found.'}</td></tr>`;
+      return;
+    }
+
+    // Group sessions by manager
+    // Primary: team assignment stored in settings (traineeId → managerName)
+    // Fallback: name-based lookup from _MANAGER_AGENT_MAP
+    const managerGroups = {};
+    const unassigned    = [];
+    sessions.forEach(s => {
+      const assigned = _teamAssignments[s.traineeId];
+      // Use team assignment if it's a known manager, else name-match (with alias resolution)
+      const mgr = (assigned && _MANAGER_AGENT_MAP[assigned])
+                ? assigned
+                : _getAgentManager(s.traineeName);
+      if (mgr) {
+        if (!managerGroups[mgr]) managerGroups[mgr] = [];
+        managerGroups[mgr].push(s);
+      } else {
+        unassigned.push(s);
+      }
+    });
+
+    const makeRow = (mgr, mgrSessions, isUnassigned) => {
+      const totalAgents        = isUnassigned ? '?' : ((_MANAGER_AGENT_MAP[mgr] || []).length);
+      const agentsWithSessions = new Set(mgrSessions.map(s => (s.traineeName || '').trim().toLowerCase())).size;
+      const agentsLabel        = isUnassigned ? agentsWithSessions : `${agentsWithSessions} / ${totalAgents}`;
+
+      const aiNums    = mgrSessions.map(s => s.aiScores    ? normalizeOverall(s.aiScores.overall) : null).filter(x => x !== null);
+      const adminNums = mgrSessions.map(s => s.adminScores ? calcAdminAvg(s.adminScores)           : null).filter(x => x !== null);
+      const avgAI    = aiNums.length    ? (aiNums.reduce((a, b) => a + b, 0)    / aiNums.length).toFixed(1)    : '—';
+      const avgAdmin = adminNums.length ? (adminNums.reduce((a, b) => a + b, 0) / adminNums.length).toFixed(1) : '—';
+
+      const safeMgr    = mgr.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      const archiveBtn = _viewArchive
+        ? `<button class="btn-small" onclick="event.stopPropagation();Admin.restoreAllManagerSessions('${safeMgr}')">↩ Restore All</button>`
+        : `<button class="btn-small" onclick="event.stopPropagation();Admin.archiveAllManagerSessions('${safeMgr}')">📁 Archive All</button>`;
+
+      return `<tr style="cursor:pointer" onclick="Admin.drillIntoManager('${safeMgr}')">
+        <td style="text-align:center" onclick="event.stopPropagation()">
+          ${!isUnassigned ? `<input type="checkbox" class="manager-cb" data-mgr="${mgr.replace(/"/g,'&quot;')}" onchange="Admin.toggleManagerCheckbox('${safeMgr}', this.checked)" />` : ''}
+        </td>
+        <td><strong style="color:var(--primary)">${mgr}</strong></td>
+        <td style="text-align:center">${agentsLabel}</td>
+        <td style="text-align:center;font-weight:600">${mgrSessions.length}</td>
+        <td style="text-align:right">${avgAI !== '—' ? avgAI + '/100' : '—'}</td>
+        <td style="text-align:right;font-weight:600;color:${avgAdmin !== '—' ? '#1d4ed8' : 'var(--text-muted)'}">${avgAdmin !== '—' ? avgAdmin + '/100' : '—'}</td>
+        <td style="display:flex;gap:0.4rem;flex-wrap:wrap">
+          <button class="btn-small primary" onclick="event.stopPropagation();Admin.drillIntoManager('${safeMgr}')">View Sessions</button>
+          ${!isUnassigned ? archiveBtn : ''}
+        </td>
+      </tr>`;
+    };
+
+    const rows = Object.entries(managerGroups)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([mgr, mgrSessions]) => makeRow(mgr, mgrSessions, false))
+      .join('');
+
+    const unassignedRow = unassigned.length ? makeRow('(No Manager Assigned)', unassigned, true) : '';
+
+    tbody.innerHTML = rows + unassignedRow;
+  }
+
+  // ---- Drill into a specific manager's sessions ----
+  function drillIntoManager(managerName) {
+    _currentManagerDrill = managerName;
+    const backBtn = $('btn-back-to-managers');
+    if (backBtn) {
+      backBtn.style.display = '';
+      backBtn.querySelector('button').textContent = `← Back to Managers  (${managerName})`;
+    }
+    const mgrSel = $('filter-manager');
+    if (mgrSel) mgrSel.value = managerName;
+    applyAssessmentFilters(_cachedSessions, _cachedTopicMap);
+  }
+
+  function backToManagers() {
+    _currentManagerDrill = null;
+    const backBtn = $('btn-back-to-managers');
+    if (backBtn) backBtn.style.display = 'none';
+    const mgrSel = $('filter-manager');
+    if (mgrSel) mgrSel.value = '';
+    applyAssessmentFilters(_cachedSessions, _cachedTopicMap);
+  }
+
+  // ---- Archive / Restore all sessions for a manager ----
+  // Resolve which manager a session belongs to — same logic used by renderManagerSummaryTable
+  function _resolveSessionManager(s) {
+    const assigned = _teamAssignments[s.traineeId];
+    return (assigned && _MANAGER_AGENT_MAP[assigned]) ? assigned : _getAgentManager(s.traineeName);
+  }
+
+  async function archiveAllManagerSessions(managerName) {
+    const ids = _cachedSessions
+      .filter(s => _resolveSessionManager(s) === managerName)
+      .filter(s => !_archivedIds.has(s.id))
+      .map(s => s.id);
+    if (!ids.length) { toast('No active sessions to archive for this manager.', ''); return; }
+    if (!confirm(`Archive all ${ids.length} active session${ids.length !== 1 ? 's' : ''} for ${managerName}?\n\nYou can restore them at any time from the Archive tab.`)) return;
+    try {
+      await _setSessionsArchived(ids, true);
+      toast(`Archived ${ids.length} session${ids.length !== 1 ? 's' : ''} for ${managerName}.`, 'success');
+    } catch (e) {
+      toast('Archive failed: ' + e.message, 'error');
+    }
+  }
+
+  async function restoreAllManagerSessions(managerName) {
+    const ids = _cachedSessions
+      .filter(s => _resolveSessionManager(s) === managerName)
+      .filter(s => _archivedIds.has(s.id))
+      .map(s => s.id);
+    if (!ids.length) { toast('No archived sessions to restore for this manager.', ''); return; }
+    if (!confirm(`Restore all ${ids.length} archived session${ids.length !== 1 ? 's' : ''} for ${managerName}?`)) return;
+    try {
+      await _setSessionsArchived(ids, false);
+      toast(`Restored ${ids.length} session${ids.length !== 1 ? 's' : ''} for ${managerName}.`, 'success');
+    } catch (e) {
+      toast('Restore failed: ' + e.message, 'error');
+    }
+  }
+
+  // ---- Manager checkbox multi-select ----
+  function toggleManagerCheckbox(mgrName, checked) {
+    if (checked) _selectedManagerNames.add(mgrName);
+    else         _selectedManagerNames.delete(mgrName);
+    _updateManagerActionBtns();
+    const allCb = $('select-all-managers');
+    if (allCb) {
+      const allCbs = document.querySelectorAll('.manager-cb');
+      const n = _selectedManagerNames.size;
+      allCb.indeterminate = n > 0 && n < allCbs.length;
+      allCb.checked       = allCbs.length > 0 && n === allCbs.length;
+    }
+  }
+
+  function toggleAllManagers(checked) {
+    _selectedManagerNames.clear();
+    document.querySelectorAll('.manager-cb').forEach(cb => {
+      cb.checked = checked;
+      if (checked) _selectedManagerNames.add(cb.dataset.mgr);
+    });
+    _updateManagerActionBtns();
+  }
+
+  function _updateManagerActionBtns() {
+    const archBtn = $('btn-archive-selected-managers');
+    const restBtn = $('btn-restore-selected-managers');
+    if (!archBtn || !restBtn) return;
+    const n = _selectedManagerNames.size;
+    if (_viewArchive) {
+      archBtn.style.display = 'none';
+      restBtn.style.display = '';
+      restBtn.disabled      = n === 0;
+      restBtn.textContent   = n > 0 ? `↩ Restore Selected (${n})` : '↩ Restore Selected';
+    } else {
+      restBtn.style.display = 'none';
+      archBtn.style.display = '';
+      archBtn.disabled      = n === 0;
+      archBtn.textContent   = n > 0 ? `📁 Archive Selected (${n})` : '📁 Archive Selected';
+    }
+  }
+
+  async function archiveSelectedManagers() {
+    const managers = [..._selectedManagerNames];
+    if (!managers.length) return;
+    const ids = _cachedSessions
+      .filter(s => managers.includes(_resolveSessionManager(s)))
+      .filter(s => !_archivedIds.has(s.id))
+      .map(s => s.id);
+    if (!ids.length) { toast('No active sessions found for selected managers.', ''); return; }
+    if (!confirm(`Archive all ${ids.length} active session${ids.length !== 1 ? 's' : ''} for ${managers.length} selected manager${managers.length !== 1 ? 's' : ''}?\n\nYou can restore them at any time from the Archive tab.`)) return;
+    try {
+      await _setSessionsArchived(ids, true);
+      _selectedManagerNames.clear();
+      toast(`Archived ${ids.length} session${ids.length !== 1 ? 's' : ''}.`, 'success');
+    } catch (e) {
+      toast('Archive failed: ' + e.message, 'error');
+    }
+  }
+
+  async function restoreSelectedManagers() {
+    const managers = [..._selectedManagerNames];
+    if (!managers.length) return;
+    const ids = _cachedSessions
+      .filter(s => managers.includes(_resolveSessionManager(s)))
+      .filter(s => _archivedIds.has(s.id))
+      .map(s => s.id);
+    if (!ids.length) { toast('No archived sessions found for selected managers.', ''); return; }
+    if (!confirm(`Restore all ${ids.length} archived session${ids.length !== 1 ? 's' : ''} for ${managers.length} selected manager${managers.length !== 1 ? 's' : ''}?`)) return;
+    try {
+      await _setSessionsArchived(ids, false);
+      _selectedManagerNames.clear();
+      toast(`Restored ${ids.length} session${ids.length !== 1 ? 's' : ''}.`, 'success');
+    } catch (e) {
+      toast('Restore failed: ' + e.message, 'error');
+    }
+  }
+
+  function renderAssessmentsTable(sessions, topicMap) {
+    const tbody = $('assessments-tbody');
+    const sorted = [...sessions].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+    _currentFilteredSessions = sorted; // track for Download All
+    _allRenderedSessions = sorted;     // track for select-all
+    _selectedSessionIds.clear();
+    _selectedManagerNames.clear();
+    _updateSessionActionBtns();
+    // hide manager-level bulk buttons when in session drill view
+    const mgrArchBtn = $('btn-archive-selected-managers');
+    const mgrRestBtn = $('btn-restore-selected-managers');
+    if (mgrArchBtn) mgrArchBtn.style.display = 'none';
+    if (mgrRestBtn) mgrRestBtn.style.display = 'none';
+
+    // Reset select-all checkbox
+    const allCb = $('select-all-sessions');
+    if (allCb) { allCb.checked = false; allCb.indeterminate = false; }
+
+    if (sorted.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="10" class="empty-state">${_viewArchive ? 'No archived assessments.' : 'No assessments found.'}</td></tr>`;
+      return;
+    }
+
+    // ── Pick & Speak: pre-compute per-trainee.
+    // Effective score per session = admin score if scored, else AI score.
+    // avgOfAll  = average of effective scores across ALL that trainee's P&S sessions.
+    // bestId    = session with the highest effective score (that row shows avgOfAll; rest → N/A).
+    const PS_MODULES = new Set(['pick-speak', 'pick-speak-general', 'pick-speak-stock']);
+    const psGrouped  = {}; // traineeId → [{ id, eff }]
+    sorted.forEach(s => {
+      if (!PS_MODULES.has(s.module)) return;
+      const adminNum = s.adminScores ? (calcAdminAvg(s.adminScores)          ?? null) : null;
+      const aiNum    = s.aiScores    ? (normalizeOverall(s.aiScores.overall) ?? null) : null;
+      const eff      = adminNum !== null ? adminNum : aiNum; // prefer admin
+      if (eff === null) return;
+      if (!psGrouped[s.traineeId]) psGrouped[s.traineeId] = [];
+      psGrouped[s.traineeId].push({ id: s.id, eff });
+    });
+    const psByTrainee = {}; // traineeId → { bestId, avgOfAll }
+    Object.entries(psGrouped).forEach(([tid, list]) => {
+      const best     = list.reduce((a, b) => b.eff > a.eff ? b : a);
+      const avgOfAll = parseFloat((list.reduce((s, x) => s + x.eff, 0) / list.length).toFixed(1));
+      psByTrainee[tid] = { bestId: best.id, avgOfAll };
+    });
+
+    tbody.innerHTML = sorted.map(s => {
+      const aiScore    = s.aiScores    ? (normalizeOverall(s.aiScores.overall) ?? '—') : '—';
+      const adminScore = s.adminScores ? (calcAdminAvg(s.adminScores)          ?? '—') : '—';
+      const isScored   = !!s.adminScores;
+
+      // For P&S: best-session row shows average of all sessions' effective scores; others → N/A
+      // For all other modules (mock call, grammar, listening): admin score is final;
+      //   if no admin score, AI score is final. No averaging.
+      let avgScore;
+      if (PS_MODULES.has(s.module)) {
+        const info = psByTrainee[s.traineeId];
+        avgScore = (info && s.id === info.bestId) ? info.avgOfAll : 'N/A';
+      } else {
+        const aiNum    = aiScore    !== '—' ? parseFloat(aiScore)    : null;
+        const adminNum = adminScore !== '—' ? parseFloat(adminScore) : null;
+        avgScore = adminNum !== null ? adminNum : (aiNum !== null ? aiNum : '—');
+      }
+      const ext = (s.recordingUrl || '').includes('.mp4') ? 'mp4' : (s.recordingUrl || '').includes('.ogg') ? 'ogg' : 'webm';
+      const dlFilename = `${(s.traineeName || 'recording').replace(/\s+/g, '_')}-${s.module}-${(s.submittedAt || '').slice(0, 10)}.${ext}`;
+      const dlBtn = s.recordingUrl
+        ? `<button class="btn-small" onclick="Admin.downloadRecording('${s.recordingUrl}', '${dlFilename}')">⬇ Recording</button>`
+        : '';
+
+      const archiveBtn = _viewArchive
+        ? `<button class="btn-small" onclick="Admin.restoreSingleSession('${s.id}', '${(s.traineeName || '').replace(/'/g, "\\'")}')">↩ Restore</button>`
+        : `<button class="btn-small" onclick="Admin.archiveSingleSession('${s.id}', '${(s.traineeName || '').replace(/'/g, "\\'")}')">📁 Archive</button>`;
+
+      return `
+        <tr class="${_archivedIds.has(s.id) ? 'session-archived' : ''}">
+          <td style="width:36px;text-align:center">
+            <input type="checkbox" class="session-cb" data-id="${s.id}"
+              onchange="Admin.toggleSessionCheckbox('${s.id}', this.checked)" />
+          </td>
+          <td><strong>${s.traineeName || '—'}</strong></td>
+          <td>${moduleBadge(s.module)}</td>
+          <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.topicTitle || '—'}</td>
+          <td style="white-space:nowrap">${formatDate(s.submittedAt).split(' ')[0]}</td>
+          <td>${statusBadge(isScored ? 'scored' : s.status)}</td>
+          <td>${aiScore    !== '—' ? aiScore    + '/100' : '—'}</td>
+          <td>${adminScore !== '—' ? adminScore + '/100' : '—'}</td>
+          <td style="font-weight:600;color:${avgScore === 'N/A' || avgScore === '—' ? 'var(--text-muted)' : '#1d4ed8'}">${avgScore !== '—' && avgScore !== 'N/A' ? avgScore + '/100' : avgScore}</td>
+          <td style="display:flex;gap:0.4rem;flex-wrap:wrap">
+            <button class="btn-small primary" onclick="Admin.openScoring('${s.id}')">
+              ${isScored ? 'Review' : 'Score'}
+            </button>
+            ${dlBtn}
+            ${archiveBtn}
+            <button class="btn-small danger" onclick="Admin.deleteSession('${s.id}', '${(s.traineeName || '').replace(/'/g, "\\'")}')">
+              🗑 Delete
+            </button>
+          </td>
+        </tr>`;
+    }).join('');
+  }
+
+  // ---- Delete Session ----
+  async function deleteSession(sessionId, traineeName) {
+    const confirmed = confirm(
+      `Delete this assessment?\n\nTrainee: ${traineeName || 'Unknown'}\n\nThis will remove the session details (recording & transcript) but PRESERVE the score in the reports.`
+    );
+    if (!confirmed) return;
+
+    let deleteFromReports = false;
+    const confirmReports = confirm(
+      `Do you also want to permanently delete this score from Reports and the Comm360 Master Sheet?\n\n(Warning: This requires separate admin confirmation)`
+    );
+    if (confirmReports) {
+      const pin = prompt("Enter Admin Password to confirm deletion from reports:");
+      const pwRec = await DB.get('settings', 'adminPassword');
+      const correctPw = pwRec ? pwRec.value : 'admin123';
+      if (pin === correctPw) {
+        deleteFromReports = true;
+      } else {
+        alert("Invalid password. The score will be preserved in reports.");
+      }
+    }
+
+    try {
+      const session = await DB.get('sessions', sessionId);
+      if (session) {
+        await _preserveScoresBeforeDeletion([session], deleteFromReports);
+      }
+      await DB.del('sessions', sessionId);
+      toast('Assessment deleted.', '');
+      loadAssessments();
+    } catch (e) {
+      console.error('Delete failed:', e);
+      toast('Failed to delete assessment.', 'error');
+    }
+  }
+
+  async function forceReSeed() {
+    const btn = document.getElementById('btn-force-seed');
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '⏳ Seeding Database...';
+    }
+    toast('Checking and re-seeding default topics...', 'info');
+    try {
+      await DB.forceReSeed();
+      toast('Database defaults successfully re-seeded!', 'success');
+      await renderTopicsList();
+    } catch (e) {
+      console.error('Force seed failed:', e);
+      alert('Failed to seed database: ' + e.message);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '⚡ Force Re-seed Defaults';
+      }
+    }
+  }
+
+  // ---- Public API (called from inline onclick) ----
+  return {
+    init,
+    forceReSeed,
+    openTopicModal,
+    deleteTopic,
+    toggleTopicEnabled,
+    toggleGrammarSet,
+    enableAllTopics,
+    disableAllTopics,
+    openScoring,
+    updateAdminScoreDisplay,
+    updateCriterionDisplay,
+    selectScale135,
+    viewTraineeSessions,
+    setTraineeTeam,
+    toggleTraineeCheckbox,
+    toggleAllTrainees,
+    deleteSelectedTrainees,
+    deleteAllTrainees,
+    downloadCSV,
+    downloadSmqWrongAnswersReport,
+    downloadRecording,
+    downloadAllRecordings,
+    deleteSession,
+    deleteAllSessions,
+    deduplicateTraineeSessions,
+    copyLetter,
+    downloadTraineePPT,
+    downloadMasterExcel,
+    reScoreWrittenComm,
+    resetWrittenScores,
+    // Assessments archive / multi-select / manager view
+    switchAssessmentView,
+    toggleSessionCheckbox,
+    toggleAllSessions,
+    archiveSelectedSessions,
+    restoreSelectedSessions,
+    archiveSingleSession,
+    restoreSingleSession,
+    drillIntoManager,
+    backToManagers,
+    archiveAllManagerSessions,
+    restoreAllManagerSessions,
+    toggleManagerCheckbox,
+    toggleAllManagers,
+    archiveSelectedManagers,
+    restoreSelectedManagers,
+    // Bot script per-turn audio upload
+    toggleBotTurnRec,      // kept as no-op stub for cached HTML compatibility
+    uploadBotTurnAudio,
+    clearBotTurnAudio,
+    removeBotScriptRow,
+    // AI Audit Scores (kept for backward compatibility)
+    filterAiAudit,
+    toggleAuditCheckbox,
+    toggleAllAudit,
+    editSelfScore,
+    cancelSelfScoreEdit,
+    saveSelfScore,
+    editAuditScore,
+    cancelAuditEdit,
+    saveAuditScore,
+    deleteSingleAuditScore,
+    deleteSelectedAuditScores,
+    deleteAllAuditScores,
+    // Comm360 Master Report
+    filterComm360,
+    searchComm360,
+    isComm360Deleted: () => _comm360ReportDeleted,
+    deleteEntireComm360Report,
+    restoreEntireComm360Report,
+    // Manager Assessments
+    loadMgrAssessments,
+    renderMgrAssessments,
+    openMgrScoreModal,
+    saveMgrScore,
+    seedStockMarketMcq,
+    downloadSmqWrongAnswersReport,
+    deduplicateTraineeSessions,
+  };
+})();
+
+document.addEventListener('DOMContentLoaded', () => Admin.init());

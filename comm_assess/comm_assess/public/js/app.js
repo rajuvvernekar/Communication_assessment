@@ -1,0 +1,3432 @@
+'use strict';
+
+const App = (() => {
+  // ---- State ----
+  let _trainee = null; // { id, name }
+  let _currentTopic = null;
+  let _recordingPromise = null;
+  let _psRecordingStartTime = null; // for duration tracking
+  let _psSkipUsed = false;          // only one topic skip allowed per session
+  let _psCategory = null;           // 'pick-speak-stock' | 'pick-speak-general'
+  let _psTopicsPool = [];           // all fetched topics for current category
+  let _psTopicChoiceA = null;       // first general topic choice shown to agent
+  let _psTopicChoiceB = null;       // second general topic choice shown to agent
+  let _psChoiceTimerId = null;      // 30s countdown interval for general topic selection
+  let _psMicPregranted = false;     // mic was pre-requested during category click (for auto-advance)
+  let _wcStartTime = null;
+  let _wcTimerInterval = null;
+  let _wcChatTurns = [];
+  let _wcChatTurnIndex = 0;
+  let _wcChatTranscripts = [];
+  let _wcChatHistory = [];
+  let _wcChatStartTime = null;
+  let _wcChatTimerInterval = null;
+
+  const WRITTEN_COMM_DEFAULT_PREFIX = "Thank you for writing to Broker.\n\n";
+  const WRITTEN_COMM_DEFAULT_SUFFIX = "\n\nYou can update this ticket if you have any concerns or queries, and we will get back to you.\n\nPlease note: This ticket will auto-close after 24 hours of inactivity, but you can reopen it at any time or reach out to us via our Support Portal.";
+
+  function getTraineeContent(text) {
+    if (!text) return '';
+    let cleaned = text;
+
+    const prefixes = [
+      "Thank you for writing to Broker.",
+      "Thank you for writing to Broker.\n\n",
+      "Thank you for writing to Broker.\r\n\r\n"
+    ];
+
+    const suffixes = [
+      "You can update this ticket if you have any concerns or queries, and we will get back to you.\n\nPlease note: This ticket will auto-close after 24 hours of inactivity, but you can reopen it at any time or reach out to us via our Support Portal.",
+      "You can update this ticket if you have any concerns or queries, and we will get back to you.\r\n\r\nPlease note: This ticket will auto-close after 24 hours of inactivity, but you can reopen it at any time or reach out to us via our Support Portal.",
+      "You can update this ticket if you have any concerns or queries, and we will get back to you.",
+      "Please note: This ticket will auto-close after 24 hours of inactivity, but you can reopen it at any time or reach out to us via our Support Portal."
+    ];
+
+    for (const p of prefixes) {
+      if (cleaned.startsWith(p)) {
+        cleaned = cleaned.substring(p.length);
+        break;
+      }
+      const idx = cleaned.toLowerCase().indexOf(p.toLowerCase());
+      if (idx !== -1) {
+        cleaned = cleaned.substring(idx + p.length);
+        break;
+      }
+    }
+
+    for (const s of suffixes) {
+      const idx = cleaned.toLowerCase().indexOf(s.toLowerCase());
+      if (idx !== -1) {
+        cleaned = cleaned.substring(0, idx);
+        break;
+      }
+    }
+
+    return cleaned.trim();
+  }
+
+  // ── Listening Assessment state ──
+  let _laSections       = [];   // [{id, title, sectionType, questions}] sorted by title
+  let _laCurrentSection = 0;    // 0-based index into _laSections
+  let _laSectionResults = [];   // accumulated results
+  let _laQuestions      = [];   // current section's question array
+  let _laCurrentIdx     = 0;    // current question index within section
+  let _laUserAnswers    = [];   // -1 = unanswered, 0-3 = chosen option index
+
+  // Marks per section: Video=2, Audio=5, Reading=3 (by section index 0,1,2)
+  const LA_MARKS = [2, 5, 3];
+
+  // ── NRI Stock Market MCQ state ──
+  let _smqQuestions      = [];   // all questions for the chosen topic
+  let _smqCurrentIdx     = 0;    // current question index
+  let _smqUserAnswers    = [];   // -1 = unanswered, 0-3 = chosen option index
+  let _smqTopicId        = null; // UUID of the topic row used
+  let _smqTimerInterval  = null; // setInterval handle for countdown
+  let _smqStartTime      = null; // Date.now() when quiz started
+
+  // ── Calculator state ──
+  let _calcExpr          = '';   // Stores current history expression string
+  let _calcInput         = '0';  // Stores current input display string
+  let _calcResetOnInput  = false;// Overwrite input on next digit if true
+
+  // ── Grammar Assessment state ──
+  let _gaSections       = [];   // [{id, title, questions}] all sections sorted A → C
+  let _gaCurrentSection = 0;    // 0-based index into _gaSections
+  let _gaSectionResults = [];   // [{title, answerRecord, correct, total, pct}] accumulated
+  let _gaQuestions      = [];   // current section's question array
+  let _gaCurrentIdx     = 0;    // current question index within section
+  let _gaUserAnswers    = [];   // -1 = unanswered, 0-3 = chosen option index
+
+  // ── Bot-call turn state ──
+  let _mcTurns         = [];    // botScript lines for current call
+  let _mcTurnIndex     = 0;     // 0-based current turn
+  let _mcTranscripts   = [];    // per-turn trainee transcript
+  let _mcBlobPromise   = null;  // single continuous recording (start → finish)
+  let _mcTurnTimerId   = null;  // per-turn 90s countdown setInterval
+  let _mcTurnEnded     = false; // guard: prevent double-call of endTraineeTurn()
+  let _mcCallFinishing = false; // guard: prevent double-call of finishBotCall()
+  let _mcBotAudioEl    = null;  // current <Audio> element for per-turn recorded voice
+
+  // ── AI-driven call state (live Claude customer, Takeover topic only) ──
+  const MC_AI_TOPIC_TITLE = 'Takeover Offer – Client Insists Despite Higher Market Price';
+  const MC_AI_MAX_TURNS   = 8;   // ~5-10 min depending on agent response length
+  let _mcAiMode           = false;
+  let _mcAiHistory        = [];   // [{bot: string, agent: string}, ...]
+  let _mcAiTurnCount      = 0;
+
+  // ── TTS voice cache — Chrome loads voices async; pre-cache on first event ──
+  let _ttsVoices = [];
+  if (window.speechSynthesis) {
+    const _cacheVoices = () => {
+      const v = speechSynthesis.getVoices();
+      if (v.length) _ttsVoices = v;
+    };
+    _cacheVoices(); // populate immediately if already available (Firefox, Safari)
+    speechSynthesis.onvoiceschanged = _cacheVoices; // fires in Chrome after async load
+  }
+
+  // Ranked list of high-quality voices, best first.
+  // Neural / Online voices sound dramatically more natural than built-ins.
+  const TTS_VOICE_PRIORITY = [
+    // Edge Neural voices (best quality — very human-sounding)
+    'Microsoft Ryan Online (Natural)',
+    'Microsoft Andrew Online (Natural)',
+    'Microsoft Brian Online (Natural)',
+    'Microsoft Christopher Online (Natural)',
+    'Microsoft Eric Online (Natural)',
+    'Microsoft Aria Online (Natural)',
+    'Microsoft Emma Online (Natural)',
+    'Microsoft Jenny Online (Natural)',
+    'Microsoft Guy Online (Natural)',
+    // Chrome Neural (good)
+    'Google US English',
+    'Google UK English Male',
+    'Google UK English Female',
+    // macOS / iOS built-in (acceptable)
+    'Alex',
+    'Samantha',
+    'Karen',
+    'Moira',
+    'Daniel',
+    // Windows built-in (fallback)
+    'David',
+    'Zira',
+  ];
+
+  // ---- Score Bands (overall scores are out of 100) ----
+  const SCORE_BANDS = {
+    'pick-speak': [
+      { maxPct: 40,       label: 'Needs Significant Improvement', cls: 'band-poor',      icon: '⚠️',
+        feedback: 'Significant gaps across multiple areas. Focus on building clarity of thought, reducing filler words, improving pace, and using more varied vocabulary. Practice structured speaking with a clear opening, body, and close.' },
+      { maxPct: 60,       label: 'Acceptable / Meets Expectations', cls: 'band-fair',    icon: '📋',
+        feedback: 'Meets basic expectations. Work on reducing filler words (um, uh, like), improving sentence variety, and covering the topic more thoroughly within the time given.' },
+      { maxPct: 80,       label: 'Good / Above Average',           cls: 'band-good',     icon: '👍',
+        feedback: 'Good command of language and delivery. Refine by increasing vocabulary variety, tightening logical flow, and maintaining a more consistent pace throughout.' },
+      { maxPct: Infinity, label: 'Excellent / Consistently Strong', cls: 'band-excellent', icon: '⭐',
+        feedback: 'Consistently strong performance across all areas! Excellent fluency, rich vocabulary, professional tone, and well-structured delivery. Keep practising to maintain this standard.' }
+    ],
+    'mock-call': [
+      { maxPct: 50,       label: 'Needs Significant Improvement', cls: 'band-poor',      icon: '⚠️',
+        feedback: 'Key call-handling elements are missing or insufficient. Prioritise training on greeting structure, acknowledging the customer with empathy, probing questions, and proper call closings.' },
+      { maxPct: 60,       label: 'Acceptable / Meets Expectations', cls: 'band-fair',    icon: '📋',
+        feedback: 'Basic call-handling demonstrated. Work on consistent empathy phrases, clearer communication without fillers, and following hold and closing procedures every time.' },
+      { maxPct: 70,       label: 'Good / Above Average',           cls: 'band-good',     icon: '👍',
+        feedback: 'Good customer service skills shown. Minor refinements needed — ensure the extra mile is offered and all hold/closing steps are followed precisely.' },
+      { maxPct: Infinity, label: 'Excellent / Consistently Strong', cls: 'band-excellent', icon: '⭐',
+        feedback: 'Consistently strong call quality! Excellent adherence to protocol, genuine empathy throughout, and professional communication from opening to closing.' }
+    ]
+  };
+
+  function getBand(module, overallScore) {
+    // overallScore is 0-100
+    const bands = SCORE_BANDS[module];
+    if (!bands || overallScore === null || overallScore === undefined) return null;
+    return bands.find(b => overallScore < b.maxPct) || bands[bands.length - 1];
+  }
+
+  function renderBandCard(containerId, module, overallScore) {
+    const el = $(containerId);
+    if (!el) return;
+    const band = getBand(module, overallScore);
+    if (!band) { el.innerHTML = ''; return; }
+    el.innerHTML = `
+      <div class="band-card ${band.cls}">
+        <div class="band-header">
+          <span class="band-icon">${band.icon}</span>
+          <div class="band-info">
+            <div class="band-label">${band.label}</div>
+            <div class="band-score">${overallScore}/100</div>
+          </div>
+        </div>
+        <div class="band-feedback">${band.feedback}</div>
+      </div>`;
+  }
+
+  // ---- Helpers ----
+  function $(id) { return document.getElementById(id); }
+
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    const el = $(`screen-${id}`);
+    if (el) {
+      el.classList.add('active');
+      if (document.activeElement?.blur) document.activeElement.blur();
+      // Defer scroll until after the browser has painted the new layout
+      requestAnimationFrame(() => {
+        window.scrollTo(0, 0);
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+      });
+    }
+  }
+
+  // Only return topics that are enabled (or have no enabled field = legacy = treat as enabled)
+  function enabledTopics(topics) {
+    return topics.filter(t => t.enabled !== false);
+  }
+
+  function showStep(modulePrefix, stepId) {
+    // Hide all direct step children of the module screen
+    const screen = $(`screen-${modulePrefix}`);
+    if (screen) {
+      Array.from(screen.children).forEach(child => {
+        if (child.id && child.id.startsWith(modulePrefix.replace('-', '-'))) {
+          child.classList.add('hidden');
+        } else if (child.classList.contains('step-container') || child.classList.contains('module-header')) {
+          if (child.id) child.classList.add('hidden');
+        }
+      });
+      // Hide all elements with step-like IDs within the screen
+      screen.querySelectorAll('[id^="ps-step"],[id^="mc-step"],[id^="rp-step"],[id^="gd-step"],[id^="wc-step"],[id^="ga-step"],[id^="la-step"]')
+        .forEach(el => el.classList.add('hidden'));
+    }
+    const el = $(stepId);
+    if (el) { el.classList.remove('hidden'); window.scrollTo(0, 0); }
+  }
+
+  function toast(msg, type = '') {
+    const el = document.createElement('div');
+    el.className = `toast ${type}`;
+    el.textContent = msg;
+    $('toast-container').appendChild(el);
+    setTimeout(() => {
+      el.style.animation = 'slide-out 0.25s ease forwards';
+      setTimeout(() => el.remove(), 300);
+    }, 3000);
+  }
+
+  function renderAIScores(containerId, scores, labels) {
+    const el = $(containerId);
+    if (!el) return;
+    el.innerHTML = '';
+    Object.entries(scores).forEach(([key, val]) => {
+      if (key === 'overall') return;
+      const label = labels[key] || key;
+      const pct = ((val / 5) * 100).toFixed(0);
+      const stars = '★'.repeat(Math.round(val)) + '☆'.repeat(5 - Math.round(val));
+      el.innerHTML += `
+        <div class="ai-score-row">
+          <span class="score-label">${label}</span>
+          <div class="score-bar"><div class="score-bar-fill" style="width:${pct}%"></div></div>
+          <span class="score-stars">${stars}</span>
+          <span class="score-val">${val}/5</span>
+        </div>`;
+    });
+    if (scores.overall !== undefined) {
+      // overall is out of 100
+      el.innerHTML += `
+        <div class="ai-score-row" style="background:#eff6ff;border:1px solid #dbeafe">
+          <span class="score-label" style="font-weight:800">Overall AI Score</span>
+          <div class="score-bar"><div class="score-bar-fill" style="width:${scores.overall.toFixed(0)}%;background:#3b82f6"></div></div>
+          <span class="score-val" style="color:#3b82f6;font-weight:700">${scores.overall}/100</span>
+        </div>`;
+    }
+  }
+
+  function renderAnalysisPills(containerId, analysis, durationSeconds) {
+    const el = $(containerId);
+    if (!el || !analysis) return;
+    const pills = [
+      { label: `${analysis.wordCount} words`, cls: 'info' },
+      { label: `~${analysis.wpm} WPM`, cls: analysis.wpm >= 100 && analysis.wpm <= 170 ? 'good' : 'warn' },
+      { label: `${analysis.sentenceCount} sentences`, cls: 'info' },
+      { label: `${Math.round(analysis.uniqueWordRatio * 100)}% unique vocab`, cls: analysis.uniqueWordRatio > 0.6 ? 'good' : 'warn' },
+    ];
+    if (analysis.fillerCount > 0) {
+      pills.push({ label: `${analysis.fillerCount} filler words`, cls: analysis.fillerCount > 5 ? 'warn' : 'info' });
+    }
+    el.innerHTML = pills.map(p => `<span class="pill ${p.cls}">${p.label}</span>`).join('');
+  }
+
+  function getModuleLabel(module) {
+    const map = {
+      'pick-speak': 'Pick & Speak',
+      'mock-call': 'Mock Call',
+      'role-play': 'Role Play',
+      'group-discussion': 'Group Discussion',
+      'written-comm': 'Written Communication',
+      'grammar-assessment': 'Grammar Assessment',
+      'stock-market-mcq':   'NRI Stock Market'
+    };
+    return map[module] || module;
+  }
+
+  // ---- Navigation (back buttons, module cards) ----
+  function bindNavigation() {
+    document.addEventListener('click', (e) => {
+      const back = e.target.closest('[data-back]');
+      if (back) {
+        Recorder.stopTimer();
+        Recorder.stopWaveform();
+        showScreen(back.dataset.back);
+        return;
+      }
+
+      const card = e.target.closest('.module-card');
+      if (card) {
+        const module = card.dataset.module;
+        promptTeamThenOpen(module);
+      }
+    });
+  }
+
+  // ---- Auth Screen ----
+  function initAuth() {
+    // Restore trainee from previous session (same browser/device)
+    const cached = localStorage.getItem('commassess_trainee');
+    if (cached) {
+      try {
+        _trainee = JSON.parse(cached);
+        activateTrainee();
+        return;
+      } catch (_) {
+        localStorage.removeItem('commassess_trainee');
+      }
+    }
+
+    const doStart = async () => {
+      const name       = $('auth-name').value.trim();
+      const employeeId = $('auth-empid').value.trim();
+      const errorEl    = $('auth-error');
+      if (!name || !employeeId) {
+        errorEl.textContent = 'Please enter your name and Employee ID.';
+        errorEl.classList.remove('hidden');
+        return;
+      }
+      errorEl.classList.add('hidden');
+      $('btn-start').disabled    = true;
+      $('btn-start').textContent = 'Starting…';
+      try {
+        // Look up existing trainee by employee_id or create a new one
+        const rows = await DB.getByIndex('trainees', 'employee_id', employeeId);
+        let traineeId;
+        if (rows.length > 0) {
+          traineeId = rows[0].id;
+          await DB.put('trainees', { id: traineeId, name, employee_id: employeeId });
+        } else {
+          traineeId = crypto.randomUUID();
+          await DB.put('trainees', { id: traineeId, name, employee_id: employeeId });
+        }
+
+        _trainee = { id: traineeId, name, employeeId };
+        localStorage.setItem('commassess_trainee', JSON.stringify(_trainee));
+        activateTrainee();
+      } catch (e) {
+        errorEl.textContent = e.message || 'Something went wrong. Please try again.';
+        errorEl.classList.remove('hidden');
+      } finally {
+        $('btn-start').disabled    = false;
+        $('btn-start').textContent = 'Start Assessment →';
+      }
+    };
+
+    $('btn-start').addEventListener('click', doStart);
+    $('auth-name').addEventListener('keydown',  (e) => { if (e.key === 'Enter') doStart(); });
+    $('auth-empid').addEventListener('keydown', (e) => { if (e.key === 'Enter') doStart(); });
+  }
+
+  function activateTrainee() {
+    $('header-trainee-name').textContent = _trainee.name;
+    $('app-header').classList.remove('hidden');
+    $('btn-change-trainee').onclick = () => {
+      _trainee = null;
+      localStorage.removeItem('commassess_trainee');
+      $('app-header').classList.add('hidden');
+      if ($('auth-name'))  $('auth-name').value  = '';
+      if ($('auth-empid')) $('auth-empid').value = '';
+      if ($('auth-error')) $('auth-error').classList.add('hidden');
+      showScreen('welcome');
+    };
+    showScreen('modules');
+  }
+
+  // ---- Team Name Prompt (shown before every module) ----
+  function promptTeamThenOpen(module) {
+    const overlay = $('team-modal-overlay');
+    const input   = $('modal-team-input');
+    const confirmBtn = $('modal-team-confirm');
+    const skipBtn    = $('modal-team-skip');
+
+    // Pre-select previously saved manager if available
+    input.value = (_trainee && _trainee.team) || '';
+    overlay.classList.remove('hidden');
+
+    const proceed = async () => {
+      const team = input.value.trim();
+      overlay.classList.add('hidden');
+
+      if (team && _trainee) {
+        _trainee.team = team;
+        localStorage.setItem('commassess_trainee', JSON.stringify(_trainee));
+        try {
+          const s = await DB.get('settings', 'team_assignments');
+          const assignments = (s && s.value) ? JSON.parse(s.value) : {};
+          assignments[_trainee.id] = team;
+          await DB.put('settings', { key: 'team_assignments', value: JSON.stringify(assignments) });
+        } catch (te) {
+          console.warn('Could not save team assignment:', te.message);
+        }
+      }
+
+      openModule(module);
+    };
+
+    const dismiss = () => {
+      overlay.classList.add('hidden');
+      openModule(module);
+    };
+
+    confirmBtn.onclick = proceed;
+    skipBtn.onclick    = dismiss;
+
+    // Click outside the card to skip
+    overlay.onclick = (e) => { if (e.target === overlay) dismiss(); };
+  }
+
+  // ---- Module Dispatch ----
+  async function openModule(module) {
+    if (module === 'pick-speak') {
+      showScreen('pick-speak');
+      initPickSpeakCategory();
+      return;
+    }
+
+    if (module === 'stock-market-mcq') {
+      await initStockMarketMcq();
+      return;
+    }
+
+    if (module === 'grammar-assessment') {
+      await initGrammarAssessment();
+      return;
+    }
+
+    if (module === 'listening-assessment') {
+      await initListeningAssessment();
+      return;
+    }
+
+    const topics = enabledTopics(await DB.getByIndex('topics', 'module', module));
+    if (!topics.length) {
+      toast('No topics available for this module. Ask your admin to add some.', 'error');
+      return;
+    }
+
+    _currentTopic = topics[Math.floor(Math.random() * topics.length)];
+    showScreen(module);
+
+    if (module === 'mock-call') initMockCall();
+    else if (module === 'role-play') initRolePlay();
+    else if (module === 'group-discussion') initGroupDiscussion();
+    else if (module === 'written-comm') initWrittenComm();
+  }
+
+  // ================================================================
+  //  PICK & SPEAK
+  // ================================================================
+  function _clearPsChoiceTimer() {
+    if (_psChoiceTimerId) { clearInterval(_psChoiceTimerId); _psChoiceTimerId = null; }
+  }
+
+  function initPickSpeakCategory() {
+    _psSkipUsed   = false;
+    _psCategory   = null;
+    _psTopicsPool = [];
+    _psMicPregranted = false;
+    _clearPsChoiceTimer();
+    showStep('pick-speak', 'ps-step-category');
+
+    $('btn-ps-cat-stock').onclick   = () => selectPsCategory('pick-speak-stock');
+    $('btn-ps-cat-general').onclick = () => selectPsCategory('pick-speak-general');
+  }
+
+  async function selectPsCategory(category) {
+    let topics = enabledTopics(await DB.getByIndex('topics', 'module', category));
+    // Backward-compat: if no general topics exist yet, fall back to legacy 'pick-speak' module
+    if (!topics.length && category === 'pick-speak-general') {
+      topics = enabledTopics(await DB.getByIndex('topics', 'module', 'pick-speak'));
+    }
+    if (!topics.length) {
+      toast('No topics available for this category. Ask your admin to add some.', 'error');
+      return;
+    }
+    _psCategory   = category;
+    _psTopicsPool = topics;
+
+    if (category === 'pick-speak-general') {
+      // Pre-request mic during user gesture so the 30s auto-advance can proceed without a popup
+      const micOk = await Recorder.requestMic();
+      if (!micOk) {
+        toast('🎤 Microphone access denied. Please allow mic access and try again.', 'error');
+        return;
+      }
+      _psMicPregranted = true;
+
+      // General: pick two distinct topics for the agent to choose from
+      const shuffled = [...topics].sort(() => Math.random() - 0.5);
+      _psTopicChoiceA = shuffled[0];
+      _psTopicChoiceB = shuffled.length > 1 ? shuffled[1] : shuffled[0];
+      _currentTopic   = null; // will be set when agent picks one
+    } else {
+      // Stock Market: single random topic revealed by agent
+      _currentTopic   = topics[Math.floor(Math.random() * topics.length)];
+      _psTopicChoiceA = null;
+      _psTopicChoiceB = null;
+    }
+    initPickSpeak(false);
+  }
+
+  function initPickSpeak(isSkip = false) {
+    if (!isSkip) _psSkipUsed = false;
+
+    showStep('pick-speak', 'ps-step-topic');
+
+    const stockWrap   = $('ps-stock-reveal-wrap');
+    const generalWrap = $('ps-general-topics-wrap');
+
+    if (_psCategory === 'pick-speak-general') {
+      // ── General mode: show two topic choices ──
+      stockWrap.classList.add('hidden');
+      generalWrap.classList.remove('hidden');
+
+      const aTitleEl = $('ps-topic-choice-a-title');
+      const aDescEl  = $('ps-topic-choice-a-desc');
+      const bTitleEl = $('ps-topic-choice-b-title');
+      const bDescEl  = $('ps-topic-choice-b-desc');
+
+      if (aTitleEl) aTitleEl.textContent = _psTopicChoiceA ? _psTopicChoiceA.title : '';
+      if (aDescEl)  aDescEl.textContent  = _psTopicChoiceA ? (_psTopicChoiceA.description || '') : '';
+      if (bTitleEl) bTitleEl.textContent = _psTopicChoiceB ? _psTopicChoiceB.title : '';
+      if (bDescEl)  bDescEl.textContent  = _psTopicChoiceB ? (_psTopicChoiceB.description || '') : '';
+
+      const pickAndStart = async (chosen) => {
+        _clearPsChoiceTimer(); // stop countdown when topic chosen
+        _currentTopic = chosen;
+        const ok = await startPickSpeakPrep();
+        if (!ok) toast('🎤 Microphone access denied. Please allow mic and try again.', 'error');
+      };
+
+      $('ps-topic-choice-a').onclick = () => pickAndStart(_psTopicChoiceA);
+      $('ps-topic-choice-b').onclick = () => pickAndStart(_psTopicChoiceB);
+
+      // 30-second countdown — auto-select if agent doesn't choose in time
+      let choiceRemaining = 30;
+      const countdownEl = $('ps-choice-countdown');
+      if (countdownEl) countdownEl.textContent = choiceRemaining;
+      _clearPsChoiceTimer();
+      _psChoiceTimerId = setInterval(() => {
+        choiceRemaining--;
+        if (countdownEl) countdownEl.textContent = choiceRemaining;
+        if (choiceRemaining <= 0) {
+          clearInterval(_psChoiceTimerId);
+          _psChoiceTimerId = null;
+          // Guard: only auto-advance if still on the topic step
+          const topicStep = $('ps-step-topic');
+          if (!topicStep || topicStep.classList.contains('hidden')) return;
+          pickAndStart(Math.random() < 0.5 ? _psTopicChoiceA : _psTopicChoiceB);
+        }
+      }, 1000);
+
+    } else {
+      // ── Stock Market mode: reveal → timer starts immediately ──
+      generalWrap.classList.add('hidden');
+      stockWrap.classList.remove('hidden');
+
+      const revealEl = $('ps-topic-reveal');
+      revealEl.classList.remove('revealed');
+      $('ps-topic-title').textContent = 'Click to reveal your topic';
+      $('ps-topic-desc').textContent  = 'Your topic will be revealed and the 2-minute prep timer will start immediately.';
+
+      $('btn-ps-reveal').onclick = async () => {
+        // Show the topic first, then immediately start prep
+        revealEl.classList.add('revealed');
+        $('ps-topic-title').textContent = _currentTopic.title;
+        $('ps-topic-desc').textContent  = _currentTopic.description || '';
+        $('btn-ps-reveal').style.display = 'none';
+
+        const ok = await startPickSpeakPrep();
+        if (!ok) {
+          // Mic denied — restore reveal button so user can retry
+          revealEl.classList.remove('revealed');
+          $('ps-topic-title').textContent = 'Click to reveal your topic';
+          $('ps-topic-desc').textContent  = 'Your topic will be revealed and the 2-minute prep timer will start immediately.';
+          $('btn-ps-reveal').style.display = '';
+          toast('🎤 Microphone access denied. Please allow mic and try again.', 'error');
+        }
+      };
+    }
+
+    $('btn-ps-again').onclick = () => initPickSpeakCategory();
+  }
+
+  async function startPickSpeakPrep() {
+    // Mic was pre-requested in selectPsCategory for general mode (user gesture).
+    // For stock mode (or any other path), request it now.
+    if (!_psMicPregranted) {
+      const micOk = await Recorder.requestMic();
+      if (!micOk) {
+        toast('⚠ Microphone access denied. Please allow mic access in your browser and try again.', 'error');
+        return false;
+      }
+    }
+    _psMicPregranted = false; // consume the flag
+
+    showStep('pick-speak', 'ps-step-prep');
+    $('ps-prep-title').textContent = _currentTopic.title;
+    $('ps-prep-desc').textContent = _currentTopic.description || '';
+
+    // Clear notepad and wire up word counter for this session
+    const notepad  = $('ps-notepad');
+    const noteWc   = $('ps-note-wordcount');
+    if (notepad) {
+      notepad.value = '';
+      if (noteWc) noteWc.textContent = '0 words';
+      notepad.oninput = () => {
+        const words = notepad.value.trim() ? notepad.value.trim().split(/\s+/).length : 0;
+        if (noteWc) noteWc.textContent = `${words} word${words !== 1 ? 's' : ''}`;
+      };
+    }
+
+    const PREP = 120;
+    const ring = $('ps-prep-ring');
+    const circumference = 339.3;
+
+    Recorder.startTimer($('ps-prep-time'), PREP, (secs) => {
+      const progress = secs / PREP;
+      ring.style.strokeDashoffset = circumference * (1 - progress);
+    }, () => {
+      startPickSpeakRecording();
+    });
+
+    $('btn-ps-skip-prep').onclick = () => {
+      Recorder.stopTimer();
+      startPickSpeakRecording();
+    };
+    return true;
+  }
+
+  function startPickSpeakRecording() {
+    // Mic was already granted in startPickSpeakPrep (user gesture context).
+    showStep('pick-speak', 'ps-step-record');
+    $('ps-rec-title').textContent = _currentTopic.title;
+
+    // Copy notepad content into the recording-step notepad so it stays visible
+    const srcNotes = $('ps-notepad');
+    const recNotes = $('ps-notepad-rec');
+    const recWc    = $('ps-rec-note-wc');
+    if (srcNotes && recNotes) {
+      recNotes.value = srcNotes.value;
+      if (recWc) {
+        const words = recNotes.value.trim() ? recNotes.value.trim().split(/\s+/).length : 0;
+        recWc.textContent = `${words} word${words !== 1 ? 's' : ''}`;
+      }
+      // Keep word count live as agent edits during recording
+      recNotes.oninput = () => {
+        const words = recNotes.value.trim() ? recNotes.value.trim().split(/\s+/).length : 0;
+        if (recWc) recWc.textContent = `${words} word${words !== 1 ? 's' : ''}`;
+      };
+    }
+    const speechSupported = SpeechEngine.isSupported();
+    if (!speechSupported) {
+      $('ps-no-speech-note').classList.remove('hidden');
+    }
+
+    let transcriptText = '';
+    SpeechEngine.startTranscription((text) => {
+      transcriptText = text;
+      const el = $('ps-live-transcript');
+      el.innerHTML = text || '<span class="transcript-placeholder">Listening...</span>';
+    });
+
+    const blobPromise = Recorder.start();
+    const waveCanvas = $('ps-waveform');
+    Recorder.startWaveform(waveCanvas);
+    _psRecordingStartTime = Date.now();
+
+    const REC_DURATION = 300;
+
+    Recorder.startTimer($('ps-rec-time'), REC_DURATION, null, () => {
+      stopPickSpeakRecording(blobPromise, transcriptText);
+    });
+
+    $('btn-ps-stop').onclick = () => {
+      Recorder.stopTimer();
+      stopPickSpeakRecording(blobPromise, transcriptText);
+    };
+  }
+
+  async function stopPickSpeakRecording(blobPromise, transcriptText) {
+    $('btn-ps-stop').disabled = true;
+    const finalTranscript = SpeechEngine.stopTranscription() || transcriptText;
+    Recorder.stop();
+
+    let blob = null;
+    try { blob = await blobPromise; } catch (e) { console.warn('Recording error:', e); }
+
+    // Compute actual recording duration
+    const duration = _psRecordingStartTime
+      ? Math.floor((Date.now() - _psRecordingStartTime) / 1000)
+      : 300;
+
+    const MIN_SCORE_DURATION = 120; // must speak for at least 2 minutes to get AI scored
+    const scoreable = duration >= MIN_SCORE_DURATION && !!finalTranscript;
+
+    let analysis = null;
+    let aiScores = null;
+    if (scoreable) {
+      analysis = SpeechEngine.analyze(finalTranscript, duration);
+      aiScores  = SpeechEngine.scoreSpeech(analysis, duration);
+      // Add time management criterion based on actual recording duration
+      if (typeof ClaudeEvaluator !== 'undefined') {
+        const tm = ClaudeEvaluator.scoreTimeManagement(duration);
+        aiScores.timeManagement = tm.score;
+        if (!aiScores._reasons) aiScores._reasons = {};
+        aiScores._reasons.timeManagement = tm.reason;
+      }
+      aiScores._summary = SpeechEngine.generateCoachingSummary('pick-speak', aiScores);
+    }
+
+    const sessionData = {
+      traineeId: _trainee.id,
+      traineeName: _trainee.name,
+      module: 'pick-speak',
+      topicId: _currentTopic.id,
+      topicTitle: _currentTopic.title,
+      recordingBlob: blob,
+      transcript: finalTranscript,
+      aiScores,
+      adminScores: null,
+      adminComment: '',
+      status: scoreable ? 'ai-evaluated' : 'pending',
+      submittedAt: new Date().toISOString(),
+      timeTaken: Math.max(duration, 1),
+      analysis
+    };
+
+    try {
+      await DB.put('sessions', sessionData);
+    } catch (e) {
+      console.error('Session save failed:', e.message);
+      toast('⚠ Could not save session: ' + e.message, 'error');
+    }
+    showPickSpeakResults();
+  }
+
+  function showPickSpeakResults() {
+    _clearPsChoiceTimer(); // stop any remaining choice countdown
+    showStep('pick-speak', 'ps-step-results');
+    $('btn-ps-stop').disabled = false;
+    toast('Assessment submitted!', 'success');
+  }
+
+  // ================================================================
+  //  MOCK CALL
+  // ================================================================
+
+  // ── Mood params: irate → calm arc across turns ──
+  function _botMoodParams(turnIndex, totalTurns) {
+    const progress = totalTurns <= 1 ? 0.5 : Math.min(1, turnIndex / (totalTurns - 1));
+    // Pitch 1.10 → 0.92, Rate 1.05 → 0.88 — subtle variation, not robotic
+    const pitch  = 1.10 - progress * 0.18;
+    const rate   = 1.05 - progress * 0.17;
+    const volume = 1.0;
+    let emoji, label, bubbleClass;
+    // Realistic call arc: starts frustrated → peaks demanding mid-call → listens → warms up
+    if      (progress < 0.25) { emoji = '😤'; label = 'Frustrated';   bubbleClass = 'mood-frustrated'; }
+    else if (progress < 0.55) { emoji = '😡'; label = 'Demanding';    bubbleClass = 'mood-irate';      }
+    else if (progress < 0.80) { emoji = '😐'; label = 'Listening';    bubbleClass = 'mood-neutral';    }
+    else                      { emoji = '🙂'; label = 'Warming Up';   bubbleClass = 'mood-calm';       }
+    return { pitch, rate, volume, progress, emoji, label, bubbleClass };
+  }
+
+  // ── Audible breath sound via Web Audio API ──
+  // progress 0 = angry (short sharp inhale), 1 = calm (long soft breath)
+  // Returns a Promise that resolves when the breath finishes playing.
+  function _playBreath(progress) {
+    return new Promise(resolve => {
+      try {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) { resolve(); return; }
+        const ctx = new Ctx();
+
+        // Angry = 95ms sharp, calm = 260ms gentle
+        const durationMs  = Math.round(95 + progress * 165);
+        const gainLevel   = 0.055 - progress * 0.018;   // louder when agitated
+        const sr  = ctx.sampleRate;
+        const len = Math.round(sr * durationMs / 1000);
+        const buf = ctx.createBuffer(1, len, sr);
+        const pcm = buf.getChannelData(0);
+
+        // Envelope: fast attack then exponential decay (sounds like real breath-in)
+        const attackEnd = 0.08 + progress * 0.12;       // 0.08→0.20 of duration
+        for (let i = 0; i < len; i++) {
+          const t   = i / len;
+          const env = t < attackEnd
+            ? t / attackEnd
+            : Math.pow(1 - (t - attackEnd) / (1 - attackEnd + 1e-6), 0.6);
+          pcm[i] = (Math.random() * 2 - 1) * env * gainLevel;
+        }
+
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+
+        // Low-pass: real breath is all low-frequency air turbulence
+        const lpf = ctx.createBiquadFilter();
+        lpf.type             = 'lowpass';
+        lpf.frequency.value  = 580 + progress * 200;   // slightly brighter when calm
+        lpf.Q.value          = 0.5;
+
+        src.connect(lpf);
+        lpf.connect(ctx.destination);
+        src.start(0);
+
+        let fired = false;
+        const fin = () => { if (!fired) { fired = true; try { ctx.close(); } catch(e){} resolve(); } };
+        src.onended = fin;
+        setTimeout(fin, durationMs + 150);
+      } catch (e) { resolve(); }  // AudioContext blocked — skip silently
+    });
+  }
+
+  // ── Split bot text into natural speaking chunks ──
+  // Sentence-level first, then long clauses at comma/semicolon boundaries.
+  function _splitSpeechChunks(text) {
+    if (!text || !text.trim()) return [text];
+    const MARKER = '⁠';
+    const raw = text
+      .replace(/([.!?])(\s+)/g, `$1${MARKER}$2`)
+      .split(MARKER)
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    const out = [];
+    for (const sentence of raw) {
+      if (sentence.split(/\s+/).length <= 9) {
+        out.push(sentence);
+      } else {
+        const clauses = sentence.split(/,\s*|;\s*/).map(c => c.trim()).filter(c => c.length > 3);
+        out.push(...(clauses.length > 1 ? clauses : [sentence]));
+      }
+    }
+    // Merge stray tiny fragments into next chunk
+    const merged = [];
+    for (let i = 0; i < out.length; i++) {
+      if (out[i].length < 4 && i + 1 < out.length) { out[i + 1] = out[i] + ' ' + out[i + 1]; }
+      else merged.push(out[i]);
+    }
+    return merged.length ? merged : [text];
+  }
+
+  // ── Pick best TTS voice — strongly prefer male ──
+  function _pickTtsVoice() {
+    const voices = _ttsVoices.length ? _ttsVoices : speechSynthesis.getVoices();
+    // Priority list already has male voices at the top
+    for (const name of TTS_VOICE_PRIORITY) {
+      const v = voices.find(v => v.name === name);
+      if (v) return v;
+    }
+    // Try any male-sounding Neural voice before generic fallback
+    const maleNeural = voices.find(v =>
+      /ryan|andrew|brian|christopher|eric|guy|daniel|alex|david|james|mark|thomas/i.test(v.name)
+      && /natural|neural|online/i.test(v.name)
+      && v.lang.startsWith('en')
+    );
+    if (maleNeural) return maleNeural;
+    const anyNeural = voices.find(v => /natural|neural|online/i.test(v.name) && v.lang.startsWith('en'));
+    return anyNeural
+        || voices.find(v => v.lang === 'en-US')
+        || voices.find(v => v.lang.startsWith('en'))
+        || null;
+  }
+
+  // ── Play admin-recorded audio (Blob or URL string) for a bot turn ──
+  // Falls back to onEnd immediately if audio is invalid.
+  function playBotAudio(audio, onEnd) {
+    try {
+      const isBlob = audio instanceof Blob;
+      const url    = isBlob ? URL.createObjectURL(audio) : audio;
+      const el     = new Audio(url);
+      _mcBotAudioEl = el;
+      const cleanup = () => { _mcBotAudioEl = null; if (isBlob) URL.revokeObjectURL(url); };
+      el.onended = () => { cleanup(); onEnd(); };
+      el.onerror = () => { cleanup(); onEnd(); };
+      el.play().catch(() => { cleanup(); onEnd(); });
+    } catch (e) {
+      _mcBotAudioEl = null;
+      onEnd();
+    }
+  }
+
+  // ── ElevenLabs TTS for AI customer (human-sounding voice) ──
+  // Sends text to the /tts route on the Cloudflare Worker proxy, receives
+  // audio/mpeg back, and plays it via an HTMLAudioElement stored in
+  // _mcBotAudioEl (so endBotCallEarly() can cancel it).
+  // Falls back to speakBot() if the proxy is unavailable or returns an error.
+  async function speakAiCustomer(text, onEnd, mood = {}) {
+    const proxyUrl = (typeof CONFIG !== 'undefined' && CONFIG.CLAUDE_PROXY_URL) || '';
+    if (!proxyUrl) { speakBot(text, onEnd, mood); return; }
+
+    const ttsUrl = proxyUrl.replace(/\/?$/, '/tts');
+
+    try {
+      const resp = await fetch(ttsUrl, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          text,
+          model_id: 'eleven_multilingual_v2',  // higher quality, natural pacing
+          voice_settings: {
+            stability:         0.50,  // steady, controlled investor tone
+            similarity_boost:  0.75,
+            style:             0.20,  // natural, not theatrical
+            use_speaker_boost: true,
+          },
+        }),
+      });
+
+      if (!resp.ok) throw new Error(`ElevenLabs TTS error ${resp.status}`);
+
+      const blob     = await resp.blob();
+      const audioUrl = URL.createObjectURL(blob);
+      const audio    = new Audio(audioUrl);
+      _mcBotAudioEl  = audio;
+
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        URL.revokeObjectURL(audioUrl);
+        _mcBotAudioEl = null;
+        onEnd();
+      };
+
+      // Safety timeout: ~400 ms per word + 6 s buffer
+      const guard = setTimeout(finish, text.split(/\s+/).length * 400 + 6000);
+      audio.onended = () => { clearTimeout(guard); finish(); };
+      audio.onerror = () => { clearTimeout(guard); finish(); };
+
+      await audio.play();
+    } catch (e) {
+      console.warn('ElevenLabs TTS failed, using browser voice:', e.message);
+      speakBot(text, onEnd, mood);
+    }
+  }
+
+  // ── Core TTS: speaks with real breath sounds + per-chunk variation ──
+  // Plays an audible breath inhale → then speaks each sentence/clause
+  // chunk with slight pitch/rate jitter and natural pauses between them.
+  function speakBot(text, onEnd, mood = {}) {
+    if (!window.speechSynthesis) { onEnd(); return; }
+    window.speechSynthesis.cancel();
+
+    const chunks      = _splitSpeechChunks(text);
+    const chosenVoice = _pickTtsVoice();
+    const basePitch   = mood.pitch    !== undefined ? mood.pitch    : 1.0;
+    const baseRate    = mood.rate     !== undefined ? mood.rate     : 0.92;
+    const baseVol     = mood.volume   !== undefined ? mood.volume   : 1.0;
+    const progress    = mood.progress !== undefined ? mood.progress : 0.5;
+
+    let done = false;
+    let chunkIdx = 0;
+
+    // Safety guard scales with length of the text
+    const wordCount = text.split(/\s+/).length;
+    const guardMs   = wordCount * 230 + chunks.length * 300 + 10000;
+    const guard     = setTimeout(() => { if (!done) { done = true; onEnd(); } }, guardMs);
+
+    function finish() {
+      if (!done) { done = true; clearTimeout(guard); onEnd(); }
+    }
+
+    function speakChunk() {
+      if (done) return;
+      if (chunkIdx >= chunks.length) { finish(); return; }
+
+      const chunk     = chunks[chunkIdx++];
+      const lastChar  = chunk.trim().slice(-1);
+      const isSentEnd = /[.!?]/.test(lastChar);
+
+      // Per-chunk pitch + rate jitter — stronger variation = more human
+      const pitchJitter = (Math.random() - 0.5) * 0.14;   // ±0.07
+      const rateJitter  = (Math.random() - 0.5) * 0.10;   // ±0.05
+
+      const utt    = new SpeechSynthesisUtterance(chunk);
+      utt.lang     = 'en-US';
+      utt.pitch    = Math.max(0.5, Math.min(2.0, basePitch + pitchJitter));
+      utt.rate     = Math.max(0.5, Math.min(1.6, baseRate  + rateJitter));
+      utt.volume   = baseVol;
+      if (chosenVoice) utt.voice = chosenVoice;
+
+      utt.onend = () => {
+        if (done) return;
+        if (chunkIdx >= chunks.length) { finish(); return; }
+
+        if (isSentEnd) {
+          // After a full sentence: play a breath then continue
+          // (irate = short pause before breath, calm = longer)
+          const preBreathMs = Math.round(60 + progress * 80);   // 60→140 ms
+          setTimeout(() => {
+            _playBreath(progress).then(() => {
+              if (!done) setTimeout(speakChunk, 40 + Math.random() * 60);
+            });
+          }, preBreathMs);
+        } else {
+          // After a clause (comma): just a short thinking pause
+          const clausePauseMs = Math.round(70 + Math.random() * 80);  // 70–150 ms
+          setTimeout(speakChunk, clausePauseMs);
+        }
+      };
+      utt.onerror = () => { if (!done) { done = true; clearTimeout(guard); onEnd(); } };
+
+      speechSynthesis.speak(utt);
+    }
+
+    // ── Start: play opening breath, then begin speaking ──
+    // First breath is slightly longer than inter-sentence breaths
+    const openBreathProgress = Math.max(0, progress - 0.1);  // slightly angrier-sounding
+    _playBreath(openBreathProgress).then(() => {
+      if (!done) {
+        // Short "thinking" pause after breath before first word
+        const thinkMs = Math.round(80 + Math.random() * 100 + (1 - progress) * 60);
+        setTimeout(speakChunk, thinkMs);
+      }
+    });
+  }
+
+  function initMockCallTopicSelect(allTopics) {
+    // Randomly pick up to 2 topics from the pool
+    const pool = [...allTopics];
+    const selected = [];
+    while (selected.length < 2 && pool.length > 0) {
+      const idx = Math.floor(Math.random() * pool.length);
+      selected.push(pool.splice(idx, 1)[0]);
+    }
+
+    showStep('mock-call', 'mc-step-topic-select');
+
+    const container = $('mc-topic-cards');
+    container.innerHTML = selected.map((t, i) => `
+      <button class="mc-topic-card" data-idx="${i}">
+        <h4>${t.title}</h4>
+        <p>${t.description || ''}</p>
+      </button>
+    `).join('');
+
+    container.querySelectorAll('.mc-topic-card').forEach((btn, i) => {
+      btn.onclick = () => {
+        _currentTopic = selected[i];
+        initMockCall();
+      };
+    });
+  }
+
+  function initMockCall() {
+    showStep('mock-call', 'mc-step-scenario');
+    $('mc-title').textContent = _currentTopic.title;
+    $('mc-desc').textContent = _currentTopic.description || '';
+    $('mc-scenario-text').textContent = _currentTopic.scenario || '';
+
+    // Checklist
+    const ul = $('mc-checklist');
+    ul.innerHTML = '';
+    (_currentTopic.checklist || []).forEach(item => {
+      ul.innerHTML += `<li>${item}</li>`;
+    });
+
+    // Caller audio — support both Storage URL (new) and legacy Blob (old)
+    const audioSection = $('mc-caller-audio-section');
+    const callerUrl = _currentTopic.callerAudioUrl
+      || (_currentTopic.callerAudioBlob ? URL.createObjectURL(_currentTopic.callerAudioBlob) : null);
+    if (callerUrl) {
+      $('mc-caller-audio').src = callerUrl;
+      audioSection.classList.remove('hidden');
+    } else {
+      audioSection.classList.add('hidden');
+    }
+
+    $('btn-mc-ready').onclick = async () => {
+      const micOk = await Recorder.requestMic();
+      if (!micOk) {
+        toast('⚠ Microphone access denied. Please allow mic access in your browser and try again.', 'error');
+        return;
+      }
+      const script = _currentTopic.botScript || _currentTopic.bot_script || [];
+      if (script.length > 0) {
+        startBotCall(script);   // turn-based bot conversation
+      } else {
+        startMockCallRecording(); // legacy single-recording fallback
+      }
+    };
+  }
+
+  function startMockCallRecording() {
+    showStep('mock-call', 'mc-step-record');
+    $('mc-rec-mini').textContent = _currentTopic.title;
+
+    // Show customer questions panel if topic has bot script lines
+    const questions = _currentTopic.botScript || _currentTopic.bot_script || [];
+    const panel = $('mc-questions-panel');
+    const list  = $('mc-questions-list');
+    if (questions.length > 0) {
+      list.innerHTML = questions.map(q => `<li>${q}</li>`).join('');
+      panel.classList.remove('hidden');
+    } else {
+      panel.classList.add('hidden');
+    }
+
+    const blobPromise = Recorder.start();
+    Recorder.startWaveform($('mc-waveform'));
+    Recorder.startTimer($('mc-rec-time'), 0, null, null, true); // count up
+
+    // Start live transcription if browser supports it
+    const transcriptBox = $('mc-live-transcript-box');
+    const transcriptEl  = $('mc-live-transcript');
+    if (SpeechEngine.isSupported()) {
+      if (transcriptBox) transcriptBox.classList.remove('hidden');
+      SpeechEngine.startTranscription((text) => {
+        if (transcriptEl) transcriptEl.textContent = text || 'Listening...';
+      });
+    }
+
+    $('btn-mc-stop').onclick = async () => {
+      $('btn-mc-stop').disabled = true;
+      Recorder.stopTimer();
+      Recorder.stopWaveform();
+      Recorder.stop();
+      const elapsed = Recorder.getElapsed();
+
+      // Stop transcription
+      const finalTranscript = SpeechEngine.isSupported() ? SpeechEngine.stopTranscription() : '';
+      if (transcriptBox) transcriptBox.classList.add('hidden');
+
+      let blob = null;
+      try { blob = await blobPromise; } catch (e) {}
+
+      // Show processing state in done step
+      showStep('mock-call', 'mc-step-done');
+      const scoringStatusEl = $('mc-ai-scoring-status');
+      if (scoringStatusEl) {
+        scoringStatusEl.textContent = '⏳ Analyzing your call...';
+        scoringStatusEl.classList.remove('hidden');
+      }
+
+      // Score: Claude API → JS fallback (always produces a score)
+      let aiScores = null;
+      let scoringMethod = 'js';
+
+      if (finalTranscript && typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
+        try {
+          if (scoringStatusEl) scoringStatusEl.textContent = '🤖 Claude AI is scoring your call...';
+          const claudeResult = await ClaudeEvaluator.evaluate(
+            'mock-call', finalTranscript, _currentTopic.title, _currentTopic.scenario || ''
+          );
+          if (claudeResult && claudeResult.overall !== null) {
+            aiScores = { ...claudeResult.scores, overall: claudeResult.overall, _reasons: claudeResult.reasons, _method: 'claude' };
+            scoringMethod = 'claude';
+          }
+        } catch (e) {
+          console.warn('Claude scoring failed, falling back to JS:', e.message);
+        }
+      }
+      // Always fall back to JS scorer (handles empty transcript gracefully)
+      if (!aiScores) {
+        aiScores = SpeechEngine.scoreMockCall(finalTranscript);
+        aiScores._method = 'js';
+      }
+      aiScores._summary = SpeechEngine.generateCoachingSummary('mock-call', aiScores);
+
+      if (scoringStatusEl) scoringStatusEl.classList.add('hidden');
+
+      // Persist session
+      try {
+        await DB.put('sessions', {
+          traineeId: _trainee.id,
+          traineeName: _trainee.name,
+          module: 'mock-call',
+          topicId: _currentTopic.id,
+          topicTitle: _currentTopic.title,
+          recordingBlob: blob,
+          transcript: finalTranscript,
+          aiScores,
+          adminScores: null,
+          adminComment: '',
+          status: 'ai-evaluated',
+          submittedAt: new Date().toISOString(),
+          timeTaken: Math.max(elapsed, 1)
+        });
+        toast('Mock call submitted!', 'success');
+      } catch (e) {
+        console.error('Session save failed:', e.message);
+        toast('⚠ Could not save session: ' + e.message, 'error');
+      }
+
+      showMockCallResults(aiScores, finalTranscript, scoringMethod);
+      $('btn-mc-stop').disabled = false;
+    };
+  }
+
+  // ================================================================
+  //  MOCK CALL — BOT-DRIVEN TURN-BASED FLOW
+  // ================================================================
+
+  // Entry point: called when topic has a non-empty botScript
+  async function startBotCall(script) {
+    // Reset AI flags regardless of path
+    _mcAiMode      = false;
+    _mcAiHistory   = [];
+    _mcAiTurnCount = 0;
+
+    // Takeover topic → live AI customer instead of scripted turns
+    if (_currentTopic && _currentTopic.title === MC_AI_TOPIC_TITLE) {
+      startAiCall();
+      return;
+    }
+
+    _mcTurns         = script;
+    _mcTurnIndex     = 0;
+    _mcTranscripts   = [];
+    _mcCallFinishing = false;
+
+    showStep('mock-call', 'mc-step-bot-call');
+    $('mc-chat-thread').innerHTML = '';
+
+    // Populate the full scenario panel
+    $('mc-bot-sc-title').textContent = _currentTopic.title || '';
+    $('mc-bot-sc-desc').textContent  = _currentTopic.description || '';
+    $('mc-bot-sc-text').textContent  = _currentTopic.scenario || '';
+    const clEl = $('mc-bot-sc-checklist');
+    clEl.innerHTML = '';
+    (_currentTopic.checklist || []).forEach(item => { clEl.innerHTML += `<li>${item}</li>`; });
+
+    // Collapse / expand scenario toggle
+    const scBody   = $('mc-bot-sc-body');
+    const scToggle = $('btn-mc-sc-toggle');
+    let scVisible  = true;
+    scToggle.onclick = () => {
+      scVisible = !scVisible;
+      scBody.classList.toggle('mc-bot-sc-collapsed', !scVisible);
+      scToggle.textContent = scVisible ? 'Hide ▲' : 'Show ▼';
+    };
+
+    // Start ONE continuous recording for the entire call
+    _mcBlobPromise = Recorder.start();
+    Recorder.startWaveform($('mc-bot-waveform'));
+    // Start a count-up timer (no display element) so Recorder.getElapsed() is accurate
+    Recorder.startTimer(null, 0, null, null, true);
+
+    // "End Call Early" — always visible; cancels TTS + timer, submits whatever was captured
+    $('btn-mc-end-call').onclick = endBotCallEarly;
+
+    runBotTurn();
+  }
+
+  // ── AI-driven call (Takeover topic) ──────────────────────────────────────
+  // Replaces scripted turns with live Claude responses based on what the agent says.
+
+  function startAiCall() {
+    _mcAiMode      = true;
+    _mcAiHistory   = [];
+    _mcAiTurnCount = 0;
+    _mcTranscripts = [];
+    _mcCallFinishing = false;
+
+    showStep('mock-call', 'mc-step-bot-call');
+    $('mc-chat-thread').innerHTML = '';
+
+    // Populate scenario panel (same as scripted call)
+    $('mc-bot-sc-title').textContent = _currentTopic.title || '';
+    $('mc-bot-sc-desc').textContent  = _currentTopic.description || '';
+    $('mc-bot-sc-text').textContent  = _currentTopic.scenario || '';
+    const clEl = $('mc-bot-sc-checklist');
+    clEl.innerHTML = '';
+    (_currentTopic.checklist || []).forEach(item => { clEl.innerHTML += `<li>${item}</li>`; });
+
+    const scBody   = $('mc-bot-sc-body');
+    const scToggle = $('btn-mc-sc-toggle');
+    let scVisible  = true;
+    scToggle.onclick = () => {
+      scVisible = !scVisible;
+      scBody.classList.toggle('mc-bot-sc-collapsed', !scVisible);
+      scToggle.textContent = scVisible ? 'Hide ▲' : 'Show ▼';
+    };
+
+    _mcBlobPromise = Recorder.start();
+    Recorder.startWaveform($('mc-bot-waveform'));
+    Recorder.startTimer(null, 0, null, null, true);
+    $('btn-mc-end-call').onclick = endBotCallEarly;
+
+    // Badge in turn label so it's obvious this is AI mode
+    const turnLabel = $('mc-turn-label');
+    if (turnLabel) {
+      turnLabel.textContent  = '🤖 Live AI Customer — Starting call…';
+      turnLabel.style.color  = '#6366f1';
+      turnLabel.style.fontWeight = '700';
+    }
+
+    runAiTurn(null); // first turn — no agent response yet
+  }
+
+  // Build the alternating user/assistant message array for Claude
+  function _buildAiMessages() {
+    const msgs = [{ role: 'user', content: 'The agent has answered the call. Start as the customer with your opening complaint or question.' }];
+    for (const ex of _mcAiHistory) {
+      msgs.push({ role: 'assistant', content: ex.bot });
+      if (ex.agent) msgs.push({ role: 'user', content: ex.agent });
+    }
+    return msgs;
+  }
+
+  // Call Claude for the customer's next line, display bubble, speak it
+  async function runAiTurn(agentResponse) {
+    _mcAiTurnCount++;
+    const isLast = _mcAiTurnCount >= MC_AI_MAX_TURNS;
+
+    // If there's an agent response, store it in the last history entry
+    if (agentResponse !== null && _mcAiHistory.length > 0) {
+      _mcAiHistory[_mcAiHistory.length - 1].agent = agentResponse;
+    }
+
+    // Update turn label
+    const turnLabel = $('mc-turn-label');
+    if (turnLabel) {
+      turnLabel.textContent  = isLast
+        ? `🤖 AI Customer — Turn ${_mcAiTurnCount} — 🏁 Final Turn`
+        : `🤖 AI Customer — Turn ${_mcAiTurnCount} of ${MC_AI_MAX_TURNS}`;
+      turnLabel.style.color  = isLast ? '#d97706' : '#6366f1';
+      turnLabel.style.fontWeight = '700';
+    }
+
+    // Show "thinking" state
+    $('mc-bot-status').style.display = '';
+    $('mc-rec-area').style.display   = 'none';
+    $('btn-mc-finish').style.display = 'none';
+    const statusEl = $('mc-bot-status');
+    if (statusEl) statusEl.innerHTML = '<span style="color:#6366f1;font-style:italic">🤖 AI Customer is thinking…</span>';
+
+    let botLine = '';
+    try {
+      botLine = await ClaudeEvaluator.callAiCustomer(
+        _currentTopic.scenario || '',
+        _currentTopic.description || '',
+        _buildAiMessages(),
+        _mcAiTurnCount,
+        MC_AI_MAX_TURNS
+      );
+    } catch (e) {
+      console.warn('AI customer call failed, using fallback:', e.message);
+      botLine = _mcAiTurnCount === 1
+        ? "I'd like to apply for a takeover offer but your system is blocking me even though I'm willing to proceed. Why is that?"
+        : "I still don't understand why I can't do this directly. Can you explain the exact policy?";
+    }
+
+    // Add entry to history (agent will be filled in after agent speaks)
+    _mcAiHistory.push({ bot: botLine, agent: '' });
+
+    // Show bubble + mood
+    const mood = _botMoodParams(_mcAiTurnCount - 1, MC_AI_MAX_TURNS);
+    const moodEl = $('mc-mood-indicator');
+    if (moodEl) {
+      moodEl.className = `mc-mood-bar ${mood.bubbleClass}`;
+      moodEl.innerHTML = `<span class="mc-mood-emoji">${mood.emoji}</span> Customer is <strong>${mood.label}</strong>`;
+    }
+    const bubble = document.createElement('div');
+    bubble.className = `mc-bubble bot ${mood.bubbleClass}`;
+    bubble.innerHTML = `<span class="mc-bubble-mood">${mood.emoji}</span>${botLine}`;
+    $('mc-chat-thread').appendChild(bubble);
+    $('mc-chat-thread').scrollTop = $('mc-chat-thread').scrollHeight;
+
+    // Speak it, then hand off to trainee or finish
+    speakAiCustomer(botLine, () => {
+      if (isLast) {
+        $('mc-bot-status').style.display = 'none';
+        $('btn-mc-finish').style.display = '';
+        $('btn-mc-finish').onclick = finishBotCall;
+      } else {
+        startTraineeTurn();
+      }
+    }, mood);
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Called when trainee clicks "End Call Early": cancel TTS, flush any
+  // in-progress trainee turn, then hand off to finishBotCall()
+  function endBotCallEarly() {
+    if (_mcCallFinishing) return; // already finishing — ignore duplicate clicks
+    // Cancel any ongoing TTS or recorded audio playback
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    if (_mcBotAudioEl) { try { _mcBotAudioEl.pause(); _mcBotAudioEl.src = ''; } catch(e){} _mcBotAudioEl = null; }
+
+    // If currently in a trainee turn, capture whatever has been spoken so far
+    const recArea = $('mc-rec-area');
+    if (recArea && recArea.style.display !== 'none' && !_mcTurnEnded) {
+      _mcTurnEnded = true; // prevent endTraineeTurn() from firing via timer
+      clearInterval(_mcTurnTimerId);
+      const partial = SpeechEngine.isSupported() ? SpeechEngine.stopTranscription() : '';
+      _mcTranscripts.push(partial);
+    } else {
+      // Bot was speaking — just clear the timer guard
+      clearInterval(_mcTurnTimerId);
+      if (SpeechEngine.isSupported()) SpeechEngine.stopTranscription();
+    }
+
+    finishBotCall();
+  }
+
+  // Render the bot's current turn as a chat bubble, then speak via TTS
+  function runBotTurn() {
+    const line = _mcTurns[_mcTurnIndex];
+    const mood = _botMoodParams(_mcTurnIndex, _mcTurns.length);
+
+    const isLastTurn = _mcTurnIndex === _mcTurns.length - 1;
+    const turnLabel = $('mc-turn-label');
+    if (turnLabel) {
+      turnLabel.textContent = isLastTurn
+        ? `Turn ${_mcTurnIndex + 1} of ${_mcTurns.length} — 🏁 Final Question`
+        : `Turn ${_mcTurnIndex + 1} of ${_mcTurns.length}`;
+      turnLabel.style.color  = isLastTurn ? '#d97706' : '';
+      turnLabel.style.fontWeight = isLastTurn ? '700' : '';
+    }
+
+    // Update the mood indicator bar at the top of the chat
+    const moodEl = $('mc-mood-indicator');
+    if (moodEl) {
+      moodEl.className = `mc-mood-bar ${mood.bubbleClass}`;
+      moodEl.innerHTML = `<span class="mc-mood-emoji">${mood.emoji}</span> Customer is <strong>${mood.label}</strong>`;
+    }
+
+    const bubble = document.createElement('div');
+    bubble.className = `mc-bubble bot ${mood.bubbleClass}`;
+    bubble.innerHTML = `<span class="mc-bubble-mood">${mood.emoji}</span>${line}`;
+    $('mc-chat-thread').appendChild(bubble);
+    $('mc-chat-thread').scrollTop = $('mc-chat-thread').scrollHeight;
+
+    $('mc-bot-status').style.display = '';
+    $('mc-rec-area').style.display   = 'none';
+    $('btn-mc-finish').style.display = 'none';
+
+    // Use admin-recorded audio if available, otherwise fall back to TTS
+    const recordedBlob = _currentTopic.botScriptAudio && _currentTopic.botScriptAudio[_mcTurnIndex];
+    if (recordedBlob) {
+      playBotAudio(recordedBlob, startTraineeTurn);
+    } else {
+      speakBot(line, startTraineeTurn, mood);
+    }
+  }
+
+  // After TTS ends: show recording area, wait for agent to click Done
+  function startTraineeTurn() {
+    _mcTurnEnded = false;
+    $('mc-bot-status').style.display = 'none';
+    $('mc-rec-area').style.display   = '';
+
+    // Live transcription (SpeechEngine resets _transcript on each call)
+    if (SpeechEngine.isSupported()) {
+      $('mc-bot-live-transcript-box').style.display = '';
+      $('mc-bot-live-transcript').textContent = 'Listening...';
+      SpeechEngine.startTranscription((text) => {
+        $('mc-bot-live-transcript').textContent = text || 'Listening...';
+      });
+    }
+
+    // Per-turn 2-minute countdown — auto-advances on timeout
+    const TURN_LIMIT = 120;
+    let remaining = TURN_LIMIT;
+    function fmtTime(s) {
+      return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    }
+    const timeEl = $('mc-turn-time');
+    if (timeEl) timeEl.textContent = fmtTime(remaining);
+    clearInterval(_mcTurnTimerId);
+    _mcTurnTimerId = setInterval(() => {
+      remaining--;
+      if (timeEl) timeEl.textContent = fmtTime(remaining);
+      if (remaining <= 0) endTraineeTurn();
+    }, 1000);
+
+    $('btn-mc-done-turn').onclick = () => endTraineeTurn();
+  }
+
+  // Capture this turn's transcript, advance to next bot turn (or finish)
+  function endTraineeTurn() {
+    if (_mcTurnEnded) return; // guard double-call (timer + button race)
+    _mcTurnEnded = true;
+
+    clearInterval(_mcTurnTimerId);
+
+    const partial = SpeechEngine.isSupported() ? SpeechEngine.stopTranscription() : '';
+    _mcTranscripts.push(partial);
+
+    $('mc-bot-live-transcript-box').style.display = 'none';
+    $('mc-bot-live-transcript').textContent = 'Listening...';
+    $('mc-rec-area').style.display = 'none';
+
+    // Add trainee response bubble
+    const bubble = document.createElement('div');
+    bubble.className = 'mc-bubble trainee';
+    bubble.textContent = partial || '(no transcript captured)';
+    $('mc-chat-thread').appendChild(bubble);
+    $('mc-chat-thread').scrollTop = $('mc-chat-thread').scrollHeight;
+
+    if (_mcAiMode) {
+      // AI mode: feed agent's response to Claude for the next customer turn
+      if (_mcAiTurnCount < MC_AI_MAX_TURNS) {
+        runAiTurn(partial);
+      } else {
+        $('btn-mc-finish').style.display = '';
+        $('btn-mc-finish').onclick = finishBotCall;
+      }
+    } else {
+      _mcTurnIndex++;
+      if (_mcTurnIndex < _mcTurns.length) {
+        runBotTurn();
+      } else {
+        $('btn-mc-finish').style.display = '';
+        $('btn-mc-finish').onclick = finishBotCall;
+      }
+    }
+  }
+
+  // Stop recording, score trainee transcript, save session, show results
+  async function finishBotCall() {
+    if (_mcCallFinishing) return; // prevent double-submission
+    _mcCallFinishing = true;
+    $('btn-mc-finish').disabled = true;
+
+    // Stop the single continuous recording
+    Recorder.stop(); // also calls stopWaveform() + stopTimer() internally
+    const elapsed = Recorder.getElapsed(); // works because startTimer(countUp) was called in startBotCall
+
+    let blob = null;
+    try { blob = await _mcBlobPromise; } catch (e) {}
+
+    // Full transcript for storage (Customer/You labels — readable by admin)
+    const fullTranscript = _mcAiMode
+      ? _mcAiHistory.map(ex =>
+          `Customer: ${ex.bot}\nYou: ${ex.agent || '(no response)'}`
+        ).join('\n\n')
+      : _mcTurns.map((line, i) =>
+          `Customer: ${line}\nYou: ${_mcTranscripts[i] || '(no response)'}`
+        ).join('\n\n');
+
+    // Trainee-only text for AI scoring
+    const traineeOnly = _mcAiMode
+      ? _mcAiHistory.map(ex => ex.agent || '').join(' ').trim()
+      : _mcTranscripts.join(' ').trim();
+
+    showStep('mock-call', 'mc-step-done');
+    const statusEl = $('mc-ai-scoring-status');
+    if (statusEl) { statusEl.textContent = '⏳ Analyzing your call...'; statusEl.classList.remove('hidden'); }
+
+    let aiScores = null;
+    if (traineeOnly && typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
+      try {
+        if (statusEl) statusEl.textContent = '🤖 Claude AI is scoring your call...';
+        const result = await ClaudeEvaluator.evaluate(
+          'mock-call', traineeOnly, _currentTopic.title, _currentTopic.scenario || ''
+        );
+        if (result && result.overall !== null) {
+          aiScores = { ...result.scores, overall: result.overall, _reasons: result.reasons, _method: 'claude' };
+        }
+      } catch (e) { console.warn('Claude scoring failed:', e.message); }
+    }
+    if (!aiScores) {
+      aiScores = SpeechEngine.scoreMockCall(traineeOnly);
+      aiScores._method = 'js';
+    }
+    aiScores._summary = SpeechEngine.generateCoachingSummary('mock-call', aiScores);
+
+    if (statusEl) statusEl.classList.add('hidden');
+
+    try {
+      await DB.put('sessions', {
+        traineeId:     _trainee.id,
+        traineeName:   _trainee.name,
+        module:        'mock-call',
+        topicId:       _currentTopic.id,
+        topicTitle:    _currentTopic.title,
+        recordingBlob: blob,
+        transcript:    fullTranscript,
+        aiScores,
+        adminScores:   null,
+        adminComment:  '',
+        status:        'ai-evaluated',
+        submittedAt:   new Date().toISOString(),
+        timeTaken:     Math.max(elapsed, 1),
+      });
+      toast('Mock call submitted!', 'success');
+    } catch (e) {
+      console.error('Session save failed:', e.message);
+      toast('⚠ Could not save session: ' + e.message, 'error');
+    }
+
+    showMockCallResults(aiScores, fullTranscript, aiScores._method);
+    $('btn-mc-finish').disabled = false;
+  }
+
+  function showMockCallResults(aiScores, transcript, method) {
+    // Trainee sees ONLY the thank-you message — no scores, no transcript, no summary
+    const statusEl = $('mc-ai-scoring-status');
+    if (statusEl) statusEl.classList.add('hidden');
+    const scoresEl = $('mc-result-scores');
+    if (scoresEl) scoresEl.classList.add('hidden');
+    const transcriptBox = $('mc-result-transcript-box');
+    if (transcriptBox) transcriptBox.classList.add('hidden');
+
+    $('mc-band-display').innerHTML = `
+      <div style="text-align:center;padding:1.5rem 1rem;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;margin-bottom:1rem">
+        <div style="font-size:2.5rem;margin-bottom:0.5rem">🎉</div>
+        <h3 style="color:#15803d;font-size:1.15rem;margin-bottom:0.4rem">Thank you for submitting the call.</h3>
+        <p style="color:#166534;font-size:0.88rem">Your recording has been sent to the Training Team for evaluation. You will receive feedback soon.</p>
+      </div>`;
+    $('mc-result-method').innerHTML = '';
+  }
+
+  // ================================================================
+  //  ROLE PLAY
+  // ================================================================
+  function initRolePlay() {
+    showStep('role-play', 'rp-step-scenario');
+    $('rp-title').textContent = _currentTopic.title;
+    $('rp-desc').textContent = _currentTopic.description || '';
+    $('rp-scenario-text').textContent = _currentTopic.scenario || '';
+
+    const ul = $('rp-checklist');
+    ul.innerHTML = '';
+    (_currentTopic.checklist || []).forEach(item => {
+      ul.innerHTML += `<li>${item}</li>`;
+    });
+
+    $('btn-rp-ready').onclick = () => startRolePlayRecording();
+  }
+
+  async function startRolePlayRecording() {
+    showStep('role-play', 'rp-step-record');
+
+    const blobPromise = Recorder.start();
+    Recorder.startWaveform($('rp-waveform'));
+    Recorder.startTimer($('rp-rec-time'), 0, null, null, true);
+
+    $('btn-rp-stop').onclick = async () => {
+      $('btn-rp-stop').disabled = true;
+      Recorder.stop();
+      const elapsed = Recorder.getElapsed();
+      let blob = null;
+      try { blob = await blobPromise; } catch (e) {}
+
+      try {
+        await DB.put('sessions', {
+          traineeId: _trainee.id,
+          traineeName: _trainee.name,
+          module: 'role-play',
+          topicId: _currentTopic.id,
+          topicTitle: _currentTopic.title,
+          recordingBlob: blob,
+          transcript: '',
+          aiScores: null,
+          adminScores: null,
+          adminComment: '',
+          status: 'pending',
+          submittedAt: new Date().toISOString(),
+          timeTaken: elapsed
+        });
+        toast('Role play submitted!', 'success');
+      } catch (e) {
+        console.error('Session save failed:', e.message);
+        toast('⚠ Could not save session: ' + e.message, 'error');
+      }
+
+      showStep('role-play', 'rp-step-done');
+      $('btn-rp-stop').disabled = false;
+    };
+  }
+
+  // ================================================================
+  //  GROUP DISCUSSION
+  // ================================================================
+  function initGroupDiscussion() {
+    showStep('group-discussion', 'gd-step-topic');
+    $('gd-title').textContent = _currentTopic.title;
+    $('gd-desc').textContent = _currentTopic.description || '';
+    $('gd-scenario-text').textContent = _currentTopic.scenario || '';
+
+    const ul = $('gd-checklist');
+    ul.innerHTML = '';
+    (_currentTopic.checklist || []).forEach(item => {
+      ul.innerHTML += `<li>${item}</li>`;
+    });
+
+    $('btn-gd-ready').onclick = () => startGroupDiscussionRecording();
+  }
+
+  async function startGroupDiscussionRecording() {
+    showStep('group-discussion', 'gd-step-record');
+
+    const blobPromise = Recorder.start();
+    Recorder.startWaveform($('gd-waveform'));
+    Recorder.startTimer($('gd-rec-time'), 0, null, null, true);
+
+    $('btn-gd-stop').onclick = async () => {
+      $('btn-gd-stop').disabled = true;
+      Recorder.stop();
+      const elapsed = Recorder.getElapsed();
+      let blob = null;
+      try { blob = await blobPromise; } catch (e) {}
+
+      try {
+       await DB.put('sessions', {
+        traineeId: _trainee.id,
+        traineeName: _trainee.name,
+        module: 'group-discussion',
+        topicId: _currentTopic.id,
+        topicTitle: _currentTopic.title,
+        recordingBlob: blob,
+        transcript: '',
+        aiScores: null,
+        adminScores: null,
+        adminComment: '',
+        status: 'pending',
+        submittedAt: new Date().toISOString(),
+        timeTaken: elapsed
+      });
+
+        toast('Contribution submitted!', 'success');
+      } catch (e) {
+        console.error('Session save failed:', e.message);
+        toast('⚠ Could not save session: ' + e.message, 'error');
+      }
+
+      showStep('group-discussion', 'gd-step-done');
+      $('btn-gd-stop').disabled = false;
+    };
+  }
+
+  // ================================================================
+  //  WRITTEN COMMUNICATION
+  // ================================================================
+  function initWrittenComm() {
+    showStep('written-comm', 'wc-step-task');
+    $('wc-title').textContent = _currentTopic.title;
+    $('wc-desc').textContent = _currentTopic.description || '';
+    $('wc-scenario-text').textContent = _currentTopic.scenario || '';
+
+    const ul = $('wc-checklist');
+    ul.innerHTML = '';
+    (_currentTopic.checklist || []).forEach(item => {
+      ul.innerHTML += `<li>${item}</li>`;
+    });
+
+    $('btn-wc-start').onclick = () => {
+      const script = _currentTopic.botScript || _currentTopic.bot_script || [];
+      if (script.length > 0) {
+        startWrittenCommChat(script);
+      } else {
+        startWrittenCommEditor();
+      }
+    };
+  }
+
+  // Build the alternating user/assistant message array for Claude in written chat assessment
+  function _buildWcAiMessages() {
+    const msgs = [{ role: 'user', content: 'The support chat session has started. Please open the chat by stating your complaint/issue.' }];
+    for (const turn of _wcChatHistory) {
+      if (turn.bot) {
+        msgs.push({ role: 'assistant', content: turn.bot });
+      }
+      if (turn.agent) {
+        msgs.push({ role: 'user', content: turn.agent });
+      }
+    }
+    return msgs;
+  }
+
+  function startWrittenCommChat(script) {
+    showStep('written-comm', 'wc-step-chat');
+    $('wc-chat-title').textContent = _currentTopic.title;
+    $('wc-chat-desc').textContent = _currentTopic.description || '';
+    $('wc-chat-scenario').textContent = _currentTopic.scenario || '';
+
+    const checklistUl = $('wc-chat-checklist');
+    if (checklistUl) {
+      checklistUl.innerHTML = '';
+      (_currentTopic.checklist || []).forEach(item => {
+        checklistUl.innerHTML += `<li>${item}</li>`;
+      });
+    }
+
+    _wcChatTurns = script;
+    _wcChatTurnIndex = 0;
+    _wcChatTranscripts = [];
+    _wcChatHistory = []; // Initialize dynamic chat history
+    $('wc-chat-thread').innerHTML = '';
+    $('wc-chat-input').value = '';
+    $('wc-chat-input').disabled = false;
+    $('btn-wc-chat-send').disabled = false;
+    $('btn-wc-chat-submit').style.display = 'none';
+
+    // Start timer
+    _wcChatStartTime = Date.now();
+    if (_wcChatTimerInterval) clearInterval(_wcChatTimerInterval);
+    _wcChatTimerInterval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - _wcChatStartTime) / 1000);
+      const m = Math.floor(elapsed / 60);
+      const s = elapsed % 60;
+      $('wc-chat-time-elapsed').textContent = `${m}:${s.toString().padStart(2, '0')}`;
+    }, 1000);
+
+    // Run first bot turn
+    runWcChatBotTurn();
+  }
+
+  function runWcChatBotTurn() {
+    const mood = _botMoodParams(_wcChatTurnIndex, _wcChatTurns.length);
+    const isLastTurn = _wcChatTurnIndex === _wcChatTurns.length - 1;
+
+    // Update turn label
+    const turnLabel = $('wc-chat-turn-label');
+    if (turnLabel) {
+      turnLabel.textContent = isLastTurn
+        ? `Turn ${_wcChatTurnIndex + 1} of ${_wcChatTurns.length} — Final Turn`
+        : `Turn ${_wcChatTurnIndex + 1} of ${_wcChatTurns.length}`;
+      turnLabel.style.color = isLastTurn ? '#d97706' : '';
+    }
+
+    // Show bot typing animation
+    $('wc-chat-bot-status').style.display = '';
+    $('wc-chat-input').disabled = true;
+    $('btn-wc-chat-send').disabled = true;
+
+    // Helper to display the bot bubble and handle next steps
+    function displayBotBubble(text) {
+      $('wc-chat-bot-status').style.display = 'none';
+      $('wc-chat-input').disabled = false;
+      $('btn-wc-chat-send').disabled = false;
+
+      // Pre-fill the default response template
+      const defaultText = WRITTEN_COMM_DEFAULT_PREFIX + "\n" + WRITTEN_COMM_DEFAULT_SUFFIX;
+      $('wc-chat-input').value = defaultText;
+
+      $('wc-chat-input').focus();
+      const pos = WRITTEN_COMM_DEFAULT_PREFIX.length;
+      $('wc-chat-input').setSelectionRange(pos, pos);
+
+      const bubble = document.createElement('div');
+      bubble.className = `mc-bubble bot ${mood.bubbleClass}`;
+      bubble.innerHTML = `<span class="mc-bubble-mood">${mood.emoji}</span>${text}`;
+      $('wc-chat-thread').appendChild(bubble);
+      $('wc-chat-thread').scrollTop = $('wc-chat-thread').scrollHeight;
+
+      // Log turn in transcripts and history
+      _wcChatTranscripts.push({ role: 'bot', text: text });
+      
+      // Update the current history slot or create one if it's the opening turn
+      if (_wcChatTurnIndex === 0) {
+        _wcChatHistory.push({ bot: text, agent: '' });
+      }
+
+      // Handle trainee send click
+      $('btn-wc-chat-send').onclick = () => sendWcChatTraineeTurn();
+    }
+
+    if (_wcChatTurnIndex === 0) {
+      // First turn: always use the high-quality pre-scripted starting query from the database
+      setTimeout(() => {
+        displayBotBubble(_wcChatTurns[0]);
+      }, 1000);
+    } else if (ClaudeEvaluator.isAvailable()) {
+      // Subsequent turns: use Claude to dynamically reply to the agent's message
+      (async () => {
+        let botLine = '';
+        try {
+          const messages = _buildWcAiMessages();
+          botLine = await ClaudeEvaluator.callAiWrittenCustomer(
+            _currentTopic.title || '',
+            _currentTopic.scenario || '',
+            _currentTopic.description || '',
+            messages,
+            _wcChatTurnIndex + 1,
+            _wcChatTurns.length
+          );
+        } catch (e) {
+          console.warn('Claude written chat turn failed, using fallback:', e.message);
+          botLine = _wcChatTurns[_wcChatTurnIndex];
+        }
+        _wcChatHistory.push({ bot: botLine, agent: '' });
+        displayBotBubble(botLine);
+      })();
+    } else {
+      // Offline fallback: use pre-scripted script turns
+      setTimeout(() => {
+        const line = _wcChatTurns[_wcChatTurnIndex];
+        _wcChatHistory.push({ bot: line, agent: '' });
+        displayBotBubble(line);
+      }, 1000);
+    }
+  }
+
+  function sendWcChatTraineeTurn() {
+    const text = $('wc-chat-input').value.trim();
+    if (!text) return;
+
+    // Check if the trainee has actually added any content
+    const traineeText = getTraineeContent(text);
+    if (!traineeText) {
+      toast('Please write your response content.', 'error');
+      return;
+    }
+
+    // Append trainee message to chat
+    const bubble = document.createElement('div');
+    bubble.className = 'mc-bubble trainee';
+    bubble.innerHTML = text.replace(/\n/g, '<br>');
+    $('wc-chat-thread').appendChild(bubble);
+    $('wc-chat-thread').scrollTop = $('wc-chat-thread').scrollHeight;
+
+    // Log turn
+    _wcChatTranscripts.push({ role: 'trainee', text: text });
+    
+    // Update active history entry with agent's response
+    if (_wcChatHistory.length > 0) {
+      _wcChatHistory[_wcChatHistory.length - 1].agent = text;
+    }
+
+    // Clear input
+    $('wc-chat-input').value = '';
+
+    _wcChatTurnIndex++;
+
+    if (_wcChatTurnIndex < _wcChatTurns.length) {
+      // Run next bot turn
+      runWcChatBotTurn();
+    } else {
+      // No more turns! Finish conversation.
+      $('wc-chat-input').disabled = true;
+      $('btn-wc-chat-send').disabled = true;
+      $('wc-chat-turn-label').textContent = '🏁 Conversation Finished';
+      $('wc-chat-turn-label').style.color = '#10b981';
+      $('btn-wc-chat-submit').style.display = '';
+      $('btn-wc-chat-submit').onclick = () => submitWcChatCorrespondence();
+    }
+  }
+
+  async function submitWcChatCorrespondence() {
+    clearInterval(_wcChatTimerInterval);
+    const duration = Math.floor((Date.now() - _wcChatStartTime) / 1000);
+
+    // Format the entire chat thread for storage and display
+    const formattedChat = _wcChatTranscripts.map(t => {
+      const label = t.role === 'bot' ? 'CUSTOMER' : 'AGENT';
+      return `${label}:\n${t.text}`;
+    }).join('\n\n');
+
+    // Combine trainee responses for AI scoring
+    const traineeResponsesCombined = _wcChatTranscripts
+      .filter(t => t.role === 'trainee')
+      .map(t => getTraineeContent(t.text))
+      .join('\n\n');
+
+    const analysis = SpeechEngine.analyze(traineeResponsesCombined, duration);
+    const aiScores = SpeechEngine.scoreWriting(traineeResponsesCombined, duration, _currentTopic?.title);
+    aiScores._summary = SpeechEngine.generateCoachingSummary('written-comm', aiScores);
+
+    try {
+      await DB.put('sessions', {
+        traineeId: _trainee.id,
+        traineeName: _trainee.name,
+        module: 'written-comm',
+        topicId: _currentTopic.id,
+        topicTitle: _currentTopic.title,
+        recordingBlob: null,
+        writtenText: formattedChat,
+        transcript: formattedChat,
+        aiScores,
+        adminScores: null,
+        adminComment: '',
+        status: 'ai-evaluated',
+        submittedAt: new Date().toISOString(),
+        timeTaken: duration,
+        analysis
+      });
+    } catch (e) {
+      console.error('Session save failed:', e.message);
+      toast('⚠ Could not save session: ' + e.message, 'error');
+    }
+
+    showWrittenCommResults(aiScores, traineeResponsesCombined, analysis, duration);
+  }
+
+  function startWrittenCommEditor() {
+    showStep('written-comm', 'wc-step-write');
+    $('wc-write-title').textContent = _currentTopic.title;
+    $('wc-write-scenario').textContent = _currentTopic.scenario || '';
+
+    const checklistUl = $('wc-write-checklist');
+    if (checklistUl) {
+      checklistUl.innerHTML = '';
+      (_currentTopic.checklist || []).forEach(item => {
+        checklistUl.innerHTML += `<li>${item}</li>`;
+      });
+    }
+
+    const editor = $('wc-editor');
+    // Pre-fill default template response
+    const defaultText = WRITTEN_COMM_DEFAULT_PREFIX + "\n" + WRITTEN_COMM_DEFAULT_SUFFIX;
+    editor.value = defaultText;
+
+    // Position cursor in the empty line between prefix and suffix
+    const cursorPosition = WRITTEN_COMM_DEFAULT_PREFIX.length;
+    editor.setSelectionRange(cursorPosition, cursorPosition);
+    editor.focus();
+
+    $('wc-word-count').textContent = '0';
+    $('wc-time-elapsed').textContent = '0:00';
+
+    _wcStartTime = Date.now();
+    if (_wcTimerInterval) clearInterval(_wcTimerInterval);
+    _wcTimerInterval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - _wcStartTime) / 1000);
+      const m = Math.floor(elapsed / 60);
+      const s = elapsed % 60;
+      $('wc-time-elapsed').textContent = `${m}:${s.toString().padStart(2, '0')}`;
+    }, 1000);
+
+    editor.oninput = () => {
+      const traineeText = getTraineeContent(editor.value);
+      const words = traineeText.trim().split(/\s+/).filter(w => w);
+      $('wc-word-count').textContent = traineeText.trim() ? words.length : 0;
+    };
+
+    $('btn-wc-submit').onclick = () => submitWrittenComm();
+  }
+
+  async function submitWrittenComm() {
+    const text = $('wc-editor').value.trim();
+    if (!text) {
+      toast('Please write something before submitting.', 'error');
+      return;
+    }
+
+    const traineeText = getTraineeContent(text);
+    if (!traineeText) {
+      toast('Please add your custom response content between the default template greetings.', 'error');
+      return;
+    }
+
+    clearInterval(_wcTimerInterval);
+    const duration = Math.floor((Date.now() - _wcStartTime) / 1000);
+    const analysis = SpeechEngine.analyze(traineeText, duration);
+    const aiScores = SpeechEngine.scoreWriting(traineeText, duration, _currentTopic?.title);
+    aiScores._summary = SpeechEngine.generateCoachingSummary('written-comm', aiScores);
+
+    try {
+      await DB.put('sessions', {
+        traineeId: _trainee.id,
+        traineeName: _trainee.name,
+        module: 'written-comm',
+        topicId: _currentTopic.id,
+        topicTitle: _currentTopic.title,
+        recordingBlob: null,
+        writtenText: text,
+        transcript: text,
+        aiScores,
+        adminScores: null,
+        adminComment: '',
+        status: 'ai-evaluated',
+        submittedAt: new Date().toISOString(),
+        timeTaken: duration,
+        analysis
+      });
+    } catch (e) {
+      console.error('Session save failed:', e.message);
+      toast('⚠ Could not save session: ' + e.message, 'error');
+    }
+
+    showWrittenCommResults(aiScores, text, analysis, duration);
+  }
+
+  function showWrittenCommResults(scores, text, analysis, duration) {
+    showStep('written-comm', 'wc-step-results');
+
+    const labels = {
+      criterion_0: 'Tone & Empathy',
+      criterion_1: 'Clarity',
+      criterion_2: 'Ownership',
+      criterion_3: 'Accuracy',
+      criterion_4: 'Customer Education',
+      criterion_5: 'Grammar & Language'
+    };
+    renderAIScores('wc-ai-scores', scores, labels);
+
+    // Pills for writing
+    const el = $('wc-analysis-pills');
+    if (el && analysis) {
+      const words = text.trim().split(/\s+/).filter(w => w).length;
+      const m = Math.floor(duration / 60), s = duration % 60;
+      el.innerHTML = [
+        `<span class="pill info">${words} words</span>`,
+        `<span class="pill ${words >= 80 ? 'good' : 'warn'}">${words >= 80 ? 'Good length' : 'Could be longer'}</span>`,
+        `<span class="pill info">Time: ${m}:${s.toString().padStart(2, '0')}</span>`,
+        `<span class="pill ${analysis.sentenceCount >= 4 ? 'good' : 'warn'}">${analysis.sentenceCount} sentences</span>`
+      ].join('');
+    }
+
+    $('wc-submitted-text').textContent = text;
+
+    const summaryEl = $('wc-coaching-summary');
+    if (summaryEl) {
+      if (scores && scores._summary) {
+        summaryEl.textContent = scores._summary;
+        summaryEl.classList.remove('hidden');
+      } else {
+        summaryEl.classList.add('hidden');
+      }
+    }
+
+    toast('Writing submitted!', 'success');
+  }
+
+  // ================================================================
+  //  NRI STOCK MARKET MCQ — single section, 54 questions, auto-scored
+  // ================================================================
+
+  async function initStockMarketMcq() {
+    const allTopics = enabledTopics(await DB.getByIndex('topics', 'module', 'stock-market-mcq'));
+    if (!allTopics.length) {
+      toast('No stock market questions available. Ask your admin to add some.', 'error');
+      return;
+    }
+
+    // Pick one topic at random (allows multiple sets in future)
+    const topic      = allTopics[Math.floor(Math.random() * allTopics.length)];
+    _smqTopicId      = topic.id;
+    _smqQuestions    = (topic.checklist || []).filter(q => q && q.stem);
+    _smqCurrentIdx   = 0;
+    _smqUserAnswers  = _smqQuestions.map(() => -1);
+
+    if (!_smqQuestions.length) {
+      toast('No questions found in this topic. Ask your admin to check the content.', 'error');
+      return;
+    }
+
+    showScreen('stock-market-mcq');
+    showStep('stock-market-mcq', 'smq-step-intro');
+
+    // Reset and hide calculator on starting assessment
+    const calcEl = $('smq-calculator');
+    if (calcEl) calcEl.classList.add('hidden');
+    handleCalcClear();
+
+    // Dynamic text for intro screen
+    const titleEl = $('smq-intro-title');
+    if (titleEl) titleEl.textContent = topic.title;
+    const gridQCountEl = $('smq-intro-qcount-grid');
+    if (gridQCountEl) gridQCountEl.textContent = _smqQuestions.length;
+    const gridMarksEl = $('smq-intro-marks-grid');
+    if (gridMarksEl) gridMarksEl.textContent = _smqQuestions.length;
+    const metaQCountEl = $('smq-intro-qcount-meta');
+    if (metaQCountEl) metaQCountEl.innerHTML = `<span class="ga-meta-icon">📋</span><span>${_smqQuestions.length} Questions</span>`;
+    const metaMarksEl = $('smq-intro-marks-meta');
+    if (metaMarksEl) metaMarksEl.innerHTML = `<span class="ga-meta-icon">🏆</span><span>${_smqQuestions.length} Marks</span>`;
+
+    $('btn-smq-start').onclick = () => {
+      showStep('stock-market-mcq', 'smq-step-quiz');
+      _smqStartTime = Date.now();
+      renderSmqQuestion();
+    };
+  }
+
+  function startSmqTimer() {
+    const DURATION = 60 * 60; // 60 minutes in seconds
+    let remaining  = DURATION;
+    const el = $('smq-timer');
+
+    function tick() {
+      const m = String(Math.floor(remaining / 60)).padStart(2, '0');
+      const s = String(remaining % 60).padStart(2, '0');
+      if (el) {
+        el.textContent = `⏱ ${m}:${s}`;
+        el.style.color = remaining <= 300 ? '#dc2626' : '';  // red when ≤ 5 min
+      }
+      if (remaining <= 0) {
+        clearInterval(_smqTimerInterval);
+        _smqTimerInterval = null;
+        submitSmqAssessment();
+        return;
+      }
+      remaining--;
+    }
+    tick();
+    _smqTimerInterval = setInterval(tick, 1000);
+  }
+
+  function renderSmqQuestion() {
+    const q     = _smqQuestions[_smqCurrentIdx];
+    const total = _smqQuestions.length;
+    const cur   = _smqCurrentIdx + 1;
+
+    $('smq-progress-bar').style.width = `${((cur - 1) / total) * 100}%`;
+    $('smq-q-num').textContent        = `Question ${cur} of ${total}`;
+    $('smq-q-stem').textContent       = q.stem;
+
+    const expBox = $('smq-explanation-box');
+    if (expBox) expBox.remove();
+
+    const container = $('smq-options-container');
+    container.innerHTML = '';
+    const LABELS = ['A', 'B', 'C', 'D'];
+    const answeredIdx = _smqUserAnswers[_smqCurrentIdx];
+
+    (q.options || []).forEach((opt, idx) => {
+      const btn     = document.createElement('button');
+      btn.className = 'smq-option-btn';
+      btn.innerHTML = `<span class="smq-option-label">${LABELS[idx]}</span><span>${opt}</span>`;
+      btn.onclick   = () => selectSmqOption(idx);
+      
+      // Instant trial test feedback mode
+      if (answeredIdx !== -1) {
+        btn.style.pointerEvents = 'none';
+        if (idx === answeredIdx) {
+          if (answeredIdx === q.correct) {
+            btn.style.background = '#d1fae5';
+            btn.style.borderColor = '#10b981';
+            btn.style.color = '#064e3b';
+          } else {
+            btn.style.background = '#fee2e2';
+            btn.style.borderColor = '#ef4444';
+            btn.style.color = '#7f1d1d';
+          }
+        }
+        if (idx === q.correct) {
+          btn.style.background = '#d1fae5';
+          btn.style.borderColor = '#10b981';
+          btn.style.color = '#064e3b';
+        }
+      }
+      
+      container.appendChild(btn);
+    });
+
+    if (answeredIdx !== -1) {
+      let box = $('smq-explanation-box');
+      if (!box) {
+        box = document.createElement('div');
+        box.id = 'smq-explanation-box';
+        container.parentNode.insertBefore(box, container.nextSibling);
+      }
+      box.style = 'margin-top: 1rem; padding: 0.75rem 1rem; border-radius: 8px; background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; font-size: 0.88rem; line-height: 1.5;';
+      box.innerHTML = `<strong>Correct Answer: ${LABELS[q.correct]}</strong>${q.explanation ? '<br><span style="color:#374151; font-size: 0.82rem; margin-top: 0.25rem; display: block;">' + q.explanation + '</span>' : ''}`;
+    }
+
+    const prevBtn         = $('btn-smq-prev');
+    prevBtn.style.display = _smqCurrentIdx > 0 ? '' : 'none';
+    prevBtn.onclick       = () => { if (_smqCurrentIdx > 0) { _smqCurrentIdx--; renderSmqQuestion(); } };
+
+    const endBtn = $('btn-smq-end');
+    if (endBtn) {
+      endBtn.onclick = () => {
+        if (confirm('Are you sure you want to end the test early and submit your answers?')) {
+          submitSmqAssessment();
+        }
+      };
+    }
+
+    const nextBtn   = $('btn-smq-next');
+    const isLastQ   = _smqCurrentIdx === total - 1;
+    if (!isLastQ) {
+      nextBtn.textContent = 'Next →';
+      nextBtn.onclick     = () => {
+        if (_smqUserAnswers[_smqCurrentIdx] === -1) {
+          toast('Please select an answer before continuing.', 'error'); return;
+        }
+        _smqCurrentIdx++;
+        renderSmqQuestion();
+      };
+    } else {
+      nextBtn.textContent = 'Submit Test ✓';
+      nextBtn.onclick     = () => {
+        if (_smqUserAnswers[_smqCurrentIdx] === -1) {
+          toast('Please select an answer before submitting.', 'error'); return;
+        }
+        submitSmqAssessment();
+      };
+    }
+  }
+
+  function selectSmqOption(idx) {
+    _smqUserAnswers[_smqCurrentIdx] = idx;
+    const q = _smqQuestions[_smqCurrentIdx];
+    const correctIdx = q.correct;
+
+    document.querySelectorAll('#smq-options-container .smq-option-btn').forEach((btn, i) => {
+      btn.style.pointerEvents = 'none';
+      if (i === idx) {
+        if (idx === correctIdx) {
+          btn.style.background = '#d1fae5';
+          btn.style.borderColor = '#10b981';
+          btn.style.color = '#064e3b';
+        } else {
+          btn.style.background = '#fee2e2';
+          btn.style.borderColor = '#ef4444';
+          btn.style.color = '#7f1d1d';
+        }
+      }
+      if (i === correctIdx) {
+        btn.style.background = '#d1fae5';
+        btn.style.borderColor = '#10b981';
+        btn.style.color = '#064e3b';
+      }
+    });
+
+    let box = $('smq-explanation-box');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'smq-explanation-box';
+      const container = $('smq-options-container');
+      container.parentNode.insertBefore(box, container.nextSibling);
+    }
+    const LABELS = ['A', 'B', 'C', 'D'];
+    box.style = 'margin-top: 1rem; padding: 0.75rem 1rem; border-radius: 8px; background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; font-size: 0.88rem; line-height: 1.5;';
+    box.innerHTML = `<strong>Correct Answer: ${LABELS[correctIdx]}</strong>${q.explanation ? '<br><span style="color:#374151; font-size: 0.82rem; margin-top: 0.25rem; display: block;">' + q.explanation + '</span>' : ''}`;
+  }
+
+  async function submitSmqAssessment() {
+    if (_smqTimerInterval) { clearInterval(_smqTimerInterval); _smqTimerInterval = null; }
+    const timeTaken = _smqStartTime ? Math.round((Date.now() - _smqStartTime) / 1000) : 0;
+    let correct = 0;
+    const answerRecord = _smqQuestions.map((q, i) => {
+      const chosen  = _smqUserAnswers[i];
+      const isRight = (chosen !== undefined && chosen !== null) ? chosen === q.correct : false;
+      if (isRight) correct++;
+      return {
+        stem:        q.stem,
+        options:     q.options,
+        userAnswer:  chosen ?? null,
+        isCorrect:   isRight,
+        correct:     q.correct,
+        explanation: q.explanation || ''
+      };
+    });
+
+    const total         = _smqQuestions.length;
+    const scoreOutOf100 = total > 0 ? Math.round((correct / total) * 100) : 0;
+
+    try {
+      await DB.put('sessions', {
+        traineeId:    _trainee.id,
+        traineeName:  _trainee.name,
+        module:       'stock-market-mcq',
+        topicId:      _smqTopicId,
+        topicTitle:   'NRI Basics of Stock Market — Full Test',
+        recordingBlob: null,
+        transcript:   '',
+        writtenText:  JSON.stringify({ answerRecord, correct, total, scoreOutOf100 }),
+        aiScores:     { overall: scoreOutOf100, marksObtained: correct, totalMarks: total },
+        adminScores:  null,
+        adminComment: '',
+        status:       'ai-evaluated',
+        submittedAt:  new Date().toISOString(),
+        timeTaken:    timeTaken
+      });
+      toast('Stock market test submitted!', 'success');
+    } catch (e) {
+      console.error('Session save failed:', e.message);
+      toast('⚠ Could not save session: ' + e.message, 'error');
+    }
+
+    showStep('stock-market-mcq', 'smq-step-results');
+  }
+
+  // ================================================================
+  //  GRAMMAR ASSESSMENT (MCQ) — all sections in one session
+  // ================================================================
+
+  async function initGrammarAssessment() {
+    const allTopics = enabledTopics(await DB.getByIndex('topics', 'module', 'grammar-assessment'));
+    if (!allTopics.length) {
+      toast('No grammar tests available. Ask your admin to add questions.', 'error');
+      return;
+    }
+
+    // Group enabled topics by set name, then pick ONE set randomly
+    // Title format: "Grammar Set N — Section A: MCQ (40 Questions)"
+    const setMap = {};
+    allTopics.forEach(t => {
+      const setName = (t.title.match(/^(.+?)\s+[—–-]+\s+Section/i)?.[1] || t.title).trim();
+      if (!setMap[setName]) setMap[setName] = [];
+      setMap[setName].push(t);
+    });
+    const setNames = Object.keys(setMap);
+    const chosenSet = setNames[Math.floor(Math.random() * setNames.length)];
+    const chosenTopics = setMap[chosenSet];
+
+    // Sort sections within the chosen set (A → B → C)
+    chosenTopics.sort((a, b) => a.title.localeCompare(b.title));
+
+    _gaSections = chosenTopics
+      .map(t => ({
+        id:        t.id,
+        title:     t.title,
+        questions: (t.checklist || []).filter(q => q && typeof q === 'object' && q.stem)
+      }))
+      .filter(s => s.questions.length > 0);
+
+    if (!_gaSections.length) {
+      toast('No grammar questions found. Ask your admin to add questions.', 'error');
+      return;
+    }
+
+    _gaCurrentSection = 0;
+    _gaSectionResults = [];
+
+    showScreen('grammar-assessment');
+    showStep('grammar-assessment', 'ga-step-intro');
+
+    // Intro text is static HTML — just wire up the Start button
+    $('btn-ga-start').onclick = () => loadGrammarSection(0);
+  }
+
+  function loadGrammarSection(idx) {
+    _gaCurrentSection = idx;
+    const section     = _gaSections[idx];
+    _gaQuestions      = section.questions;
+    _gaCurrentIdx     = 0;
+    // Written-answer questions get '' as initial value; MCQ questions get -1
+    _gaUserAnswers    = section.questions.map(q =>
+      (q.type === 'fill-blank' || q.type === 'rewrite') ? '' : -1
+    );
+
+    showStep('grammar-assessment', 'ga-step-quiz');
+    renderGrammarQuestion();
+  }
+
+  function renderGrammarQuestion() {
+    const q         = _gaQuestions[_gaCurrentIdx];
+    const total     = _gaQuestions.length;
+    const cur       = _gaCurrentIdx + 1;
+    const secLetter = String.fromCharCode(65 + _gaCurrentSection); // A, B, C
+    const isWritten = q.type === 'fill-blank' || q.type === 'rewrite';
+
+    // Section label + overall progress
+    $('ga-section-label').textContent    = `Section ${secLetter}`;
+    $('ga-section-progress').textContent = `Section ${_gaCurrentSection + 1} of ${_gaSections.length}`;
+
+    // Progress bar within this section
+    $('ga-progress-bar').style.width = `${((cur - 1) / total) * 100}%`;
+    $('ga-q-num').textContent        = `Question ${cur} of ${total}`;
+    $('ga-q-stem').textContent       = q.stem;
+
+    const container = $('ga-options-container');
+    container.innerHTML = '';
+
+    if (q.type === 'fill-blank') {
+      // ── Fill-in-the-blank: show instruction + single-line text input ──
+      const hint      = document.createElement('p');
+      hint.className  = 'ga-written-hint';
+      hint.textContent = 'Type the word or phrase that best fills the blank:';
+      container.appendChild(hint);
+
+      const input         = document.createElement('input');
+      input.type          = 'text';
+      input.className     = 'ga-written-input';
+      input.placeholder   = 'Your answer…';
+      input.value         = _gaUserAnswers[_gaCurrentIdx] || '';
+      input.autocomplete  = 'off';
+      input.dataset.gramm        = 'false';
+      input.dataset.gramm_editor = 'false';
+      input.oninput       = () => { _gaUserAnswers[_gaCurrentIdx] = input.value; };
+      input.onkeydown     = (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (_gaCurrentIdx < total - 1) nextGrammarQuestion();
+          else completeGrammarSection();
+        }
+      };
+      container.appendChild(input);
+      setTimeout(() => input.focus(), 50);
+
+    } else if (q.type === 'rewrite') {
+      // ── Rewrite: show instruction + multi-line textarea ──
+      const hint      = document.createElement('p');
+      hint.className  = 'ga-written-hint';
+      hint.textContent = 'Rewrite the sentence correctly (fix the grammatical error):';
+      container.appendChild(hint);
+
+      const ta        = document.createElement('textarea');
+      ta.className    = 'ga-written-textarea';
+      ta.placeholder  = 'Type the corrected sentence here…';
+      ta.value        = _gaUserAnswers[_gaCurrentIdx] || '';
+      ta.rows         = 3;
+      ta.dataset.gramm        = 'false';
+      ta.dataset.gramm_editor = 'false';
+      ta.oninput      = () => { _gaUserAnswers[_gaCurrentIdx] = ta.value; };
+      container.appendChild(ta);
+      setTimeout(() => ta.focus(), 50);
+
+    } else {
+      // ── MCQ: show option buttons ──
+      const LABELS = ['A', 'B', 'C', 'D'];
+      (q.options || []).forEach((opt, idx) => {
+        const btn     = document.createElement('button');
+        btn.className = 'ga-option-btn' + (_gaUserAnswers[_gaCurrentIdx] === idx ? ' selected' : '');
+        btn.innerHTML = `<span class="ga-option-label">${LABELS[idx]}</span> <span>${opt}</span>`;
+        btn.onclick   = () => selectGrammarOption(idx);
+        container.appendChild(btn);
+      });
+    }
+
+    // Previous button (only within a section, and disable for written sections after first q)
+    const prevBtn         = $('btn-ga-prev');
+    prevBtn.style.display = _gaCurrentIdx > 0 ? '' : 'none';
+    prevBtn.onclick       = () => prevGrammarQuestion();
+
+    const endBtn = $('btn-ga-end');
+    if (endBtn) {
+      endBtn.onclick = () => {
+        endGrammarAssessmentEarly();
+      };
+    }
+
+    // Next / Complete-Section / Submit button
+    const nextBtn       = $('btn-ga-next');
+    const isLastQ       = _gaCurrentIdx === total - 1;
+    const isLastSection = _gaCurrentSection === _gaSections.length - 1;
+
+    if (!isLastQ) {
+      nextBtn.textContent = 'Next →';
+      nextBtn.onclick     = nextGrammarQuestion;
+    } else if (!isLastSection) {
+      nextBtn.textContent = `Complete Section ${secLetter} →`;
+      nextBtn.onclick     = completeGrammarSection;
+    } else {
+      nextBtn.textContent = 'Submit Full Test ✓';
+      nextBtn.onclick     = completeGrammarSection;
+    }
+  }
+
+  function selectGrammarOption(idx) {
+    _gaUserAnswers[_gaCurrentIdx] = idx;
+    document.querySelectorAll('#ga-options-container .ga-option-btn').forEach((btn, i) => {
+      btn.classList.toggle('selected', i === idx);
+    });
+  }
+
+  function nextGrammarQuestion() {
+    const q         = _gaQuestions[_gaCurrentIdx];
+    const ans       = _gaUserAnswers[_gaCurrentIdx];
+    const isWritten = q.type === 'fill-blank' || q.type === 'rewrite';
+
+    if (isWritten ? (!ans || !ans.trim()) : ans === -1) {
+      toast('Please enter your answer before continuing.', 'error');
+      return;
+    }
+    _gaCurrentIdx++;
+    renderGrammarQuestion();
+  }
+
+  function prevGrammarQuestion() {
+    if (_gaCurrentIdx > 0) {
+      _gaCurrentIdx--;
+      renderGrammarQuestion();
+    }
+  }
+
+  async function completeGrammarSection() {
+    const lastQ      = _gaQuestions[_gaCurrentIdx];
+    const lastAns    = _gaUserAnswers[_gaCurrentIdx];
+    const isLastWritten = lastQ.type === 'fill-blank' || lastQ.type === 'rewrite';
+
+    if (isLastWritten ? (!lastAns || !lastAns.trim()) : lastAns === -1) {
+      toast('Please enter your answer before continuing.', 'error');
+      return;
+    }
+
+    // Marks per question: Section A (index 0) = 1 mark, Section B & C (index 1,2) = 2 marks
+    const marksPerQ = _gaCurrentSection === 0 ? 1 : 2;
+
+    // Determine if this section has any written-answer questions
+    const hasWritten = _gaQuestions.some(q => q.type === 'fill-blank' || q.type === 'rewrite');
+
+    // Disable nav buttons and show loading indicator for sections requiring Claude
+    const nextBtn = $('btn-ga-next');
+    const prevBtn = $('btn-ga-prev');
+    if (hasWritten) {
+      nextBtn.disabled    = true;
+      nextBtn.textContent = '⌛ Evaluating answers…';
+      if (prevBtn) prevBtn.disabled = true;
+    }
+
+    // Normalise helper: trim, lowercase, strip ALL punctuation, collapse spaces
+    const normalise = s => (s || '').trim().toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+
+    // Expand common contractions so "doesn't" and "does not" normalise identically
+    const expandContractions = s => s
+      .replace(/\bwon't\b/g, 'will not')
+      .replace(/\bcan't\b/g, 'cannot')
+      .replace(/\bdon't\b/g, 'do not')
+      .replace(/\bdoesn't\b/g, 'does not')
+      .replace(/\bdidn't\b/g, 'did not')
+      .replace(/\bisn't\b/g, 'is not')
+      .replace(/\baren't\b/g, 'are not')
+      .replace(/\bwasn't\b/g, 'was not')
+      .replace(/\bweren't\b/g, 'were not')
+      .replace(/\bhadn't\b/g, 'had not')
+      .replace(/\bhasn't\b/g, 'has not')
+      .replace(/\bhaven't\b/g, 'have not')
+      .replace(/\bcouldn't\b/g, 'could not')
+      .replace(/\bshouldn't\b/g, 'should not')
+      .replace(/\bwouldn't\b/g, 'would not')
+      .replace(/\bhe's\b/g, 'he is')
+      .replace(/\bshe's\b/g, 'she is')
+      .replace(/\bit's\b/g, 'it is')
+      .replace(/\bi'm\b/g, 'i am')
+      .replace(/\bthey're\b/g, 'they are')
+      .replace(/\bwe're\b/g, 'we are')
+      .replace(/\byou're\b/g, 'you are')
+      .replace(/\bi've\b/g, 'i have')
+      .replace(/\bthey've\b/g, 'they have')
+      .replace(/\bwe've\b/g, 'we have')
+      .replace(/\byou've\b/g, 'you have')
+      .replace(/\bhe'd\b/g, 'he would')
+      .replace(/\bshe'd\b/g, 'she would')
+      .replace(/\bi'd\b/g, 'i would')
+      .replace(/\bthey'd\b/g, 'they would')
+      .replace(/\bhe'll\b/g, 'he will')
+      .replace(/\bshe'll\b/g, 'she will')
+      .replace(/\bthey'll\b/g, 'they will');
+
+    // Full normalise pipeline: lowercase → expand contractions → strip punctuation → collapse spaces
+    const normFull = s => normalise(expandContractions((s || '').toLowerCase()));
+
+    // Score this section
+    let correct = 0;
+    const answerRecord = [];
+
+    for (let idx = 0; idx < _gaQuestions.length; idx++) {
+      const q  = _gaQuestions[idx];
+      const ua = _gaUserAnswers[idx];
+
+      if (q.type === 'fill-blank' || q.type === 'rewrite') {
+        // Written answer: exact-match first (case-insensitive, no punctuation, contractions expanded)
+        const userNorm = normFull(ua);
+        let isOk = (q.acceptedAnswers || []).some(a => normFull(a) === userNorm);
+
+        // Rewrite: if not an exact match, ask Claude for semantic/grammar evaluation
+        if (!isOk && q.type === 'rewrite' && userNorm) {
+          try {
+            isOk = await ClaudeEvaluator.evaluateRewrite(q.stem, ua, q.acceptedAnswers || []);
+          } catch (e) {
+            console.warn('Claude rewrite eval failed:', e.message);
+            isOk = false;
+          }
+        }
+
+        if (isOk) correct++;
+        answerRecord.push({
+          stem:            q.stem,
+          type:            q.type,
+          acceptedAnswers: q.acceptedAnswers,
+          userAnswer:      ua,
+          isCorrect:       isOk,
+          explanation:     q.explanation || ''
+        });
+      } else {
+        // MCQ
+        const isOk = ua === q.correct;
+        if (isOk) correct++;
+        answerRecord.push({
+          stem:        q.stem,
+          options:     q.options,
+          correct:     q.correct,
+          userAnswer:  ua,
+          isCorrect:   isOk,
+          explanation: q.explanation || ''
+        });
+      }
+    }
+
+    // Re-enable buttons
+    if (nextBtn) nextBtn.disabled = false;
+    if (prevBtn) prevBtn.disabled = false;
+
+    const marksObtained = correct * marksPerQ;
+    const maxMarks      = _gaQuestions.length * marksPerQ;
+
+    _gaSectionResults.push({
+      title:        _gaSections[_gaCurrentSection].title,
+      answerRecord,
+      correct,
+      total:        _gaQuestions.length,
+      marksPerQ,
+      marksObtained,
+      maxMarks
+    });
+
+    const isLastSection = _gaCurrentSection === _gaSections.length - 1;
+    if (isLastSection) {
+      submitGrammarAssessment();
+    } else {
+      const nextIdx       = _gaCurrentSection + 1;
+      const currentLetter = String.fromCharCode(65 + _gaCurrentSection);
+      const nextLetter    = String.fromCharCode(65 + nextIdx);
+      showStep('grammar-assessment', 'ga-step-transition');
+      $('ga-transition-msg').textContent  = `Section ${currentLetter} complete! Get ready for Section ${nextLetter}.`;
+      $('ga-transition-next').textContent = `Start Section ${nextLetter} →`;
+      $('ga-transition-next').onclick     = () => loadGrammarSection(nextIdx);
+    }
+  }
+
+  async function submitGrammarAssessment() {
+    // Total marks: Section A max=40 (40×1), Section B max=26 (13×2), Section C max=34 (17×2) = 100
+    const totalMarksObtained = _gaSectionResults.reduce((s, r) => s + r.marksObtained, 0);
+    const totalMaxMarks      = _gaSectionResults.reduce((s, r) => s + r.maxMarks, 0); // 100
+    const totalCorrect       = _gaSectionResults.reduce((s, r) => s + r.correct, 0);
+    const totalQuestions     = _gaSectionResults.reduce((s, r) => s + r.total, 0);
+    // Score is directly out of 100 since totalMaxMarks == 100
+    const scoreOutOf100      = totalMaxMarks > 0 ? Math.round((totalMarksObtained / totalMaxMarks) * 100) : 0;
+
+    const sessionData = {
+      sections: _gaSectionResults.map(r => ({
+        title:         r.title,
+        answerRecord:  r.answerRecord,
+        correct:       r.correct,
+        total:         r.total,
+        marksPerQ:     r.marksPerQ,
+        marksObtained: r.marksObtained,
+        maxMarks:      r.maxMarks
+      })),
+      totalCorrect,
+      totalQuestions,
+      totalMarksObtained,
+      totalMaxMarks,
+      scoreOutOf100
+    };
+
+    try {
+      await DB.put('sessions', {
+        traineeId:    _trainee.id,
+        traineeName:  _trainee.name,
+        module:       'grammar-assessment',
+        topicId:      _gaSections[0].id,
+        topicTitle:   'Grammar Assessment — Full Test (Sections A + B + C)',
+        recordingBlob: null,
+        transcript:   '',
+        writtenText:  JSON.stringify(sessionData),
+        aiScores:     { overall: scoreOutOf100, marksObtained: totalMarksObtained, totalMarks: totalMaxMarks, correctAnswers: totalCorrect, totalQuestions },
+        adminScores:  null,
+        adminComment: '',
+        status:       'ai-evaluated',
+        submittedAt:  new Date().toISOString(),
+        timeTaken:    0
+      });
+      toast('Grammar test submitted!', 'success');
+    } catch (e) {
+      console.error('Session save failed:', e.message);
+      toast('⚠ Could not save session: ' + e.message, 'error');
+    }
+
+    // Show confirmation — no scores visible to trainee
+    showStep('grammar-assessment', 'ga-step-results');
+  }
+
+  async function endGrammarAssessmentEarly() {
+    if (!confirm('Are you sure you want to end the test early and submit your answers?')) return;
+
+    // Show loading indicator since we might evaluate written answers using Claude
+    const endBtn = $('btn-ga-end');
+    const nextBtn = $('btn-ga-next');
+    const prevBtn = $('btn-ga-prev');
+    if (endBtn) { endBtn.disabled = true; endBtn.textContent = '⌛ Ending…'; }
+    if (nextBtn) nextBtn.disabled = true;
+    if (prevBtn) prevBtn.disabled = true;
+
+    // 1. Grade the current section
+    const marksPerQ = _gaCurrentSection === 0 ? 1 : 2;
+    const normalise = s => (s || '').trim().toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+    const expandContractions = s => s
+      .replace(/\bwon't\b/g, 'will not')
+      .replace(/\bcan't\b/g, 'cannot')
+      .replace(/\bdon't\b/g, 'do not')
+      .replace(/\bdoesn't\b/g, 'does not')
+      .replace(/\bdidn't\b/g, 'did not')
+      .replace(/\bisn't\b/g, 'is not')
+      .replace(/\baren't\b/g, 'are not')
+      .replace(/\bwasn't\b/g, 'was not')
+      .replace(/\bweren't\b/g, 'were not')
+      .replace(/\bhadn't\b/g, 'had not')
+      .replace(/\bhasn't\b/g, 'has not')
+      .replace(/\bhaven't\b/g, 'have not')
+      .replace(/\bcouldn't\b/g, 'could not')
+      .replace(/\bshouldn't\b/g, 'should not')
+      .replace(/\bwouldn't\b/g, 'would not')
+      .replace(/\bhe's\b/g, 'he is')
+      .replace(/\bshe's\b/g, 'she is')
+      .replace(/\bit's\b/g, 'it is')
+      .replace(/\bi'm\b/g, 'i am')
+      .replace(/\bthey're\b/g, 'they are')
+      .replace(/\bwe're\b/g, 'we are')
+      .replace(/\byou're\b/g, 'you are')
+      .replace(/\bi've\b/g, 'i have')
+      .replace(/\bthey've\b/g, 'they have')
+      .replace(/\bwe've\b/g, 'we have')
+      .replace(/\byou've\b/g, 'you have')
+      .replace(/\bhe'd\b/g, 'he would')
+      .replace(/\bshe'd\b/g, 'she would')
+      .replace(/\bi'd\b/g, 'i would')
+      .replace(/\bthey'd\b/g, 'they would')
+      .replace(/\bhe'll\b/g, 'he will')
+      .replace(/\bshe'll\b/g, 'she will')
+      .replace(/\bthey'll\b/g, 'they will');
+    const normFull = s => normalise(expandContractions((s || '').toLowerCase()));
+
+    let correct = 0;
+    const answerRecord = [];
+    for (let idx = 0; idx < _gaQuestions.length; idx++) {
+      const q  = _gaQuestions[idx];
+      const ua = _gaUserAnswers[idx];
+
+      if (q.type === 'fill-blank' || q.type === 'rewrite') {
+        const userNorm = normFull(ua);
+        let isOk = false;
+        if (ua && ua.trim()) {
+          isOk = (q.acceptedAnswers || []).some(a => normFull(a) === userNorm);
+          if (!isOk && q.type === 'rewrite' && userNorm) {
+            try {
+              isOk = await ClaudeEvaluator.evaluateRewrite(q.stem, ua, q.acceptedAnswers || []);
+            } catch (e) {
+              console.warn('Claude rewrite eval failed:', e.message);
+              isOk = false;
+            }
+          }
+        }
+        if (isOk) correct++;
+        answerRecord.push({
+          stem:            q.stem,
+          type:            q.type,
+          acceptedAnswers: q.acceptedAnswers,
+          userAnswer:      ua || '',
+          isCorrect:       isOk,
+          explanation:     q.explanation || ''
+        });
+      } else {
+        const isOk = ua === q.correct;
+        if (isOk) correct++;
+        answerRecord.push({
+          stem:        q.stem,
+          options:     q.options,
+          correct:     q.correct,
+          userAnswer:  ua,
+          isCorrect:   isOk,
+          explanation: q.explanation || ''
+        });
+      }
+    }
+
+    const marksObtained = correct * marksPerQ;
+    const maxMarks      = _gaQuestions.length * marksPerQ;
+
+    _gaSectionResults.push({
+      title:        _gaSections[_gaCurrentSection].title,
+      answerRecord,
+      correct,
+      total:        _gaQuestions.length,
+      marksPerQ,
+      marksObtained,
+      maxMarks
+    });
+
+    // 2. Grade any remaining unstarted sections as 0/empty
+    for (let nextSecIdx = _gaCurrentSection + 1; nextSecIdx < _gaSections.length; nextSecIdx++) {
+      const nextSec = _gaSections[nextSecIdx];
+      const nextQuestions = nextSec.questions || [];
+      const nextMarksPerQ = nextSecIdx === 0 ? 1 : 2;
+      const nextAnswerRecord = nextQuestions.map(q => {
+        if (q.type === 'fill-blank' || q.type === 'rewrite') {
+          return {
+            stem:            q.stem,
+            type:            q.type,
+            acceptedAnswers: q.acceptedAnswers,
+            userAnswer:      '',
+            isCorrect:       false,
+            explanation:     q.explanation || ''
+          };
+        } else {
+          return {
+            stem:        q.stem,
+            options:     q.options,
+            correct:     q.correct,
+            userAnswer:  -1,
+            isCorrect:   false,
+            explanation: q.explanation || ''
+          };
+        }
+      });
+      _gaSectionResults.push({
+        title:        nextSec.title,
+        answerRecord:  nextAnswerRecord,
+        correct:       0,
+        total:        nextQuestions.length,
+        marksPerQ:     nextMarksPerQ,
+        marksObtained: 0,
+        maxMarks:      nextQuestions.length * nextMarksPerQ
+      });
+    }
+
+    if (endBtn) { endBtn.disabled = false; endBtn.textContent = 'End Test'; }
+    if (nextBtn) nextBtn.disabled = false;
+    if (prevBtn) prevBtn.disabled = false;
+
+    submitGrammarAssessment();
+  }
+
+  // ================================================================
+  //  LISTENING ASSESSMENT (MCQ) — 3 sections, 100 marks total
+  // ================================================================
+
+  async function initListeningAssessment() {
+    const allTopics = enabledTopics(await DB.getByIndex('topics', 'module', 'listening-assessment'));
+    if (!allTopics.length) {
+      toast('No listening tests available. Ask your admin to add questions.', 'error');
+      return;
+    }
+
+    // Group enabled topics by set name, then pick ONE set randomly
+    // Title format: "Listening Set 1 — Section 2: Audio (10 Questions)"
+    const setMap = {};
+    allTopics.forEach(t => {
+      const setName = (t.title.match(/^(.+?)\s+[—–-]+\s+Section/i)?.[1] || t.title).trim();
+      if (!setMap[setName]) setMap[setName] = [];
+      setMap[setName].push(t);
+    });
+    const setNames = Object.keys(setMap);
+    const chosenSet = setNames[Math.floor(Math.random() * setNames.length)];
+    const chosenTopics = setMap[chosenSet];
+
+    // Sort sections within the chosen set (Section 1 → 2 → 3)
+    chosenTopics.sort((a, b) => a.title.localeCompare(b.title));
+
+    _laSections = chosenTopics
+      .map((t, i) => {
+        // Extract section type label: "Listening Set 1 — Section 2: Audio (10 Questions)" → "Audio"
+        const typeMatch = t.title.match(/Section\s+\d+:\s*(\w+)/i);
+        return {
+          id:          t.id,
+          title:       t.title,
+          sectionType: typeMatch ? typeMatch[1] : `Section ${i + 1}`,
+          questions:   (t.checklist || []).filter(q => q && typeof q === 'object' && q.stem)
+        };
+      })
+      .filter(s => s.questions.length > 0);
+
+    if (!_laSections.length) {
+      toast('No listening questions found. Ask your admin to add questions.', 'error');
+      return;
+    }
+
+    _laCurrentSection = 0;
+    _laSectionResults = [];
+
+    showScreen('listening-assessment');
+    showStep('listening-assessment', 'la-step-intro');
+
+    $('btn-la-start').onclick = () => loadListeningSection(0);
+  }
+
+  function loadListeningSection(idx) {
+    _laCurrentSection = idx;
+    const section     = _laSections[idx];
+    _laQuestions      = section.questions;
+    _laCurrentIdx     = 0;
+    _laUserAnswers    = new Array(section.questions.length).fill(-1);
+
+    showStep('listening-assessment', 'la-step-quiz');
+    renderListeningQuestion();
+  }
+
+  function renderListeningQuestion() {
+    const q     = _laQuestions[_laCurrentIdx];
+    const total = _laQuestions.length;
+    const cur   = _laCurrentIdx + 1;
+    const sec   = _laSections[_laCurrentSection];
+    // Use per-question marksPerQ if set (Set 2+), else fall back to LA_MARKS array (Set 1)
+    const marks = (_laQuestions[0] && _laQuestions[0].marksPerQ) || LA_MARKS[_laCurrentSection] || 1;
+
+    // Section label + overall progress
+    $('la-section-label').textContent    = `Section ${_laCurrentSection + 1} — ${sec.sectionType} (${marks} mark${marks > 1 ? 's' : ''} each)`;
+    $('la-section-progress').textContent = `Section ${_laCurrentSection + 1} of ${_laSections.length}`;
+
+    // Progress bar within this section
+    $('la-progress-bar').style.width = `${((cur - 1) / total) * 100}%`;
+    $('la-q-num').textContent        = `Question ${cur} of ${total}`;
+    $('la-q-stem').textContent       = q.stem;
+
+    // Answer options
+    const LABELS    = ['A', 'B', 'C', 'D'];
+    const container = $('la-options-container');
+    container.innerHTML = '';
+    (q.options || []).forEach((opt, idx) => {
+      const btn       = document.createElement('button');
+      btn.className   = 'ga-option-btn' + (_laUserAnswers[_laCurrentIdx] === idx ? ' selected' : '');
+      btn.innerHTML   = `<span class="ga-option-label">${LABELS[idx]}</span> <span>${opt}</span>`;
+      btn.onclick     = () => selectListeningOption(idx);
+      container.appendChild(btn);
+    });
+
+    // Previous button
+    const prevBtn         = $('btn-la-prev');
+    prevBtn.style.display = _laCurrentIdx > 0 ? '' : 'none';
+    prevBtn.onclick       = () => prevListeningQuestion();
+
+    const endBtn = $('btn-la-end');
+    if (endBtn) {
+      endBtn.onclick = () => {
+        endListeningAssessmentEarly();
+      };
+    }
+
+    // Next / Complete-Section / Submit button
+    const nextBtn       = $('btn-la-next');
+    const isLastQ       = _laCurrentIdx === total - 1;
+    const isLastSection = _laCurrentSection === _laSections.length - 1;
+
+    if (!isLastQ) {
+      nextBtn.textContent = 'Next →';
+      nextBtn.onclick     = nextListeningQuestion;
+    } else if (!isLastSection) {
+      nextBtn.textContent = `Complete Section ${_laCurrentSection + 1} →`;
+      nextBtn.onclick     = completeListeningSection;
+    } else {
+      nextBtn.textContent = 'Submit Full Test ✓';
+      nextBtn.onclick     = completeListeningSection;
+    }
+  }
+
+  function selectListeningOption(idx) {
+    _laUserAnswers[_laCurrentIdx] = idx;
+    document.querySelectorAll('#la-options-container .ga-option-btn').forEach((btn, i) => {
+      btn.classList.toggle('selected', i === idx);
+    });
+  }
+
+  function nextListeningQuestion() {
+    if (_laUserAnswers[_laCurrentIdx] === -1) {
+      toast('Please select an answer before continuing.', 'error');
+      return;
+    }
+    _laCurrentIdx++;
+    renderListeningQuestion();
+  }
+
+  function prevListeningQuestion() {
+    if (_laCurrentIdx > 0) {
+      _laCurrentIdx--;
+      renderListeningQuestion();
+    }
+  }
+
+  function completeListeningSection() {
+    if (_laUserAnswers[_laCurrentIdx] === -1) {
+      toast('Please select an answer before continuing.', 'error');
+      return;
+    }
+
+    // Use per-question marksPerQ if set (Set 2+), else fall back to LA_MARKS array (Set 1)
+    const marksPerQ = (_laQuestions[0] && _laQuestions[0].marksPerQ) || LA_MARKS[_laCurrentSection] || 1;
+
+    let correct = 0;
+    const answerRecord = _laQuestions.map((q, idx) => {
+      const isOk = _laUserAnswers[idx] === q.correct;
+      if (isOk) correct++;
+      return {
+        stem:        q.stem,
+        options:     q.options,
+        correct:     q.correct,
+        userAnswer:  _laUserAnswers[idx],
+        isCorrect:   isOk,
+        explanation: q.explanation || ''
+      };
+    });
+
+    const marksObtained = correct * marksPerQ;
+    const maxMarks      = _laQuestions.length * marksPerQ;
+
+    _laSectionResults.push({
+      title:        _laSections[_laCurrentSection].title,
+      sectionType:  _laSections[_laCurrentSection].sectionType,
+      answerRecord,
+      correct,
+      total:        _laQuestions.length,
+      marksPerQ,
+      marksObtained,
+      maxMarks
+    });
+
+    const isLastSection = _laCurrentSection === _laSections.length - 1;
+    if (isLastSection) {
+      submitListeningAssessment();
+    } else {
+      const nextIdx      = _laCurrentSection + 1;
+      const nextSec      = _laSections[nextIdx];
+      showStep('listening-assessment', 'la-step-transition');
+      $('la-transition-msg').textContent  = `Section ${_laCurrentSection + 1} complete! Get ready for Section ${nextIdx + 1}: ${nextSec.sectionType}.`;
+      $('la-transition-next').textContent = `Start Section ${nextIdx + 1}: ${nextSec.sectionType} →`;
+      $('la-transition-next').onclick     = () => loadListeningSection(nextIdx);
+    }
+  }
+
+  async function submitListeningAssessment() {
+    const totalMarksObtained = _laSectionResults.reduce((s, r) => s + r.marksObtained, 0);
+    const totalMaxMarks      = _laSectionResults.reduce((s, r) => s + r.maxMarks, 0);
+    const totalCorrect       = _laSectionResults.reduce((s, r) => s + r.correct, 0);
+    const totalQuestions     = _laSectionResults.reduce((s, r) => s + r.total, 0);
+    const scoreOutOf100      = totalMaxMarks > 0 ? Math.round((totalMarksObtained / totalMaxMarks) * 100) : 0;
+
+    const sessionData = {
+      sections: _laSectionResults.map(r => ({
+        title:         r.title,
+        sectionType:   r.sectionType,
+        answerRecord:  r.answerRecord,
+        correct:       r.correct,
+        total:         r.total,
+        marksPerQ:     r.marksPerQ,
+        marksObtained: r.marksObtained,
+        maxMarks:      r.maxMarks
+      })),
+      totalCorrect,
+      totalQuestions,
+      totalMarksObtained,
+      totalMaxMarks,
+      scoreOutOf100
+    };
+
+    try {
+      await DB.put('sessions', {
+        traineeId:    _trainee.id,
+        traineeName:  _trainee.name,
+        module:       'listening-assessment',
+        topicId:      _laSections[0].id,
+        topicTitle:   'Listening Assessment — Full Test (Video + Audio + Reading)',
+        recordingBlob: null,
+        transcript:   '',
+        writtenText:  JSON.stringify(sessionData),
+        aiScores:     { overall: scoreOutOf100, marksObtained: totalMarksObtained, totalMarks: totalMaxMarks, correctAnswers: totalCorrect, totalQuestions },
+        adminScores:  null,
+        adminComment: '',
+        status:       'ai-evaluated',
+        submittedAt:  new Date().toISOString(),
+        timeTaken:    0
+      });
+      toast('Listening test submitted!', 'success');
+    } catch (e) {
+      console.error('Session save failed:', e.message);
+      toast('⚠ Could not save session: ' + e.message, 'error');
+    }
+
+    showStep('listening-assessment', 'la-step-results');
+  }
+
+  async function endListeningAssessmentEarly() {
+    if (!confirm('Are you sure you want to end the test early and submit your answers?')) return;
+
+    // 1. Grade the current section
+    const marksPerQ = (_laQuestions[0] && _laQuestions[0].marksPerQ) || LA_MARKS[_laCurrentSection] || 1;
+    let correct = 0;
+    const answerRecord = _laQuestions.map((q, idx) => {
+      const isOk = _laUserAnswers[idx] === q.correct;
+      if (isOk) correct++;
+      return {
+        stem:        q.stem,
+        options:     q.options,
+        correct:     q.correct,
+        userAnswer:  _laUserAnswers[idx],
+        isCorrect:   isOk,
+        explanation: q.explanation || ''
+      };
+    });
+
+    const marksObtained = correct * marksPerQ;
+    const maxMarks      = _laQuestions.length * marksPerQ;
+
+    _laSectionResults.push({
+      title:        _laSections[_laCurrentSection].title,
+      sectionType:  _laSections[_laCurrentSection].sectionType,
+      answerRecord,
+      correct,
+      total:        _laQuestions.length,
+      marksPerQ,
+      marksObtained,
+      maxMarks
+    });
+
+    // 2. Grade any remaining unstarted sections as 0/empty
+    for (let nextSecIdx = _laCurrentSection + 1; nextSecIdx < _laSections.length; nextSecIdx++) {
+      const nextSec = _laSections[nextSecIdx];
+      const nextQuestions = nextSec.questions || [];
+      const nextMarksPerQ = nextSec.marksPerQ || LA_MARKS[nextSecIdx] || 1;
+      const nextAnswerRecord = nextQuestions.map(q => {
+        return {
+          stem:        q.stem,
+          options:     q.options,
+          correct:     q.correct,
+          userAnswer:  -1,
+          isCorrect:   false,
+          explanation: q.explanation || ''
+        };
+      });
+      _laSectionResults.push({
+        title:        nextSec.title,
+        sectionType:  nextSec.sectionType,
+        answerRecord:  nextAnswerRecord,
+        correct:       0,
+        total:        nextQuestions.length,
+        marksPerQ:     nextMarksPerQ,
+        marksObtained: 0,
+        maxMarks:      nextQuestions.length * nextMarksPerQ
+      });
+    }
+
+    submitListeningAssessment();
+  }
+
+  // ── NRI STOCK MARKET MCQ — Calculator Logic ──
+  function safeEval(expression) {
+    const sanitized = expression.replace(/×/g, '*').replace(/÷/g, '/');
+    if (!/^[0-9+\-*/.\s()]+$/.test(sanitized)) {
+      throw new Error('Invalid characters');
+    }
+    try {
+      const fn = new Function(`return (${sanitized});`);
+      const val = fn();
+      if (typeof val !== 'number' || isNaN(val) || !isFinite(val)) {
+        return 'Error';
+      }
+      return Number(val.toFixed(8));
+    } catch (e) {
+      return 'Error';
+    }
+  }
+
+  function updateCalcDisplay() {
+    const historyEl = $('calc-history');
+    const inputEl = $('calc-input');
+    if (historyEl) historyEl.textContent = _calcExpr;
+    if (inputEl) inputEl.textContent = _calcInput;
+  }
+
+  function handleCalcInput(val) {
+    if (_calcResetOnInput) {
+      if (val === '.') {
+        _calcInput = '0.';
+      } else {
+        _calcInput = val;
+      }
+      _calcResetOnInput = false;
+      if (_calcExpr === '') {
+        const historyEl = $('calc-history');
+        if (historyEl) historyEl.textContent = '';
+      }
+    } else {
+      if (val === '.') {
+        if (_calcInput.includes('.')) return;
+        _calcInput += '.';
+      } else {
+        if (_calcInput === '0') {
+          _calcInput = val;
+        } else {
+          _calcInput += val;
+        }
+      }
+    }
+    updateCalcDisplay();
+  }
+
+  function handleCalcOperator(op) {
+    if (_calcResetOnInput) {
+      if (_calcExpr !== '' && !/=\s*$/.test(_calcExpr)) {
+        _calcExpr = _calcExpr.trim().slice(0, -1).trim() + ' ' + op + ' ';
+      } else {
+        _calcExpr = _calcInput + ' ' + op + ' ';
+      }
+    } else {
+      _calcExpr += _calcInput + ' ' + op + ' ';
+    }
+    _calcResetOnInput = true;
+    updateCalcDisplay();
+  }
+
+  function handleCalcEqual() {
+    if (_calcExpr === '' || /=\s*$/.test(_calcExpr)) return;
+    
+    const fullExpr = _calcExpr + _calcInput;
+    const result = safeEval(fullExpr);
+    
+    const historyEl = $('calc-history');
+    if (historyEl) historyEl.textContent = fullExpr + ' =';
+    
+    _calcInput = String(result);
+    _calcExpr = '';
+    _calcResetOnInput = true;
+    
+    const inputEl = $('calc-input');
+    if (inputEl) inputEl.textContent = _calcInput;
+  }
+
+  function handleCalcBackspace() {
+    if (_calcResetOnInput) return;
+    
+    _calcInput = _calcInput.slice(0, -1);
+    if (_calcInput === '' || _calcInput === '-') {
+      _calcInput = '0';
+    }
+    updateCalcDisplay();
+  }
+
+  function handleCalcClear() {
+    _calcExpr = '';
+    _calcInput = '0';
+    _calcResetOnInput = false;
+    updateCalcDisplay();
+  }
+
+  function initCalculator() {
+    const toggleBtn = $('btn-smq-calc-toggle');
+    const closeBtn = $('btn-smq-calc-close');
+    const calcEl = $('smq-calculator');
+
+    if (toggleBtn && calcEl) {
+      toggleBtn.onclick = (e) => {
+        e.stopPropagation();
+        calcEl.classList.toggle('hidden');
+      };
+    }
+
+    if (closeBtn && calcEl) {
+      closeBtn.onclick = (e) => {
+        e.stopPropagation();
+        calcEl.classList.add('hidden');
+      };
+    }
+
+    const buttons = document.querySelectorAll('#smq-calculator .calc-btn');
+    buttons.forEach(btn => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        const val = btn.getAttribute('data-val');
+        if (val === 'C') {
+          handleCalcClear();
+        } else if (val === 'back') {
+          handleCalcBackspace();
+        } else if (['+', '-', '*', '/'].includes(val)) {
+          handleCalcOperator(val);
+        } else if (val === '=') {
+          handleCalcEqual();
+        } else {
+          handleCalcInput(val);
+        }
+      };
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (!calcEl || calcEl.classList.contains('hidden')) return;
+
+      const active = document.activeElement;
+      if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) {
+        return;
+      }
+
+      const key = e.key;
+      if (/[0-9.]/.test(key)) {
+        e.preventDefault();
+        handleCalcInput(key);
+      } else if (['+', '-', '*', '/'].includes(key)) {
+        e.preventDefault();
+        handleCalcOperator(key);
+      } else if (key === 'Enter' || key === '=') {
+        e.preventDefault();
+        handleCalcEqual();
+      } else if (key === 'Backspace') {
+        e.preventDefault();
+        handleCalcBackspace();
+      } else if (key === 'Escape' || key.toLowerCase() === 'c') {
+        e.preventDefault();
+        handleCalcClear();
+      }
+    });
+  }
+
+  // ---- Init ----
+  async function init() {
+    await DB.init();
+    initAuth();
+    bindNavigation();
+    initCalculator();
+
+    // Draw idle waveforms on load
+    ['ps', 'mc', 'rp', 'gd'].forEach(prefix => {
+      const canvas = $(`${prefix}-waveform`);
+      if (canvas) Recorder.drawIdleWaveform(canvas);
+    });
+  }
+
+  return { init };
+})();
+
+document.addEventListener('DOMContentLoaded', () => App.init());

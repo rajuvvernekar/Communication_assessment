@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CommAssess — Admin Portal</title>
+  <link rel="stylesheet" href="/assets/comm_assess/css/style.css?v=13">
+  <!-- Frappe Database Adapter -->
+  <script src="/assets/comm_assess/js/frappe-db.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+
+<!-- ============================================================
+     AUTH OVERLAY
+     ============================================================ -->
+<div id="admin-auth-modal" class="auth-overlay">
+  <div class="auth-card">
+    <div class="auth-logo">CA</div>
+    <h2>Admin Portal</h2>
+    <p>Sign in with your admin credentials</p>
+    <input type="text"     id="admin-username-input" placeholder="Username"  autocomplete="username"         style="margin-bottom:0.5rem" />
+    <input type="password" id="admin-pwd-input"      placeholder="Password"  autocomplete="current-password" />
+    <button id="btn-admin-login" class="btn-primary" style="margin-top:0.25rem">Sign In →</button>
+    <div id="admin-pwd-error" class="error-msg hidden">Incorrect username or password.</div>
+    <div style="margin-top:1.25rem;display:flex;justify-content:center;gap:1.5rem">
+      <a href="index.html" style="color:rgba(255,255,255,0.35);font-size:0.8rem;text-decoration:none">
+        ← Trainee Portal
+      </a>
+      <a href="manager.html" style="color:rgba(255,255,255,0.35);font-size:0.8rem;text-decoration:none">
+        Manager Portal →
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     ADMIN APP
+     ============================================================ -->
+<div id="admin-app" class="hidden">
+
+  <!-- Sidebar -->
+  <aside class="admin-sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-dot"></span>
+      <span>CommAssess</span>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="#" class="nav-item active" data-section="dashboard">
+        <span class="nav-icon">📊</span>
+        <span>Dashboard</span>
+      </a>
+      <a href="#" class="nav-item" data-section="trainees">
+        <span class="nav-icon">👥</span>
+        <span>Trainees</span>
+      </a>
+      <a href="#" class="nav-item" data-section="topics">
+        <span class="nav-icon">📚</span>
+        <span>Topics</span>
+      </a>
+      <a href="#" class="nav-item" data-section="assessments">
+        <span class="nav-icon">📋</span>
+        <span>Assessments</span>
+        <span class="nav-badge" id="pending-badge">0</span>
+      </a>
+      <a href="#" class="nav-item" data-section="reports">
+        <span class="nav-icon">📈</span>
+        <span>Reports</span>
+      </a>
+      <a href="#" class="nav-item" data-section="mgr-assessments">
+        <span class="nav-icon">👔</span>
+        <span>Manager Assessments</span>
+        <span class="nav-badge" id="mgr-pending-badge">0</span>
+      </a>
+      <a href="#" class="nav-item" data-section="comm360">
+        <span class="nav-icon">📑</span>
+        <span>Comm360 Master Report</span>
+      </a>
+      <a href="#" class="nav-item" data-section="settings">
+        <span class="nav-icon">⚙️</span>
+        <span>Settings</span>
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="admin-logged-in" id="admin-logged-in-name"></div>
+      <a href="#" class="nav-item" id="btn-admin-logout" style="display:none">
+        <span class="nav-icon">🚪</span>
+        <span>Sign Out</span>
+      </a>
+      <a href="index.html" class="nav-item">
+        <span class="nav-icon">🏠</span>
+        <span>Trainee Portal</span>
+      </a>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="admin-main">
+
+    <!-- ==================== DASHBOARD ==================== -->
+    <section id="admin-dashboard" class="admin-section active">
+      <div class="section-header">
+        <div>
+          <h1>Dashboard</h1>
+          <p>Overview of all assessment activity</p>
+        </div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value" id="stat-trainees">0</div>
+          <div class="stat-label">Total Trainees</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-sessions">0</div>
+          <div class="stat-label">Total Sessions</div>
+        </div>
+        <div class="stat-card warning">
+          <div class="stat-value" id="stat-pending">0</div>
+          <div class="stat-label">Pending Review</div>
+        </div>
+        <div class="stat-card success">
+          <div class="stat-value" id="stat-avg-score">—</div>
+          <div class="stat-label">Avg Admin Score</div>
+        </div>
+      </div>
+
+      <div class="dashboard-grid">
+        <div class="card">
+          <h3>Sessions by Module</h3>
+          <div id="module-breakdown" class="module-breakdown">
+            <div class="empty-state" style="padding:1rem">No sessions yet.</div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Recent Activity</h3>
+          <div id="recent-activity" class="activity-list">
+            <div class="empty-state" style="padding:1rem">No recent activity.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TRAINEES ==================== -->
+    <section id="admin-trainees" class="admin-section">
+      <div class="section-header">
+        <div>
+          <h1>Trainees</h1>
+          <p>All registered trainees and their performance</p>
+        </div>
+      </div>
+      <div class="card">
+        <div class="table-toolbar" style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+          <input type="text" id="trainee-search" placeholder="Search trainees by name..." class="search-input" style="flex:1;min-width:180px" />
+          <button id="btn-delete-selected-trainees" class="btn-ghost btn-ghost-danger" onclick="Admin.deleteSelectedTrainees()" disabled>🗑 Delete Selected</button>
+          <button class="btn-ghost btn-ghost-danger" onclick="Admin.deleteAllTrainees()">🗑 Delete All</button>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width:36px;text-align:center">
+                <input type="checkbox" id="select-all-trainees" title="Select all" onchange="Admin.toggleAllTrainees(this.checked)" />
+              </th>
+              <th>Name</th>
+              <th>Sessions</th>
+              <th>Last Active</th>
+              <th>Avg Score</th>
+              <th>Team <span style="font-weight:400;font-size:0.75rem;color:var(--text-muted)">(type &amp; press Enter)</span></th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="trainees-tbody">
+            <tr><td colspan="7" class="empty-state">No trainees yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ==================== TOPICS ==================== -->
+    <section id="admin-topics" class="admin-section">
+      <div class="section-header">
+        <div>
+          <h1>Topics &amp; Scenarios</h1>
+          <p>Manage content for all assessment modules</p>
+        </div>
+        <div style="display:flex;gap:0.5rem;align-items:center">
+          <button class="btn-ghost" onclick="Admin.disableAllTopics()" title="Disable all topics in the current tab">⏸ Disable All</button>
+          <button class="btn-ghost" onclick="Admin.enableAllTopics()"  title="Enable all topics in the current tab">✅ Enable All</button>
+          <button id="btn-new-topic" class="btn-primary">+ New Topic</button>
+          <button id="btn-force-seed" class="btn-secondary" style="background:#4b5563;color:#fff;margin-left:0.5rem" onclick="Admin.forceReSeed()" title="Force a database re-seed of all default topics to fix missing assessments">⚡ Force Re-seed Defaults</button>
+        </div>
+      </div>
+
+      <div class="module-tabs">
+        <button class="tab-btn active" data-module="all">All</button>
+        <span class="tab-separator">— Trainee —</span>
+        <button class="tab-btn" data-module="pick-speak-stock">📈 P&amp;S Stock</button>
+        <button class="tab-btn" data-module="pick-speak-general">💬 P&amp;S General</button>
+        <button class="tab-btn" data-module="mock-call">Mock Call</button>
+        <button class="tab-btn" data-module="role-play">Role Play</button>
+        <button class="tab-btn" data-module="group-discussion">GD</button>
+        <button class="tab-btn" data-module="written-comm">Written</button>
+        <button class="tab-btn" data-module="grammar-assessment">Grammar</button>
+        <button class="tab-btn" data-module="listening-assessment">Listening</button>
+        <button class="tab-btn" data-module="stock-market-mcq">📊 NRI Stock Market</button>
+        <span class="tab-separator">— Manager —</span>
+        <button class="tab-btn" data-module="mgr-situation-room">🎯 Situation Room</button>
+        <button class="tab-btn" data-module="mgr-transcript-autopsy">📋 Transcript Autopsy</button>
+        <button class="tab-btn" data-module="mgr-mock-call">📞 Mock Call</button>
+        <button class="tab-btn" data-module="mgr-feedback">💬 Feedback</button>
+        <button class="tab-btn" data-module="mgr-eq">🧠 EQ</button>
+        <button class="tab-btn" data-module="mgr-listening-tone">🎧 Listening &amp; Tone</button>
+        <button class="tab-btn" data-module="mgr-management-skills">📊 Mgmt Skills</button>
+      </div>
+
+      <div id="topics-list" class="topics-grid">
+        <div class="empty-state" style="grid-column:1/-1">Loading topics...</div>
+      </div>
+    </section>
+
+    <!-- ==================== ASSESSMENTS ==================== -->
+    <section id="admin-assessments" class="admin-section">
+      <div class="section-header">
+        <div>
+          <h1>Assessments</h1>
+          <p>Review and score submitted assessment recordings</p>
+        </div>
+        <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+          <select id="rescore-manager-select"
+            style="border:1px solid #f97316;border-radius:6px;padding:0.35rem 0.6rem;font-size:0.82rem;color:#c2410c;background:#fff7ed;cursor:pointer;max-width:200px">
+            <option value="">— Select Team —</option>
+            <option value="__ALL__">🌐 All Teams</option>
+          </select>
+          <input id="rescore-agent-names"
+            placeholder="Specific agents (optional, comma-separated)"
+            style="border:1px solid #f97316;border-radius:6px;padding:0.35rem 0.7rem;font-size:0.82rem;color:#7c2d12;background:#fff7ed;width:260px"
+            title="Leave blank to re-score the whole selected team. Enter comma-separated names to target specific agents only." />
+          <button id="btn-rescore-wc" class="btn-ghost"
+            style="font-size:0.82rem;padding:0.45rem 1rem;white-space:nowrap;border-color:#f97316;color:#c2410c"
+            onclick="Admin.reScoreWrittenComm()"
+            title="Re-evaluate Written Communication sessions with the new parameters">
+            🔄 Re-score Written
+          </button>
+          <button id="btn-reset-wc" class="btn-ghost"
+            style="font-size:0.82rem;padding:0.45rem 1rem;white-space:nowrap;border-color:#6b7280;color:#374151"
+            onclick="Admin.resetWrittenScores()"
+            title="Restore Written Comm AI scores to the original values before any re-scoring was done">
+            ↩ Reset Scores
+          </button>
+        </div>
+      </div>
+
+      <!-- Active / Archive view tabs -->
+      <div class="module-tabs" style="margin-bottom:0.75rem">
+        <button class="tab-btn active" id="tab-active-sessions" onclick="Admin.switchAssessmentView(false)">
+          📋 Active <span id="count-active-sessions" style="font-size:0.75rem;opacity:0.8"></span>
+        </button>
+        <button class="tab-btn" id="tab-archive-sessions" onclick="Admin.switchAssessmentView(true)">
+          📁 Archive <span id="count-archive-sessions" style="font-size:0.75rem;opacity:0.8"></span>
+        </button>
+      </div>
+
+      <!-- Back-to-managers breadcrumb (hidden in manager summary view, shown when drilling in) -->
+      <div id="btn-back-to-managers" style="display:none;margin-bottom:0.5rem">
+        <button class="btn-ghost" onclick="Admin.backToManagers()" style="font-size:0.85rem">← Back to Managers</button>
+      </div>
+
+      <div class="filter-bar">
+        <select id="filter-manager" class="filter-select">
+          <option value="">All Managers</option>
+        </select>
+        <select id="filter-team" class="filter-select">
+          <option value="all">All Teams</option>
+        </select>
+        <select id="filter-module" class="filter-select">
+          <option value="all">All Modules</option>
+          <option value="pick-speak">Pick &amp; Speak</option>
+          <option value="mock-call">Mock Call</option>
+          <option value="role-play">Role Play</option>
+          <option value="group-discussion">Group Discussion</option>
+          <option value="written-comm">Written Comm.</option>
+          <option value="grammar-assessment">Grammar Assessment</option>
+          <option value="listening-assessment">Listening Assessment</option>
+        </select>
+        <select id="filter-status" class="filter-select">
+          <option value="all">All Status</option>
+          <option value="pending">Pending</option>
+          <option value="ai-evaluated">AI Evaluated</option>
+          <option value="scored">Fully Scored</option>
+        </select>
+        <button id="btn-refresh-assessments" class="btn-ghost">↻ Refresh</button>
+        <!-- Bulk action buttons (session-level) -->
+        <button id="btn-archive-selected" class="btn-ghost" onclick="Admin.archiveSelectedSessions()" disabled style="display:none">📁 Archive Selected</button>
+        <button id="btn-restore-selected" class="btn-ghost" onclick="Admin.restoreSelectedSessions()" disabled style="display:none">↩ Restore Selected</button>
+        <!-- Bulk action buttons (manager-level) -->
+        <button id="btn-archive-selected-managers" class="btn-ghost" onclick="Admin.archiveSelectedManagers()" disabled style="display:none">📁 Archive Selected</button>
+        <button id="btn-restore-selected-managers" class="btn-ghost" onclick="Admin.restoreSelectedManagers()" disabled style="display:none">↩ Restore Selected</button>
+        <button id="btn-export-csv" class="btn-ghost" style="margin-left:auto">⬇ Export Excel</button>
+        <button class="btn-ghost" onclick="Admin.downloadAllRecordings()">⬇ Download All Recordings</button>
+        <button id="btn-delete-all-assessments" class="btn-ghost btn-ghost-danger" onclick="Admin.deleteAllSessions()">🗑 Delete All</button>
+      </div>
+
+      <div class="card">
+        <table class="data-table">
+          <thead>
+            <tr id="assessments-thead-tr">
+              <th style="width:36px;text-align:center">
+                <input type="checkbox" id="select-all-sessions" onchange="Admin.toggleAllSessions(this.checked)" />
+              </th>
+              <th>Trainee</th>
+              <th>Module</th>
+              <th>Topic</th>
+              <th>Submitted</th>
+              <th>Status</th>
+              <th>AI Score</th>
+              <th>Admin Score</th>
+              <th>Final Score</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="assessments-tbody">
+            <tr><td colspan="10" class="empty-state">No assessments yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ==================== REPORTS ==================== -->
+    <section id="admin-reports" class="admin-section">
+      <div class="section-header">
+        <div>
+          <h1>Reports</h1>
+          <p>Per-trainee performance analytics</p>
+        </div>
+      </div>
+
+      <!-- Two-level Manager → Agent selector -->
+      <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;flex-wrap:wrap">
+        <label style="font-size:0.9rem;font-weight:600">Manager:</label>
+        <select id="report-manager-select" class="filter-select" style="min-width:210px">
+          <option value="">— Choose a manager —</option>
+        </select>
+        <label style="font-size:0.9rem;font-weight:600">Agent:</label>
+        <select id="report-trainee-select" class="filter-select" style="min-width:210px" disabled>
+          <option value="">— Choose an agent —</option>
+        </select>
+      </div>
+
+      <div id="report-content" class="hidden">
+        <!-- Letter-style performance report -->
+        <div id="report-letter-card" class="card letter-report-card"></div>
+
+        <!-- Session history (admin reference) -->
+        <div class="card" style="margin-top:1.25rem">
+          <h3 style="margin:0 0 0.75rem;font-size:0.9rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em">Session History</h3>
+          <table class="data-table" id="report-sessions-table">
+            <thead>
+              <tr>
+                <th>Module</th>
+                <th>Topic</th>
+                <th>Date</th>
+                <th>AI Score</th>
+                <th>Admin Score</th>
+                <th>Final Score</th>
+              </tr>
+            </thead>
+            <tbody id="report-sessions-tbody">
+              <tr><td colspan="6" class="empty-state">No sessions for this trainee.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== COMM360 MASTER REPORT ==================== -->
+    <section id="admin-comm360" class="admin-section">
+      <div class="section-header">
+        <div>
+          <h1>Comm360 Master Report</h1>
+          <p>Comprehensive view of all agent scores across all assessment modules</p>
+        </div>
+      </div>
+
+      <!-- Team filter + search toolbar -->
+      <div class="table-toolbar" style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-bottom:1rem">
+        <div style="display:flex;gap:0.4rem">
+          <button id="comm360-filter-all" class="btn-primary" onclick="Admin.filterComm360('all')" style="font-size:0.8rem;padding:0.3rem 0.8rem">🏢 All Teams</button>
+          <button id="comm360-filter-calls" class="btn-ghost" onclick="Admin.filterComm360('calls')" style="font-size:0.8rem;padding:0.3rem 0.8rem">📞 Calls Team</button>
+          <button id="comm360-filter-tickets" class="btn-ghost" onclick="Admin.filterComm360('tickets')" style="font-size:0.8rem;padding:0.3rem 0.8rem">🎫 Tickets Team</button>
+        </div>
+        <input type="text" id="comm360-search" placeholder="🔍 Search by name or manager…"
+          oninput="Admin.searchComm360(this.value)"
+          style="flex:1;min-width:180px;padding:0.5rem 0.75rem;border:1px solid var(--border);border-radius:6px;font-size:0.875rem" />
+        <button id="btn-master-excel" class="btn-primary" style="font-size:0.82rem;padding:0.45rem 1rem;white-space:nowrap" onclick="Admin.downloadMasterExcel()">⬇ Download Excel</button>
+        <button id="btn-delete-comm360" class="btn-ghost btn-ghost-danger" style="font-size:0.82rem;padding:0.45rem 1rem;white-space:nowrap" onclick="Admin.deleteEntireComm360Report()">🗑 Delete Report</button>
+      </div>
+
+      <!-- Table -->
+      <div class="card" style="padding:0;overflow:hidden;overflow-x:auto">
+        <table class="data-table" id="comm360-table">
+          <thead>
+            <tr>
+              <th style="width:42px;text-align:center">#</th>
+              <th>Name</th>
+              <th>Manager</th>
+              <th style="width:80px;text-align:center">Team</th>
+              <th style="width:110px;text-align:right">Self Assess.</th>
+              <th style="width:100px;text-align:right">AI Audit</th>
+              <th style="width:80px;text-align:right">P&S /20</th>
+              <th style="width:90px;text-align:right">Listening /20</th>
+              <th style="width:120px;text-align:right">Mock Call/Ticket /20</th>
+              <th style="width:90px;text-align:right">Grammar /25</th>
+              <th style="width:100px;text-align:right">Total /100</th>
+            </tr>
+          </thead>
+          <tbody id="comm360-tbody">
+            <tr><td colspan="11" class="empty-state">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="comm360-count" style="margin-top:0.5rem;font-size:0.8rem;color:var(--text-muted)"></div>
+    </section>
+
+    <!-- ==================== MANAGER ASSESSMENTS ==================== -->
+    <section id="admin-mgr-assessments" class="admin-section">
+      <div class="section-header">
+        <div>
+          <h1>Manager Assessments</h1>
+          <p>Review and score manager leadership assessment submissions</p>
+        </div>
+        <div style="display:flex;gap:0.5rem;align-items:center">
+          <a href="manager.html" target="_blank" class="btn-ghost" style="font-size:0.82rem;padding:0.45rem 1rem">
+            Open Manager Portal ↗
+          </a>
+        </div>
+      </div>
+
+      <!-- Filter bar -->
+      <div class="filter-bar">
+        <select id="mgr-filter-module" class="filter-select" onchange="Admin.renderMgrAssessments()">
+          <option value="all">All Modules</option>
+          <option value="mgr-situation-room">🎯 Situation Room</option>
+          <option value="mgr-transcript-autopsy">📋 Transcript Autopsy</option>
+          <option value="mgr-mock-call">📞 Mock Call</option>
+          <option value="mgr-feedback">💬 Feedback</option>
+          <option value="mgr-eq">🧠 Emotional Intelligence</option>
+          <option value="mgr-listening-tone">🎧 Listening &amp; Tone</option>
+          <option value="mgr-management-skills">📊 Management Skills</option>
+        </select>
+        <select id="mgr-filter-status" class="filter-select" onchange="Admin.renderMgrAssessments()">
+          <option value="all">All Status</option>
+          <option value="pending">Pending</option>
+          <option value="scored">Scored</option>
+        </select>
+        <button class="btn-ghost" onclick="Admin.loadMgrAssessments()">↻ Refresh</button>
+      </div>
+
+      <div class="card" style="padding:0;overflow:hidden">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Manager Name</th>
+              <th>Module</th>
+              <th>Topic</th>
+              <th>Submitted</th>
+              <th>Status</th>
+              <th>AI Score</th>
+              <th>Admin Score</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="mgr-assessments-tbody">
+            <tr><td colspan="8" class="empty-state">No manager assessments yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ==================== SETTINGS ==================== -->
+    <section id="admin-settings" class="admin-section">
+      <div class="section-header">
+        <div>
+          <h1>Settings</h1>
+          <p>Admin password and data management</p>
+        </div>
+      </div>
+
+      <div class="card settings-card">
+        <h3>Change Admin Password</h3>
+        <div class="setting-row">
+          <label>New Password</label>
+          <input type="password" id="new-pwd" placeholder="Enter new password" style="max-width:300px" />
+        </div>
+        <div class="setting-row">
+          <label>Confirm Password</label>
+          <input type="password" id="confirm-pwd" placeholder="Confirm new password" style="max-width:300px" />
+        </div>
+        <button id="btn-save-pwd" class="btn-primary">Save Password</button>
+        <div id="pwd-msg" style="margin-top:0.75rem;font-size:0.875rem"></div>
+      </div>
+
+      <div class="card settings-card" style="margin-top:1.25rem">
+        <h3>🤖 Claude AI Scoring</h3>
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:1rem">
+          Add your Anthropic API key to enable real-time AI scoring for Mock Calls and spoken modules.
+          If left blank, the tool uses built-in JS phrase analysis instead.
+          Your key is stored only in this browser session and never sent anywhere except Anthropic's API.
+        </p>
+        <div class="setting-row">
+          <label>Anthropic API Key</label>
+          <input type="password" id="claude-api-key" placeholder="sk-ant-..." autocomplete="off" style="max-width:380px;font-family:monospace;font-size:0.82rem" />
+        </div>
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-top:0.75rem;flex-wrap:wrap">
+          <button id="btn-save-api-key" class="btn-primary">Save Key for This Session</button>
+          <button id="btn-clear-api-key" class="btn-ghost small">Clear Key</button>
+          <span id="api-key-status" style="font-size:0.82rem;color:var(--text-muted)"></span>
+        </div>
+      </div>
+
+      <div class="card settings-card danger-zone" style="margin-top:1.25rem">
+        <h3>Data Management</h3>
+        <p>Clear all trainee and session data from local storage. Your topics and settings will be preserved. This cannot be undone.</p>
+        <button id="btn-clear-data" class="btn-danger-outline">Clear All Assessment Data</button>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ============================================================
+     TOPIC MODAL (Create / Edit)
+     ============================================================ -->
+<div id="topic-modal" class="modal-overlay hidden">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h2 id="topic-modal-title">New Topic</h2>
+      <button class="btn-close" id="btn-close-topic-modal">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Module</label>
+        <select id="topic-module" class="filter-select" style="width:100%">
+          <option value="pick-speak-general">Pick &amp; Speak — General</option>
+          <option value="pick-speak-stock">Pick &amp; Speak — Stock Market</option>
+          <option value="mock-call">Mock Call</option>
+          <option value="role-play">Role Play</option>
+          <option value="group-discussion">Group Discussion</option>
+          <option value="written-comm">Written Communication</option>
+          <option value="grammar-assessment">Grammar Assessment (MCQ)</option>
+          <option value="listening-assessment">Listening Assessment (MCQ)</option>
+          <option value="stock-market-mcq">NRI Stock Market MCQ</option>
+          <optgroup label="── Manager Modules ──">
+            <option value="mgr-situation-room">🎯 Situation Room</option>
+            <option value="mgr-transcript-autopsy">📋 Transcript Autopsy</option>
+            <option value="mgr-mock-call">📞 Manager Mock Call</option>
+            <option value="mgr-feedback">💬 Feedback (AI Conversation)</option>
+            <option value="mgr-eq">🧠 Emotional Intelligence</option>
+            <option value="mgr-listening-tone">🎧 Listening &amp; Tone</option>
+            <option value="mgr-management-skills">📊 Management Skills</option>
+          </optgroup>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Title</label>
+        <input type="text" id="topic-title" placeholder="e.g. Handling an Angry Customer" />
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea id="topic-description" placeholder="Short description shown to trainee before the task..."></textarea>
+      </div>
+      <div class="form-group">
+        <label>Scenario / Context Text</label>
+        <textarea id="topic-scenario" placeholder="The actual scenario, situation, or template shown to the trainee..." style="min-height:120px"></textarea>
+      </div>
+      <div class="form-group" id="topic-checklist-group">
+        <label>Evaluation Checklist</label>
+        <div id="checklist-items"></div>
+        <button id="btn-add-checklist" class="btn-ghost small" style="margin-top:0.5rem">+ Add Item</button>
+      </div>
+      <!-- MCQ Questions — Grammar Assessment only -->
+      <div class="form-group" id="topic-mcq-group" style="display:none">
+        <label>MCQ Questions</label>
+        <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.75rem">
+          Add multiple-choice questions. Click the radio button (✓) next to the correct answer for each question.
+        </p>
+        <div id="mcq-questions-list"></div>
+        <button id="btn-add-mcq-question" class="btn-ghost small" style="margin-top:0.5rem">+ Add Question</button>
+      </div>
+
+      <!-- Bot Script — Mock Call only -->
+      <div class="form-group" id="topic-bot-script-group" style="display:none">
+        <label>Bot Script — Customer Lines <small style="font-weight:400;color:var(--text-muted)">(one line per turn, in order)</small></label>
+        <div id="bot-script-items"></div>
+        <button id="btn-add-bot-line" class="btn-ghost small" style="margin-top:0.5rem">+ Add Customer Line</button>
+      </div>
+      <!-- Caller Audio — Mock Call only -->
+      <div class="form-group" id="topic-caller-audio-group" style="display:none">
+        <label>Caller Audio Prompt (Optional — Mock Call)</label>
+        <div class="caller-audio-section">
+          <div class="caller-rec-row">
+            <button id="btn-record-caller" class="btn-secondary">🎙 Record Caller Prompt</button>
+            <span id="caller-rec-status"></span>
+          </div>
+          <audio id="caller-preview-audio" controls class="caller-audio-player hidden" style="margin-top:0.5rem"></audio>
+          <button id="btn-clear-caller-audio" class="btn-ghost small hidden" style="margin-top:0.5rem">Remove Audio</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button id="btn-cancel-topic" class="btn-ghost">Cancel</button>
+      <button id="btn-save-topic" class="btn-primary">Save Topic</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     SCORING MODAL
+     ============================================================ -->
+<div id="scoring-modal" class="modal-overlay hidden">
+  <div class="modal-card large-modal">
+    <div class="modal-header">
+      <h2>Score Assessment</h2>
+      <button class="btn-close" id="btn-close-scoring">✕</button>
+    </div>
+    <div class="modal-body scoring-body" style="padding:0">
+
+      <!-- Left: playback + info -->
+      <div class="scoring-left">
+        <div class="scoring-info">
+          <div class="scoring-meta">
+            <span id="scoring-trainee" style="font-size:0.95rem"></span>
+            <span id="scoring-module-badge" class="module-badge"></span>
+          </div>
+          <div class="scoring-topic" id="scoring-topic"></div>
+          <div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.3rem" id="scoring-date"></div>
+        </div>
+
+        <!-- Audio playback (for spoken modules) -->
+        <div class="audio-section" id="scoring-audio-section">
+          <h4>Recording</h4>
+          <audio id="scoring-audio" controls class="scoring-audio-player"></audio>
+        </div>
+
+        <!-- Written text (for written comm) -->
+        <div class="written-section hidden" id="scoring-written-section">
+          <h4>Submitted Writing</h4>
+          <div id="scoring-written-text" class="transcript-box writing-box"></div>
+        </div>
+
+        <!-- MCQ results (for grammar assessment) -->
+        <div class="hidden" id="scoring-mcq-section">
+          <h4>MCQ Test Results</h4>
+          <div id="scoring-mcq-score" style="font-size:1.1rem;font-weight:700;color:#7c3aed;margin-bottom:0.75rem"></div>
+          <div id="scoring-mcq-review" class="mcq-scoring-review"></div>
+        </div>
+
+        <!-- Transcript (for spoken modules) -->
+        <div class="transcript-section" id="scoring-transcript-section">
+          <h4>Transcript</h4>
+          <div id="scoring-transcript" class="transcript-box">No transcript available.</div>
+        </div>
+
+        <!-- AI Band Classification -->
+        <div id="scoring-ai-band" style="margin-top:1rem"></div>
+
+        <!-- AI Scores -->
+        <div id="scoring-ai-scores-display" class="ai-scores small" style="margin-top:0.75rem"></div>
+      </div>
+
+      <!-- Right: scoring inputs -->
+      <div class="scoring-right">
+        <h4 style="margin-bottom:0.25rem;font-size:0.9rem;font-weight:700">Admin Scores (1–5)</h4>
+        <p style="font-size:0.75rem;color:var(--text-muted);margin-bottom:1rem">Score each criterion. The AI pre-assessment is shown on the left for reference.</p>
+        <div id="scoring-criteria" class="scoring-criteria"></div>
+
+        <!-- Admin overall + band (live, updates as sliders change) -->
+        <div class="scoring-total">
+          Admin Score: <strong id="scoring-total-display">—</strong> / 100
+          &nbsp;<span id="admin-band-inline" style="font-size:0.78rem;font-weight:600"></span>
+        </div>
+
+        <div class="form-group" style="margin-top:0.75rem">
+          <label style="display:flex;align-items:center;gap:0.5rem">
+            Feedback &amp; Comments
+            <button id="btn-use-ai-feedback" class="btn-ghost small" style="font-size:0.7rem;padding:0.15rem 0.5rem">Use AI feedback</button>
+          </label>
+          <textarea id="scoring-comment" placeholder="Write detailed feedback for the trainee — specific observations, strengths, areas to improve..." style="min-height:120px"></textarea>
+        </div>
+
+        <button id="btn-save-score" class="btn-primary full-width">Save &amp; Share with Trainee</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     MANAGER SCORING MODAL
+     ============================================================ -->
+<div id="mgr-score-modal" class="modal-overlay hidden">
+  <div class="modal-card large-modal">
+    <div class="modal-header">
+      <h2>Score Manager Assessment</h2>
+      <button class="btn-close" onclick="document.getElementById('mgr-score-modal').classList.add('hidden')">✕</button>
+    </div>
+    <div class="modal-body scoring-body" style="padding:0">
+
+      <!-- Left: session details -->
+      <div class="scoring-left">
+        <div class="scoring-info">
+          <div class="scoring-meta">
+            <span id="mgr-modal-name" style="font-size:0.95rem;font-weight:700"></span>
+          </div>
+          <div style="font-size:0.8rem;color:var(--text-muted);margin-top:0.2rem">
+            Module: <strong id="mgr-modal-module"></strong>
+          </div>
+          <div class="scoring-topic" id="mgr-modal-topic" style="margin-top:0.3rem"></div>
+        </div>
+
+        <!-- Transcript / written / MCQ content -->
+        <div style="margin-bottom:1.25rem">
+          <div id="mgr-modal-transcript"
+               style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:1rem;font-size:0.875rem;line-height:1.7;max-height:280px;overflow-y:auto">
+          </div>
+        </div>
+
+        <!-- AI scores summary -->
+        <div id="mgr-modal-ai-scores" style="font-size:0.875rem;color:var(--text-muted);padding:0.5rem 0"></div>
+      </div>
+
+      <!-- Right: admin scoring -->
+      <div class="scoring-right">
+        <h4 style="margin-bottom:0.25rem;font-size:0.9rem;font-weight:700">Admin Scores (1–5)</h4>
+        <p style="font-size:0.75rem;color:var(--text-muted);margin-bottom:1rem">
+          Score each criterion on a scale of 1–5. Overall will be calculated automatically.
+        </p>
+
+        <div id="mgr-scoring-criteria" class="scoring-criteria"></div>
+
+        <div class="form-group" style="margin-top:0.75rem">
+          <label>Admin Comments</label>
+          <textarea id="mgr-admin-comment"
+            placeholder="Write coaching notes or feedback for the manager..."
+            style="min-height:100px"></textarea>
+        </div>
+
+        <button class="btn-primary full-width" onclick="Admin.saveMgrScore()"
+          style="background:#7c3aed">
+          Save Score
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Toast Notifications -->
+<div id="toast-container"></div>
+
+<script src="/assets/comm_assess/js/recorder.js?v=6"></script>
+<script src="/assets/comm_assess/js/speech.js?v=8"></script>
+<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+<script src="/assets/comm_assess/js/claude.js?v=17"></script>
+<script src="/assets/comm_assess/js/admin.js?v=65"></script>
+</body>
+</html>

@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>CommAssess Recording Diagnostics</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.5;
+      max-width: 900px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      background: #f8fafc;
+      color: #1e293b;
+    }
+    h1 {
+      color: #0f172a;
+      border-bottom: 2px solid #e2e8f0;
+      padding-bottom: 0.5rem;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .error {
+      background: #fef2f2;
+      border: 1px solid #fee2e2;
+      color: #991b1b;
+      padding: 1rem;
+      border-radius: 6px;
+      margin-bottom: 1.5rem;
+    }
+    .session-card {
+      border-left: 4px solid #3b82f6;
+    }
+    .session-card.status-ok {
+      border-left-color: #10b981;
+    }
+    .session-card.status-error {
+      border-left-color: #ef4444;
+    }
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+      color: #475569;
+    }
+    .meta strong {
+      color: #0f172a;
+    }
+    .log-box {
+      background: #0f172a;
+      color: #38bdf8;
+      font-family: monospace;
+      padding: 1rem;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 0.85rem;
+      max-height: 250px;
+    }
+    .btn {
+      background: #3b82f6;
+      color: #fff;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+    .btn:hover {
+      background: #2563eb;
+    }
+    .alert-banner {
+      background: #ffedd5;
+      border: 1px solid #fed7aa;
+      color: #9a3412;
+      padding: 1rem;
+      border-radius: 6px;
+      margin-bottom: 1.5rem;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>🎙 Recording Diagnostics Tool</h1>
+  <p>This tool connects directly to your Supabase instance to test why recording downloads are failing or showing as "empty".</p>
+  
+  <div class="alert-banner">
+    <strong>Instructions:</strong> Open this file by double-clicking it on your computer, or copy-paste this path into your browser address bar: 
+    <code style="background:#fff;padding:0.2rem 0.4rem;border-radius:4px;font-size:0.9rem;">file:///Users/girisha/Communication_assessment/diagnostics.html</code>
+  </div>
+
+  <div class="card">
+    <button class="btn" onclick="runDiagnostics()">🔍 Run Diagnostics Now</button>
+    <div id="loading" style="display:none; margin-top:1rem; color:#475569;">Connecting to Supabase and checking files...</div>
+  </div>
+
+  <div id="results"></div>
+
+  <!-- Load Config parameters -->
+  <script src="config.js"></script>
+  
+  <script>
+    async function runDiagnostics() {
+      const resultsDiv = document.getElementById('results');
+      const loading = document.getElementById('loading');
+      resultsDiv.innerHTML = '';
+      loading.style.display = 'block';
+      
+      try {
+        if (typeof CONFIG === 'undefined') {
+          throw new Error("config.js could not be loaded. Please ensure this file is run from the project root folder.");
+        }
+        
+        const headers = {
+          'apikey': CONFIG.SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json'
+        };
+        
+        // Fetch sessions
+        const res = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/sessions?module=eq.mock-call&order=submitted_at.desc&limit=5`, {
+          headers: headers
+        });
+        
+        if (!res.ok) {
+          throw new Error(`Failed to query database: ${res.status} ${res.statusText}\n${await res.text()}`);
+        }
+        
+        const sessions = await res.json();
+        loading.style.display = 'none';
+        
+        if (sessions.length === 0) {
+          resultsDiv.innerHTML = `<div class="card">No mock-call sessions found in your database.</div>`;
+          return;
+        }
+        
+        for (const s of sessions) {
+          await analyzeSession(s, resultsDiv, headers);
+        }
+        
+      } catch (err) {
+        loading.style.display = 'none';
+        resultsDiv.innerHTML = `<div class="error">
+          <h3>Connection Error</h3>
+          <p>${err.message.replace(/\n/g, '<br>')}</p>
+        </div>`;
+      }
+    }
+    
+    async function analyzeSession(session, container, authHeaders) {
+      const card = document.createElement('div');
+      card.className = 'card session-card';
+      
+      const title = document.createElement('h3');
+      title.style.margin = '0 0 0.5rem 0';
+      title.textContent = `Trainee: ${session.trainee_name}`;
+      card.appendChild(title);
+      
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      meta.innerHTML = `
+        <div><strong>Submitted:</strong> ${new Date(session.submitted_at).toLocaleString()}</div>
+        <div><strong>Topic:</strong> ${session.topic_title || 'N/A'}</div>
+        <div><strong>URL in DB:</strong> <a href="${session.recording_url || '#'}" target="_blank">${session.recording_url ? 'Link' : 'None'}</a></div>
+      `;
+      card.appendChild(meta);
+      
+      if (!session.recording_url) {
+        card.classList.add('status-error');
+        card.innerHTML += `<p style="color:#ef4444;font-weight:bold;">❌ No recording URL was saved for this session.</p>`;
+        container.appendChild(card);
+        return;
+      }
+      
+      const log = document.createElement('div');
+      log.className = 'log-box';
+      log.textContent = `Initializing check for: ${session.recording_url}\n`;
+      card.appendChild(log);
+      
+      container.appendChild(card);
+      
+      try {
+        log.textContent += `Sending fetch request to URL...\n`;
+        const start = Date.now();
+        const resp = await fetch(session.recording_url);
+        const duration = Date.now() - start;
+        
+        log.textContent += `Response status: ${resp.status} ${resp.statusText} (took ${duration}ms)\n`;
+        log.textContent += `Headers:\n`;
+        resp.headers.forEach((val, key) => {
+          log.textContent += `   ${key}: ${val}\n`;
+        });
+        
+        const blob = await resp.blob();
+        log.textContent += `Blob size received: ${blob.size} bytes\n`;
+        
+        if (blob.size === 0) {
+          card.classList.add('status-error');
+          log.textContent += `❌ ERROR: File size is 0 bytes (Empty File).\n`;
+        } else if (blob.size < 1000) {
+          card.classList.add('status-error');
+          log.textContent += `⚠️ WARNING: File is extremely small (${blob.size} bytes). Reading as text...\n`;
+          const text = await blob.text();
+          log.textContent += `Content read from URL:\n====================\n${text}\n====================\n`;
+          
+          if (text.includes('Bucket is not public') || text.includes('Unauthorized') || text.includes('Permission denied')) {
+            log.textContent += `❌ DIAGNOSIS: The Supabase bucket is Private or public policies are missing. The download URL is returning an authorization error page instead of the actual audio recording.\n`;
+          } else if (text.includes('Object not found')) {
+            log.textContent += `❌ DIAGNOSIS: The audio file does not exist in the bucket. It was either deleted or the upload failed silently.\n`;
+          }
+        } else {
+          // Check binary magic bytes
+          const arrayBuffer = await blob.slice(0, 12).arrayBuffer();
+          const uint8 = new Uint8Array(arrayBuffer);
+          const hex = Array.from(uint8).map(b => b.toString(16).padStart(2, '0')).join(' ');
+          log.textContent += `Magic bytes (hex): ${hex}\n`;
+          
+          if (hex.startsWith('1a 45 df a3')) {
+            card.classList.add('status-ok');
+            log.textContent += `✅ DIAGNOSIS: Valid WebM audio file. If QuickTime fails to play it, try dragging it into Chrome or VLC.\n`;
+          } else if (hex.includes('66 74 79 70')) { // 'ftyp'
+            card.classList.add('status-ok');
+            log.textContent += `✅ DIAGNOSIS: Valid MP4/M4A audio file. QuickTime and Chrome should play this natively.\n`;
+          } else if (hex.startsWith('4f 67 67 53')) { // 'OggS'
+            card.classList.add('status-ok');
+            log.textContent += `✅ DIAGNOSIS: Valid OGG audio file.\n`;
+          } else {
+            card.classList.add('status-error');
+            log.textContent += `❌ DIAGNOSIS: Unknown or corrupted file headers. The file data is present (${blob.size} bytes) but does not match standard audio formats.\n`;
+          }
+        }
+      } catch (err) {
+        card.classList.add('status-error');
+        log.textContent += `❌ ERROR: Fetch request failed: ${err.message}\n`;
+        if (err.message.toLowerCase().includes('failed to fetch') || err.message.toLowerCase().includes('cors')) {
+          log.textContent += `DIAGNOSIS: Possible CORS (Cross-Origin Resource Sharing) block. The Supabase Storage server is rejecting access from this domain, or the network is blocked.\n`;
+        }
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Connection Test</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="config.js?v=8"></script>
+  <style>
+    body { font-family: sans-serif; padding: 40px; background: #f5f5f5; }
+    .box { background: white; border-radius: 12px; padding: 30px; max-width: 700px; margin: auto; box-shadow: 0 2px 12px rgba(0,0,0,0.1); }
+    h2 { margin-top: 0; }
+    .ok { color: green; font-weight: bold; }
+    .fail { color: red; font-weight: bold; }
+    pre { background: #f0f0f0; padding: 12px; border-radius: 6px; font-size: 0.85em; white-space: pre-wrap; word-break: break-all; }
+    .label { color: #888; font-size: 0.85em; margin-top: 16px; }
+  </style>
+</head>
+<body>
+<div class="box">
+  <h2>CommAssess — Connection Test</h2>
+  <div class="label">Supabase URL</div>
+  <pre id="url"></pre>
+  <div class="label">Anon Key (first 30 chars)</div>
+  <pre id="key"></pre>
+  <div class="label">Direct Fetch Test (bypasses Supabase JS client)</div>
+  <pre id="fetch-result">Testing...</pre>
+  <div class="label">Supabase JS Client Test</div>
+  <pre id="sb-result">Testing...</pre>
+</div>
+<script>
+document.getElementById('url').textContent = CONFIG.SUPABASE_URL;
+document.getElementById('key').textContent = CONFIG.SUPABASE_ANON_KEY.substring(0, 40) + '...';
+
+// Test 1: raw fetch
+(async () => {
+  try {
+    const res = await fetch(CONFIG.SUPABASE_URL + '/rest/v1/settings?select=key&limit=1', {
+      headers: {
+        'apikey': CONFIG.SUPABASE_ANON_KEY,
+        'Authorization': 'Bearer ' + CONFIG.SUPABASE_ANON_KEY
+      }
+    });
+    const text = await res.text();
+    document.getElementById('fetch-result').textContent = 'HTTP ' + res.status + ' ' + res.statusText + '\n' + text;
+  } catch(e) {
+    document.getElementById('fetch-result').textContent = 'ERROR: ' + e.message;
+  }
+})();
+
+// Test 2: Supabase JS client
+(async () => {
+  try {
+    const sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+    const { data, error } = await sb.from('settings').select('key').limit(1);
+    if (error) throw error;
+    document.getElementById('sb-result').textContent = 'SUCCESS: ' + JSON.stringify(data);
+  } catch(e) {
+    document.getElementById('sb-result').textContent = 'ERROR: ' + (e.message || JSON.stringify(e));
+  }
+})();
+</script>
+</body>
+</html>

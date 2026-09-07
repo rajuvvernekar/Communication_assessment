@@ -1,0 +1,1159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CommAssess — Communication Assessment Tool</title>
+  <link rel="stylesheet" href="css/style.css?v=16">
+  <!-- Supabase JS SDK (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+</head>
+<body>
+
+<!-- App Header (shown after trainee logs in) -->
+<header id="app-header" class="hidden">
+  <div class="header-logo">CommAssess</div>
+  <div class="header-trainee">
+    <span id="header-trainee-name"></span>
+    <button class="btn-change" id="btn-change-trainee">Change</button>
+  </div>
+</header>
+
+<!-- ============================================================
+     SCREEN: Welcome / Auth
+     ============================================================ -->
+<section id="screen-welcome" class="screen active">
+  <div class="auth-page">
+    <div class="auth-logo-block">
+      <div class="logo-icon">CA</div>
+      <h1>CommAssess</h1>
+      <p>Corporate Communication Assessment Platform</p>
+    </div>
+
+    <!-- Simple Entry Form -->
+    <div class="auth-card" id="auth-form">
+      <h2>Welcome</h2>
+
+      <div class="auth-field">
+        <label for="auth-name">Full Name</label>
+        <input type="text" id="auth-name" placeholder="Your full name" autocomplete="name" data-gramm="false" data-gramm_editor="false" />
+      </div>
+      <div class="auth-field">
+        <label for="auth-empid">Employee ID</label>
+        <input type="text" id="auth-empid" placeholder="e.g. EMP1234" autocomplete="username" data-gramm="false" data-gramm_editor="false" />
+      </div>
+      <p id="auth-error" class="auth-msg error hidden"></p>
+      <button id="btn-start" class="btn-primary full-width">Start Assessment →</button>
+
+      <p class="auth-toggle" style="margin-top:0.5rem">
+        <a href="admin.html" style="color:var(--text-muted);font-size:0.8rem">Admin Portal ↗</a>
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SCREEN: Module Hub
+     ============================================================ -->
+<section id="screen-modules" class="screen">
+  <div class="modules-header">
+    <h2>Select an Assessment Module</h2>
+    <p>Choose a module to practice and get evaluated on</p>
+  </div>
+  <div class="modules-grid">
+    <div class="module-card ps" data-module="pick-speak">
+      <div class="module-icon" style="background:#eff6ff">🎤</div>
+      <h3>Pick &amp; Speak</h3>
+      <p>Pick a random topic and speak for 2 minutes. Get instant AI feedback on fluency and vocabulary.</p>
+      <span class="module-tag">AI + Admin</span>
+    </div>
+    <div class="module-card mc" data-module="mock-call">
+      <div class="module-icon" style="background:#f5f3ff">📞</div>
+      <h3>Mock Call</h3>
+      <p>Handle a simulated customer or client call. Demonstrate professional call-handling skills.</p>
+      <span class="module-tag">Admin Evaluated</span>
+    </div>
+    <div class="module-card rp" data-module="role-play">
+      <div class="module-icon" style="background:#fff7ed">🎭</div>
+      <h3>Role Play</h3>
+      <p>Act out a workplace scenario — handle a team conflict, client objection, or tricky situation.</p>
+      <span class="module-tag">Admin Evaluated</span>
+    </div>
+    <div class="module-card gd" data-module="group-discussion">
+      <div class="module-icon" style="background:#f0fdf4">💬</div>
+      <h3>Group Discussion</h3>
+      <p>Record your individual contribution to a group discussion. Demonstrate argumentation skills.</p>
+      <span class="module-tag">Admin Evaluated</span>
+    </div>
+    <div class="module-card wc" data-module="written-comm">
+      <div class="module-icon" style="background:#f0f9ff">✍️</div>
+      <h3>Written Communication</h3>
+      <p>Complete a professional writing task — email, memo, or report. AI checks tone and structure.</p>
+      <span class="module-tag">AI + Admin</span>
+    </div>
+    <div class="module-card ga" data-module="grammar-assessment">
+      <div class="module-icon" style="background:#f5f3ff">📝</div>
+      <h3>Grammar Assessment</h3>
+      <p>Test your grammar knowledge with multiple-choice questions. Get instant scores and detailed explanations.</p>
+      <span class="module-tag">Auto Scored</span>
+    </div>
+    <div class="module-card la" data-module="listening-assessment">
+      <div class="module-icon" style="background:#fdf2f8">🎧</div>
+      <h3>Listening Assessment</h3>
+      <p>Watch a video clip, listen to an audio clip, and read a passage — then answer MCQs to test your comprehension.</p>
+      <span class="module-tag">Auto Scored</span>
+    </div>
+    <div class="module-card smq" data-module="stock-market-mcq">
+      <div class="module-icon" style="background:#ecfdf5">📊</div>
+      <h3>NRI Basics of Stock Market</h3>
+      <p>Test your knowledge of stock exchanges, SEBI, IPO, Broker, order types, settlement, and trading fundamentals.</p>
+      <span class="module-tag">Auto Scored</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SCREEN: NRI Stock Market MCQ
+     ============================================================ -->
+<section id="screen-stock-market-mcq" class="screen">
+  <div class="module-header smq-header">
+    <button class="btn-back" data-back="modules">← Back</button>
+    <h2>📊 NRI Basics of Stock Market</h2>
+  </div>
+
+  <!-- Step 1: Intro -->
+  <div class="step-container" id="smq-step-intro">
+    <div class="step-card">
+      <div class="step-label">Stock Market MCQ Test</div>
+      <h3 id="smq-intro-title" style="text-align:center;margin-bottom:0.4rem">NRI Basics of Stock Market — Full Test</h3>
+      <p style="text-align:center;color:var(--text-muted);margin-bottom:1.25rem;font-size:0.9rem">
+        All Multiple Choice · <strong>1 mark each · Set assigned randomly</strong>
+      </p>
+
+      <div style="background:#ecfdf5;border-radius:10px;padding:1rem;margin-bottom:1.25rem">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.5rem;text-align:center">
+          <div style="background:#fff;border-radius:8px;padding:0.6rem 0.4rem;border:1px solid #a7f3d0">
+            <div id="smq-intro-qcount-grid" style="font-size:1.1rem;font-weight:800;color:var(--smq-color)">50</div>
+            <div style="font-size:0.72rem;color:var(--text-muted);line-height:1.3">Questions<br>MCQ only</div>
+          </div>
+          <div style="background:#fff;border-radius:8px;padding:0.6rem 0.4rem;border:1px solid #a7f3d0">
+            <div id="smq-intro-marks-grid" style="font-size:1.1rem;font-weight:800;color:var(--smq-color)">50</div>
+            <div style="font-size:0.72rem;color:var(--text-muted);line-height:1.3">Max Marks<br>1 per question</div>
+          </div>
+          <div style="background:#fff;border-radius:8px;padding:0.6rem 0.4rem;border:1px solid #a7f3d0">
+            <div style="font-size:1.1rem;font-weight:800;color:var(--smq-color)">0</div>
+            <div style="font-size:0.72rem;color:var(--text-muted);line-height:1.3">Negative<br>Marking</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ga-intro-meta">
+        <div class="ga-meta-item" id="smq-intro-qcount-meta"><span class="ga-meta-icon">📋</span><span>54 Questions</span></div>
+        <div class="ga-meta-item" id="smq-intro-marks-meta"><span class="ga-meta-icon">🏆</span><span>54 Marks</span></div>
+      </div>
+
+      <div class="ga-intro-rules">
+        <h4>Instructions</h4>
+        <ul>
+          <li>All questions are multiple choice — select the best answer.</li>
+          <li>There is no time limit for this test.</li>
+          <li>Use <strong>← Previous</strong> to revisit earlier questions.</li>
+          <li>No negative marking — attempt all questions.</li>
+          <li>Click <strong>Submit Test</strong> on the final question to submit early.</li>
+          <li>Topics: Broker, Exchanges, SEBI, IPO, Orders, Account Opening, Settlement, Short Delivery, Gifts, FIFO.</li>
+        </ul>
+      </div>
+      <button id="btn-smq-start" class="btn-primary" style="background:var(--smq-color);width:100%;margin-top:1.5rem">
+        Start Test →
+      </button>
+    </div>
+  </div>
+
+  <!-- Step 2: Quiz -->
+  <div class="step-container hidden" id="smq-step-quiz">
+    <div class="step-card" style="position: relative;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem">
+        <div class="smq-question-num" id="smq-q-num" style="margin-bottom:0">Question 1 of 54</div>
+        <div style="display:flex;align-items:center;gap:0.75rem">
+          <button id="btn-smq-calc-toggle" class="btn-secondary" style="padding:0.35rem 0.65rem;font-size:0.82rem;display:flex;align-items:center;gap:0.35rem;cursor:pointer">🧮 Calculator</button>
+          <div id="smq-timer" style="font-size:0.9rem;font-weight:700;color:var(--smq-color);letter-spacing:0.03em;display:none">⏱ 60:00</div>
+        </div>
+      </div>
+      <div class="smq-progress-bar-wrap">
+        <div id="smq-progress-bar" class="smq-progress-bar" style="width:0%"></div>
+      </div>
+      <div class="smq-question-stem" id="smq-q-stem"></div>
+      <div class="smq-options-grid" id="smq-options-container"></div>
+      <div class="ga-nav-row">
+        <button id="btn-smq-prev" class="btn-secondary" style="display:none">← Previous</button>
+        <button id="btn-smq-end" class="btn-danger-outline" style="margin-left:0.5rem">End Test</button>
+        <button id="btn-smq-next" class="btn-primary" style="background:var(--smq-color);margin-left:auto">Next →</button>
+      </div>
+
+      <!-- Floating Calculator Widget -->
+      <div id="smq-calculator" class="smq-calculator hidden">
+        <div class="calc-header">
+          <span>🧮 Calculator</span>
+          <button id="btn-smq-calc-close" class="calc-close-btn">×</button>
+        </div>
+        <div class="calc-display">
+          <div id="calc-history" class="calc-history"></div>
+          <div id="calc-input" class="calc-input">0</div>
+        </div>
+        <div class="calc-buttons">
+          <button class="calc-btn btn-clear" data-val="C">C</button>
+          <button class="calc-btn btn-op" data-val="back">⌫</button>
+          <button class="calc-btn btn-op" data-val="/">/</button>
+          <button class="calc-btn btn-op" data-val="*">×</button>
+          
+          <button class="calc-btn" data-val="7">7</button>
+          <button class="calc-btn" data-val="8">8</button>
+          <button class="calc-btn" data-val="9">9</button>
+          <button class="calc-btn btn-op" data-val="-">-</button>
+          
+          <button class="calc-btn" data-val="4">4</button>
+          <button class="calc-btn" data-val="5">5</button>
+          <button class="calc-btn" data-val="6">6</button>
+          <button class="calc-btn btn-op" data-val="+">+</button>
+          
+          <button class="calc-btn" data-val="1">1</button>
+          <button class="calc-btn" data-val="2">2</button>
+          <button class="calc-btn" data-val="3">3</button>
+          <button class="calc-btn btn-eq" data-val="=" style="grid-row: span 2; height: 100%;">=</button>
+          
+          <button class="calc-btn" data-val="0" style="grid-column: span 2;">0</button>
+          <button class="calc-btn" data-val=".">.</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3: Submitted -->
+  <div class="step-container hidden" id="smq-step-results">
+    <div class="results-card" style="text-align:center;padding:2.5rem 2rem">
+      <div class="results-icon" style="font-size:3.5rem;margin-bottom:1rem">✅</div>
+      <h2 style="margin-bottom:0.5rem">Test Submitted!</h2>
+      <p style="color:var(--text-secondary);margin-bottom:0.5rem">
+        Your NRI Basics of Stock Market assessment has been recorded successfully.
+      </p>
+      <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:2rem">
+        Your trainer will review your results and share feedback with you shortly.
+      </p>
+      <div class="results-actions">
+        <button class="btn-secondary" data-back="modules">← Back to Modules</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SCREEN: Pick & Speak
+     ============================================================ -->
+<section id="screen-pick-speak" class="screen">
+  <div class="module-header ps-header">
+    <button class="btn-back" data-back="modules">← Back</button>
+    <h2>🎤 Pick &amp; Speak</h2>
+  </div>
+
+  <!-- Step 0: Category Selection -->
+  <div class="step-container" id="ps-step-category">
+    <div class="step-card">
+      <div class="step-label">Choose Your Topic Category</div>
+      <h3 style="text-align:center;margin-bottom:1.5rem">What would you like to speak about?</h3>
+      <div class="ps-category-grid">
+        <button id="btn-ps-cat-stock" class="ps-cat-card">
+          <div class="ps-cat-icon">📈</div>
+          <h4>Stock Market</h4>
+          <p>Investing, markets, trading &amp; finance</p>
+        </button>
+        <button id="btn-ps-cat-general" class="ps-cat-card">
+          <div class="ps-cat-icon">💬</div>
+          <h4>General</h4>
+          <p>Workplace &amp; communication topics</p>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 1: Topic Reveal -->
+  <div class="step-container hidden" id="ps-step-topic">
+    <div class="step-card">
+      <div class="step-label">Step 1 of 3 — Your Topic</div>
+
+      <!-- Stock Market mode: single reveal card, timer starts on reveal -->
+      <div id="ps-stock-reveal-wrap">
+        <div class="topic-reveal" id="ps-topic-reveal">
+          <div class="topic-icon">🎲</div>
+          <h2 id="ps-topic-title">Click to reveal your topic</h2>
+          <p id="ps-topic-desc">Your topic will be revealed and the 2-minute prep timer will start immediately.</p>
+        </div>
+        <div style="display:flex;gap:0.75rem;flex-direction:column;margin-top:1.5rem">
+          <button id="btn-ps-reveal" class="btn-primary">🎲 Reveal My Topic &amp; Start Prep</button>
+        </div>
+      </div>
+
+      <!-- General mode: two topic choices, clicking one starts prep timer -->
+      <div id="ps-general-topics-wrap" class="hidden">
+        <div class="ps-choice-timer-wrap">
+          <span class="ps-choice-timer-label">Choose a topic in</span>
+          <span id="ps-choice-countdown" class="ps-choice-countdown">30</span>
+          <span class="ps-choice-timer-label">sec — or one will be picked for you.</span>
+        </div>
+        <p style="text-align:center;color:var(--text-muted);margin-bottom:1rem;font-size:0.875rem">
+          Once you choose, you get <strong>2 minutes</strong> to prepare your points.
+        </p>
+        <div class="ps-topic-choice-grid">
+          <button class="ps-topic-choice-card" id="ps-topic-choice-a">
+            <div class="ps-choice-label">Option A</div>
+            <h3 id="ps-topic-choice-a-title"></h3>
+            <p id="ps-topic-choice-a-desc"></p>
+          </button>
+          <button class="ps-topic-choice-card" id="ps-topic-choice-b">
+            <div class="ps-choice-label">Option B</div>
+            <h3 id="ps-topic-choice-b-title"></h3>
+            <p id="ps-topic-choice-b-desc"></p>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Step 2: Prep Timer -->
+  <div class="step-container hidden" id="ps-step-prep">
+    <div class="step-card ps-prep-card">
+      <div class="step-label">Step 2 of 3 — Preparation Time</div>
+
+      <!-- Topic + compact timer row -->
+      <div class="ps-prep-top">
+        <div class="ps-prep-topic-col">
+          <div class="topic-mini" style="margin-bottom:0">
+            <strong id="ps-prep-title"></strong>
+            <p id="ps-prep-desc" style="margin-top:0.25rem"></p>
+          </div>
+        </div>
+        <div class="ps-prep-timer-col">
+          <div class="timer-ring timer-ring-sm">
+            <svg viewBox="0 0 120 120">
+              <circle cx="60" cy="60" r="54" fill="none" stroke="#e2e8f0" stroke-width="8"/>
+              <circle id="ps-prep-ring" cx="60" cy="60" r="54" fill="none"
+                stroke="var(--ps-color)" stroke-width="8"
+                stroke-dasharray="339.3" stroke-dashoffset="0"
+                stroke-linecap="round" transform="rotate(-90 60 60)"/>
+            </svg>
+            <div class="timer-text">
+              <span id="ps-prep-time">120</span>
+              <small>sec</small>
+            </div>
+          </div>
+          <p style="font-size:0.72rem;color:var(--text-muted);text-align:center;margin-top:0.35rem">Prep time</p>
+        </div>
+      </div>
+
+      <!-- Notepad area -->
+      <div class="ps-notepad-wrap">
+        <div class="ps-notepad-header">
+          <span>📝 Your Notes</span>
+          <span id="ps-note-wordcount" class="ps-note-wc">0 words</span>
+        </div>
+        <textarea id="ps-notepad"
+          placeholder="Jot down your key points, structure your talk, note examples you want to use...&#10;&#10;• Opening line / hook&#10;• Main point 1&#10;• Main point 2&#10;• Closing / summary"
+          class="ps-notepad-area"></textarea>
+      </div>
+
+      <div style="text-align:center;margin-top:1rem">
+        <button id="btn-ps-skip-prep" class="btn-ghost">Skip Prep → Start Recording Now</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3: Recording -->
+  <div class="step-container hidden" id="ps-step-record">
+    <div class="step-card">
+      <div class="step-label">Step 3 of 3 — Speak Now!</div>
+      <div class="topic-mini" style="border-left-color:var(--ps-color)">
+        <strong id="ps-rec-title"></strong>
+      </div>
+      <div class="recording-ui">
+        <div class="rec-timer">
+          <div class="rec-dot"></div>
+          <span id="ps-rec-time">2:00</span>
+          <small>remaining</small>
+        </div>
+        <canvas id="ps-waveform" class="waveform-canvas" width="600" height="70"></canvas>
+        <div id="ps-live-transcript" class="live-transcript">
+          <span class="transcript-placeholder" id="ps-transcript-placeholder">Your speech will appear here in real time...</span>
+        </div>
+        <p id="ps-no-speech-note" class="no-speech-note hidden">
+          ⚠️ Live transcription requires Chrome. Recording is still active.
+        </p>
+      </div>
+      <!-- Notepad visible throughout the 5-minute speaking activity -->
+      <div class="ps-notes-during-rec">
+        <div class="ps-notepad-header">
+          <span>📝 Your Notes</span>
+          <span id="ps-rec-note-wc" class="ps-note-wc">0 words</span>
+        </div>
+        <textarea id="ps-notepad-rec" class="ps-notepad-area ps-notepad-compact"
+          placeholder="Your prep notes will appear here — refer to them while you speak."></textarea>
+      </div>
+      <div class="rec-controls">
+        <button id="btn-ps-stop" class="btn-danger">⏹ Stop &amp; Submit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 4: Results -->
+  <div class="step-container hidden" id="ps-step-results">
+    <div class="results-card">
+      <div class="results-header">
+        <div class="results-icon">✅</div>
+        <h2>Thank You for Submitting!</h2>
+        <p>Your recording has been saved successfully.</p>
+      </div>
+      <div class="admin-note">
+        <span>📋</span>
+        <span>Your admin will review this recording and add a final score and written feedback.</span>
+      </div>
+      <div class="results-actions">
+        <button class="btn-secondary" data-back="modules">← Back to Modules</button>
+        <button id="btn-ps-again" class="btn-primary">Try Another Topic</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SCREEN: Mock Call
+     ============================================================ -->
+<section id="screen-mock-call" class="screen">
+  <div class="module-header mc-header">
+    <button class="btn-back" data-back="modules">← Back</button>
+    <h2>📞 Mock Call</h2>
+  </div>
+
+  <!-- Step 0: Topic Selection (unused — kept for potential future use) -->
+  <div class="step-container hidden" id="mc-step-topic-select">
+    <div class="step-card">
+      <div class="step-label">Choose Your Call Scenario</div>
+      <h3 style="text-align:center;margin-bottom:1.5rem">Select a topic to practice</h3>
+      <div id="mc-topic-cards" class="mc-topic-grid"></div>
+    </div>
+  </div>
+
+  <!-- Step 1: Scenario -->
+  <div class="step-container hidden" id="mc-step-scenario">
+    <div class="step-card">
+      <div class="step-label">Step 1 of 2 — Read the Scenario Carefully</div>
+      <div class="scenario-card mc-scenario">
+        <h3 id="mc-title"></h3>
+        <p id="mc-desc"></p>
+        <div class="scenario-call-box">
+          <div class="caller-icon">📞</div>
+          <div>
+            <div class="caller-label">Incoming call — the caller says:</div>
+            <p id="mc-scenario-text" style="font-size:0.9rem;margin-top:0.3rem"></p>
+          </div>
+        </div>
+        <div id="mc-caller-audio-section" class="hidden" style="margin:0.875rem 0">
+          <div class="caller-label">Listen to the caller's audio:</div>
+          <audio id="mc-caller-audio" controls class="caller-audio-player"></audio>
+        </div>
+        <div class="checklist-section">
+          <h4>You will be evaluated on:</h4>
+          <ul id="mc-checklist" class="evaluation-checklist"></ul>
+        </div>
+      </div>
+      <button id="btn-mc-ready" class="btn-primary" style="background:var(--mc-color)">
+        I'm Ready → Start Recording
+      </button>
+    </div>
+  </div>
+
+  <!-- Step 2: Recording -->
+  <div class="step-container hidden" id="mc-step-record">
+    <div class="step-card">
+      <div class="step-label">Step 2 of 2 — Handle the Call</div>
+
+      <!-- Customer questions panel (shown when topic has bot script) -->
+      <div id="mc-questions-panel" class="mc-questions-panel hidden">
+        <div class="mc-questions-label">💬 Customer may ask — answer each as you record:</div>
+        <ol id="mc-questions-list" class="mc-questions-list"></ol>
+      </div>
+
+      <div class="scenario-mini" style="border-left-color:var(--mc-color)" id="mc-rec-mini"></div>
+      <div class="recording-ui">
+        <div class="rec-timer">
+          <div class="rec-dot"></div>
+          <span id="mc-rec-time">0:00</span>
+          <small>recording...</small>
+        </div>
+        <canvas id="mc-waveform" class="waveform-canvas" width="600" height="70"></canvas>
+      </div>
+      <!-- Live transcript (shown only on Chrome) -->
+      <div id="mc-live-transcript-box" class="live-transcript-box hidden">
+        <div class="live-transcript-label">📝 Live Transcript</div>
+        <div id="mc-live-transcript" class="live-transcript-text">Listening...</div>
+      </div>
+      <div class="rec-controls">
+        <button id="btn-mc-stop" class="btn-danger" style="background:var(--mc-color)">
+          ⏹ End Call &amp; Submit
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2b: Bot-driven turn-based call -->
+  <div class="step-container hidden" id="mc-step-bot-call">
+    <div class="step-card mc-bot-call-card">
+
+      <!-- ── Scenario panel (collapsible, always at top) ── -->
+      <div class="mc-bot-sc-bar" id="mc-bot-sc-bar">
+        <span id="mc-bot-sc-bar-title">📋 Scenario</span>
+        <button class="mc-bot-sc-toggle" id="btn-mc-sc-toggle">Hide ▲</button>
+      </div>
+      <div id="mc-bot-sc-body" class="mc-bot-sc-body">
+        <div class="scenario-card mc-scenario mc-bot-sc-inner">
+          <h3 id="mc-bot-sc-title"></h3>
+          <p id="mc-bot-sc-desc"></p>
+          <div class="scenario-call-box">
+            <div class="caller-icon">📞</div>
+            <div>
+              <div class="caller-label">Incoming call — the caller says:</div>
+              <p id="mc-bot-sc-text" style="font-size:0.875rem;margin-top:0.25rem"></p>
+            </div>
+          </div>
+          <div class="checklist-section" style="margin-top:0.75rem">
+            <h4>You will be evaluated on:</h4>
+            <ul id="mc-bot-sc-checklist" class="evaluation-checklist"></ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Call area: turn header + mood bar + chat ── -->
+      <div class="mc-bot-call-inner">
+        <div class="mc-turn-header">
+          <div class="step-label" id="mc-turn-label">Turn 1 of 4</div>
+          <div class="mc-call-rec-badge"><span class="rec-dot-pulse"></span> Recording</div>
+        </div>
+        <!-- Customer mood indicator — updates each turn -->
+        <div id="mc-mood-indicator" class="mc-mood-bar mood-irate">
+          <span class="mc-mood-emoji">😡</span> Customer is <strong>Very Upset</strong>
+        </div>
+        <div id="mc-chat-thread" class="mc-chat-thread"></div>
+        <div id="mc-bot-status" class="mc-bot-status" style="display:none">
+          🔊 Customer is speaking...
+        </div>
+      </div>
+
+      <!-- ── Sticky bottom: recording controls, always visible ── -->
+      <div class="mc-bot-call-controls">
+        <div id="mc-rec-area" style="display:none">
+          <canvas id="mc-bot-waveform" class="waveform-canvas" width="300" height="40"></canvas>
+          <div class="mc-turn-timer-row">
+            <span class="mc-turn-timer-label">Time remaining:</span>
+            <span id="mc-turn-time" class="mc-turn-time">2:00</span>
+          </div>
+          <div id="mc-bot-live-transcript-box" class="live-transcript-box" style="display:none">
+            <div class="live-transcript-label">📝 Live Transcript</div>
+            <div id="mc-bot-live-transcript" class="live-transcript-text">Listening...</div>
+          </div>
+          <button id="btn-mc-done-turn" class="btn-primary"
+                  style="background:var(--mc-color);margin-top:0.75rem;width:100%">
+            Done Responding →
+          </button>
+        </div>
+        <button id="btn-mc-finish" class="btn-primary"
+                style="display:none;background:var(--mc-color);width:100%">
+          ✅ Finish Call &amp; Submit
+        </button>
+        <button id="btn-mc-end-call" class="btn-ghost"
+                style="margin-top:0.5rem;width:100%;font-size:0.82rem;color:#64748b">
+          ⏹ End Call Early &amp; Submit
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Step 3: Results -->
+  <div class="step-container hidden" id="mc-step-done">
+    <div class="results-card">
+      <div class="results-header">
+        <div class="results-icon">📞</div>
+        <h2>Call Submitted!</h2>
+        <p>Your assessment is being evaluated by the Training Team</p>
+      </div>
+
+      <!-- Scoring status (while processing) -->
+      <div id="mc-ai-scoring-status" class="scoring-status hidden">⏳ Analyzing...</div>
+
+      <!-- Performance band — most prominent -->
+      <div id="mc-band-display"></div>
+
+      <!-- Scoring method tag -->
+      <div id="mc-result-method" style="text-align:center;margin:0.5rem 0"></div>
+
+      <!-- Per-criterion scores -->
+      <div id="mc-result-scores" class="hidden" style="margin:1rem 0"></div>
+
+      <!-- Transcript -->
+      <div id="mc-result-transcript-box" class="hidden" style="margin-top:1rem">
+        <div style="font-size:0.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:0.4rem">Call Transcript</div>
+        <div id="mc-result-transcript" class="transcript-box" style="max-height:160px;overflow-y:auto"></div>
+      </div>
+
+      <div class="admin-note" style="margin-top:1.25rem">
+        <span>📋</span>
+        <span>Your admin will also listen to your recording and may add a final score and written feedback.</span>
+      </div>
+      <div class="results-actions">
+        <button class="btn-secondary" data-back="modules">← Back to Modules</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SCREEN: Role Play
+     ============================================================ -->
+<section id="screen-role-play" class="screen">
+  <div class="module-header rp-header">
+    <button class="btn-back" data-back="modules">← Back</button>
+    <h2>🎭 Role Play</h2>
+  </div>
+
+  <div class="step-container" id="rp-step-scenario">
+    <div class="step-card">
+      <div class="step-label">Step 1 of 2 — Your Scenario</div>
+      <div class="scenario-card rp-scenario">
+        <h3 id="rp-title"></h3>
+        <p id="rp-desc"></p>
+        <div class="scenario-box rp-box">
+          <div class="scenario-label">Your Role &amp; Situation:</div>
+          <p id="rp-scenario-text" style="font-size:0.875rem;margin-top:0.3rem;line-height:1.7"></p>
+        </div>
+        <div class="checklist-section">
+          <h4>You will be evaluated on:</h4>
+          <ul id="rp-checklist" class="evaluation-checklist"></ul>
+        </div>
+      </div>
+      <button id="btn-rp-ready" class="btn-primary" style="background:var(--rp-color)">
+        I'm Ready → Start Recording
+      </button>
+    </div>
+  </div>
+
+  <div class="step-container hidden" id="rp-step-record">
+    <div class="step-card">
+      <div class="step-label">Step 2 of 2 — Record Your Role</div>
+      <div class="recording-ui">
+        <div class="rec-timer">
+          <div class="rec-dot"></div>
+          <span id="rp-rec-time">0:00</span>
+          <small>recording...</small>
+        </div>
+        <canvas id="rp-waveform" class="waveform-canvas" width="600" height="70"></canvas>
+      </div>
+      <div class="rec-controls">
+        <button id="btn-rp-stop" class="btn-danger" style="background:var(--rp-color)">⏹ Stop &amp; Submit</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="step-container hidden" id="rp-step-done">
+    <div class="results-card">
+      <div class="results-header">
+        <div class="results-icon">🎭</div>
+        <h2>Role Play Submitted!</h2>
+        <p>Your recording has been sent for admin review.</p>
+      </div>
+      <div class="admin-note">
+        <span>📋</span>
+        <span>Your admin will evaluate your empathy, assertiveness, resolution skills, and professionalism.</span>
+      </div>
+      <div class="results-actions">
+        <button class="btn-secondary" data-back="modules">← Back to Modules</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SCREEN: Group Discussion
+     ============================================================ -->
+<section id="screen-group-discussion" class="screen">
+  <div class="module-header gd-header">
+    <button class="btn-back" data-back="modules">← Back</button>
+    <h2>💬 Group Discussion</h2>
+  </div>
+
+  <div class="step-container" id="gd-step-topic">
+    <div class="step-card">
+      <div class="step-label">Step 1 of 2 — Discussion Topic</div>
+      <div class="scenario-card gd-scenario">
+        <h3 id="gd-title"></h3>
+        <p id="gd-desc"></p>
+        <div class="scenario-box gd-box">
+          <div class="scenario-label">Discussion Format &amp; Instructions:</div>
+          <p id="gd-scenario-text" style="font-size:0.875rem;margin-top:0.3rem;line-height:1.7"></p>
+        </div>
+        <div class="checklist-section">
+          <h4>You will be evaluated on:</h4>
+          <ul id="gd-checklist" class="evaluation-checklist"></ul>
+        </div>
+      </div>
+      <button id="btn-gd-ready" class="btn-primary" style="background:var(--gd-color)">
+        I'm Ready → Record My Contribution
+      </button>
+    </div>
+  </div>
+
+  <div class="step-container hidden" id="gd-step-record">
+    <div class="step-card">
+      <div class="step-label">Step 2 of 2 — Record Your Contribution</div>
+      <div class="recording-ui">
+        <div class="rec-timer">
+          <div class="rec-dot"></div>
+          <span id="gd-rec-time">0:00</span>
+          <small>recording...</small>
+        </div>
+        <canvas id="gd-waveform" class="waveform-canvas" width="600" height="70"></canvas>
+      </div>
+      <div class="rec-controls">
+        <button id="btn-gd-stop" class="btn-danger" style="background:var(--gd-color)">⏹ Finish &amp; Submit</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="step-container hidden" id="gd-step-done">
+    <div class="results-card">
+      <div class="results-header">
+        <div class="results-icon">💬</div>
+        <h2>Contribution Submitted!</h2>
+        <p>Your group discussion response has been recorded.</p>
+      </div>
+      <div class="admin-note">
+        <span>📋</span>
+        <span>Your admin will evaluate your participation quality, argumentation, and communication clarity.</span>
+      </div>
+      <div class="results-actions">
+        <button class="btn-secondary" data-back="modules">← Back to Modules</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SCREEN: Written Communication
+     ============================================================ -->
+<section id="screen-written-comm" class="screen">
+  <div class="module-header wc-header">
+    <button class="btn-back" data-back="modules">← Back</button>
+    <h2>✍️ Written Communication</h2>
+  </div>
+
+  <!-- Step 1: Task -->
+  <div class="step-container" id="wc-step-task">
+    <div class="step-card wc-card">
+      <div class="step-label">Step 1 of 2 — Your Writing Task</div>
+      <div class="scenario-card wc-scenario">
+        <h3 id="wc-title"></h3>
+        <p id="wc-desc"></p>
+        <div class="scenario-box wc-box">
+          <div class="scenario-label">Context &amp; Template:</div>
+          <pre id="wc-scenario-text" class="scenario-pre"></pre>
+        </div>
+        <div class="checklist-section">
+          <h4>You will be evaluated on:</h4>
+          <ul id="wc-checklist" class="evaluation-checklist"></ul>
+        </div>
+      </div>
+      <button id="btn-wc-start" class="btn-primary" style="background:var(--wc-color)">Start Writing</button>
+    </div>
+  </div>
+
+  <!-- Step 2: Writing Editor -->
+  <div class="hidden" id="wc-step-write" style="min-height:100vh">
+    <div class="wc-editor-layout">
+      <div class="wc-editor-left">
+        <div class="wc-task-mini">
+          <strong id="wc-write-title"></strong>
+          <pre id="wc-write-scenario" class="scenario-pre small" style="margin-top:0.5rem"></pre>
+        </div>
+        <div style="margin-top:1rem;background:#fff;border-radius:10px;padding:1rem;box-shadow:var(--shadow)">
+          <div style="font-size:0.75rem;font-weight:700;color:var(--text-muted);margin-bottom:0.5rem">CHECKLIST</div>
+          <ul id="wc-write-checklist" class="evaluation-checklist"></ul>
+        </div>
+      </div>
+      <div class="wc-editor-right">
+        <div class="wc-editor-header">
+          <div class="wc-stats">
+            <span>Words: <strong id="wc-word-count">0</strong></span>
+            <span>Time: <strong id="wc-time-elapsed">0:00</strong></span>
+          </div>
+        </div>
+        <textarea id="wc-editor" placeholder="Start writing here...&#10;&#10;Use the context on the left to guide your writing."></textarea>
+        <div style="padding:1rem;text-align:right;border-top:1px solid var(--border)">
+          <button id="btn-wc-submit" class="btn-primary" style="background:var(--wc-color)">Submit Writing ✓</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2b: Interactive conversational chat -->
+  <div class="hidden" id="wc-step-chat" style="min-height:100vh">
+    <div class="wc-editor-layout">
+      <!-- Left panel: Task guidelines / checklist -->
+      <div class="wc-editor-left">
+        <div class="wc-task-mini">
+          <strong id="wc-chat-title"></strong>
+          <p id="wc-chat-desc" style="font-size:0.875rem;margin-top:0.25rem;color:var(--text-muted)"></p>
+          <pre id="wc-chat-scenario" class="scenario-pre small" style="margin-top:0.5rem"></pre>
+        </div>
+        <div style="margin-top:1rem;background:#fff;border-radius:10px;padding:1rem;box-shadow:var(--shadow)">
+          <div style="font-size:0.75rem;font-weight:700;color:var(--text-muted);margin-bottom:0.5rem">CHECKLIST</div>
+          <ul id="wc-chat-checklist" class="evaluation-checklist"></ul>
+        </div>
+      </div>
+      <!-- Right panel: Conversational chat interface -->
+      <div class="wc-editor-right" style="display:flex;flex-direction:column;height:100vh">
+        <div class="wc-editor-header" style="background:#fff;border-bottom:1px solid var(--border);padding:1rem">
+          <div style="display:flex;justify-content:space-between;align-items:center;width:100%">
+            <div id="wc-chat-turn-label" style="font-weight:600;color:var(--primary-color)">Turn 1 of 4</div>
+            <div style="font-size:0.85rem;color:var(--text-muted)">
+              Time: <strong id="wc-chat-time-elapsed">0:00</strong>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Chat Thread container -->
+        <div id="wc-chat-thread" class="mc-chat-thread" style="flex:1;overflow-y:auto;padding:1.5rem;background:#f8fafc;display:flex;flex-direction:column;gap:1rem">
+          <!-- Chat bubbles will be dynamically added here -->
+        </div>
+
+        <!-- Typing status indicator -->
+        <div id="wc-chat-bot-status" style="display:none;padding:0.5rem 1.5rem;font-size:0.85rem;color:var(--text-muted);background:#f8fafc;font-style:italic">
+          💬 Customer is typing...
+        </div>
+
+        <!-- Chat Input bar -->
+        <div style="padding:1rem;background:#fff;border-top:1px solid var(--border)">
+          <div style="display:flex;gap:0.75rem;align-items:flex-end">
+            <textarea id="wc-chat-input" placeholder="Type your response here..." style="flex:1;resize:none;height:120px;padding:0.75rem;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:0.95rem" onkeydown="if(event.key==='Enter' && !event.shiftKey){ event.preventDefault(); document.getElementById('btn-wc-chat-send').click(); }"></textarea>
+            <button id="btn-wc-chat-send" class="btn-primary" style="background:var(--wc-color);height:120px;padding:0 1.5rem;border-radius:8px;font-weight:600">Send →</button>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.5rem">
+            <span style="font-size:0.75rem;color:var(--text-muted)">Press Enter to send, Shift + Enter for new line.</span>
+            <button id="btn-wc-chat-submit" class="btn-primary" style="display:none;background:var(--wc-color);padding:0.5rem 1rem;font-size:0.9rem">Submit Correspondence ✓</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3: Results -->
+  <div class="step-container hidden" id="wc-step-results">
+    <div class="results-card">
+      <div class="results-header">
+        <div class="results-icon">✍️</div>
+        <h2>Writing Submitted!</h2>
+        <p>Here's your AI writing analysis</p>
+      </div>
+      <div class="ai-scores" id="wc-ai-scores"></div>
+      <div class="analysis-pills" id="wc-analysis-pills"></div>
+      <div id="wc-coaching-summary" class="coaching-summary hidden"></div>
+      <div class="transcript-section">
+        <h3>Your Writing</h3>
+        <div id="wc-submitted-text" class="transcript-box writing-box"></div>
+      </div>
+      <div class="admin-note">
+        <span>📋</span>
+        <span>Your admin will review and provide final scores on clarity, structure, grammar, tone, and professionalism.</span>
+      </div>
+      <div class="results-actions">
+        <button class="btn-secondary" data-back="modules">← Back to Modules</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SCREEN: Grammar Assessment
+     ============================================================ -->
+<section id="screen-grammar-assessment" class="screen">
+  <div class="module-header ga-header">
+    <button class="btn-back" data-back="modules">← Back</button>
+    <h2>📝 Grammar Assessment</h2>
+  </div>
+
+  <!-- Step 1: Intro -->
+  <div class="step-container" id="ga-step-intro">
+    <div class="step-card">
+      <div class="step-label">Grammar MCQ Test</div>
+      <h3 style="text-align:center;margin-bottom:0.4rem">Grammar Assessment — Full Test</h3>
+      <p style="text-align:center;color:var(--text-muted);margin-bottom:1.25rem;font-size:0.9rem">
+        3 sections · All Multiple Choice · Total: <strong>100 marks</strong>
+      </p>
+
+      <!-- Section marks breakdown -->
+      <div style="background:#f5f3ff;border-radius:10px;padding:1rem;margin-bottom:1.25rem">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.5rem;text-align:center">
+          <div style="background:#fff;border-radius:8px;padding:0.6rem 0.4rem;border:1px solid #e9d5ff">
+            <div style="font-size:1.1rem;font-weight:800;color:var(--ga-color)">40</div>
+            <div style="font-size:0.72rem;color:var(--text-muted);line-height:1.3">Section A<br>1 mark each</div>
+          </div>
+          <div style="background:#fff;border-radius:8px;padding:0.6rem 0.4rem;border:1px solid #e9d5ff">
+            <div style="font-size:1.1rem;font-weight:800;color:var(--ga-color)">13×2</div>
+            <div style="font-size:0.72rem;color:var(--text-muted);line-height:1.3">Section B<br>2 marks each</div>
+          </div>
+          <div style="background:#fff;border-radius:8px;padding:0.6rem 0.4rem;border:1px solid #e9d5ff">
+            <div style="font-size:1.1rem;font-weight:800;color:var(--ga-color)">17×2</div>
+            <div style="font-size:0.72rem;color:var(--text-muted);line-height:1.3">Section C<br>2 marks each</div>
+          </div>
+        </div>
+        <div style="text-align:center;margin-top:0.6rem;font-size:0.78rem;color:#6d28d9;font-weight:600">
+          40 + 26 + 34 = 100 marks total
+        </div>
+      </div>
+
+      <div class="ga-intro-meta">
+        <div class="ga-meta-item">
+          <span class="ga-meta-icon">📋</span>
+          <span>3 Sections</span>
+        </div>
+        <div class="ga-meta-item">
+          <span class="ga-meta-icon">❓</span>
+          <span>70 Questions</span>
+        </div>
+        <div class="ga-meta-item">
+          <span class="ga-meta-icon">⏱️</span>
+          <span>No time limit</span>
+        </div>
+      </div>
+
+      <div class="ga-intro-rules">
+        <h4>Instructions</h4>
+        <ul>
+          <li>Complete all 3 sections in one sitting — do not close the browser.</li>
+          <li>All questions are multiple choice — select the best answer.</li>
+          <li>Use <strong>← Previous</strong> to revisit earlier questions within a section.</li>
+          <li>Click <strong>Complete Section</strong> at the end of each section to proceed.</li>
+          <li>Your score will be reviewed and shared by your trainer only.</li>
+        </ul>
+      </div>
+      <button id="btn-ga-start" class="btn-primary" style="background:var(--ga-color);width:100%;margin-top:1.5rem">
+        Start Test →
+      </button>
+    </div>
+  </div>
+
+  <!-- Step 2: Quiz -->
+  <div class="step-container hidden" id="ga-step-quiz">
+    <div class="step-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.35rem">
+        <span id="ga-section-label" style="font-size:0.78rem;font-weight:700;color:var(--ga-color);text-transform:uppercase;letter-spacing:0.05em">Section A</span>
+        <span id="ga-section-progress" style="font-size:0.78rem;color:var(--text-muted)">Section 1 of 3</span>
+      </div>
+      <div class="ga-progress-bar-wrap">
+        <div id="ga-progress-bar" class="ga-progress-bar" style="width:0%"></div>
+      </div>
+      <div class="ga-question-num" id="ga-q-num">Question 1 of 10</div>
+      <div class="ga-question-stem" id="ga-q-stem"></div>
+      <div class="ga-options-grid" id="ga-options-container"></div>
+      <div class="ga-nav-row">
+        <button id="btn-ga-prev" class="btn-secondary" style="display:none">← Previous</button>
+        <button id="btn-ga-end" class="btn-danger-outline" style="margin-left:0.5rem">End Test</button>
+        <button id="btn-ga-next" class="btn-primary" style="background:var(--ga-color);margin-left:auto">Next →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2b: Section Transition -->
+  <div class="step-container hidden" id="ga-step-transition">
+    <div class="step-card" style="text-align:center;padding:2.5rem 2rem">
+      <div style="font-size:3.5rem;margin-bottom:1rem">🎯</div>
+      <h3 id="ga-transition-msg" style="margin-bottom:0.75rem"></h3>
+      <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:2rem">Take a moment before continuing to the next section.</p>
+      <button id="ga-transition-next" class="btn-primary" style="background:var(--ga-color);width:100%">Continue →</button>
+    </div>
+  </div>
+
+  <!-- Step 3: Submitted Confirmation (no scores shown to trainee) -->
+  <div class="step-container hidden" id="ga-step-results">
+    <div class="results-card" style="text-align:center;padding:2.5rem 2rem">
+      <div class="results-icon" style="font-size:3.5rem;margin-bottom:1rem">✅</div>
+      <h2 style="margin-bottom:0.5rem">Test Submitted!</h2>
+      <p style="color:var(--text-secondary);margin-bottom:0.5rem">
+        Your grammar assessment has been recorded successfully.
+      </p>
+      <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:2rem">
+        Your trainer will review your results and share feedback with you shortly.
+      </p>
+      <div class="results-actions">
+        <button class="btn-secondary" data-back="modules">← Back to Modules</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SCREEN: Listening Assessment
+     ============================================================ -->
+<section id="screen-listening-assessment" class="screen">
+  <div class="module-header la-header">
+    <button class="btn-back" data-back="modules">← Back</button>
+    <h2>🎧 Listening Assessment</h2>
+  </div>
+
+  <!-- Step 1: Intro -->
+  <div class="step-container" id="la-step-intro">
+    <div class="step-card">
+      <div class="step-label">Listening Comprehension Test</div>
+      <h3 style="text-align:center;margin-bottom:0.4rem">Listening Assessment — Full Test</h3>
+      <p style="text-align:center;color:var(--text-muted);margin-bottom:1.25rem;font-size:0.9rem">
+        3 sections · All Multiple Choice · Total: <strong>100 marks</strong>
+      </p>
+
+      <!-- Section marks breakdown -->
+      <div style="background:#fdf2f8;border-radius:10px;padding:1rem;margin-bottom:1.25rem">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.5rem;text-align:center">
+          <div style="background:#fff;border-radius:8px;padding:0.6rem 0.4rem;border:1px solid #fbcfe8">
+            <div style="font-size:1.1rem;font-weight:800;color:var(--la-color)">10×2</div>
+            <div style="font-size:0.72rem;color:var(--text-muted);line-height:1.3">Section 1<br>Video Clip</div>
+          </div>
+          <div style="background:#fff;border-radius:8px;padding:0.6rem 0.4rem;border:1px solid #fbcfe8">
+            <div style="font-size:1.1rem;font-weight:800;color:var(--la-color)">10×5</div>
+            <div style="font-size:0.72rem;color:var(--text-muted);line-height:1.3">Section 2<br>Audio Clip</div>
+          </div>
+          <div style="background:#fff;border-radius:8px;padding:0.6rem 0.4rem;border:1px solid #fbcfe8">
+            <div style="font-size:1.1rem;font-weight:800;color:var(--la-color)">10×3</div>
+            <div style="font-size:0.72rem;color:var(--text-muted);line-height:1.3">Section 3<br>Reading</div>
+          </div>
+        </div>
+        <div style="text-align:center;margin-top:0.6rem;font-size:0.78rem;color:#be185d;font-weight:600">
+          20 + 50 + 30 = 100 marks total
+        </div>
+      </div>
+
+      <div class="ga-intro-meta">
+        <div class="ga-meta-item">
+          <span class="ga-meta-icon">📋</span>
+          <span>3 Sections</span>
+        </div>
+        <div class="ga-meta-item">
+          <span class="ga-meta-icon">❓</span>
+          <span>30 Questions</span>
+        </div>
+        <div class="ga-meta-item">
+          <span class="ga-meta-icon">⏱️</span>
+          <span>No time limit</span>
+        </div>
+      </div>
+
+      <div class="ga-intro-rules">
+        <h4>Instructions</h4>
+        <ul>
+          <li>Complete all 3 sections in one sitting — do not close the browser.</li>
+          <li><strong>Section 1:</strong> Your trainer will play a video clip — answer from memory after watching.</li>
+          <li><strong>Section 2:</strong> Your trainer will play an audio clip — answer from memory after listening.</li>
+          <li><strong>Section 3:</strong> Your trainer will have you read a passage — answer based on what you read.</li>
+          <li>All questions are multiple choice — select the best answer.</li>
+          <li>Your score will be reviewed and shared by your trainer only.</li>
+        </ul>
+      </div>
+      <button id="btn-la-start" class="btn-primary" style="background:var(--la-color);width:100%;margin-top:1.5rem">
+        Start Test →
+      </button>
+    </div>
+  </div>
+
+  <!-- Step 2: Quiz -->
+  <div class="step-container hidden" id="la-step-quiz">
+    <div class="step-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.35rem">
+        <span id="la-section-label" style="font-size:0.78rem;font-weight:700;color:var(--la-color);text-transform:uppercase;letter-spacing:0.05em">Section 1 — Video</span>
+        <span id="la-section-progress" style="font-size:0.78rem;color:var(--text-muted)">Section 1 of 3</span>
+      </div>
+      <div class="ga-progress-bar-wrap">
+        <div id="la-progress-bar" class="ga-progress-bar" style="width:0%"></div>
+      </div>
+      <div class="ga-question-num" id="la-q-num">Question 1 of 10</div>
+      <div class="ga-question-stem" id="la-q-stem"></div>
+      <div class="ga-options-grid" id="la-options-container"></div>
+      <div class="ga-nav-row">
+        <button id="btn-la-prev" class="btn-secondary" style="display:none">← Previous</button>
+        <button id="btn-la-end" class="btn-danger-outline" style="margin-left:0.5rem">End Test</button>
+        <button id="btn-la-next" class="btn-primary" style="background:var(--la-color);margin-left:auto">Next →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2b: Section Transition -->
+  <div class="step-container hidden" id="la-step-transition">
+    <div class="step-card" style="text-align:center;padding:2.5rem 2rem">
+      <div style="font-size:3.5rem;margin-bottom:1rem">🎯</div>
+      <h3 id="la-transition-msg" style="margin-bottom:0.75rem"></h3>
+      <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:2rem">Take a moment before continuing to the next section.</p>
+      <button id="la-transition-next" class="btn-primary" style="background:var(--la-color);width:100%">Continue →</button>
+    </div>
+  </div>
+
+  <!-- Step 3: Submitted Confirmation -->
+  <div class="step-container hidden" id="la-step-results">
+    <div class="results-card" style="text-align:center;padding:2.5rem 2rem">
+      <div class="results-icon" style="font-size:3.5rem;margin-bottom:1rem">✅</div>
+      <h2 style="margin-bottom:0.5rem">Test Submitted!</h2>
+      <p style="color:var(--text-secondary);margin-bottom:0.5rem">
+        Your listening assessment has been recorded successfully.
+      </p>
+      <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:2rem">
+        Your trainer will review your results and share feedback with you shortly.
+      </p>
+      <div class="results-actions">
+        <button class="btn-secondary" data-back="modules">← Back to Modules</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Team Name Modal (shown when any assessment module is clicked) -->
+<div id="team-modal-overlay" class="modal-overlay hidden">
+  <div class="modal-card team-modal-card">
+    <div class="modal-header">
+      <h2>👥 Which team are you from?</h2>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--text-muted);font-size:0.875rem;margin-bottom:1rem">
+        Select your reporting manager so the admin can track your results correctly.
+      </p>
+      <div style="margin-bottom:0">
+        <label for="modal-team-input" style="display:block;font-size:0.8rem;font-weight:600;color:var(--text-muted);margin-bottom:0.4rem">Your Manager</label>
+        <select id="modal-team-input"
+          style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--border);border-radius:8px;font-size:0.95rem;color:var(--text);background:#fff;outline:none;box-sizing:border-box;">
+          <option value="">— Select your manager —</option>
+          <option>Manager A</option>
+          <option>Manager B</option>
+          <option>Manager C</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button id="modal-team-skip" class="btn-secondary">Skip</button>
+      <button id="modal-team-confirm" class="btn-primary">Continue →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Notifications -->
+<div id="toast-container"></div>
+
+<script src="config.js?v=8"></script>
+<script src="js/db.js?v=11"></script>
+<script src="js/auth.js?v=9"></script>
+<script src="js/recorder.js?v=7"></script>
+<script src="js/speech.js?v=10"></script>
+<script src="js/claude.js?v=15"></script>
+<script src="js/app.js?v=28"></script>
+</body>
+</html>

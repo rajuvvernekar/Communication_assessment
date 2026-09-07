@@ -1,0 +1,84 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "hash",
+ "creation": "2026-09-07 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "category",
+  "set_name",
+  "question_stem",
+  "options",
+  "correct_answer",
+  "explanation",
+  "media_url"
+ ],
+ "fields": [
+  {
+   "fieldname": "category",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Category",
+   "options": "Grammar\nListening\nStock Market\nMock Call\nWritten Comm",
+   "reqd": 1
+  },
+  {
+   "fieldname": "set_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Set Name"
+  },
+  {
+   "fieldname": "question_stem",
+   "fieldtype": "Small Text",
+   "in_list_view": 1,
+   "label": "Question Stem",
+   "reqd": 1
+  },
+  {
+   "fieldname": "options",
+   "fieldtype": "Code",
+   "label": "Options JSON",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "correct_answer",
+   "fieldtype": "Data",
+   "label": "Correct Answer"
+  },
+  {
+   "fieldname": "explanation",
+   "fieldtype": "Text",
+   "label": "Explanation"
+  },
+  {
+   "fieldname": "media_url",
+   "fieldtype": "Data",
+   "label": "Media / Audio URL"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-09-07 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Communication Assessment",
+ "name": "Assessment Question",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

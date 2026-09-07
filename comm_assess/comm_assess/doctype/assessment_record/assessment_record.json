@@ -1,0 +1,100 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "hash",
+ "creation": "2026-09-07 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "trainee",
+  "module_type",
+  "status",
+  "total_score",
+  "max_score",
+  "audio_recording",
+  "ai_feedback",
+  "admin_feedback",
+  "submission_data"
+ ],
+ "fields": [
+  {
+   "fieldname": "trainee",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Trainee",
+   "options": "Assessment Trainee",
+   "reqd": 1
+  },
+  {
+   "fieldname": "module_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Module Type",
+   "options": "Pick & Speak\nMock Call\nRole Play\nGroup Discussion\nWritten Communication\nGrammar Assessment\nListening Assessment\nStock Market MCQ",
+   "reqd": 1
+  },
+  {
+   "default": "Pending",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Pending\nAI Evaluated\nEvaluated\nCompleted"
+  },
+  {
+   "fieldname": "total_score",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Total Score"
+  },
+  {
+   "fieldname": "max_score",
+   "fieldtype": "Float",
+   "label": "Max Score"
+  },
+  {
+   "fieldname": "audio_recording",
+   "fieldtype": "Attach",
+   "label": "Audio Recording"
+  },
+  {
+   "fieldname": "ai_feedback",
+   "fieldtype": "Long Text",
+   "label": "AI Feedback"
+  },
+  {
+   "fieldname": "admin_feedback",
+   "fieldtype": "Text",
+   "label": "Admin Feedback"
+  },
+  {
+   "fieldname": "submission_data",
+   "fieldtype": "Code",
+   "label": "Submission Raw Data",
+   "options": "JSON"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-09-07 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Communication Assessment",
+ "name": "Assessment Record",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
