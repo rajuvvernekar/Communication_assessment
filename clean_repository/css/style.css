@@ -3,32 +3,33 @@
    ============================================================ */
 
 :root {
-  --bg: #f0f4f8;
+  --bg: #f4f5f6;
   --surface: #ffffff;
-  --sidebar: #1a1f2e;
-  --sidebar-text: #8b9bb4;
+  --sidebar: #1f2937;
+  --sidebar-text: #9ca3af;
   --sidebar-active: #ffffff;
-  --primary: #3b82f6;
-  --text: #1e293b;
-  --text-muted: #64748b;
-  --border: #e2e8f0;
+  --primary: #2490ef;
+  --primary-hover: #1d7cd1;
+  --text: #1f2937;
+  --text-muted: #6b7280;
+  --border: #e5e7eb;
   --success: #10b981;
   --danger: #ef4444;
   --warning: #f59e0b;
 
-  /* Module colors */
-  --ps-color: #3b82f6;
-  --mc-color: #8b5cf6;
-  --rp-color: #f97316;
-  --gd-color: #10b981;
-  --wc-color: #0ea5e9;
-  --ga-color: #7c3aed;
-  --la-color: #db2777;
-  --smq-color: #059669;
+  /* Plain Frappe minimal module colors */
+  --ps-color: #2490ef;
+  --mc-color: #2490ef;
+  --rp-color: #2490ef;
+  --gd-color: #2490ef;
+  --wc-color: #2490ef;
+  --ga-color: #2490ef;
+  --la-color: #2490ef;
+  --smq-color: #2490ef;
 
-  --radius: 12px;
-  --shadow: 0 1px 3px rgba(0,0,0,0.07), 0 4px 16px rgba(0,0,0,0.05);
-  --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
+  --radius: 6px;
+  --shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 4px 6px -1px rgba(0, 0, 0, 0.08);
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -3010,4 +3011,118 @@ body {
 
 .auth-card {
   background: #ffffff !important;
+}
+
+
+/* ── AUTH CARD & SIGN IN OVERLAY FIX ── */
+.auth-overlay {
+  position: fixed !important;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.45) !important;
+  backdrop-filter: blur(4px) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 1000 !important;
+}
+
+.auth-card {
+  background: #ffffff !important;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 8px !important;
+  padding: 2.25rem 2rem !important;
+  width: 100% !important;
+  max-width: 400px !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12) !important;
+  text-align: center !important;
+}
+
+.auth-card .auth-logo {
+  width: 52px !important;
+  height: 52px !important;
+  background: #2490ef !important;
+  color: #ffffff !important;
+  border-radius: 8px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-weight: 700 !important;
+  font-size: 1.25rem !important;
+  margin: 0 auto 1rem !important;
+}
+
+.auth-card h2 {
+  color: #1f2937 !important;
+  font-size: 1.35rem !important;
+  font-weight: 700 !important;
+  margin: 0 0 0.4rem !important;
+}
+
+.auth-card p {
+  color: #6b7280 !important;
+  font-size: 0.875rem !important;
+  margin: 0 0 1.25rem !important;
+}
+
+.auth-card input[type=text],
+.auth-card input[type=password] {
+  width: 100% !important;
+  padding: 0.7rem 0.9rem !important;
+  background: #ffffff !important;
+  border: 1px solid #d1d5db !important;
+  border-radius: 6px !important;
+  color: #1f2937 !important;
+  font-size: 0.9rem !important;
+  outline: none !important;
+  transition: border-color 0.15s !important;
+  box-sizing: border-box !important;
+  margin-bottom: 0.75rem !important;
+}
+
+.auth-card input[type=text]:focus,
+.auth-card input[type=password]:focus {
+  border-color: #2490ef !important;
+  box-shadow: 0 0 0 2px rgba(36, 144, 239, 0.15) !important;
+}
+
+.auth-card input[type=text]::placeholder,
+.auth-card input[type=password]::placeholder {
+  color: #9ca3af !important;
+}
+
+.auth-card .btn-primary {
+  width: 100% !important;
+  background: #2490ef !important;
+  color: #ffffff !important;
+  padding: 0.75rem !important;
+  border-radius: 6px !important;
+  font-weight: 500 !important;
+  font-size: 0.95rem !important;
+  cursor: pointer !important;
+  border: none !important;
+  margin-top: 0.25rem !important;
+}
+
+.auth-card .btn-primary:hover {
+  background: #1d7cd1 !important;
+}
+
+.auth-card a {
+  color: #4b5563 !important;
+  text-decoration: none !important;
+}
+
+.auth-card a:hover {
+  color: #2490ef !important;
+  text-decoration: underline !important;
+}
+
+.error-msg {
+  color: #dc2626 !important;
+  background: #fef2f2 !important;
+  border: 1px solid #fca5a5 !important;
+  border-radius: 6px !important;
+  padding: 0.5rem 0.75rem !important;
+  font-size: 0.8125rem !important;
+  margin-top: 0.75rem !important;
 }

@@ -42,7 +42,28 @@ const MgrApp = (() => {
         title: 'The Breakdown in the Team Meeting',
         scenario: `You are running the weekly team standup — 12 people on a video call. Mid-meeting, Kavya — a reliable, mid-level team member — suddenly says:\n\n"I'm sorry. I just can't. I can't do this anymore. I am completely overwhelmed and I feel like nothing I do is ever enough."\n\nShe looks close to tears. Everyone else has gone silent. There is a 5-second pause. The whole team is watching you.`,
         sectionAPrompt: 'Write the EXACT words you say in the next 30 seconds — with the full team watching. What you say here determines both Kavya\'s trust in you and how safe every other team member feels.',
-        wrongResponse: `"Kavya, hey — it's okay. I think we can all relate to feeling a bit overwhelmed sometimes, it's been a tough quarter for everyone. Why don't we take a quick 5-minute break and come back? And Kavya, maybe we can connect after the call and have a chat about what's going on — I'm sure it'll look a lot better once you've had a bit of a rest. Alright team, 5-minute break, and then we'll pick up from slide 7."`,
+        ,
+      {
+        id: 'sr5',
+        title: 'The HNW Portfolio Delay Crisis',
+        scenario: `Your High-Net-Worth (HNW) client, Mr. Rakesh Kapoor, had initiated a ₹75 Lakh portfolio transfer to a new PMS structure. Due to a documentation backlog in your operations team, the transfer took 10 working days instead of 2. During this window, the market rallied 4.5%, resulting in an estimated ₹3.5 Lakh opportunity loss for the client.
+
+Mr. Kapoor has just called your cell phone. He is furious, threatening to initiate legal proceedings and file a complaint with SEBI. He demands a face-to-face meeting in your office in 30 minutes.`,
+        sectionAPrompt: 'Write the EXACT words you say to open this meeting with Mr. Kapoor — your opening 60–90 seconds. How do you address the financial impact, demonstrate ownership, and de-escalate without making unauthorized promises?',
+        wrongResponse: `"Mr. Kapoor, thank you for coming in. Look, I understand you're upset about the 10-day timeline, but as I tried explaining on the phone, the delay was entirely at the clearing house and depository participant level — our internal team processed your documents within 24 hours. The market rally was unpredictable, so calling it a ₹3.5 Lakh loss isn't entirely accurate. We cannot reimburse market opportunity losses, but I can ask our compliance team if we can waive next quarter's advisory fees as a goodwill gesture."`
+      },
+      {
+        id: 'sr6',
+        title: 'The Multi-Team Outage Conflict',
+        scenario: `During morning market opening hours, a system glitch caused 45 high-priority trade orders to fail silently. Your Operations lead and IT Infrastructure lead are in a heated argument in the hallway in front of 20 team members. Operations blames IT for server misconfiguration; IT blames Operations for uploading corrupted batch files.
+
+You have called both leads into a conference room immediately. The rest of the floor is tense and watching.`,
+        sectionAPrompt: 'Write your EXACT opening words in the next 60 seconds to reset the meeting, stop the blame game, and pivot both leads toward root-cause resolution.',
+        wrongResponse: `"Alright, shut the door. What was that embarrassing display out on the floor? You two are senior leads acting like trainees. I don't care who started it — if this isn't resolved in the next 20 minutes, I am issuing formal written warnings to both of you. Operations, stop blaming IT. IT, fix the batch script right now. We'll figure out who screwed up during the post-mortem."`
+      }
+      }
+    ],
+    'mgr-transcript-autopsy': [ I think we can all relate to feeling a bit overwhelmed sometimes, it's been a tough quarter for everyone. Why don't we take a quick 5-minute break and come back? And Kavya, maybe we can connect after the call and have a chat about what's going on — I'm sure it'll look a lot better once you've had a bit of a rest. Alright team, 5-minute break, and then we'll pick up from slide 7."`,
       },
     ],
     'mgr-transcript-autopsy': [
@@ -340,14 +361,98 @@ YOUR TASK: Write a full coaching analysis for this 26-minute call. Identify a mi
 End with a "Development Priority Matrix" — rate the agent on 5 dimensions from 1 (critical gap) to 5 (competent), and identify the top 2 immediate training priorities.
 
 Minimum 300 words.` },
+      { id:'ta3', title:'NRI PIS Account & Currency Conversion Delay — 18 Min Call',
+        scenario:`BACKGROUND: Sunita Rao (NRI based in Dubai) called Zerodha support regarding her NRE PIS account opening delay. She submitted documents 3 weeks ago but her account remains pending, causing her to miss a major public infrastructure bond issue. The agent makes 8 critical errors during the call.
+
+─── CALL TRANSCRIPT ─────────────────────────────────────────────
+
+AGENT: Hello, Zerodha support.
+
+SUNITA: Hello, my name is Sunita Rao. I applied for an NRE PIS account 3 weeks ago. Application number PIS-88219. I was assured it would take 3-5 business days. The infrastructure bond issue I wanted to invest in closes tomorrow, and my account is still not active!
+
+AGENT: Can I have your Client ID?
+
+SUNITA: It's SR-9941.
+
+AGENT: Hold on. [40-second silence with no hold request]
+
+AGENT: The documents were rejected by the partner bank.
+
+SUNITA: What? Rejected? Why was I not informed? I haven't received an email or SMS!
+
+AGENT: The bank rejected it due to signature mismatch on the PIS permission letter.
+
+SUNITA: I attested those documents at the Indian Consulate in Dubai! How could there be a signature mismatch? And why did nobody inform me for 3 weeks?
+
+AGENT: The bank handles the PIS permission, not us. We just forward the physical copy.
+
+SUNITA: But I paid Zerodha for the service! You are my broker. If there was a rejection, shouldn't your team have notified me immediately?
+
+AGENT: Our team updates the status on the portal. You should have checked the portal status.
+
+SUNITA: The portal status showed "Under Processing by Bank" until this morning!
+
+AGENT: Well, the bank sent the rejection list yesterday evening.
+
+SUNITA: So what do I do now? The bond issue closes tomorrow at 4 PM!
+
+AGENT: You will have to re-sign the PIS letter and courier physical copies to our Bangalore office again.
+
+SUNITA: Courier physical copies from Dubai? That will take at least 4 days! Is there no digital or email verification option?
+
+AGENT: No. PIS is RBI regulated. Physical signature is mandatory.
+
+SUNITA: Can I speak to your manager or PIS department head?
+
+AGENT: Manager is in a meeting. And PIS team doesn't take direct calls.
+
+SUNITA: This is completely unacceptable! I have lost an investment opportunity because of your lack of communication.
+
+AGENT: Ma'am, RBI guidelines are strict. We cannot bypass regulations.
+
+SUNITA: I am not asking to bypass regulations! I am asking why you didn't notify me 2 weeks ago when the bank rejected it!
+
+AGENT: I understand, but there's nothing I can do about past delays. Do you want me to email you the fresh PIS form?
+
+SUNITA: Yes, email it. But I want an official explanation for why the rejection notification was delayed by 3 weeks.
+
+AGENT: I will raise a internal query. Anything else?
+
+SUNITA: What is the query reference number?
+
+AGENT: Q-4410. You will get reply in 3-4 working days.
+
+SUNITA: Okay. Good-bye.
+
+AGENT: Bye. [Disconnects instantly]
+
+─── END OF TRANSCRIPT ──────────────────────────────────────────
+
+YOUR TASK: Provide a detailed transcript autopsy covering:
+1. Identify all 8 communication & process errors committed by the agent.
+2. Pinpoint the exact turning point where the call turned hostile.
+3. Write the exact revised response for the agent to de-escalate Sunita and offer constructive solutions.
+Minimum 200 words.` },
     ],
     'mgr-mock-call': [
       { id:'mc1', title:'C-Suite Escalation',
         scenario:'You are on a call with the VP Operations of your biggest client. Three major deliverables were missed this quarter due to internal resourcing issues. The VP is furious and says:\n\n"I have been patient enough. We pay premium rates for a premium service and we are getting junior-level delivery. I am reviewing this contract tomorrow. Give me ONE reason why we should continue with you."\n\nHandle this call professionally. You have 4-5 minutes.' },
+      { id:'mc4', title:'Margin Call Penalty Dispute',
+        scenario:'A high-volume corporate trader calls in a rage after receiving a ₹1.8 Lakh margin penalty. They claim the automated risk management system closed their position prematurely without sending a margin call alert. They threaten to move their ₹12 Crore portfolio to a competing broker unless the penalty is refunded today. Handle this 4-minute call.' },
+      { id:'mc5', title:'Cross-Border Regulatory Freeze',
+        scenario:'An NRI client based in London has their Demat account suddenly frozen due to pending FATCA re-declaration. They are currently travelling and unable to access their registered Indian mobile number for OTP verification. They need to liquidate ₹15 Lakhs for an emergency medical payment today. Handle this call.' },
       { id:'mc2', title:'Contract at Risk',
         scenario:'A key enterprise client worth ₹45 crores annually is on the line. Their procurement head says:\n\n"We have been getting better proposals from two other vendors. Our leadership is already leaning towards switching. Your team has been reactive, not proactive. I\'m giving you this call as a courtesy — convince me why we should stay."\n\nHandle this retention conversation. You have 4-5 minutes.' },
+      { id:'mc4', title:'Margin Call Penalty Dispute',
+        scenario:'A high-volume corporate trader calls in a rage after receiving a ₹1.8 Lakh margin penalty. They claim the automated risk management system closed their position prematurely without sending a margin call alert. They threaten to move their ₹12 Crore portfolio to a competing broker unless the penalty is refunded today. Handle this 4-minute call.' },
+      { id:'mc5', title:'Cross-Border Regulatory Freeze',
+        scenario:'An NRI client based in London has their Demat account suddenly frozen due to pending FATCA re-declaration. They are currently travelling and unable to access their registered Indian mobile number for OTP verification. They need to liquidate ₹15 Lakhs for an emergency medical payment today. Handle this call.' },
       { id:'mc3', title:'Performance Review Call',
         scenario:'You are conducting a formal performance review call with a team member who has missed targets for 2 consecutive months. They begin defensively:\n\n"I know the numbers don\'t look good but these targets are unrealistic. The leads I\'m getting are poor quality and the product team keeps changing things without warning us. I\'m not the problem here."\n\nConduct a structured, empathetic but direct performance conversation. You have 4-5 minutes.' },
+      { id:'mc4', title:'Margin Call Penalty Dispute',
+        scenario:'A high-volume corporate trader calls in a rage after receiving a ₹1.8 Lakh margin penalty. They claim the automated risk management system closed their position prematurely without sending a margin call alert. They threaten to move their ₹12 Crore portfolio to a competing broker unless the penalty is refunded today. Handle this 4-minute call.' },
+      { id:'mc5', title:'Cross-Border Regulatory Freeze',
+        scenario:'An NRI client based in London has their Demat account suddenly frozen due to pending FATCA re-declaration. They are currently travelling and unable to access their registered Indian mobile number for OTP verification. They need to liquidate ₹15 Lakhs for an emergency medical payment today. Handle this call.' },
     ],
     'mgr-feedback': [
       { id:'fb1', title:'The Burnout Star',
@@ -360,8 +465,16 @@ Minimum 300 words.` },
     'mgr-eq': [
       { id:'eq1', title:'In-the-Moment Crisis',
         scenario:'During a team meeting, a team member suddenly becomes visibly distressed and says: "I\'m sorry, I can\'t do this anymore. I am completely overwhelmed. Everything is falling apart."\n\nThe rest of the team is watching.\n\nWrite your response: What do you say and do in the next 5 minutes? What actions do you take in the 24 hours after? How do you handle the rest of the team? (Min 150 words)' },
+      { id:'eq3', title:'Multi-Front Operational Crisis',
+        scenario:'It is 9:15 AM on a Monday. The primary order routing server crashes, 3 of your key team leads are absent due to food poisoning, and the Executive VP has called an unscheduled review in 15 minutes to ask about Q3 performance. Detail your emotional self-regulation strategy, immediate 15-minute action plan, and communication plan. (Min 150 words)' },
+      { id:'eq4', title:'Public Peer Challenge',
+        scenario:'During a monthly strategy meeting with senior leadership, a peer manager interrupts your presentation and says: "Honestly, your team's operational metrics look inflated. Ground reality is very different." Describe your immediate response, how you manage your physiological response, and your post-meeting resolution strategy. (Min 150 words)' },
       { id:'eq2', title:'The Public Undermining',
         scenario:'In a leadership review meeting attended by 15 people including your team, a peer manager says: "I think the numbers from [your team] are a bit misleading — they\'re hitting targets but the quality issues tell a different story. Maybe the management style needs a rethink."\n\nWrite your response: How do you handle this in the moment without escalating? What do you do afterwards with the peer, your team, and leadership? What does this situation tell you about your own emotional regulation? (Min 150 words)' },
+      { id:'eq3', title:'Multi-Front Operational Crisis',
+        scenario:'It is 9:15 AM on a Monday. The primary order routing server crashes, 3 of your key team leads are absent due to food poisoning, and the Executive VP has called an unscheduled review in 15 minutes to ask about Q3 performance. Detail your emotional self-regulation strategy, immediate 15-minute action plan, and communication plan. (Min 150 words)' },
+      { id:'eq4', title:'Public Peer Challenge',
+        scenario:'During a monthly strategy meeting with senior leadership, a peer manager interrupts your presentation and says: "Honestly, your team's operational metrics look inflated. Ground reality is very different." Describe your immediate response, how you manage your physiological response, and your post-meeting resolution strategy. (Min 150 words)' },
     ],
     'mgr-management-skills': [
       { id:'ms1', title:'30-60-90 Day Plan',
