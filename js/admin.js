@@ -7386,4 +7386,8 @@ window.Admin = (() => {
   };
 })();
 
-document.addEventListener('DOMContentLoaded', () => Admin.init());
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => Admin.init());
+} else {
+  Admin.init();
+}

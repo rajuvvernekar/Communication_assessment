@@ -1698,4 +1698,8 @@ Let's get back on track.
 
 })();
 
-document.addEventListener('DOMContentLoaded', () => MgrApp.init());
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => MgrApp.init());
+} else {
+  MgrApp.init();
+}
