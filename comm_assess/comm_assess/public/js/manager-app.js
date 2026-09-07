@@ -42,7 +42,8 @@ const MgrApp = (() => {
         title: 'The Breakdown in the Team Meeting',
         scenario: `You are running the weekly team standup — 12 people on a video call. Mid-meeting, Kavya — a reliable, mid-level team member — suddenly says:\n\n"I'm sorry. I just can't. I can't do this anymore. I am completely overwhelmed and I feel like nothing I do is ever enough."\n\nShe looks close to tears. Everyone else has gone silent. There is a 5-second pause. The whole team is watching you.`,
         sectionAPrompt: 'Write the EXACT words you say in the next 30 seconds — with the full team watching. What you say here determines both Kavya\'s trust in you and how safe every other team member feels.',
-        ,
+        wrongResponse: `"Kavya, I think we can all relate to feeling a bit overwhelmed sometimes, it's been a tough quarter for everyone. Why don't we take a quick 5-minute break and come back? And Kavya, maybe we can connect after the call and have a chat about what's going on — I'm sure it'll look a lot better once you've had a bit of a rest. Alright team, 5-minute break, and then we'll pick up from slide 7."`
+      },
       {
         id: 'sr5',
         title: 'The HNW Portfolio Delay Crisis',
@@ -61,10 +62,6 @@ You have called both leads into a conference room immediately. The rest of the f
         sectionAPrompt: 'Write your EXACT opening words in the next 60 seconds to reset the meeting, stop the blame game, and pivot both leads toward root-cause resolution.',
         wrongResponse: `"Alright, shut the door. What was that embarrassing display out on the floor? You two are senior leads acting like trainees. I don't care who started it — if this isn't resolved in the next 20 minutes, I am issuing formal written warnings to both of you. Operations, stop blaming IT. IT, fix the batch script right now. We'll figure out who screwed up during the post-mortem."`
       }
-      }
-    ],
-    'mgr-transcript-autopsy': [ I think we can all relate to feeling a bit overwhelmed sometimes, it's been a tough quarter for everyone. Why don't we take a quick 5-minute break and come back? And Kavya, maybe we can connect after the call and have a chat about what's going on — I'm sure it'll look a lot better once you've had a bit of a rest. Alright team, 5-minute break, and then we'll pick up from slide 7."`,
-      },
     ],
     'mgr-transcript-autopsy': [
       { id:'ta1', title:'SIP Debit With No Unit Allotment — 22 Min Call',
@@ -464,17 +461,13 @@ Minimum 200 words.` },
     ],
     'mgr-eq': [
       { id:'eq1', title:'In-the-Moment Crisis',
-        scenario:'During a team meeting, a team member suddenly becomes visibly distressed and says: "I\'m sorry, I can\'t do this anymore. I am completely overwhelmed. Everything is falling apart."\n\nThe rest of the team is watching.\n\nWrite your response: What do you say and do in the next 5 minutes? What actions do you take in the 24 hours after? How do you handle the rest of the team? (Min 150 words)' },
-      { id:'eq3', title:'Multi-Front Operational Crisis',
-        scenario:'It is 9:15 AM on a Monday. The primary order routing server crashes, 3 of your key team leads are absent due to food poisoning, and the Executive VP has called an unscheduled review in 15 minutes to ask about Q3 performance. Detail your emotional self-regulation strategy, immediate 15-minute action plan, and communication plan. (Min 150 words)' },
-      { id:'eq4', title:'Public Peer Challenge',
-        scenario:'During a monthly strategy meeting with senior leadership, a peer manager interrupts your presentation and says: "Honestly, your team's operational metrics look inflated. Ground reality is very different." Describe your immediate response, how you manage your physiological response, and your post-meeting resolution strategy. (Min 150 words)' },
+        scenario:`During a team meeting, a team member suddenly becomes visibly distressed and says: "I'm sorry, I can't do this anymore. I am completely overwhelmed. Everything is falling apart."\n\nThe rest of the team is watching.\n\nWrite your response: What do you say and do in the next 5 minutes? What actions do you take in the 24 hours after? How do you handle the rest of the team? (Min 150 words)` },
       { id:'eq2', title:'The Public Undermining',
-        scenario:'In a leadership review meeting attended by 15 people including your team, a peer manager says: "I think the numbers from [your team] are a bit misleading — they\'re hitting targets but the quality issues tell a different story. Maybe the management style needs a rethink."\n\nWrite your response: How do you handle this in the moment without escalating? What do you do afterwards with the peer, your team, and leadership? What does this situation tell you about your own emotional regulation? (Min 150 words)' },
+        scenario:`In a leadership review meeting attended by 15 people including your team, a peer manager says: "I think the numbers from [your team] are a bit misleading — they're hitting targets but the quality issues tell a different story. Maybe the management style needs a rethink."\n\nWrite your response: How do you handle this in the moment without escalating? What do you do afterwards with the peer, your team, and leadership? What does this situation tell you about your own emotional regulation? (Min 150 words)` },
       { id:'eq3', title:'Multi-Front Operational Crisis',
-        scenario:'It is 9:15 AM on a Monday. The primary order routing server crashes, 3 of your key team leads are absent due to food poisoning, and the Executive VP has called an unscheduled review in 15 minutes to ask about Q3 performance. Detail your emotional self-regulation strategy, immediate 15-minute action plan, and communication plan. (Min 150 words)' },
+        scenario:`It is 9:15 AM on a Monday. The primary order routing server crashes, 3 of your key team leads are absent due to food poisoning, and the Executive VP has called an unscheduled review in 15 minutes to ask about Q3 performance. Detail your emotional self-regulation strategy, immediate 15-minute action plan, and communication plan. (Min 150 words)` },
       { id:'eq4', title:'Public Peer Challenge',
-        scenario:'During a monthly strategy meeting with senior leadership, a peer manager interrupts your presentation and says: "Honestly, your team's operational metrics look inflated. Ground reality is very different." Describe your immediate response, how you manage your physiological response, and your post-meeting resolution strategy. (Min 150 words)' },
+        scenario:`During a monthly strategy meeting with senior leadership, a peer manager interrupts your presentation and says: "Honestly, your team's operational metrics look inflated. Ground reality is very different." Describe your immediate response, how you manage your physiological response, and your post-meeting resolution strategy. (Min 150 words)` }
     ],
     'mgr-management-skills': [
       { id:'ms1', title:'30-60-90 Day Plan',
@@ -1595,11 +1588,15 @@ Let's get back on track.
 
   // ── Init ─────────────────────────────────────────────────
   async function init() {
-    await DB.init();
-    const user = await Auth.init();
-    if (user && Auth.isLoggedIn()) _showLoggedInUI();
-    else showScreen('mgr-screen-welcome');
     _bindEvents();
+    try { await DB.init(); } catch (e) { console.warn('DB.init error:', e); }
+    try {
+      const user = await Auth.init();
+      if (user && Auth.isLoggedIn()) _showLoggedInUI();
+      else showScreen('mgr-screen-welcome');
+    } catch (e) {
+      showScreen('mgr-screen-welcome');
+    }
   }
 
   function _bindEvents() {
