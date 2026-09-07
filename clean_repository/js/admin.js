@@ -178,7 +178,15 @@ window.Admin = (() => {
     'group-discussion':    'Group Discussion',
     'written-comm':        'Written Comm.',
     'grammar-assessment':  'Grammar Assessment',
-    'listening-assessment': 'Listening Assessment'
+    'listening-assessment': 'Listening Assessment',
+    'stock-market-mcq':    'NRI Stock Market',
+    'mgr-situation-room':    'Situation Room',
+    'mgr-transcript-autopsy': 'Transcript Autopsy',
+    'mgr-mock-call':         'Mock Call (Mgr)',
+    'mgr-feedback':          'Feedback',
+    'mgr-eq':                'EQ',
+    'mgr-listening-tone':    'Listening & Tone',
+    'mgr-management-skills': 'Mgmt Skills'
   };
 
   const MODULE_COLORS = {
@@ -202,7 +210,15 @@ window.Admin = (() => {
     'group-discussion':    'badge-gd',
     'written-comm':        'badge-wc',
     'grammar-assessment':  'badge-ga',
-    'listening-assessment': 'badge-la'
+    'listening-assessment': 'badge-la',
+    'stock-market-mcq':    'badge-smq',
+    'mgr-situation-room':    'badge-sr',
+    'mgr-transcript-autopsy': 'badge-ta',
+    'mgr-mock-call':         'badge-mc',
+    'mgr-feedback':          'badge-fb',
+    'mgr-eq':                'badge-eq',
+    'mgr-listening-tone':    'badge-lt',
+    'mgr-management-skills': 'badge-ms'
   };
 
   // ---- Score Bands (scores are out of 100) ----
@@ -402,6 +418,8 @@ window.Admin = (() => {
       };
     });
 
+    initTopics();
+    renderTopicsList();
     try { if (typeof generateAllAgentsReport === 'function') generateAllAgentsReport(); } catch (_) {}
     try { if (typeof loadAiAuditScores === 'function') loadAiAuditScores(); } catch (_) {}
     try { if (typeof loadComm360Report === 'function') loadComm360Report(); } catch (_) {}
@@ -2519,6 +2537,221 @@ window.Admin = (() => {
     } catch (e) {
       if (!silent) toast('❌ Seed failed: ' + e.message, 'error');
       else console.error('SMQ auto-seed failed:', e.message);
+    }
+  }
+
+    // ---- Matches Module Filter Helper ----
+  function matchesModuleFilter(itemModule, filterModule) {
+    if (!filterModule || filterModule === 'all') return true;
+    if (itemModule === filterModule) return true;
+    if (filterModule === 'pick-speak' && (itemModule === 'pick-speak-stock' || itemModule === 'pick-speak-general' || itemModule === 'pick-speak')) return true;
+    if ((filterModule === 'pick-speak-stock' || filterModule === 'pick-speak-general') && itemModule === 'pick-speak') return true;
+    return false;
+  }
+
+  // ---- Topics Management ----
+  async function seedManagerTopics() {
+    try {
+      await DB.init();
+    } catch (e) {
+      console.warn('seedManagerTopics failed:', e);
+    }
+  }
+
+  async function renderTopicsList() {
+    const container = $('topics-list');
+    if (!container) return;
+
+    try {
+      await DB.init();
+      const allTopics = await DB.getAll('topics');
+      const filtered = allTopics.filter(t => matchesModuleFilter(t.module, _topicsFilter));
+
+      if (!filtered.length) {
+        container.innerHTML = '<div class="empty-state" style="grid-column:1/-1;padding:2rem;text-align:center;color:var(--text-muted)">No topics found. Create one with + New Topic.</div>';
+        return;
+      }
+
+      container.innerHTML = filtered.map(t => {
+        const isEnabled = t.enabled !== false;
+        const desc = t.description || t.scenario || '';
+        const shortDesc = desc.length > 120 ? desc.substring(0, 120) + '…' : desc;
+
+        return `
+          <div class="topic-card ${!isEnabled ? 'disabled' : ''}" style="background:#fff;border:1px solid var(--border-color,#e2e8f0);border-radius:8px;padding:1rem;display:flex;flex-direction:column;justify-content:space-between">
+            <div>
+              <div class="topic-card-header" style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;margin-bottom:0.6rem">
+                ${moduleBadge(t.module || 'pick-speak')}
+                <button class="btn-small ${isEnabled ? 'primary' : 'ghost'}" style="font-size:0.75rem;padding:0.2rem 0.5rem" onclick="Admin.toggleTopicEnabled('${t.id}')">
+                  ${isEnabled ? '✅ Enabled' : '⏸ Disabled'}
+                </button>
+              </div>
+              <h3 class="topic-card-title" style="font-size:1rem;font-weight:600;margin-bottom:0.4rem;color:var(--text-main,#1e293b)">${t.title || 'Untitled Topic'}</h3>
+              <p class="topic-card-desc" style="font-size:0.85rem;color:var(--text-muted,#64748b);line-height:1.4;margin-bottom:0.8rem">${shortDesc || 'No description'}</p>
+            </div>
+            <div class="topic-card-actions" style="display:flex;gap:0.4rem;margin-top:0.5rem">
+              <button class="btn-small" onclick="Admin.openTopicModal('${t.id}')">✏️ Edit</button>
+              <button class="btn-small danger" onclick="Admin.deleteTopic('${t.id}')">🗑 Delete</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    } catch (e) {
+      console.error('[Admin] renderTopicsList failed:', e);
+      container.innerHTML = `<div class="empty-state" style="grid-column:1/-1;color:var(--danger)">Failed to load topics: ${e.message}</div>`;
+    }
+  }
+
+  function initTopics() {
+    document.querySelectorAll('.module-tabs .tab-btn').forEach(btn => {
+      btn.onclick = async (e) => {
+        e.preventDefault();
+        document.querySelectorAll('.module-tabs .tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        _topicsFilter = btn.getAttribute('data-module') || 'all';
+        await renderTopicsList();
+      };
+    });
+
+    const newBtn = $('btn-new-topic');
+    if (newBtn) {
+      newBtn.onclick = () => openTopicModal();
+    }
+
+    const closeBtn = $('btn-close-topic-modal');
+    if (closeBtn) closeBtn.onclick = closeTopicModal;
+
+    const cancelBtn = $('btn-cancel-topic');
+    if (cancelBtn) cancelBtn.onclick = closeTopicModal;
+
+    const saveBtn = $('btn-save-topic');
+    if (saveBtn) saveBtn.onclick = saveTopic;
+  }
+
+  function closeTopicModal() {
+    const modal = $('topic-modal');
+    if (modal) modal.classList.add('hidden');
+    _editTopicId = null;
+  }
+
+  async function openTopicModal(topicId = null) {
+    _editTopicId = topicId;
+    const modal = $('topic-modal');
+    if (!modal) return;
+
+    const titleEl = $('topic-modal-title');
+    const modSelect = $('topic-module');
+    const inputTitle = $('topic-title');
+    const inputDesc = $('topic-description');
+    const inputScen = $('topic-scenario');
+
+    if (topicId) {
+      if (titleEl) titleEl.textContent = 'Edit Topic';
+      const t = await DB.get('topics', topicId);
+      if (t) {
+        if (modSelect) modSelect.value = t.module || 'pick-speak';
+        if (inputTitle) inputTitle.value = t.title || '';
+        if (inputDesc) inputDesc.value = t.description || '';
+        if (inputScen) inputScen.value = t.scenario || '';
+      }
+    } else {
+      if (titleEl) titleEl.textContent = 'New Topic';
+      if (modSelect) modSelect.value = _topicsFilter !== 'all' ? _topicsFilter : 'pick-speak';
+      if (inputTitle) inputTitle.value = '';
+      if (inputDesc) inputDesc.value = '';
+      if (inputScen) inputScen.value = '';
+    }
+
+    modal.classList.remove('hidden');
+  }
+
+  async function saveTopic() {
+    const modSelect = $('topic-module');
+    const inputTitle = $('topic-title');
+    const inputDesc = $('topic-description');
+    const inputScen = $('topic-scenario');
+
+    const module = modSelect ? modSelect.value : 'pick-speak';
+    const title = inputTitle ? inputTitle.value.trim() : '';
+    const description = inputDesc ? inputDesc.value.trim() : '';
+    const scenario = inputScen ? inputScen.value.trim() : '';
+
+    if (!title) {
+      alert('Please enter a topic title.');
+      return;
+    }
+
+    try {
+      const topic = {
+        id: _editTopicId || ('topic_' + Date.now()),
+        module,
+        title,
+        description,
+        scenario,
+        enabled: true,
+        created_at: new Date().toISOString()
+      };
+
+      await DB.put('topics', topic);
+      closeTopicModal();
+      toast(_editTopicId ? 'Topic updated!' : 'Topic created!', 'success');
+      renderTopicsList();
+    } catch (e) {
+      alert('Failed to save topic: ' + e.message);
+    }
+  }
+
+  async function deleteTopic(topicId) {
+    if (!confirm('Are you sure you want to delete this topic?')) return;
+    try {
+      await DB.del('topics', topicId);
+      toast('Topic deleted.', '');
+      renderTopicsList();
+    } catch (e) {
+      alert('Failed to delete topic: ' + e.message);
+    }
+  }
+
+  async function toggleTopicEnabled(topicId) {
+    try {
+      const t = await DB.get('topics', topicId);
+      if (t) {
+        t.enabled = !(t.enabled !== false);
+        await DB.put('topics', t);
+        renderTopicsList();
+      }
+    } catch (e) {
+      console.error('toggleTopicEnabled failed:', e);
+    }
+  }
+
+  async function enableAllTopics() {
+    try {
+      const allTopics = await DB.getAll('topics');
+      const filtered = allTopics.filter(t => matchesModuleFilter(t.module, _topicsFilter));
+      for (const t of filtered) {
+        t.enabled = true;
+        await DB.put('topics', t);
+      }
+      toast('All topics enabled for current tab.', 'success');
+      renderTopicsList();
+    } catch (e) {
+      console.error('enableAllTopics failed:', e);
+    }
+  }
+
+  async function disableAllTopics() {
+    try {
+      const allTopics = await DB.getAll('topics');
+      const filtered = allTopics.filter(t => matchesModuleFilter(t.module, _topicsFilter));
+      for (const t of filtered) {
+        t.enabled = false;
+        await DB.put('topics', t);
+      }
+      toast('All topics disabled for current tab.', 'info');
+      renderTopicsList();
+    } catch (e) {
+      console.error('disableAllTopics failed:', e);
     }
   }
 
