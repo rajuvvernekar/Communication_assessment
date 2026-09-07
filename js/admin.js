@@ -843,7 +843,7 @@ window.Admin = (() => {
     }
   }
 
-  function initApp() {
+  function _unused_initApp() {
     document.querySelectorAll('.sidebar-nav .nav-item[data-section]').forEach(item => {
       item.onclick = (e) => {
         e.preventDefault();
@@ -860,47 +860,71 @@ window.Admin = (() => {
     try { if (typeof loadMgrAssessments === 'function') loadMgrAssessments(); } catch (_) {}
   }
 
+  function doLogin() {
+    try {
+      const usernameInput = $('admin-username-input');
+      const username = (usernameInput ? usernameInput.value : '').trim() || 'admin';
+      try {
+        sessionStorage.setItem('adminAuth', 'true');
+        sessionStorage.setItem('adminName', username);
+      } catch (_) {}
+
+      const modal = $('admin-auth-modal');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.style.setProperty('display', 'none', 'important');
+      }
+
+      const app = $('admin-app');
+      if (app) {
+        app.classList.remove('hidden');
+        app.style.setProperty('display', 'block', 'important');
+      }
+
+      showAdminName();
+      initApp();
+    } catch (e) {
+      console.error('doLogin error:', e);
+      const modal = $('admin-auth-modal');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.style.setProperty('display', 'none', 'important');
+      }
+      const app = $('admin-app');
+      if (app) {
+        app.classList.remove('hidden');
+        app.style.setProperty('display', 'block', 'important');
+      }
+    }
+  }
+
   function initAuth() {
     const usernameInput = $('admin-username-input');
     const pwdInput = $('admin-pwd-input');
     const btn = $('btn-admin-login');
-    const errEl = $('admin-pwd-error');
 
-    if (!btn) return;
+    let savedAuth = false;
+    try { savedAuth = sessionStorage.getItem('adminAuth') === 'true'; } catch (_) {}
 
-    const savedAuth = sessionStorage.getItem('adminAuth');
-    if (savedAuth === 'true') {
-      if ($('admin-auth-modal')) $('admin-auth-modal').classList.add('hidden');
-      if ($('admin-app')) $('admin-app').classList.remove('hidden');
+    if (savedAuth) {
+      const modal = $('admin-auth-modal');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.style.setProperty('display', 'none', 'important');
+      }
+      const app = $('admin-app');
+      if (app) {
+        app.classList.remove('hidden');
+        app.style.setProperty('display', 'block', 'important');
+      }
       showAdminName();
       initApp();
       return;
     }
 
-    const doLogin = async () => {
-      const username = (usernameInput ? usernameInput.value : '').trim().toLowerCase() || 'admin';
-      btn.disabled = true;
-      btn.textContent = 'Signing in…';
-      if (errEl) errEl.classList.add('hidden');
-
-      try {
-        sessionStorage.setItem('adminAuth', 'true');
-        sessionStorage.setItem('adminName', username);
-        if ($('admin-auth-modal')) $('admin-auth-modal').classList.add('hidden');
-        if ($('admin-app')) $('admin-app').classList.remove('hidden');
-        showAdminName();
-        initApp();
-      } catch (e) {
-        console.error('Admin login error:', e);
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Sign In →';
-      }
-    };
-
     if (usernameInput) usernameInput.onkeydown = (e) => { if (e.key === 'Enter') doLogin(); };
     if (pwdInput) pwdInput.onkeydown = (e) => { if (e.key === 'Enter') doLogin(); };
-    if (btn) btn.onclick = doLogin;
+    if (btn) btn.onclick = (e) => { e.preventDefault(); doLogin(); };
   }
 
   // ---- Init ----
@@ -3616,6 +3640,7 @@ window.Admin = (() => {
   // ---- Public API (called from inline onclick) ----
   return {
     init,
+    doLogin,
     forceReSeed,
     openTopicModal,
     deleteTopic,

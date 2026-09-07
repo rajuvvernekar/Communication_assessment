@@ -22,7 +22,7 @@
     <p>Sign in with your admin credentials</p>
     <input type="text"     id="admin-username-input" placeholder="Username"  autocomplete="username"         style="margin-bottom:0.5rem" />
     <input type="password" id="admin-pwd-input"      placeholder="Password"  autocomplete="current-password" />
-    <button id="btn-admin-login" class="btn-primary" style="margin-top:0.25rem">Sign In →</button>
+    <button id="btn-admin-login" class="btn-primary" onclick="Admin.doLogin()" style="margin-top:0.25rem">Sign In →</button>
     <div id="admin-pwd-error" class="error-msg hidden">Incorrect username or password.</div>
     <div style="margin-top:1.25rem;display:flex;justify-content:center;gap:1.5rem">
       <a href="index.html" style="color:#6b7280;font-size:0.8rem;text-decoration:none">
@@ -762,6 +762,6 @@
 <script src="/assets/comm_assess/js/speech.js?v=100"></script>
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <script src="/assets/comm_assess/js/claude.js?v=100"></script>
-<script src="/assets/comm_assess/js/admin.js?v=105"></script>
+<script src="/assets/comm_assess/js/admin.js?v=110"></script>
 </body>
 </html>
