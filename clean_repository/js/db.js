@@ -223,29 +223,34 @@ const DB = (() => {
   }
 
   // ---- Public: initialise Supabase client ----
+  let _dbInitialized = false;
   async function init() {
+    if (_dbInitialized) return;
     try {
+      if (!CONFIG.SUPABASE_URL || CONFIG.SUPABASE_URL.includes('YOUR_SUPABASE') || !CONFIG.SUPABASE_ANON_KEY || CONFIG.SUPABASE_ANON_KEY.includes('YOUR_SUPABASE')) {
+        throw new Error('Supabase placeholder URL — using local storage');
+      }
       _sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
-      // Quick test of connection
-      const { data, error } = await _sb.from('settings').select('key').limit(1);
+      const pingPromise = _sb.from('settings').select('key').limit(1);
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Supabase connection timeout')), 2000));
+      const { error } = await Promise.race([pingPromise, timeoutPromise]);
       if (error) throw error;
 
-      // Isolated seeding block: failures here should not crash the Supabase connection
       try {
         await _seedDefaults();
         await _seedManagerTopics();
       } catch (seedErr) {
-        console.warn('[DB] Seeding defaults skipped or failed, but proceeding with Supabase:', seedErr.message || seedErr);
+        console.warn('[DB] Seeding defaults skipped or failed:', seedErr.message || seedErr);
       }
 
       console.log('[DB] Supabase connected successfully.');
-
-      // Auto-migrate any local storage data to Supabase if any exists!
       await _migrateLocalStorageToSupabase();
+      _dbInitialized = true;
     } catch (e) {
       console.warn('[DB] Supabase unavailable, using LocalStorage fallback:', e.message || e);
       _useLocalStorage = true;
-      _seedLocalStorageDefaults();
+      await _seedLocalStorageDefaults();
+      _dbInitialized = true;
     }
   }
 
@@ -1067,5 +1072,5 @@ YOUR TASK: Identify minimum 8 coaching opportunities.`, checklist: [] },
     await _seedManagerTopics();
   }
 
-  return { init, put, patch, get, getAll, del, getByIndex, getClient, isLocalStorage, forceReSeed };
+  return { init, put, patch, get, getAll, del, getByIndex, getClient, isLocalStorage, forceReSeed, seedManagerTopics: _seedManagerTopics };
 })();

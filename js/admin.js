@@ -2982,8 +2982,60 @@ window.Admin = (() => {
   async function seedManagerTopics() {
     try {
       await DB.init();
+      if (typeof DB.seedManagerTopics === 'function') {
+        await DB.seedManagerTopics();
+      }
     } catch (e) {
       console.warn('seedManagerTopics failed:', e);
+    }
+  }
+
+  async function renderTopicsList() {
+    const container = $('topics-list');
+    if (!container) return;
+
+    try {
+      await DB.init();
+      let allTopics = await DB.getAll('topics') || [];
+      if (!allTopics.some(t => t.module && t.module.startsWith('mgr-'))) {
+        await seedManagerTopics();
+        allTopics = await DB.getAll('topics') || [];
+      }
+
+      const filtered = allTopics.filter(t => matchesModuleFilter(t.module, _topicsFilter));
+
+      if (!filtered.length) {
+        container.innerHTML = '<div class="empty-state" style="grid-column:1/-1;padding:2rem;text-align:center;color:var(--text-muted)">No topics found. Create one with + New Topic.</div>';
+        return;
+      }
+
+      container.innerHTML = filtered.map(t => {
+        const isEnabled = t.enabled !== false;
+        const desc = t.description || t.scenario || '';
+        const shortDesc = desc.length > 120 ? desc.substring(0, 120) + '…' : desc;
+
+        return `
+          <div class="topic-card ${!isEnabled ? 'disabled' : ''}" style="background:#fff;border:1px solid var(--border-color,#e2e8f0);border-radius:8px;padding:1rem;display:flex;flex-direction:column;justify-content:space-between">
+            <div>
+              <div class="topic-card-header" style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;margin-bottom:0.6rem">
+                ${moduleBadge(t.module || 'pick-speak')}
+                <button class="btn-small ${isEnabled ? 'primary' : 'ghost'}" style="font-size:0.75rem;padding:0.2rem 0.5rem" onclick="Admin.toggleTopicEnabled('${t.id}')">
+                  ${isEnabled ? '✅ Enabled' : '⏸ Disabled'}
+                </button>
+              </div>
+              <h3 class="topic-card-title" style="font-size:1rem;font-weight:600;margin-bottom:0.4rem;color:var(--text-main,#1e293b)">${t.title || 'Untitled Topic'}</h3>
+              <p class="topic-card-desc" style="font-size:0.85rem;color:var(--text-muted,#64748b);line-height:1.4;margin-bottom:0.8rem">${shortDesc || 'No description'}</p>
+            </div>
+            <div class="topic-card-actions" style="display:flex;gap:0.4rem;margin-top:0.5rem">
+              <button class="btn-small" onclick="Admin.openTopicModal('${t.id}')">✏️ Edit</button>
+              <button class="btn-small danger" onclick="Admin.deleteTopic('${t.id}')">🗑 Delete</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    } catch (e) {
+      console.error('[Admin] renderTopicsList failed:', e);
+      container.innerHTML = `<div class="empty-state" style="grid-column:1/-1;color:var(--danger)">Failed to load topics: ${e.message}</div>`;
     }
   }
 
