@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CommAssess — Admin Portal</title>
-  <link rel="stylesheet" href="/assets/comm_assess/css/style.css?v=13">
+  <link rel="stylesheet" href="/assets/comm_assess/css/style.css?v=99999">
   <!-- Frappe Database Adapter -->
   <script src="/assets/comm_assess/js/frappe-db.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
@@ -15,7 +15,7 @@
 <!-- ============================================================
      AUTH OVERLAY
      ============================================================ -->
-<div id="admin-auth-modal" class="auth-overlay">
+<div id="admin-auth-modal" class="auth-overlay hidden" style="display:none !important">
   <div class="auth-card">
     <div class="auth-logo">CA</div>
     <h2>Admin Portal</h2>
@@ -38,7 +38,7 @@
 <!-- ============================================================
      ADMIN APP
      ============================================================ -->
-<div id="admin-app" class="hidden">
+<div id="admin-app">
 
   <!-- Sidebar -->
   <aside class="admin-sidebar">
@@ -47,7 +47,7 @@
       <span>CommAssess</span>
     </div>
     <nav class="sidebar-nav">
-      <a href="#" class="nav-item active" data-section="dashboard">
+      <a href="#" class="nav-item" data-section="dashboard">
         <span class="nav-icon">📊</span>
         <span>Dashboard</span>
       </a>
@@ -55,7 +55,7 @@
         <span class="nav-icon">👥</span>
         <span>Trainees</span>
       </a>
-      <a href="#" class="nav-item" data-section="topics">
+      <a href="#" class="nav-item active" data-section="topics">
         <span class="nav-icon">📚</span>
         <span>Topics</span>
       </a>
@@ -99,7 +99,7 @@
   <main class="admin-main">
 
     <!-- ==================== DASHBOARD ==================== -->
-    <section id="admin-dashboard" class="admin-section active">
+    <section id="admin-dashboard" class="admin-section">
       <div class="section-header">
         <div>
           <h1>Dashboard</h1>
@@ -178,7 +178,7 @@
     </section>
 
     <!-- ==================== TOPICS ==================== -->
-    <section id="admin-topics" class="admin-section">
+    <section id="admin-topics" class="admin-section active">
       <div class="section-header">
         <div>
           <h1>Topics &amp; Scenarios</h1>
@@ -762,6 +762,6 @@
 <script src="/assets/comm_assess/js/speech.js?v=100"></script>
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <script src="/assets/comm_assess/js/claude.js?v=100"></script>
-<script src="/assets/comm_assess/js/admin.js?v=110"></script>
+<script src="/assets/comm_assess/js/admin.js?v=99999"></script>
 </body>
 </html>

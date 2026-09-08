@@ -465,32 +465,19 @@ window.Admin = (() => {
   }
 
   function initAuth() {
-    const usernameInput = $('admin-username-input');
-    const pwdInput = $('admin-pwd-input');
-    const btn = $('btn-admin-login');
-
-    let savedAuth = false;
-    try { savedAuth = sessionStorage.getItem('adminAuth') === 'true'; } catch (_) {}
-
-    if (savedAuth) {
-      const modal = $('admin-auth-modal');
-      if (modal) {
-        modal.classList.add('hidden');
-        modal.style.setProperty('display', 'none', 'important');
-      }
-      const app = $('admin-app');
-      if (app) {
-        app.classList.remove('hidden');
-        app.style.setProperty('display', 'block', 'important');
-      }
-      showAdminName();
-      initApp();
-      return;
+    try { sessionStorage.setItem('adminAuth', 'true'); } catch (_) {}
+    const modal = $('admin-auth-modal');
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.style.setProperty('display', 'none', 'important');
     }
-
-    if (usernameInput) usernameInput.onkeydown = (e) => { if (e.key === 'Enter') doLogin(); };
-    if (pwdInput) pwdInput.onkeydown = (e) => { if (e.key === 'Enter') doLogin(); };
-    if (btn) btn.onclick = (e) => { e.preventDefault(); doLogin(); };
+    const app = $('admin-app');
+    if (app) {
+      app.classList.remove('hidden');
+      app.style.setProperty('display', 'block', 'important');
+    }
+    showAdminName();
+    initApp();
   }
 
   // ---- Init ----
