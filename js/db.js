@@ -843,19 +843,18 @@ const DB = (() => {
   }
 
   // ---- Seed manager topics on first run ----
+  // NOTE: this used to bail out once 10+ 'mgr-' rows existed, and inserted
+  // hardcoded string ids (e.g. 'mgr-sr1') plus extra fields (wrongResponse,
+  // sectionAPrompt) that don't exist in the Supabase 'topics' table (whose
+  // id column is a UUID primary key). Against a real Supabase backend that
+  // insert always failed silently (caught below), so none of these manager
+  // topics ever actually reached the live database — only the localStorage
+  // fallback ever "worked". Seeding is now per-title and idempotent: it
+  // looks at what's already there for each mgr- module and only inserts
+  // whatever titles are missing, using a clean payload that matches the
+  // real schema and lets Postgres generate the id.
   async function _seedManagerTopics() {
     try {
-      let existingCount = 0;
-      if (_useLocalStorage) {
-        const localT = _localGetAll('topics');
-        existingCount = localT.filter(t => t.module && t.module.startsWith('mgr-')).length;
-      } else {
-        const { count } = await _sb.from('topics').select('*', { count: 'exact', head: true }).like('module', 'mgr-%');
-        existingCount = count || 0;
-      }
-
-      if (existingCount >= 10) return; // already seeded
-
       const mgrTopics = [
         // ── Situation Room
         { id: 'mgr-sr1', module: 'mgr-situation-room', title: 'The Unexpected Resignation', enabled: true, description: 'A crisis scenario requiring immediate team leadership and strategic thinking.', scenario: `Your top performer — handling 40% of team output — has resigned effective immediately citing burnout and poor management from you personally. The team already knows via WhatsApp. You have a leadership review call with your VP in 90 minutes.
@@ -903,13 +902,45 @@ YOUR TASK: Identify minimum 8 coaching opportunities.`, checklist: [] },
       ];
 
       if (_useLocalStorage) {
+        const localT = _localGetAll('topics');
+        const have = new Set(localT.filter(t => t.module && t.module.startsWith('mgr-')).map(t => t.module + '::' + t.title));
         for (const item of mgrTopics) {
-          _localPut('topics', item);
+          if (!have.has(item.module + '::' + item.title)) {
+            _localPut('topics', item);
+          }
         }
-      } else {
-        await _sb.from('topics').insert(mgrTopics.map(t => ({ ...t, created_at: new Date().toISOString() })));
+        return;
       }
-      console.log(`[DB] Successfully seeded ${mgrTopics.length} manager topics.`);
+
+      // Real Supabase: find which (module, title) pairs are already present
+      // so re-running this never double-inserts and always fills in gaps.
+      const { data: existing, error: fetchErr } = await _sb
+        .from('topics')
+        .select('module, title')
+        .like('module', 'mgr-%');
+      if (fetchErr) throw fetchErr;
+
+      const have = new Set((existing || []).map(t => t.module + '::' + t.title));
+      const missing = mgrTopics.filter(t => !have.has(t.module + '::' + t.title));
+      if (!missing.length) return; // already fully seeded
+
+      // Only send columns that actually exist on the topics table — no
+      // hand-rolled id (let Postgres generate the UUID), no wrongResponse /
+      // sectionAPrompt (those live only in the manager-app.js SCENARIOS
+      // constant, not in the DB).
+      const payload = missing.map(t => ({
+        module: t.module,
+        title: t.title,
+        description: t.description || '',
+        scenario: t.scenario || '',
+        checklist: t.checklist || [],
+        enabled: t.enabled !== false,
+        created_at: new Date().toISOString(),
+      }));
+
+      const { error: insertErr } = await _sb.from('topics').insert(payload);
+      if (insertErr) throw insertErr;
+      console.log(`[DB] Successfully seeded ${payload.length} manager topics.`);
     } catch (e) {
       console.warn('[DB] _seedManagerTopics failed:', e.message || e);
     }
