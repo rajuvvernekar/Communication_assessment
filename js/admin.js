@@ -3643,29 +3643,9 @@ window.Admin = (() => {
     openTopicModal,
     deleteTopic,
     toggleTopicEnabled,
-    toggleGrammarSet,
     enableAllTopics,
     disableAllTopics,
-    openScoring,
-    updateAdminScoreDisplay,
-    updateCriterionDisplay,
-    selectScale135,
-    viewTraineeSessions,
-    setTraineeTeam,
-    toggleTraineeCheckbox,
-    toggleAllTrainees,
-    deleteSelectedTrainees,
-    deleteAllTrainees,
-    downloadCSV,
-    downloadSmqWrongAnswersReport,
-    downloadRecording,
-    downloadAllRecordings,
     deleteSession,
-    deleteAllSessions,
-    deduplicateTraineeSessions,
-    copyLetter,
-    downloadTraineePPT,
-    downloadMasterExcel,
     reScoreWrittenComm,
     resetWrittenScores,
     // Assessments archive / multi-select / manager view
@@ -3685,10 +3665,6 @@ window.Admin = (() => {
     archiveSelectedManagers,
     restoreSelectedManagers,
     // Bot script per-turn audio upload
-    toggleBotTurnRec,      // kept as no-op stub for cached HTML compatibility
-    uploadBotTurnAudio,
-    clearBotTurnAudio,
-    removeBotScriptRow,
     // AI Audit Scores (kept for backward compatibility)
     filterAiAudit,
     toggleAuditCheckbox,
@@ -3714,8 +3690,6 @@ window.Admin = (() => {
     openMgrScoreModal,
     saveMgrScore,
     seedStockMarketMcq,
-    downloadSmqWrongAnswersReport,
-    deduplicateTraineeSessions,
   };
 })();
 
