@@ -882,10 +882,12 @@ YOUR TASK: Identify minimum 8 coaching opportunities.`, checklist: [] },
         { id: 'mgr-mc5', module: 'mgr-mock-call', title: 'Cross-Border Regulatory Freeze', enabled: true, description: 'NRI Demat account frozen due to FATCA.', scenario: 'An NRI client based in London has their Demat account suddenly frozen due to pending FATCA re-declaration while travelling.', checklist: [] },
 
         // ── Feedback (Red Pen)
-        { id: 'mgr-fb1', module: 'mgr-feedback', title: 'The Burnout Star', enabled: true, description: 'Give structured feedback to a top performer whose engagement has suddenly dropped.', scenario: 'Rahul is your best performer — always exceeds targets. For the last 3 weeks he has been arriving late, missing standups, and being short and impatient with teammates.', checklist: [] },
-        { id: 'mgr-fb2', module: 'mgr-feedback', title: 'The Struggling New Hire', enabled: true, description: 'Give honest but supportive feedback to a new hire whose communication is damaging customer relationships.', scenario: 'Priya joined 8 weeks ago. She is technically capable but comes across as too blunt with customers. Two formal complaints have been filed.', checklist: [] },
-        { id: 'mgr-fb3', module: 'mgr-feedback', title: 'The Dismissive Senior', enabled: true, description: 'Challenge a high-performing but culturally toxic senior agent on behaviour that is undermining team culture.', scenario: 'Arjun has 5 years of experience and is technically your best agent. He dismisses new processes publicly, makes condescending comments to junior staff.', checklist: [] },
-        { id: 'mgr-fb4', module: 'mgr-feedback', title: 'The Defiant Team Lead', enabled: true, description: 'Senior Lead refusing AI audit tools.', scenario: 'Vikram is a senior Team Lead who has refused to adopt the new automated audit workflow.', checklist: [] },
+        { id: 'mgr-fb1', module: 'mgr-feedback', title: 'The High Performer Who Suddenly Disengaged', enabled: true, description: 'A previously high-performing report has quietly disengaged after a team move — QA and productivity have dropped and she insists she\'s fine.', scenario: `Ananya has been a consistent high performer for 8 months, but since moving to your team after a restructuring, her QA score has dropped from 94% to 79%, she's stopped participating, and no longer volunteers. When asked if she's okay, she says "Yes, I'm fine. I'll manage." Have a one-on-one conversation with her — without leading with the numbers or assuming she's become careless.`, checklist: [] },
+        { id: 'mgr-fb2', module: 'mgr-feedback', title: 'I Don\'t Think There Is Anything Wrong With My Work', enabled: true, description: 'A consistent performer dismisses repeated QA feedback on tone and empathy because his numbers are good.', scenario: `Rahul meets his targets but has received repeated QA feedback on interrupting customers, a robotic tone, and missed empathy. When you raise it again, he says: "But my numbers are good. Customers are getting the right answers. I don't understand why QA keeps giving me feedback." Respond in a way that helps him see the gap between getting the job done and doing it effectively — without arguing over whether QA is fair.`, checklist: [] },
+        { id: 'mgr-fb3', module: 'mgr-feedback', title: 'The Employee Who Is Doing Well but Has a Negative Attitude', enabled: true, description: 'A top performer\'s cynical comments are discouraging the team, but he believes he\'s just being honest.', scenario: `Vikram is one of your strongest performers, but he regularly makes discouraging comments in meetings ("This won't work," "We've tried this before") and influences others negatively. When you raise it, he says: "I'm only being practical. At least I'm honest. My performance is good, so I don't see the problem." Separate performance from behaviour and address the impact without making it personal.`, checklist: [] },
+        { id: 'mgr-fb4', module: 'mgr-feedback', title: 'The Employee Who Keeps Making the Same Mistake', enabled: true, description: 'A repeated process error persists despite training and coaching, and the same apology each time isn\'t fixing it.', scenario: `Meera has made the same process-related error four times this month despite explanation, documentation, and coaching. Each time she says: "I'm sorry. I'll be careful next time." This time you need a different conversation — diagnose whether this is a knowledge, skill, attitude, or attention issue, and agree a specific corrective action rather than accepting another promise to be careful.`, checklist: [] },
+        { id: 'mgr-fb5', module: 'mgr-feedback', title: 'The Defensive Employee', enabled: true, description: 'An agent turns defensive during call-review feedback, feeling singled out and unrecognised for his good work.', scenario: `After reviewing three of Arjun's calls, you raise that he interrupted customers, missed probing opportunities, and didn't acknowledge frustration. He becomes defensive: "The customer was being unreasonable... other agents speak like this too, why am I being singled out... you only look at my mistakes." Keep the conversation from becoming confrontational and bring it back to observable behaviour.`, checklist: [] },
+        { id: 'mgr-fb6', module: 'mgr-feedback', title: 'The Employee Who Has Lost Confidence', enabled: true, description: 'A recently promoted agent has lost confidence after a few difficult calls and is avoiding complex work.', scenario: `Priya was recently promoted to handle more complex calls and performed well initially, but after negative feedback on a few difficult calls her confidence has dropped — she's slower, avoids complex calls, and keeps asking "Am I doing this correctly?" When you tell her to be more confident, she says: "I'm trying. But every time I take a difficult call, I feel I'm going to make another mistake." Coach her — this is a confidence issue, not a knowledge gap.`, checklist: [] },
 
         // ── Emotional Intelligence (Mirror Room)
         { id: 'mgr-eq1', module: 'mgr-eq', title: 'The Breaking Point in a Team Meeting', enabled: true, description: `Respond to a team member's public emotional breakdown with professional, human leadership.`, scenario: `During a Monday morning team meeting with 11 people present, your agent Sana suddenly says through tears: "I can't keep doing this. The pressure is impossible."`, checklist: [] },
@@ -901,8 +903,24 @@ YOUR TASK: Identify minimum 8 coaching opportunities.`, checklist: [] },
         { id: 'mgr-ms2', module: 'mgr-management-skills', title: 'Change Management Brief — CRM Migration', enabled: true, description: 'Lead a high-stakes system migration after a previous failure that damaged team trust.', scenario: 'Your team of 14 agents will migrate to a new CRM system in 4 weeks.', checklist: [] }
       ];
 
+      // One-time cleanup: the Feedback (Red Pen) module's original 4 topics
+      // were replaced wholesale by the 6 richer scenarios above (from the
+      // "red pen 2" content). Remove the old titles by name so they don't
+      // linger next to the new set — this only touches the topic catalog
+      // row, never past sessions (sessions reference topic_id with
+      // ON DELETE SET NULL, so scored history is unaffected).
+      const obsoleteFeedbackTitles = new Set([
+        'The Burnout Star', 'The Struggling New Hire', 'The Dismissive Senior', 'The Defiant Team Lead',
+      ]);
+
       if (_useLocalStorage) {
-        const localT = _localGetAll('topics');
+        let localT = _localGetAll('topics');
+        for (const t of localT) {
+          if (t.module === 'mgr-feedback' && obsoleteFeedbackTitles.has(t.title)) {
+            _localDel('topics', t.id);
+          }
+        }
+        localT = _localGetAll('topics');
         const have = new Set(localT.filter(t => t.module && t.module.startsWith('mgr-')).map(t => t.module + '::' + t.title));
         for (const item of mgrTopics) {
           if (!have.has(item.module + '::' + item.title)) {
@@ -912,8 +930,16 @@ YOUR TASK: Identify minimum 8 coaching opportunities.`, checklist: [] },
         return;
       }
 
-      // Real Supabase: find which (module, title) pairs are already present
-      // so re-running this never double-inserts and always fills in gaps.
+      // Real Supabase: remove the obsolete Feedback titles, then find which
+      // (module, title) pairs are already present so re-running this never
+      // double-inserts and always fills in gaps.
+      const { error: cleanupErr } = await _sb
+        .from('topics')
+        .delete()
+        .eq('module', 'mgr-feedback')
+        .in('title', Array.from(obsoleteFeedbackTitles));
+      if (cleanupErr) console.warn('[DB] Obsolete feedback topic cleanup failed:', cleanupErr.message);
+
       const { data: existing, error: fetchErr } = await _sb
         .from('topics')
         .select('module, title')

@@ -452,12 +452,97 @@ Minimum 200 words.` },
         scenario:'An NRI client based in London has their Demat account suddenly frozen due to pending FATCA re-declaration. They are currently travelling and unable to access their registered Indian mobile number for OTP verification. They need to liquidate ₹15 Lakhs for an emergency medical payment today. Handle this call.' },
     ],
     'mgr-feedback': [
-      { id:'fb1', title:'The Burnout Star',
-        scenario:'Rahul is your best performer — always exceeds targets. For the last 3 weeks he has been arriving late, missing standups, and giving short, impatient responses to teammates. His output has dropped 20%.\n\nYou have called him in for a one-on-one. Conduct a structured feedback conversation — be empathetic but clear about the impact of his behaviour.' },
-      { id:'fb2', title:'The Struggling New Hire',
-        scenario:'Priya joined 8 weeks ago. She is technically capable but struggles with customer-facing communication — often comes across as too blunt. Two customers have complained. Her teammates are starting to pick up her slack.\n\nConduct a supportive performance conversation — be honest about the impact while keeping her engaged and confident.' },
-      { id:'fb3', title:'The Dismissive Senior',
-        scenario:'Arjun has 5 years of experience and is technically your best agent. However, he consistently dismisses new processes, is condescending to newer team members in public, and says "we\'ve always done it this way."\n\nGive Arjun clear, direct feedback on his behaviour and its impact on team culture.' },
+      { id:'fb1', title:'The High Performer Who Suddenly Disengaged',
+        scenario:'Ananya has been a consistent high performer for the last 8 months — regularly scoring above 90% in QA, supporting new team members, and volunteering for extra responsibilities. After a team restructuring, she moved to your team. Over the last month: her QA score dropped from 94% to 79%, productivity has reduced, she rarely participates in discussions, no longer volunteers, and seems distracted and less communicative. When you ask if everything is okay, she simply says, "Yes, I\'m fine. I\'ll manage."\n\nHave a one-on-one conversation with Ananya. Think about how you\'ll start — the numbers, or what has changed? What questions will you ask, and how will you avoid assuming she has become careless? How will you create a safe environment for her to speak, and conclude with an action plan?',
+        goodLooksLike: [
+          'Opens by naming the change in behaviour/energy, not the QA score, and asks how she\'s doing before referencing any number.',
+          'Uses open questions ("What\'s changed for you since the move?") rather than closed ones ("Is everything okay?") that invite a one-word answer.',
+          'Notices and gently names the mismatch when she says "I\'m fine, I\'ll manage" rather than accepting it and moving on.',
+          'Avoids any language that implies she has become careless or lost motivation.',
+          'Surfaces the recognition gap (that her previous manager acknowledged her effort) without being told the twist directly.',
+          'Closes with a two-sided action plan — what the manager will do differently (recognition, check-ins) and what Ananya will try.',
+        ],
+        commonPitfalls: [
+          'Opens with "Your QA has dropped from 94% to 79%, what happened?" — numbers before context.',
+          'Accepts "I\'m fine, I\'ll manage" at face value and moves on to next steps.',
+          'Uses language that implies blame ("you seem to have stopped caring").',
+          'Jumps straight to an action plan without exploring the cause first.',
+        ] },
+      { id:'fb2', title:'I Don\'t Think There Is Anything Wrong With My Work',
+        scenario:'Rahul has been with the organisation for two years and meets his productivity targets consistently, but has received repeated feedback on communication — interrupting customers, not acknowledging concerns, a robotic tone, and missing opportunities to show empathy. You have discussed this with him twice before. This time he says: "But my numbers are good. Customers are getting the right answers. I don\'t understand why QA keeps giving me feedback."\n\nHow would you respond? Think about how you\'ll acknowledge his strengths, explain the difference between getting the job done and doing it effectively, use specific examples instead of general statements, prevent the conversation from becoming an argument, and get Rahul to identify the gap himself.',
+        goodLooksLike: [
+          'Acknowledges Rahul\'s strength (consistent targets, accurate answers) explicitly and early, before raising the concern.',
+          'Uses two or more specific, cited examples (call ID, timestamp, or quoted moment) rather than general statements like "your communication needs work."',
+          'Distinguishes clearly between getting the job done and doing it effectively, without dismissing the value of accurate answers.',
+          'Asks questions that let Rahul reach the gap himself ("What do you think the customer felt in that moment?") rather than declaring it for him.',
+          'Stays composed and doesn\'t get pulled into debating whether QA is a fair scoring system.',
+        ],
+        commonPitfalls: [
+          'Gets drawn into debating whether QA feedback is fair, rather than staying on observable behaviour.',
+          'Responds to "my numbers are good" with a general statement ("yes, but communication matters too") instead of a specific example.',
+          'Tells Rahul what the gap is, rather than asking questions that help him identify it himself.',
+          'Concedes the numbers matter more, undermining the point of the conversation.',
+        ] },
+      { id:'fb3', title:'The Employee Who Is Doing Well but Has a Negative Attitude',
+        scenario:'Vikram is one of the team\'s strongest performers — productivity, QA, attendance, and customer feedback are all excellent. But in team meetings he frequently makes negative comments ("This won\'t work," "We\'ve tried this before," "Why are we doing this again?"), discourages new team members from participating, and has started influencing others negatively. When you speak to him, he says: "I\'m only being practical. At least I\'m honest. My performance is good, so I don\'t see the problem."\n\nHow will you give feedback to Vikram? Think about whether a high performer can still have a behavioural gap, how you\'ll separate performance from behaviour, explain the impact on the team, avoid making it personal, and what expectations you\'ll set going forward.',
+        goodLooksLike: [
+          'Opens by explicitly recognising Vikram\'s strong performance before raising the behavioural concern.',
+          'Describes specific comments and moments ("when you said \'we\'ve tried this before\' in Monday\'s planning meeting") rather than a trait label.',
+          'Explains the effect on the team concretely — e.g. a new joiner going quiet after his comment — rather than a vague "it affects morale."',
+          'Avoids words like "negative," "toxic," or "cynical" as descriptions of Vikram himself.',
+          'Sets a specific, observable expectation going forward, and a way to check it.',
+        ],
+        commonPitfalls: [
+          'Labels the person ("you have a negative attitude") instead of describing the behaviour and its impact.',
+          'Fails to connect the behaviour to a concrete effect on the team.',
+          'Lets Vikram\'s strong performance become a reason to soften or skip the conversation entirely.',
+          'Becomes confrontational once Vikram says "at least I\'m honest."',
+        ] },
+      { id:'fb4', title:'The Employee Who Keeps Making the Same Mistake',
+        scenario:'Meera has been making the same process-related error repeatedly. You have explained the process, shared documentation, conducted a coaching session, and given feedback after previous errors — yet the same mistake has occurred four times in the last month. This time she says: "I\'m sorry. I\'ll be careful next time." You\'ve heard that same response several times before.\n\nThis time you need a different conversation. Think about whether this is a knowledge, skill, attitude, or attention issue, what probing questions you\'d ask, how you\'ll identify why the mistake keeps happening, how to avoid simply saying "be more careful," and what specific, measurable corrective action you\'ll agree on.',
+        goodLooksLike: [
+          'Asks diagnostic questions before proposing any solution ("Walk me through what\'s happening when the mistake occurs").',
+          'Notices the pattern is tied to a trigger — handling multiple issues at once — rather than assuming carelessness or lack of knowledge.',
+          'Does not accept "I\'ll be careful next time" as a sufficient action plan.',
+          'Agrees on a specific, observable corrective action tied to the actual trigger (e.g. a checklist for multi-issue calls), not generic retraining already tried four times.',
+          'Sets a measurable way to check improvement (e.g. audited calls over the next two weeks).',
+        ],
+        commonPitfalls: [
+          'Repeats the same explanation or documentation that has already failed four times.',
+          'Accepts "I\'ll be careful" as the agreed action, without defining what "careful" means in practice.',
+          'Assumes the issue is attitude (carelessness) without first checking whether it\'s knowledge, skill, or attention under pressure.',
+          'Doesn\'t identify the specific circumstance (multiple issues at once) in which the error occurs.',
+        ] },
+      { id:'fb5', title:'The Defensive Employee',
+        scenario:'You are giving feedback to Arjun after reviewing three of his calls — he interrupted customers, missed probing opportunities, his tone became impatient in one interaction, and he did not acknowledge the customer\'s frustration. Arjun immediately becomes defensive: "But the customer was being unreasonable." Then: "Other agents speak like this too. Why am I being singled out?" And finally: "You only look at my mistakes. Nobody talks about the calls where I did well."\n\nContinue the conversation without letting it become confrontational. Think about how you\'ll handle defensiveness, whether you\'ll defend your feedback or explore his perspective, how you\'ll acknowledge his point without agreeing with the behaviour, bring the conversation back to observable behaviour, and end it positively.',
+        goodLooksLike: [
+          'Acknowledges Arjun\'s underlying feeling ("I hear that you feel your good calls aren\'t recognised") without agreeing that the behaviour in question was acceptable.',
+          'Does not get drawn into debating whether "other agents do it too" or whether the customer was unreasonable.',
+          'Redirects calmly back to the three specific calls and observable behaviours under discussion.',
+          'Stays composed rather than defending the feedback or its fairness.',
+          'Closes by genuinely naming something Arjun did well, not as a formality but as real balance.',
+        ],
+        commonPitfalls: [
+          'Responds to "nobody talks about the calls where I did well" with "that\'s not true" — countering rather than acknowledging.',
+          'Argues about whether other agents behave the same way, rather than staying on Arjun\'s own calls.',
+          'Lets the conversation drift into a debate about whether the customer was unreasonable.',
+          'Ends the conversation only on the negative points, without balancing feedback.',
+        ] },
+      { id:'fb6', title:'The Employee Who Has Lost Confidence',
+        scenario:'Priya was recently promoted to handle more complex customer interactions. Initially she performed well, but after negative feedback on a few difficult calls her confidence has dropped — she\'s taking longer to respond, frequently seeks help for routine situations, avoids complex calls, and keeps asking "Am I doing this correctly?" When you tell her she needs to be more confident, she says: "I\'m trying. But every time I take a difficult call, I feel I\'m going to make another mistake."\n\nHow would you coach Priya? Think about whether this is a performance problem or a confidence problem, how you\'ll rebuild her confidence, what positive reinforcement and small wins you can create, what support or practice you\'d provide, and how you\'ll measure progress.',
+        goodLooksLike: [
+          'Recognises early that this is a confidence issue, not a knowledge or skill gap, and doesn\'t default to more training content.',
+          'Avoids generic encouragement ("you just need to be more confident") in favour of a concrete plan.',
+          'Designs a graduated exposure plan — small, winnable steps before returning to full complexity.',
+          'Offers specific reassurance grounded in evidence of Priya\'s actual past competence, not vague encouragement.',
+          'Sets a light-touch, measurable way to track progress (e.g. number of supported complex calls handled).',
+        ],
+        commonPitfalls: [
+          'Tells Priya to "just be more confident" — the same unhelpful framing already present in the scenario.',
+          'Defaults to assigning more knowledge-based training rather than structured practice.',
+          'Skips designing any graduated plan, leaving her to face full complexity again with no scaffolding.',
+          'Offers generic praise ("you\'re doing great") rather than specific, evidence-based reassurance.',
+        ] },
     ],
     'mgr-eq': [
       { id:'eq1', title:'In-the-Moment Crisis',
@@ -480,22 +565,40 @@ Minimum 200 words.` },
   // ── Employee personas for Feedback AI ───────────────────
   const FB_EMPLOYEES = {
     'fb1': {
-      name: 'Rahul',
-      gender: 'male',
-      opening: "You wanted to see me? I do have a client follow-up in about 20 minutes, so hopefully we can keep this quick.",
-      persona: "You are Rahul — a high-performing sales agent whose engagement has recently dropped. You've been coming in late, missing standups, and being short with teammates, though your numbers are still okay. You're initially defensive and downplay the issues, feeling that results are what matter. If the manager is empathetic and asks open questions, you gradually reveal you're burnt out and dealing with a personal matter at home. If they push hard without empathy, you shut down further. You genuinely respect the manager if they handle this with care."
+      name: 'Ananya',
+      gender: 'female',
+      opening: "Hi... sure, what's up? Is this about my numbers this month?",
+      persona: "You are Ananya — a consistent high performer for 8 months (90%+ QA, mentoring newer teammates, volunteering for extra work) who moved to this manager's team after a restructuring a month ago. Since the move your QA has dropped from 94% to 79%, you've gone quiet in discussions, stopped volunteering, and seem distracted. The real reason: your previous manager regularly recognised your effort and gave you stretch opportunities; your new manager hasn't acknowledged you once since the move, and you've quietly concluded your work here doesn't matter as much. You are NOT careless and you resent any suggestion that you are. Your default answer to 'is everything okay' is a flat 'Yes, I'm fine, I'll manage' — you do not open up to a generic check-in. If the manager leads with the QA numbers or implies you've become careless, you get clipped and shut down further ('I said I'll manage'). If the manager instead notices the change in you as a person, asks genuinely open questions, and creates space without pressing, you gradually admit you've felt unseen and unrecognised since the move. You respond very well to a manager who proposes concrete, two-sided next steps (regular recognition, a check-in cadence) rather than just telling you to 'get back to your old numbers.'"
     },
     'fb2': {
-      name: 'Priya',
-      gender: 'female',
-      opening: "Hi... is everything okay? I got a bit worried when you asked to meet privately. Am I in trouble?",
-      persona: "You are Priya — a new hire (8 weeks in) who is eager but unknowingly comes across as too blunt with customers. You're nervous and genuinely want to do well. You don't fully understand what you're doing wrong yet — you think being direct is professional. If the manager gives specific examples, you have an 'aha' moment and become receptive. You ask clarifying questions and apologize sincerely when you understand the impact. You're a fast learner who just needs the right framing."
+      name: 'Rahul',
+      gender: 'male',
+      opening: "Again? I already know what this is about. My numbers are good — I don't really get why we keep having this conversation.",
+      persona: "You are Rahul — two years in the role, consistently hitting productivity targets, but you've been coached twice before on communication: interrupting customers, not acknowledging concerns, a flat/robotic tone, missing chances to show empathy. You genuinely believe hitting the target IS doing the job well, and QA feedback feels like nitpicking on a scorecard that doesn't matter as much as results. You open somewhat guarded and a little tired of the topic. If the manager repeats general statements ('communication matters too', 'you need to work on empathy') without specifics, you push back harder ('give me one example') and the conversation turns into a debate about whether QA is even a fair measure. If the manager cites specific, concrete moments from your actual calls (a timestamp, a quote, what the customer likely felt) and asks you questions rather than lecturing you, you slow down, get less defensive, and can eventually acknowledge the gap yourself — grudgingly at first, then genuinely. You never fully concede that QA outranks your numbers, but you can accept 'both matter.'"
     },
     'fb3': {
+      name: 'Vikram',
+      gender: 'male',
+      opening: "Sure, come in. Let me guess — someone complained I said something too honest in a meeting again?",
+      persona: "You are Vikram — one of the strongest performers on the team (productivity, QA, attendance, customer feedback all excellent), and you know it. In team meetings you regularly say things like 'this won't work' or 'we've tried this before,' you visibly discourage newer team members from speaking up, and a couple of them have started echoing your negativity. You see yourself as the practical, honest voice in the room, not a problem — 'at least I'm honest' is your genuine belief, and your performance numbers feel like proof you're right to speak your mind. You're confident and a little dismissive at first, using your track record as a shield ('my performance is good, so I don't see the problem'). If the manager labels you personally ('you have a negative attitude', 'you're toxic') or lets your strong numbers talk them out of raising it firmly, you get defensive and write the conversation off as unfair. If the manager instead separates your performance from the specific behaviour, describes an exact moment (what you said, in which meeting, and what happened to the room afterward — e.g. a new joiner going quiet), and explains the concrete effect on the team without moralising, you become more reflective. You can accept that being 'right' isn't the same as being helpful, once someone shows you the actual cost rather than just telling you to be nicer."
+    },
+    'fb4': {
+      name: 'Meera',
+      gender: 'female',
+      opening: "I know, I know. I'm really sorry — I'll be more careful next time, I promise.",
+      persona: "You are Meera — you've made the same process-related error four times in the last month despite the process being explained, documentation shared, a coaching session held, and feedback given each time. You feel genuinely bad and embarrassed about it, and your instinct is to apologise quickly and promise to 'be more careful' so the conversation ends — that promise has never actually changed anything, because you don't yet understand the real trigger yourself. The true pattern (reveal only if the manager actually asks diagnostic questions rather than re-explaining the process): the mistake only happens when you're handling multiple issues on a call at once and rush the step under pressure — it is not that you don't know the process, and it is not carelessness. If the manager repeats the same explanation, gives you the same documentation again, or accepts 'I'll be careful' as the plan, you agree readily (to make the discomfort stop) but nothing will actually change and you know it. If the manager instead asks you to walk through exactly what happens when the mistake occurs, you gradually realise and name the multi-issue-call trigger yourself, and respond well to a specific, concrete corrective action (like a checklist for those calls) with a clear way to check progress."
+    },
+    'fb5': {
       name: 'Arjun',
       gender: 'male',
-      opening: "Sure. If this is about the new CRM rollout — I've already told the team it's not built for the volume we handle. Just being upfront.",
-      persona: "You are Arjun — a 5-year senior agent who is technically excellent but dismissive of change and condescending toward junior staff. You believe your seniority earns you flexibility. You're confident, direct, and initially resistant — you'll push back with logic ('but results are still good'). If the manager is firm, specific about the impact on team culture and gives you concrete examples, you'll reluctantly respect it and shift. If they're vague or soft, you'll dismiss them entirely and feel validated in your approach."
+      opening: "Okay... which calls are we talking about? Because honestly, most of my calls go fine.",
+      persona: "You are Arjun — your manager is reviewing three calls where you interrupted customers, missed probing opportunities, sounded impatient once, and didn't acknowledge a customer's frustration. Your default reaction to any critical feedback is defensiveness, in escalating stages: first you justify it ('but the customer was being unreasonable'), then you deflect to fairness ('other agents talk like this too, why am I being singled out?'), then you make it about recognition ('you only look at my mistakes, nobody talks about the calls where I did well'). You're not trying to be difficult — you genuinely feel unfairly targeted and under-appreciated. If the manager argues back at any of these three points (denies it, insists you ARE being singled out fairly, or gets pulled into debating whether the customer was unreasonable), you escalate further and the conversation turns confrontational. If the manager instead acknowledges the feeling behind each objection without agreeing to drop the behavioural point, and calmly keeps returning to the three specific calls, you de-escalate step by step. You respond very well, and visibly soften, if the manager genuinely and specifically names something you did well before the conversation ends — not as a token, but as something real."
+    },
+    'fb6': {
+      name: 'Priya',
+      gender: 'female',
+      opening: "Hi. Sorry, is this about the call from yesterday? I know I took a while to get through that one.",
+      persona: "You are Priya — recently promoted to handle more complex customer interactions. You started strong, but after a few pieces of critical feedback on difficult calls, your confidence has dropped: you now take longer to respond, ask for help on routine situations you used to handle fine, avoid complex calls when you can, and keep asking 'Am I doing this correctly?' This is a confidence problem, not a skill problem — you already know how to do the work, but you're now second-guessing yourself before every call. If the manager tells you to 'just be more confident' or pushes you straight back into full complex-call volume, you feel more anxious and unsupported, and your answers get shorter and more anxious ('I'm trying, but every time I take a difficult call I feel like I'm going to mess up again'). If the manager instead recognises this as a confidence issue rather than a skill gap, points to specific past evidence of your competence, and proposes a graduated plan — smaller wins first, support on the harder calls, a way to track progress — you visibly relax and re-engage, and start sounding more like your old self by the end of the conversation."
     },
   };
 
@@ -1267,7 +1370,8 @@ Let's get back on track.
     try {
       if (typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable() && fullTranscript) {
         const result = await ClaudeEvaluator.evaluateManagerFeedback(
-          fullTranscript, _currentScenario.scenario || _currentScenario.title || ''
+          fullTranscript, _currentScenario.scenario || _currentScenario.title || '',
+          _currentScenario.goodLooksLike || [], _currentScenario.commonPitfalls || []
         );
         aiScores = {
           ...result.scores,
@@ -1502,14 +1606,13 @@ Let's get back on track.
       const isParams = aiScores._method === 'mgr-feedback-params';
       if (isParams) {
         const paramRows = [
-          ['Emotional Control',   aiScores.emotionalControl],
-          ['Empathy',             aiScores.empathy],
-          ['Listening',           aiScores.listening],
-          ['Coaching Style',      aiScores.coachingStyle],
-          ['Conflict Handling',   aiScores.conflictHandling],
-          ['Leadership Presence', aiScores.leadershipPresence],
-          ['Team Support',        aiScores.teamSupport],
-          ['Communication',       aiScores.communication],
+          ['Observe',    aiScores.observe],
+          ['Explore',    aiScores.explore],
+          ['Listen',     aiScores.listen],
+          ['Feedback',   aiScores.feedback],
+          ['Agree',      aiScores.agree],
+          ['Action',     aiScores.action],
+          ['Follow-Up',  aiScores.followUp],
         ];
         $('mgr-score-grid').innerHTML = paramRows.map(([label, val]) =>
           `<div class="mgr-score-item"><div class="label">${label}</div><div class="val">${val != null ? val + '/5' : '—'}</div></div>`

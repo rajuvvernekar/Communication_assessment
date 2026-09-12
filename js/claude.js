@@ -811,41 +811,45 @@ Return ONLY valid JSON:
     };
   }
 
-  // ---- Manager Feedback Evaluation (8 leadership parameters) ----
-  async function evaluateManagerFeedback(transcript, scenarioContext) {
+  // ---- Manager Feedback Evaluation (OBSERVE -> EXPLORE -> LISTEN -> FEEDBACK -> AGREE -> ACTION -> FOLLOW-UP) ----
+  async function evaluateManagerFeedback(transcript, scenarioContext, goodLooksLike = [], commonPitfalls = []) {
     if (!isAvailable()) throw new Error('Claude proxy not configured');
 
-    const systemPrompt = `You are a senior leadership development expert evaluating a manager's feedback conversation with an employee.
+    const glItems = (goodLooksLike || []).map((s, i) => `${i + 1}. ${s}`).join('\n');
+    const cpItems = (commonPitfalls || []).map((s, i) => `${i + 1}. ${s}`).join('\n');
+
+    const systemPrompt = `You are a senior leadership development expert evaluating a manager's feedback conversation with an employee, using the OBSERVE -> EXPLORE -> LISTEN -> FEEDBACK -> AGREE -> ACTION -> FOLLOW-UP framework.
 
 SCENARIO: ${scenarioContext}
+${glItems ? `\nWHAT GOOD LOOKS LIKE IN THIS SPECIFIC SCENARIO:\n${glItems}` : ''}
+${cpItems ? `\nCOMMON MANAGER PITFALLS IN THIS SPECIFIC SCENARIO (a manager who does one of these should generally score no higher than 2 on the related dimension):\n${cpItems}` : ''}
 
 SCORING STANDARDS:
 - Score 3 = average — what most managers instinctively do
 - Score 4 = genuinely above average — real empathy, coaching instinct, not just absence of mistakes
 - Score 5 = exceptional — rare, only for masterful leadership communication
-- Score 2 = below standard — real problems present
+- Score 2 = below standard — matches one of the common pitfalls listed above for this scenario
 - Score 1 = critical failure in this area
-Be strict. Do NOT inflate scores.
+Be strict. Do NOT inflate scores. Ground every score in what the manager actually said in the transcript, weighed against the scenario-specific "what good looks like" and "common pitfalls" above where provided.
 
-Evaluate the manager's responses on these 8 parameters (1-5 each):
-1. emotionalControl: Calmness under stress — did the manager stay composed, avoid reactive language?
-2. empathy: Understanding employee emotions — did the manager acknowledge feelings and perspective?
-3. listening: Giving employees space to speak — did the manager invite dialogue, avoid interrupting or dominating?
-4. coachingStyle: Constructive guidance — did the manager offer helpful, developmental feedback rather than just criticism?
-5. conflictHandling: Neutral & mature resolution — did the manager address disagreements without escalating or dismissing?
-6. leadershipPresence: Stability during chaos — did the manager project confidence and direction?
-7. teamSupport: Emotional reassurance — did the manager make the employee feel supported and valued?
-8. communication: Clear and respectful delivery — was the language clear, professional, and respectful throughout?
+Evaluate the manager's responses on these 7 parameters (1-5 each), each tied to one stage of the framework:
+1. observe: Did the manager notice and name the real, specific change or issue (behaviour, pattern, or moment) rather than opening with a number, a label, or an assumption?
+2. explore: Did the manager ask open, curious questions to understand the underlying cause before drawing conclusions, rather than assuming they already knew the answer?
+3. listen: Did the manager give the employee real space to speak, notice when an answer was too quick or guarded (e.g. "I'm fine, I'll manage"), and avoid interrupting, dominating, or steamrolling the conversation?
+4. feedback: Was the feedback itself specific, behavioural, and non-judgmental — citing concrete moments/examples rather than vague statements or personal labels?
+5. agree: Did the manager work WITH the employee to reach shared understanding and a mutually agreed direction, rather than dictating a conclusion or unilaterally deciding what's true?
+6. action: Was the resulting action plan specific, realistic, and tied to the actual root cause discussed — not a generic instruction (like "be more careful" or "be more confident") that had already failed before?
+7. followUp: Did the manager set up a clear, concrete way to check in on progress (a cadence, a metric, a next conversation) rather than leaving the outcome open-ended?
 
 Return ONLY a JSON object:
-{"emotionalControl":<1-5>,"empathy":<1-5>,"listening":<1-5>,"coachingStyle":<1-5>,"conflictHandling":<1-5>,"leadershipPresence":<1-5>,"teamSupport":<1-5>,"communication":<1-5>,"reasons":{"emotionalControl":"<sentence>","empathy":"<sentence>","listening":"<sentence>","coachingStyle":"<sentence>","conflictHandling":"<sentence>","leadershipPresence":"<sentence>","teamSupport":"<sentence>","communication":"<sentence>"}}`;
+{"observe":<1-5>,"explore":<1-5>,"listen":<1-5>,"feedback":<1-5>,"agree":<1-5>,"action":<1-5>,"followUp":<1-5>,"reasons":{"observe":"<sentence>","explore":"<sentence>","listen":"<sentence>","feedback":"<sentence>","agree":"<sentence>","action":"<sentence>","followUp":"<sentence>"}}`;
 
     const resp = await fetch(getProxyUrl(), {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({
         model:      MODEL,
-        max_tokens: 500,
+        max_tokens: 600,
         system:     systemPrompt,
         messages:   [{ role: 'user', content: `MANAGER'S CONVERSATION TRANSCRIPT:\n\n${transcript}` }],
       }),
@@ -862,20 +866,19 @@ Return ONLY a JSON object:
     if (!match) throw new Error('No JSON in response');
 
     const parsed = JSON.parse(match[0]);
-    const keys   = ['emotionalControl','empathy','listening','coachingStyle','conflictHandling','leadershipPresence','teamSupport','communication'];
+    const keys   = ['observe','explore','listen','feedback','agree','action','followUp'];
     const sum    = keys.reduce((s, k) => s + (parsed[k] || 0), 0);
     const overall = parseFloat(((sum / (keys.length * 5)) * 100).toFixed(1));
 
     return {
       scores: {
-        emotionalControl:  parsed.emotionalControl,
-        empathy:           parsed.empathy,
-        listening:         parsed.listening,
-        coachingStyle:     parsed.coachingStyle,
-        conflictHandling:  parsed.conflictHandling,
-        leadershipPresence:parsed.leadershipPresence,
-        teamSupport:       parsed.teamSupport,
-        communication:     parsed.communication,
+        observe:  parsed.observe,
+        explore:  parsed.explore,
+        listen:   parsed.listen,
+        feedback: parsed.feedback,
+        agree:    parsed.agree,
+        action:   parsed.action,
+        followUp: parsed.followUp,
       },
       overall,
       reasons: parsed.reasons || {},
