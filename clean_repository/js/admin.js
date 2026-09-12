@@ -409,7 +409,12 @@ window.Admin = (() => {
     }
   }
 
-  function _unused_initApp() {
+  // NOTE: this was mistakenly renamed to _unused_initApp() at some point
+  // (presumably taken for dead code) while doLogin() and initAuth() kept
+  // calling it as initApp() -- that mismatch is what threw "initApp is not
+  // defined" and stopped the Topics list, dashboard, reports, audit scores
+  // and manager assessments from ever rendering. Restoring the real name.
+  function initApp() {
     document.querySelectorAll('.sidebar-nav .nav-item[data-section]').forEach(item => {
       item.onclick = (e) => {
         e.preventDefault();
