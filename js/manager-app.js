@@ -1654,6 +1654,13 @@ Let's get back on track.
   function _showResult(aiScores, type) {
     const meta = MODULE_META[_currentModule];
 
+    // Managers only ever see the generic "admin will review" notice —
+    // AI scores/feedback are for the admin dashboard, never shown here.
+    // Always reset this panel so a previous assessment's feedback can't
+    // linger visible into an unrelated later submission.
+    const _srFeedbackEl = $('mgr-sr-ai-feedback');
+    if (_srFeedbackEl) { _srFeedbackEl.innerHTML = ''; _srFeedbackEl.classList.add('hidden'); }
+
     if (type === 'mcq') {
       $('mgr-result-subtitle').textContent = `Listening & Tone — ${aiScores.correct}/${aiScores.total} correct`;
       $('mgr-result-score').textContent = `${aiScores.overall}%`;
@@ -1710,29 +1717,12 @@ Let's get back on track.
         <div class="mgr-score-item sr-section-b-item"><div class="label">B — Error Identification</div><div class="val">${sb.errorIdentification ?? '—'}/5</div></div>
         <div class="mgr-score-item sr-section-b-item"><div class="label">B — Impact Explanation</div><div class="val">${sb.impactExplanation ?? '—'}/5</div></div>
         <div class="mgr-score-item sr-section-b-item"><div class="label">B — Rewrite Quality</div><div class="val">${sb.rewriteQuality ?? '—'}/5</div></div>`;
-
-      // AI feedback panel
-      const feedbackEl = $('mgr-sr-ai-feedback');
-      if (feedbackEl) {
-        const items = [];
-        if (sa.whatNotToSay && !/clean/i.test(sa.whatNotToSay)) {
-          items.push(`<div class="sr-fb-item sr-fb-warn"><strong>⚠ What Not to Say (A):</strong> ${sa.whatNotToSay}</div>`);
-        }
-        if (sa.strength) {
-          items.push(`<div class="sr-fb-item sr-fb-good"><strong>✓ Strength (A):</strong> ${sa.strength}</div>`);
-        }
-        if (sa.improvement) {
-          items.push(`<div class="sr-fb-item sr-fb-info"><strong>💡 Priority Improvement (A):</strong> ${sa.improvement}</div>`);
-        }
-        if (sb.keyMissed && !/all key/i.test(sb.keyMissed)) {
-          items.push(`<div class="sr-fb-item sr-fb-warn"><strong>📝 Missed Error (B):</strong> ${sb.keyMissed}</div>`);
-        }
-        if (sb.rewriteFeedback && !/strong/i.test(sb.rewriteFeedback)) {
-          items.push(`<div class="sr-fb-item sr-fb-info"><strong>✍ Rewrite Feedback (B):</strong> ${sb.rewriteFeedback}</div>`);
-        }
-        feedbackEl.innerHTML = items.join('');
-        feedbackEl.classList.toggle('hidden', items.length === 0);
-      }
+      // Note: the detailed AI feedback (What Not to Say / Strength /
+      // Priority Improvement / Missed Error / Rewrite Feedback) lives in
+      // aiScores.sectionA/sectionB for the admin dashboard, but is
+      // intentionally never rendered here — managers only ever see the
+      // generic "admin will review" notice below (mgr-sr-ai-feedback is
+      // reset to empty/hidden at the top of this function).
     } else {
       // audio (Mock Call only now — Situation Room moved to written)
       $('mgr-result-subtitle').textContent = `${meta.label} — speech evaluated`;
