@@ -61,7 +61,28 @@ Mr. Kapoor has just called your cell phone. He is furious, threatening to initia
 You have called both leads into a conference room immediately. The rest of the floor is tense and watching.`,
         sectionAPrompt: 'Write your EXACT opening words in the next 60 seconds to reset the meeting, stop the blame game, and pivot both leads toward root-cause resolution.',
         wrongResponse: `"Alright, shut the door. What was that embarrassing display out on the floor? You two are senior leads acting like trainees. I don't care who started it — if this isn't resolved in the next 20 minutes, I am issuing formal written warnings to both of you. Operations, stop blaming IT. IT, fix the batch script right now. We'll figure out who screwed up during the post-mortem."`
-      }
+      },
+      {
+        id: 'sr7',
+        title: 'The Rejected Sell Order — Escalated Twice',
+        scenario: `You're the escalation manager. A customer, Mr. Aditya Rane, has just been transferred to you after two prior support agents closed his complaint without resolving it. His original message: "I placed a sell order for 500 shares of Infosys at 9:16 AM. The order got rejected. By the time I figured it out and placed it again, the price had dropped ₹47. That's ₹23,500 I lost because of your system. I want my money back." You've reviewed the logs yourself — the order was correctly rejected for insufficient margin. This was a shortfall on his own account, not a platform error.\n\nTwo things make this harder than a routine callback: he's a 9-year client with a ₹1.2 Crore portfolio, and he opens the call by saying "I'm recording this, and I have 40,000 followers on X. I'm giving you one shot to make this right before I post the whole thing." You also notice, while pulling his account, that the margin-utilisation figure shown in his app that morning carried a stale 6-hour-old timestamp — a known cosmetic display bug that did not cause the rejection, but makes his confusion genuinely understandable.\n\nHe's already been told "there's nothing we can do" twice today, by two different people.`,
+        sectionAPrompt: "Write the EXACT words you say in the first 60 seconds of this call — knowing he's recording it and has already been dismissed twice today. Then, in 2–3 sentences, say what you will deliberately NOT say in this call, and why.",
+        wrongResponse: `"Sir, I've reviewed everything and honestly, our first two agents were right — this was a margin shortfall on your end, not a system error, so there's really nothing to refund. I know that's frustrating given how long you've been with us, so let me see what I can personally approve as a one-time gesture — would ₹23,500 work to close this out today? Also, just so you're aware, whatever you post online, we do have call logs showing you were informed about the margin requirement, so we're covered on our end regardless."`,
+      },
+      {
+        id: 'sr8',
+        title: 'The Surveillance Hold During a Volatile Session',
+        scenario: `A client's trading account was blocked for two full trading sessions during a period of unusually high volatility. He estimates he lost ₹1.8 Lakh in missed exits because he couldn't square off positions in time. He has already spoken to two agents today — one told him it was a "technical glitch," the other said it was a "compliance hold" — and the contradiction between the two answers has made him angrier than the block itself.\n\nThe real reason, visible only in your escalation queue notes: Risk & Surveillance flagged his account as part of a SEBI-mandated review into a suspicious trading pattern across three linked accounts. You are not permitted to disclose the specific reason, the linked-account detail, or that a regulator is involved — only that the account is "under a mandatory compliance review" until it clears.\n\nHe says: "I've been with you people for six years and you've never explained anything to me properly. I'm filing with the SEBI SCORES portal today, and I'm telling everyone in my trading community exactly what happened here."`,
+        sectionAPrompt: 'Write the EXACT words you use to open this call and explain the situation — knowing you legally cannot disclose the actual reason for the hold, and that two colleagues already gave him two different, contradictory explanations today.',
+        wrongResponse: `"I understand your concern. As per our policy, accounts are blocked for regulatory reasons that are beyond our control. I would suggest you check your email for any communication we may have sent. As for what my colleagues told you earlier, I can't really speak to that — I can only tell you what I see on my end, which is that this is a compliance matter. Is there anything else I can help you with?"`,
+      },
+      {
+        id: 'sr9',
+        title: 'The Refund Threshold Dilemma',
+        scenario: `A long-standing client with ₹40 Lakh in his account calls you directly, bypassing the floor. He says he will move his entire relationship to a competitor and post a negative review on every platform he can find unless you refund his last 3 months of brokerage — ₹12,000 — over a complaint that is genuine but minor (a delayed contract note that caused him no financial loss).\n\nYour approval authority as escalation manager is capped at ₹5,000 per case. Your reporting manager is travelling and unreachable for the next several hours. The client is waiting on the line for your answer right now — he says he doesn't want to "go back and forth over email."`,
+        sectionAPrompt: "Write your exact words to the client explaining your decision. Then, in a separate short paragraph, walk through exactly how you arrived at that decision given that the ask (₹12,000) is above what you're authorised to approve (₹5,000) and your manager can't be reached.",
+        wrongResponse: `"I hear you, and honestly, losing a client of your standing over ₹12,000 doesn't make sense for anyone. I'm going to go ahead and approve the full refund right now as a one-time exception — you've been with us a long time and you deserve better than a delayed contract note turning into all this. Consider it done, no further action needed from your side."`,
+      },
     ],
     'mgr-transcript-autopsy': [
       { id:'ta1', title:'SIP Debit With No Unit Allotment — 22 Min Call',
@@ -430,6 +451,63 @@ YOUR TASK: Provide a detailed transcript autopsy covering:
 2. Pinpoint the exact turning point where the call turned hostile.
 3. Write the exact revised response for the agent to de-escalate Sunita and offer constructive solutions.
 Minimum 200 words.` },
+      { id:'ta4', title:'The Margin Call Dispute — Escalation Call',
+        scenario:`BACKGROUND: A customer's open Nifty futures position was squared off by RMS due to a margin shortfall. He's lost ₹31,000 on the square-off and believes the system acted without warning. This call has already reached the escalation tier — the customer asked for someone senior and was connected directly to the manager below. That means every mistake in this call has no further internal escalation path left for the customer. This is a live line-by-line transcript with 8+ identifiable mistakes.
+
+─── CALL TRANSCRIPT ─────────────────────────────────────────────
+
+CUSTOMER: Hello, I want to speak to someone senior. Your system squared off my position without any warning and I've lost ₹31,000.
+
+MANAGER: Good afternoon, sir. I'm the escalation manager here. Can you tell me your client ID?
+
+CUSTOMER: It's ZR4821. I've already given this 3 times today.
+
+MANAGER: Okay, let me pull up your account. (30 second pause) Yes, I can see the square-off happened at 11:43 AM today.
+
+CUSTOMER: Yes. Without any warning. I had no idea.
+
+MANAGER: Sir, our system sends SMS and email alerts when margin falls below the required level. Did you check?
+
+CUSTOMER: I'm telling you I got no alert.
+
+MANAGER: It shows alerts were sent at 10:55 AM and 11:20 AM to your registered mobile number.
+
+CUSTOMER: Then maybe it didn't come. Your system has problems.
+
+MANAGER: Sir, the alerts are system-generated and they are recorded on our end. They would have been sent.
+
+CUSTOMER: Are you calling me a liar?
+
+MANAGER: No sir, I'm not saying that. I'm just saying the records show the alerts were sent.
+
+CUSTOMER: This is ridiculous. I want my ₹31,000 back.
+
+MANAGER: Sir, as per our policy, if margin falls below the required level, we have the right to square off positions. This is mentioned in the terms and conditions you agreed to.
+
+CUSTOMER: I don't care about terms and conditions. I want a solution.
+
+MANAGER: I understand, but there isn't much I can do in this case since the square-off was done as per policy. I can log a grievance if you'd like.
+
+CUSTOMER: A grievance? I asked for someone senior and I got you. Where does this even go from here if you can't fix it?
+
+MANAGER: I can escalate it internally, but I can't promise a different outcome — the square-off itself was correctly executed.
+
+CUSTOMER: So what was the point of this call? You've told me nothing I didn't already hear from the first two agents.
+
+MANAGER: I understand your frustration, sir. Is there anything else I can help you with?
+
+CUSTOMER: No. There's clearly nothing you're willing to do. (disconnects)
+
+─── END OF TRANSCRIPT ──────────────────────────────────────────
+
+YOUR TASK: Write a full escalation-tier coaching analysis for this call. Identify a minimum of 8 coaching opportunities — including at least one each from: Call Opening, Information Verification, Handling the "Are you calling me a liar?" moment, Policy Communication, and Call Closing. For each opportunity:
+(a) Quote the exact transcript moment
+(b) Explain why this mistake is more damaging here than it would be from a frontline agent — this customer has already reached the escalation tier and has nowhere further to go internally
+(c) Write the improved response the manager should have delivered
+
+Also answer: this call ended with the customer disconnecting with no resolution and no real acknowledgment. Write the exact closing exchange — from "Sir, as per our policy…" to the end — the way it should have gone, and explain what, if anything, could realistically have been offered within policy (the square-off itself was correct; no refund is owed).
+
+Minimum 300 words.` },
     ],
     'mgr-mock-call': [
       { id:'mc1', title:'C-Suite Escalation',
