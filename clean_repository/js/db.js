@@ -218,7 +218,24 @@ const DB = (() => {
     const storedPwd = _localGet('settings', 'adminPassword');
     if (!storedPwd) {
       _localPut('settings', { key: 'adminPassword', value: 'admin123' });
-    await _seedManagerTopics();
+    }
+
+    // Always (re)seed default topics into localStorage while running in
+    // offline/fallback mode — previously this only ran _seedManagerTopics()
+    // and only on a brand-new browser (inside the `!storedPwd` check above),
+    // so any topic added after a trainee's first-ever load — including a
+    // trainee whose Supabase ping simply timed out once — would never reach
+    // their local copy, producing a permanent "No topics available" error
+    // for that module even though the code/deployment was correct.
+    try {
+      await _seedDefaults();
+    } catch (e) {
+      console.warn('[DB] Local default-topic seeding failed:', e.message || e);
+    }
+    try {
+      await _seedManagerTopics();
+    } catch (e) {
+      console.warn('[DB] Local manager-topic seeding failed:', e.message || e);
     }
   }
 
@@ -232,15 +249,25 @@ const DB = (() => {
       }
       _sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
       const pingPromise = _sb.from('settings').select('key').limit(1);
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Supabase connection timeout')), 2000));
+      // Was 2000ms — too aggressive on a slower/mobile connection, which
+      // tipped otherwise-healthy sessions into the LocalStorage fallback
+      // path (see _seedLocalStorageDefaults) and made newly-added modules
+      // look like "No topics available" for those trainees.
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Supabase connection timeout')), 6000));
       const { error } = await Promise.race([pingPromise, timeoutPromise]);
       if (error) throw error;
 
+      // Run these independently: a failure seeding trainee topics should
+      // never prevent manager topics from being (re)seeded, and vice versa.
       try {
         await _seedDefaults();
+      } catch (seedErr) {
+        console.warn('[DB] Seeding default topics skipped or failed:', seedErr.message || seedErr);
+      }
+      try {
         await _seedManagerTopics();
       } catch (seedErr) {
-        console.warn('[DB] Seeding defaults skipped or failed:', seedErr.message || seedErr);
+        console.warn('[DB] Seeding manager topics skipped or failed:', seedErr.message || seedErr);
       }
 
       console.log('[DB] Supabase connected successfully.');
@@ -875,12 +902,25 @@ const DB = (() => {
             console.log(`[Offline] Seeded ${toInsert.length} new default topics.`);
           } catch (_) {}
         } else {
-          const { error: insertError } = await _sb.from('topics').insert(toInsert.map(t => ({ ...t, created_at: new Date().toISOString() })));
-          if (insertError) {
-            console.error('[DB] Insert defaults failed:', insertError);
-            throw new Error(insertError.message || 'Failed to insert new default topics');
+          // Insert one row at a time (not a single batched insert): if any
+          // one row is rejected, the others still go through instead of the
+          // whole batch silently failing together, and any row that fails
+          // here simply gets retried on the next app load since existingMap
+          // is recomputed from the live table each time.
+          let insertedCount = 0;
+          for (const t of toInsert) {
+            try {
+              const { error: insertError } = await _sb.from('topics').insert({ ...t, created_at: new Date().toISOString() });
+              if (insertError) {
+                console.error(`[DB] Insert default topic failed (${t.module}: "${t.title}"):`, insertError);
+              } else {
+                insertedCount++;
+              }
+            } catch (rowErr) {
+              console.error(`[DB] Insert default topic threw (${t.module}: "${t.title}"):`, rowErr.message || rowErr);
+            }
           }
-          console.log(`Seeded ${toInsert.length} new default topics.`);
+          console.log(`Seeded ${insertedCount}/${toInsert.length} new default topics.`);
         }
       }
     } catch (e) {
