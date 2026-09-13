@@ -538,6 +538,101 @@ Return ONLY your written chat message.`;
     return data.content[0].text.trim();
   }
 
+  // ---- Live AI caller for the trainee Ops Escalation Call assessment ----
+  // Walks through a fixed list of required (very difficult) questions, one
+  // per turn, while reacting to the trainee's previous answer — so the call
+  // stays adaptive without ever skipping or diluting the intended content.
+  async function callAiOpsCaller(scenario, description, requiredQuestions, messages, turnNumber, maxTurns) {
+    if (!isAvailable()) throw new Error('Claude proxy not configured');
+
+    const isLast = turnNumber >= maxTurns;
+    const idx = Math.min(turnNumber - 1, Math.max(requiredQuestions.length - 1, 0));
+    const thisQuestion = requiredQuestions[idx] || '';
+
+    const system = `You are roleplaying as a difficult, technically sharp customer calling a stockbroker's escalation helpline about depository and settlement operations (CDSL transfers/gifting, nominee changes, short-delivery auctions, or suspended stocks).
+
+BACKGROUND CONTEXT: ${scenario || description || 'A client has an escalated operational issue with their trading/demat account.'}
+
+THIS TURN'S REQUIRED QUESTION (turn ${turnNumber} of ${maxTurns}) — you MUST raise exactly this situation/question this turn, in your own words, using ONLY the facts and figures given below. Do not invent, round, or change any numbers, dates, or rules:
+"""
+${thisQuestion}
+"""
+
+HOW TO REACT TO THE TRAINEE'S PREVIOUS ANSWER (there is no previous answer on turn 1 — skip straight to the required question):
+- If their last answer was accurate, specific, and confidently explained, acknowledge it in one short phrase, then move on to this turn's required question.
+- If their last answer was vague, evasive, or got the facts/numbers wrong, briefly and firmly call that out the way a frustrated escalation caller would (e.g. "That's still not clear to me" or "Those numbers don't add up"), THEN ask this turn's required question.
+- Never solve the question yourself and never reveal the correct answer.
+
+STRICT RULES:
+- You are the CUSTOMER on an escalation call — stay in character at all times, never break the fourth wall.
+- Reply in 3–5 sentences MAXIMUM — natural spoken phrasing for a phone call, not a written essay.
+- Speak the required question's numbers/dates naturally, as a person would say them aloud, without inventing new ones.
+- Do NOT ask about anything outside this turn's required question.${isLast ? '\n- This is the FINAL turn. After reacting to their last answer as above, ask this turn\'s required question, then say you need this resolved right now and are waiting for their final answer.' : ''}
+
+Return ONLY the customer's spoken dialogue. No stage directions, no narration, no quotes.`;
+
+    const resp = await fetch(getProxyUrl(), {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ model: MODEL, max_tokens: 220, system, messages })
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error?.message || `API error ${resp.status}`);
+    }
+    const data = await resp.json();
+    return data.content[0].text.trim();
+  }
+
+  // ---- Live AI customer for the trainee Ops Escalation Writing assessment ----
+  // Same idea as callAiOpsCaller but for the written support-chat format:
+  // walks through a fixed list of required questions, reacting in writing
+  // to the trainee's previous reply.
+  async function callAiOpsWriter(topicTitle, topicScenario, topicDescription, requiredQuestions, messages, turnNumber, maxTurns) {
+    if (!isAvailable()) throw new Error('Claude proxy not configured');
+
+    const isLast = turnNumber >= maxTurns;
+    const idx = Math.min(turnNumber - 1, Math.max(requiredQuestions.length - 1, 0));
+    const thisQuestion = requiredQuestions[idx] || '';
+
+    const system = `You are roleplaying as a customer writing into a stockbroker's support chat/ticket about a difficult depository or settlement operations issue (CDSL Easiest transfers, nominee modification, short delivery/auctions, or suspended stocks).
+
+TOPIC: ${topicTitle || 'Operations Support Query'}
+BACKGROUND CONTEXT: ${topicScenario || topicDescription || 'A client has an escalated operational issue with their trading/demat account.'}
+
+THIS TURN'S REQUIRED QUESTION (turn ${turnNumber} of ${maxTurns}) — you MUST raise exactly this situation/question this turn, in your own words, using ONLY the facts and figures given below. Do not invent, round, or change any numbers, dates, or rules:
+"""
+${thisQuestion}
+"""
+
+HOW TO REACT TO THE AGENT'S PREVIOUS REPLY (there is no previous reply on turn 1 — skip straight to the required question):
+- If their last reply was accurate, specific, and clearly explained, briefly acknowledge it, then move to this turn's required question.
+- If their last reply was vague, evasive, or factually wrong, briefly push back in writing (e.g. "That doesn't match what I was told" or "Can you double check those numbers?"), THEN raise this turn's required question.
+- Never solve the question yourself and never reveal the correct answer.
+
+STRICT RULES:
+- Stay in character as the CUSTOMER at all times. Never break the fourth wall.
+- Reply in 2 to 4 sentences MAXIMUM — natural, written chat/ticket tone.
+- Write the required question's numbers/dates/amounts naturally, without inventing new ones.
+- Do NOT add stage directions, narration, quotes, or headers like "Customer:". Only output your message.${isLast ? '\n- This is your FINAL turn. After reacting as above, raise this turn\'s required question, then say you expect a written resolution on this ticket.' : ''}
+
+Return ONLY your written chat/ticket message.`;
+
+    const resp = await fetch(getProxyUrl(), {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ model: MODEL, max_tokens: 180, system, messages })
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error?.message || `API error ${resp.status}`);
+    }
+    const data = await resp.json();
+    return data.content[0].text.trim();
+  }
+
   // ---- AI Employee for Manager Feedback Assessment ----
   // Plays the role of an employee receiving feedback from their manager.
   // Responds dynamically based on how the manager delivers the feedback.
@@ -885,5 +980,169 @@ Return ONLY a JSON object:
     };
   }
 
-  return { isAvailable, evaluate, evaluateBalanced, evaluateRewrite, callAiCustomer, callAiWrittenCustomer, callAiEmployee, evaluateManagerAssessment, evaluateManagerFeedback, evaluateSituationRoomA, evaluateSituationRoomB, getCriteria, scoreTimeManagement, MOCK_CALL_CRITERIA };
+  // ---- Reference facts for the trainee Ops Escalation assessments ----
+  // These are the correct answers/figures behind the 7 call questions and
+  // 4 writing questions in db.js. They are sent ONLY to Claude for grading
+  // (system prompt below) — never rendered anywhere in the trainee UI —
+  // so the trainee genuinely has to know or reason out the right answer.
+  const OPS_CALL_ANSWER_KEY = `
+Q1 (₹6L short position, upper circuit, -₹2,74,996 debit): T-day (10 March) closing price ₹794.50 sets the normal ±20% auction band (₹635.60–₹953.40). Because the stock stayed locked in the upper circuit, the position could not be squared off, so it went to close-out. This is flagged as an EXCEPTIONAL scenario: instead of the simple "20% above T+1 closing" formula, the exchange applied an alternative Weighted Average Price (WAP) methodology (combining whatever partial auction fills occurred, similar to Q2's WAP logic) which produced the final settlement of ₹1,020.33 — a rate distinctly higher than any single price the client quoted (₹794.50 / ₹870.40 / ₹928.80). The correct answer must explain that (a) this total is not a system error, (b) upper-circuit lockup forced the position into an exceptional close-out, (c) the settlement price comes from a blended/weighted calculation across the auction process rather than a flat 20% markup, and (d) the client bears this loss because they failed to deliver on a short position that could not be covered.
+Q2 (WAP example, 1,000 shares short, 800 bought at ₹100 + 200 closed out at ₹120): Correct WAP = (800×₹100 + 200×₹120) ÷ 1,000 = ₹1,04,000 ÷ 1,000 = ₹104 per share. The KEY POINT the trainee must get right: the exchange does NOT charge two separate prices — it blends them into ONE uniform rate (₹104) applied to the seller's entire 1,000-share shortfall. The buyer, on the other hand, actually receives the 800 shares bought in the auction and is compensated in cash at ₹120/share for the remaining 200.
+Q3 (Jaiprakash Associates holding vanished from Kite): This is a real, confirmed event — NOT a platform error or lost holdings. Per the exchange circular dated 17 March 2026, trading was suspended from 18 March 2026 after NCLT approved the company's insolvency resolution plan. The existing shares were cancelled/extinguished, the company was delisted, and shareholders received ₹0 — a complete equity wipeout. Off-market transfer/gifting is NOT possible once the ISIN is inactive. The correct answer calmly explains this is a regulatory/NCLT-driven event, not a Zerodha/platform mistake, and manages the client's panic with clear, factual language.
+Q4 (Murae Organiser vs SIPTL): Murae Organiser was suspended because it did not respond to exchange notices and was found non-existent at its registered office — trading is PERMANENTLY stopped, but the shares STILL EXIST in the client's demat account (not cancelled, not a wipeout) — they are simply illiquid/stuck; off-market transfer may still be possible until the unlisted-ISIN stage, but gifting is not allowed. This is fundamentally different from Jaiprakash Associates (Q3), which was a total wipeout. SIPTL was moved to the Trade-to-Trade (T2T) category and CAN still be traded, but only once a week, with very low liquidity — so the client CAN attempt to sell it (unlike Murae, where no trading at all is allowed), just with limited liquidity and only on the designated weekly session. A correct answer must clearly distinguish all three outcomes (wipeout vs. illiquid-but-existing vs. weekly-tradable) rather than treating them as the same situation.
+Q5 (CDSL to NSDL transfer via Easiest): The standard Trusted Account / PIN method CANNOT be used for a CDSL-to-NSDL transfer. The client must switch the mode of operation from "Trusted Account" to "Account of Choice", which requires purchasing a Digital Signature Certificate e-token (approximately ₹2,500 + GST, valid up to 2 years) from an authorised e-token vendor (RA), and submitting a Request of Authorisation (RA) form with a screenshot of the e-token certificate. CDSL maps the e-token within 20 working days, after which the inter-depository transfer can be initiated online. An offline Delivery Instruction Slip (DIS) is available as a faster alternative if the client needs to move faster. The standard ₹25 + 18% GST per security, per transaction transfer charge still applies on top of the e-token cost.
+Q6 (Gift, TPIN done at 2:30 PM, final OTP done at 8:15 PM, cousin recipient, ~₹90,000 value): This has TWO separate cut-off misses the trainee should ideally catch, not just one. First, the TPIN authorisation cut-off for gifts is 2:00 PM — completing it at 2:30 PM already missed that cut-off, meaning the CDSL beneficiary-addition email would be deferred to the next trading day rather than being processed same-day as the client assumed. Second — and decisive regardless — the final CDSL OTP verification cut-off is 8:00 PM; completing it at 8:15 PM means the gifting process must be reinitiated as a brand-new gift request, attracting a fresh ₹25 + 18% GST per scrip transfer charge. On the tax question: the sender never pays tax on gifting (Gift Tax Act abolished; gifting is excluded from "transfer" under Section 47). For the RECIPIENT, gifts of shares/securities are taxable under Section 56(2) if the value exceeds ₹50,000, UNLESS the recipient is a "relative" as defined (spouse, siblings, or lineal ascendants/descendants) or the gift is on marriage or by inheritance. A COUSIN is generally NOT covered by that definition of "relative", so since the value here (~₹90,000) exceeds ₹50,000, the cousin would ordinarily be taxed under "Income from Other Sources" at slab rates. A strong answer flags this tax nuance rather than assuming all family gifts are automatically tax-free.
+Q7 (Removing 2 nominees, adding 3 new nominees incl. a non-relative business partner, "can you do this right now on the call?"): This change (replacing existing nominees with new ones) CAN be done, but NOT instantly over the phone — it requires: downloading and filling the Nominee Form and Account Modification Form, a wet signature matching the one on file from account opening, eSigning both forms, and submitting them via a support ticket (this assumes the client's Aadhaar is linked to their registered mobile for the online route; otherwise it is fully offline/physical). There is NO rule requiring nominees to be blood relatives — a business partner (or any other person) can validly be named as a nominee. A correct answer sets accurate expectations about the paperwork/turnaround instead of claiming it can be done instantly, and correctly reassures the client there is no restriction on a non-relative nominee.
+`.trim();
+
+  const OPS_WRITING_ANSWER_KEY = `
+Q1 (HUF "Self Transfer" reason code rejected): An HUF is a legal entity SEPARATE from the individual, even though the same person is its karta — so a transfer from an individual account to that person's own HUF account is NOT a "self transfer". The correct reason code, per the CDSL reason code guide (DP_569_Off_Market_Reason_Code.pdf), is "Transfer between specified family members". The client must reinitiate the transfer selecting that correct code.
+Q2 (Replace nominee, Aadhaar NOT linked to mobile): Because Aadhaar is not linked to the registered mobile number, this modification CANNOT be completed through the online/eSign route. It must be done OFFLINE: the client must send the duly filled AND wet-signed Account Modification Form together with the Nominee Form (physical signatures matching the signature on file from account opening) — there is no eSign step in this path.
+Q3 (39 shares bought, T+2 shortfall, auction could not procure shares): Per the standard close-out process, when the auction cannot procure the shares, the shortfall is cash-settled at 20% above the closing price on the auction day (T+1). Using the closing price of ₹286.62 on the settlement day, the close-out rate works out to approximately ₹343.94 per share, and for 39 shares this amounts to approximately ₹13,413.66, credited to the client's ledger (not the shares themselves, since they could not be procured). This is the standard/expected outcome, not a platform error, and the client should be told the shares will not arrive but the cash compensation will be credited.
+Q4 (100 shares became 36, price jumped up): This is a capital reduction corporate action, not a platform error or a loss of two-thirds of the investment. The company cancels the old shares and issues fewer new shares at a proportionally higher price, so the total value is designed to stay roughly the same immediately after the change (though in restructuring/insolvency-linked cases the value can genuinely decrease — that nuance should be mentioned as a possibility, not asserted as certain here). The stock is typically suspended temporarily during this process — not visible on Kite but still visible (marked suspended) on Console. Any fractional shares are paid out in cash, and normal trading resumes once the new shares (sometimes under a new ISIN) are credited.
+`.trim();
+
+  // ---- Strict Ops evaluation for the trainee Call assessment ----
+  async function evaluateOpsCall(transcript, fullTranscript) {
+    if (!isAvailable()) throw new Error('Claude proxy not configured');
+
+    const systemPrompt = `You are a strict senior operations trainer evaluating a trainee's SPOKEN answers on an escalation call covering CDSL Easiest/Console Gifting, nominee modification, short delivery/auctions, and suspended stocks. The call asked 7 very difficult, data-heavy questions in sequence.
+
+REFERENCE ANSWER KEY (ground truth — use this to judge factual/procedural correctness; the trainee never saw this key):
+${OPS_CALL_ANSWER_KEY}
+
+SCORING STANDARDS:
+- Score 3 = average — gets the basic gist right but misses specifics, numbers, or nuances from the answer key
+- Score 4 = genuinely strong — cites the correct figures/rules precisely and explains the reasoning clearly
+- Score 5 = exceptional — rare; matches the answer key with precision AND communicates it confidently and empathetically
+- Score 2 = a meaningful factual or procedural error, or a vague non-answer
+- Score 1 = mostly wrong, contradicts the answer key, or fails to attempt most questions
+Be strict — this is a "very difficult" assessment by design. Do NOT give credit for confident-sounding answers that get the numbers or rules wrong.
+
+Evaluate the trainee's spoken answers (transcript below, "You:" lines are the trainee) on these 5 dimensions (1-5 each):
+1. factualAccuracy: Are the numbers, dates, cut-offs, and rules the trainee cites correct, per the answer key?
+2. proceduralCorrectness: Did the trainee describe the right process/steps (forms, timelines, escalation paths) rather than a generic or incorrect process?
+3. complianceJudgment: Did the trainee correctly identify what is a platform error vs. a regulatory/exchange rule vs. an irreversible outcome (e.g. wipeout, tax liability, cut-off miss), without over-promising or misleading the client?
+4. clarityProfessionalism: Is the explanation clear, well-structured, and delivered in a confident, professional, empathetic tone?
+5. ownershipResolution: Did the trainee take ownership and give the client a clear resolution or concrete next step, rather than deflecting or leaving things open-ended?
+
+CALL TRANSCRIPT (Customer/You):
+"""
+${fullTranscript || transcript || '(no transcript available)'}
+"""
+
+Return ONLY a JSON object:
+{"factualAccuracy":<1-5>,"proceduralCorrectness":<1-5>,"complianceJudgment":<1-5>,"clarityProfessionalism":<1-5>,"ownershipResolution":<1-5>,"reasons":{"factualAccuracy":"<sentence>","proceduralCorrectness":"<sentence>","complianceJudgment":"<sentence>","clarityProfessionalism":"<sentence>","ownershipResolution":"<sentence>"}}`;
+
+    const resp = await fetch(getProxyUrl(), {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        model:      MODEL,
+        max_tokens: 700,
+        system:     systemPrompt,
+        messages:   [{ role: 'user', content: 'Please evaluate this call now, per the instructions.' }],
+      }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error?.message || `API error ${resp.status}`);
+    }
+
+    const data  = await resp.json();
+    const text  = data.content[0].text.trim();
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('No JSON in response');
+
+    const parsed = JSON.parse(match[0]);
+    const keys   = ['factualAccuracy','proceduralCorrectness','complianceJudgment','clarityProfessionalism','ownershipResolution'];
+    const sum    = keys.reduce((s, k) => s + (parsed[k] || 0), 0);
+    const overall = parseFloat(((sum / (keys.length * 5)) * 100).toFixed(1));
+
+    return {
+      scores: {
+        factualAccuracy:        parsed.factualAccuracy,
+        proceduralCorrectness:  parsed.proceduralCorrectness,
+        complianceJudgment:     parsed.complianceJudgment,
+        clarityProfessionalism: parsed.clarityProfessionalism,
+        ownershipResolution:    parsed.ownershipResolution,
+      },
+      overall,
+      reasons: parsed.reasons || {},
+    };
+  }
+
+  // ---- Strict Ops evaluation for the trainee Writing assessment ----
+  async function evaluateOpsWriting(transcript, fullTranscript) {
+    if (!isAvailable()) throw new Error('Claude proxy not configured');
+
+    const systemPrompt = `You are a strict senior operations trainer evaluating a trainee's WRITTEN ticket replies covering CDSL Easiest, nominee modification, short delivery, and suspended stocks. The ticket raised 4 very difficult, data-heavy questions in sequence.
+
+REFERENCE ANSWER KEY (ground truth — use this to judge factual/procedural correctness; the trainee never saw this key):
+${OPS_WRITING_ANSWER_KEY}
+
+SCORING STANDARDS:
+- Score 3 = average — gets the basic gist right but misses specifics, numbers, or nuances from the answer key
+- Score 4 = genuinely strong — cites the correct figures/rules precisely and explains the reasoning clearly
+- Score 5 = exceptional — rare; matches the answer key with precision AND is written with confident, professional clarity
+- Score 2 = a meaningful factual or procedural error, or a vague non-answer
+- Score 1 = mostly wrong, contradicts the answer key, or fails to attempt most questions
+Be strict — this is a "very difficult" assessment by design. Do NOT give credit for confident-sounding writing that gets the numbers or rules wrong.
+
+Evaluate the trainee's written replies (transcript below, "AGENT:" lines are the trainee) on these 5 dimensions (1-5 each):
+1. factualAccuracy: Are the numbers, dates, cut-offs, and rules the trainee cites correct, per the answer key?
+2. proceduralCorrectness: Did the trainee describe the right process/steps (forms, timelines, correct reason codes) rather than a generic or incorrect process?
+3. complianceJudgment: Did the trainee correctly identify what is a platform error vs. a regulatory/exchange rule vs. an irreversible outcome (e.g. reinitiating a rejected transfer, a tax liability), without over-promising or misleading the client?
+4. clarityProfessionalism: Is the written reply clear, well-structured, and professional in tone?
+5. ownershipResolution: Did the trainee take ownership and give the client a clear resolution or concrete next step, rather than deflecting or leaving things open-ended?
+
+TICKET TRANSCRIPT (CUSTOMER/AGENT):
+"""
+${fullTranscript || transcript || '(no transcript available)'}
+"""
+
+Return ONLY a JSON object:
+{"factualAccuracy":<1-5>,"proceduralCorrectness":<1-5>,"complianceJudgment":<1-5>,"clarityProfessionalism":<1-5>,"ownershipResolution":<1-5>,"reasons":{"factualAccuracy":"<sentence>","proceduralCorrectness":"<sentence>","complianceJudgment":"<sentence>","clarityProfessionalism":"<sentence>","ownershipResolution":"<sentence>"}}`;
+
+    const resp = await fetch(getProxyUrl(), {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        model:      MODEL,
+        max_tokens: 700,
+        system:     systemPrompt,
+        messages:   [{ role: 'user', content: 'Please evaluate this ticket now, per the instructions.' }],
+      }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error?.message || `API error ${resp.status}`);
+    }
+
+    const data  = await resp.json();
+    const text  = data.content[0].text.trim();
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('No JSON in response');
+
+    const parsed = JSON.parse(match[0]);
+    const keys   = ['factualAccuracy','proceduralCorrectness','complianceJudgment','clarityProfessionalism','ownershipResolution'];
+    const sum    = keys.reduce((s, k) => s + (parsed[k] || 0), 0);
+    const overall = parseFloat(((sum / (keys.length * 5)) * 100).toFixed(1));
+
+    return {
+      scores: {
+        factualAccuracy:        parsed.factualAccuracy,
+        proceduralCorrectness:  parsed.proceduralCorrectness,
+        complianceJudgment:     parsed.complianceJudgment,
+        clarityProfessionalism: parsed.clarityProfessionalism,
+        ownershipResolution:    parsed.ownershipResolution,
+      },
+      overall,
+      reasons: parsed.reasons || {},
+    };
+  }
+
+  return { isAvailable, evaluate, evaluateBalanced, evaluateRewrite, callAiCustomer, callAiWrittenCustomer, callAiOpsCaller, callAiOpsWriter, callAiEmployee, evaluateManagerAssessment, evaluateManagerFeedback, evaluateSituationRoomA, evaluateSituationRoomB, evaluateOpsCall, evaluateOpsWriting, getCriteria, scoreTimeManagement, MOCK_CALL_CRITERIA };
 })();

@@ -4,6 +4,7 @@ const App = (() => {
   // ---- State ----
   let _trainee = null; // { id, name }
   let _currentTopic = null;
+  let _currentModule = null; // actual module key opened (may reuse mock-call/written-comm screens)
   let _recordingPromise = null;
   let _psRecordingStartTime = null; // for duration tracking
   let _psSkipUsed = false;          // only one topic skip allowed per session
@@ -113,6 +114,7 @@ const App = (() => {
   let _mcAiMode           = false;
   let _mcAiHistory        = [];   // [{bot: string, agent: string}, ...]
   let _mcAiTurnCount      = 0;
+  let _mcAiMaxTurns       = MC_AI_MAX_TURNS; // per-call override (e.g. ops-call-assessment uses its own question count)
 
   // ── TTS voice cache — Chrome loads voices async; pre-cache on first event ──
   let _ttsVoices = [];
@@ -306,7 +308,9 @@ const App = (() => {
       'group-discussion': 'Group Discussion',
       'written-comm': 'Written Communication',
       'grammar-assessment': 'Grammar Assessment',
-      'stock-market-mcq':   'NRI Stock Market'
+      'stock-market-mcq':   'NRI Stock Market',
+      'ops-call-assessment':    'Ops Escalation Call',
+      'ops-writing-assessment': 'Ops Escalation Writing'
     };
     return map[module] || module;
   }
@@ -472,13 +476,22 @@ const App = (() => {
       return;
     }
 
-    _currentTopic = topics[Math.floor(Math.random() * topics.length)];
-    showScreen(module);
+    _currentTopic  = topics[Math.floor(Math.random() * topics.length)];
+    _currentModule = module;
 
-    if (module === 'mock-call') initMockCall();
+    // ops-call-assessment / ops-writing-assessment reuse the existing Mock
+    // Call / Written Communication screens and engine (they're just a
+    // dedicated, always-adaptive topic pool) — only the topic query above
+    // and the dispatch below need to know the real module key.
+    const screenKey = (module === 'ops-call-assessment')    ? 'mock-call'
+                     : (module === 'ops-writing-assessment') ? 'written-comm'
+                     : module;
+    showScreen(screenKey);
+
+    if (module === 'mock-call' || module === 'ops-call-assessment') initMockCall();
     else if (module === 'role-play') initRolePlay();
     else if (module === 'group-discussion') initGroupDiscussion();
-    else if (module === 'written-comm') initWrittenComm();
+    else if (module === 'written-comm' || module === 'ops-writing-assessment') initWrittenComm();
   }
 
   // ================================================================
@@ -1202,7 +1215,7 @@ const App = (() => {
         await DB.put('sessions', {
           traineeId: _trainee.id,
           traineeName: _trainee.name,
-          module: 'mock-call',
+          module: _currentModule || 'mock-call',
           topicId: _currentTopic.id,
           topicTitle: _currentTopic.title,
           recordingBlob: blob,
@@ -1236,8 +1249,9 @@ const App = (() => {
     _mcAiHistory   = [];
     _mcAiTurnCount = 0;
 
-    // Takeover topic → live AI customer instead of scripted turns
-    if (_currentTopic && _currentTopic.title === MC_AI_TOPIC_TITLE) {
+    // Takeover topic (or any ops-call-assessment topic) → live AI customer
+    // instead of scripted turns
+    if (_currentTopic && (_currentTopic.title === MC_AI_TOPIC_TITLE || _currentModule === 'ops-call-assessment')) {
       startAiCall();
       return;
     }
@@ -1289,6 +1303,12 @@ const App = (() => {
     _mcAiTurnCount = 0;
     _mcTranscripts = [];
     _mcCallFinishing = false;
+    // ops-call-assessment walks through its own fixed list of required
+    // questions (one per turn) rather than the generic open-ended chat —
+    // so the turn count matches the number of questions on the topic.
+    _mcAiMaxTurns = (_currentModule === 'ops-call-assessment' && Array.isArray(_currentTopic.botScript) && _currentTopic.botScript.length)
+      ? _currentTopic.botScript.length
+      : MC_AI_MAX_TURNS;
 
     showStep('mock-call', 'mc-step-bot-call');
     $('mc-chat-thread').innerHTML = '';
@@ -1339,7 +1359,7 @@ const App = (() => {
   // Call Claude for the customer's next line, display bubble, speak it
   async function runAiTurn(agentResponse) {
     _mcAiTurnCount++;
-    const isLast = _mcAiTurnCount >= MC_AI_MAX_TURNS;
+    const isLast = _mcAiTurnCount >= _mcAiMaxTurns;
 
     // If there's an agent response, store it in the last history entry
     if (agentResponse !== null && _mcAiHistory.length > 0) {
@@ -1351,7 +1371,7 @@ const App = (() => {
     if (turnLabel) {
       turnLabel.textContent  = isLast
         ? `🤖 AI Customer — Turn ${_mcAiTurnCount} — 🏁 Final Turn`
-        : `🤖 AI Customer — Turn ${_mcAiTurnCount} of ${MC_AI_MAX_TURNS}`;
+        : `🤖 AI Customer — Turn ${_mcAiTurnCount} of ${_mcAiMaxTurns}`;
       turnLabel.style.color  = isLast ? '#d97706' : '#6366f1';
       turnLabel.style.fontWeight = '700';
     }
@@ -1365,25 +1385,42 @@ const App = (() => {
 
     let botLine = '';
     try {
-      botLine = await ClaudeEvaluator.callAiCustomer(
-        _currentTopic.scenario || '',
-        _currentTopic.description || '',
-        _buildAiMessages(),
-        _mcAiTurnCount,
-        MC_AI_MAX_TURNS
-      );
+      if (_currentModule === 'ops-call-assessment') {
+        botLine = await ClaudeEvaluator.callAiOpsCaller(
+          _currentTopic.scenario || '',
+          _currentTopic.description || '',
+          _currentTopic.botScript || [],
+          _buildAiMessages(),
+          _mcAiTurnCount,
+          _mcAiMaxTurns
+        );
+      } else {
+        botLine = await ClaudeEvaluator.callAiCustomer(
+          _currentTopic.scenario || '',
+          _currentTopic.description || '',
+          _buildAiMessages(),
+          _mcAiTurnCount,
+          _mcAiMaxTurns
+        );
+      }
     } catch (e) {
       console.warn('AI customer call failed, using fallback:', e.message);
-      botLine = _mcAiTurnCount === 1
-        ? "I'd like to apply for a takeover offer but your system is blocking me even though I'm willing to proceed. Why is that?"
-        : "I still don't understand why I can't do this directly. Can you explain the exact policy?";
+      if (_currentModule === 'ops-call-assessment' && _currentTopic.botScript && _currentTopic.botScript[_mcAiTurnCount - 1]) {
+        // Fall back to the exact required question verbatim so the trainee
+        // still gets the full data even if the live AI call fails.
+        botLine = _currentTopic.botScript[_mcAiTurnCount - 1];
+      } else {
+        botLine = _mcAiTurnCount === 1
+          ? "I'd like to apply for a takeover offer but your system is blocking me even though I'm willing to proceed. Why is that?"
+          : "I still don't understand why I can't do this directly. Can you explain the exact policy?";
+      }
     }
 
     // Add entry to history (agent will be filled in after agent speaks)
     _mcAiHistory.push({ bot: botLine, agent: '' });
 
     // Show bubble + mood
-    const mood = _botMoodParams(_mcAiTurnCount - 1, MC_AI_MAX_TURNS);
+    const mood = _botMoodParams(_mcAiTurnCount - 1, _mcAiMaxTurns);
     const moodEl = $('mc-mood-indicator');
     if (moodEl) {
       moodEl.className = `mc-mood-bar ${mood.bubbleClass}`;
@@ -1529,7 +1566,7 @@ const App = (() => {
 
     if (_mcAiMode) {
       // AI mode: feed agent's response to Claude for the next customer turn
-      if (_mcAiTurnCount < MC_AI_MAX_TURNS) {
+      if (_mcAiTurnCount < _mcAiMaxTurns) {
         runAiTurn(partial);
       } else {
         $('btn-mc-finish').style.display = '';
@@ -1581,9 +1618,9 @@ const App = (() => {
     if (traineeOnly && typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
       try {
         if (statusEl) statusEl.textContent = '🤖 Claude AI is scoring your call...';
-        const result = await ClaudeEvaluator.evaluate(
-          'mock-call', traineeOnly, _currentTopic.title, _currentTopic.scenario || ''
-        );
+        const result = (_currentModule === 'ops-call-assessment')
+          ? await ClaudeEvaluator.evaluateOpsCall(traineeOnly, fullTranscript)
+          : await ClaudeEvaluator.evaluate('mock-call', traineeOnly, _currentTopic.title, _currentTopic.scenario || '');
         if (result && result.overall !== null) {
           aiScores = { ...result.scores, overall: result.overall, _reasons: result.reasons, _method: 'claude' };
         }
@@ -1601,7 +1638,7 @@ const App = (() => {
       await DB.put('sessions', {
         traineeId:     _trainee.id,
         traineeName:   _trainee.name,
-        module:        'mock-call',
+        module:        _currentModule || 'mock-call',
         topicId:       _currentTopic.id,
         topicTitle:    _currentTopic.title,
         recordingBlob: blob,
@@ -1898,14 +1935,26 @@ const App = (() => {
         let botLine = '';
         try {
           const messages = _buildWcAiMessages();
-          botLine = await ClaudeEvaluator.callAiWrittenCustomer(
-            _currentTopic.title || '',
-            _currentTopic.scenario || '',
-            _currentTopic.description || '',
-            messages,
-            _wcChatTurnIndex + 1,
-            _wcChatTurns.length
-          );
+          if (_currentModule === 'ops-writing-assessment') {
+            botLine = await ClaudeEvaluator.callAiOpsWriter(
+              _currentTopic.title || '',
+              _currentTopic.scenario || '',
+              _currentTopic.description || '',
+              _currentTopic.botScript || _wcChatTurns,
+              messages,
+              _wcChatTurnIndex + 1,
+              _wcChatTurns.length
+            );
+          } else {
+            botLine = await ClaudeEvaluator.callAiWrittenCustomer(
+              _currentTopic.title || '',
+              _currentTopic.scenario || '',
+              _currentTopic.description || '',
+              messages,
+              _wcChatTurnIndex + 1,
+              _wcChatTurns.length
+            );
+          }
         } catch (e) {
           console.warn('Claude written chat turn failed, using fallback:', e.message);
           botLine = _wcChatTurns[_wcChatTurnIndex];
@@ -1985,14 +2034,28 @@ const App = (() => {
       .join('\n\n');
 
     const analysis = SpeechEngine.analyze(traineeResponsesCombined, duration);
-    const aiScores = SpeechEngine.scoreWriting(traineeResponsesCombined, duration, _currentTopic?.title);
+    let aiScores = null;
+    if (_currentModule === 'ops-writing-assessment' && typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
+      try {
+        const result = await ClaudeEvaluator.evaluateOpsWriting(traineeResponsesCombined, formattedChat);
+        if (result && result.overall !== null) {
+          aiScores = { ...result.scores, overall: result.overall, _reasons: result.reasons, _method: 'claude' };
+        }
+      } catch (e) {
+        console.warn('Ops writing evaluation failed, falling back:', e.message);
+      }
+    }
+    if (!aiScores) {
+      aiScores = SpeechEngine.scoreWriting(traineeResponsesCombined, duration, _currentTopic?.title);
+      aiScores._method = aiScores._method || 'js';
+    }
     aiScores._summary = SpeechEngine.generateCoachingSummary('written-comm', aiScores);
 
     try {
       await DB.put('sessions', {
         traineeId: _trainee.id,
         traineeName: _trainee.name,
-        module: 'written-comm',
+        module: _currentModule || 'written-comm',
         topicId: _currentTopic.id,
         topicTitle: _currentTopic.title,
         recordingBlob: null,
@@ -2081,7 +2144,7 @@ const App = (() => {
       await DB.put('sessions', {
         traineeId: _trainee.id,
         traineeName: _trainee.name,
-        module: 'written-comm',
+        module: _currentModule || 'written-comm',
         topicId: _currentTopic.id,
         topicTitle: _currentTopic.title,
         recordingBlob: null,
@@ -2106,7 +2169,13 @@ const App = (() => {
   function showWrittenCommResults(scores, text, analysis, duration) {
     showStep('written-comm', 'wc-step-results');
 
-    const labels = {
+    const labels = (_currentModule === 'ops-writing-assessment') ? {
+      factualAccuracy:        'Factual & Numerical Accuracy',
+      proceduralCorrectness:  'Procedural Correctness',
+      complianceJudgment:     'Compliance / Escalation Judgment',
+      clarityProfessionalism: 'Clarity & Professionalism',
+      ownershipResolution:    'Ownership & Resolution'
+    } : {
       criterion_0: 'Tone & Empathy',
       criterion_1: 'Clarity',
       criterion_2: 'Ownership',

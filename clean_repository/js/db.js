@@ -786,6 +786,53 @@ const DB = (() => {
             "Fine, run your check with the aggregator. But if the log shows the delay was on your gateway\'s end, I expect a full refund of the difference or I am taking this straight to the SEBI SCORES portal. Give me my ticket number."
           ],
           enabled: true
+        },
+
+        // Trainee Red Pen — Operations Escalation Call (7 very difficult questions, AI-adaptive)
+        {
+          module: 'ops-call-assessment',
+          title: 'Operations Escalation Helpline — CDSL, Nominee, Short Delivery & Suspended Stocks',
+          description: 'A single very difficult escalation call covering CDSL Easiest/Console Gifting, nominee modification, short delivery/auctions, and suspended stocks. 7 tough questions in a row, each with full data included — the caller reacts to how well you answer.',
+          scenario: 'You are on an escalation helpline. An experienced, technically sharp client calls in with four separate unresolved issues that were escalated to you: a CDSL/gifting transfer problem, a nominee-modification request, a short-delivery/auction charge dispute, and confusion about a suspended stock. The caller will raise 7 specific, data-heavy questions one at a time across these topics — answer each one accurately, confidently, and with empathy before the caller moves to the next.',
+          checklist: [
+            "Address the exact numbers, dates and cut-off times the caller quotes — do not give a vague or generic answer",
+            "Clearly state whether something is a platform error, a regulatory/exchange rule, or expected process — do not let the caller assume the wrong one",
+            "Correct any wrong assumption in the caller's question rather than agreeing with it to keep them calm",
+            "Give a clear next step and realistic timeline for anything still in progress",
+            "Stay calm, professional and empathetic even when the caller is frustrated or challenges your numbers"
+          ],
+          bot_script: [
+            "On 10 March I opened a short position worth about six lakh rupees, and the stock hit the upper circuit before I could cover it. My account was debited for the full trade value AND an extra two lakh seventy-four thousand nine hundred ninety-six rupees — almost 40% more! The closing price on 10 March was seven ninety-four fifty, and on 11 March, the auction day, it closed at eight seventy point four zero. The highest the stock traded between those two days was nine twenty-eight eighty. So where does an auction settlement of one thousand and twenty rupees and thirty-three paise come from? That's not even close to any number I just gave you!",
+            "I short-sold 1,000 shares. The exchange could only buy back 800 of them in the auction, at 100 rupees each, and the other 200 got closed out at 120 rupees each. But my account statement shows a flat debit of 104 rupees a share for all 1,000 shares! Neither of those two prices is 104. Explain exactly where that number came from, and why I'm not simply being charged the two actual prices separately.",
+            "My entire holding in Jaiprakash Associates has vanished from my Kite app! I had a real position in that stock and now I see nothing at all. Did you sell it without telling me, or has your platform lost my holdings? I want this fixed right now — that was a serious amount of money.",
+            "I've got shares stuck in two different suspended companies — Murae Organiser and SIPTL. I heard Murae Organiser didn't even respond to the exchange and their registered office doesn't exist anymore, so is that the same as a delisting — are my shares gone for good like the Jaiprakash Associates case? And for SIPTL, can I at least sell it on some day, or is it also completely frozen like Murae?",
+            "I want to move my shares out to my brother's demat account, but he's with a broker on a completely different depository — NSDL, I believe. Can I just use the usual trusted-account PIN process for this like any other Easiest transfer? And how much is this going to cost me, and how fast can it actually happen?",
+            "I tried gifting 20 shares worth about ninety thousand rupees to my cousin. I completed my TPIN step at two-thirty in the afternoon, so I thought I was well within time, but then I got caught up with work and only finished the final CDSL OTP verification at eight-fifteen that night. Now it says the transfer has failed. First — why exactly did it fail? And second, once my cousin does eventually receive these shares, is he going to owe tax on them given how much they're worth?",
+            "I currently have two nominees on my account — I want to remove both of them and register three new nominees instead: my wife, my son, and my business partner. Can you just process this for me right now while I'm on the phone, and is there any rule against naming my business partner since he isn't a blood relative?"
+          ],
+          enabled: true
+        },
+
+        // Trainee Red Pen — Operations Escalation Writing (4 very difficult questions, AI-adaptive)
+        {
+          module: 'ops-writing-assessment',
+          title: 'Operations Escalation Ticket — CDSL, Nominee, Short Delivery & Suspended Stocks',
+          description: 'A single very difficult written escalation ticket covering CDSL Easiest, nominee modification, short delivery, and suspended stocks. 4 tough questions, one at a time — the client reacts in writing to how well you answer.',
+          scenario: 'A client has written in with a single escalated support ticket that raises four separate, data-heavy questions one at a time — a CDSL Easiest reason-code rejection, a nominee-modification request, a short-delivery/auction compensation query, and a suspended-stock corporate action. Reply to each question accurately and professionally before the client raises the next one.',
+          checklist: [
+            "Address the exact numbers, dates and account details the client mentions — do not give a vague or generic answer",
+            "Clearly state whether something is a platform error, a regulatory/exchange rule, or expected process",
+            "Correct any wrong assumption in the client's message rather than agreeing with it",
+            "Give a clear next step and realistic timeline for anything still in progress",
+            "Keep a professional, empathetic tone throughout the written reply"
+          ],
+          bot_script: [
+            "Hi, I tried transferring 50 shares of TCS from my individual demat account to my HUF demat account using CDSL Easiest, and I selected 'Self Transfer' as the reason code, but the transaction is stuck/rejected. I am the karta of the HUF, so I assumed this counts as a self-transfer since it's technically still me. Can you tell me exactly what went wrong and what I need to do to complete this transfer correctly?",
+            "I want to replace my existing nominee, Mr. Sharma, with my daughter as the new nominee. I just checked and my registered mobile number is NOT linked to my Aadhaar. Can I still do this from the app or website, and if not, exactly what do I need to send you and how does the whole process work?",
+            "I bought 39 shares of a company on 22nd April. On T+2 my holdings showed a 39-share shortfall and the shares never arrived. I was told there was an auction for this, but I still don't have my shares or my money. What exactly happens now, and how will I be compensated for this?",
+            "I held 100 shares of a company, and suddenly my app is showing I now only have 36 shares of it, while the share price has jumped up a lot. Did you make an error, or did I lose two-thirds of my investment overnight? Please explain exactly what happened to my holding and whether I need to do anything about it."
+          ],
+          enabled: true
         }
       ];
 
