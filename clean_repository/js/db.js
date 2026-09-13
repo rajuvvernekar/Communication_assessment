@@ -408,7 +408,7 @@ const DB = (() => {
       if (_useLocalStorage) {
         existing = _localGetAll('topics');
       } else {
-        const { data: res } = await _sb.from('topics').select('module, title');
+        const { data: res } = await _sb.from('topics').select('module, title, bot_script');
         existing = res || [];
       }
 
@@ -815,12 +815,12 @@ const DB = (() => {
           enabled: true
         },
 
-        // Trainee Red Pen — Operations Escalation Call (7 very difficult questions, AI-adaptive)
+        // Trainee Red Pen — Operations Escalation Call (11 very difficult questions, AI-adaptive)
         {
           module: 'ops-call-assessment',
           title: 'Operations Escalation Helpline — CDSL, Nominee, Short Delivery & Suspended Stocks',
-          description: 'A single very difficult escalation call covering CDSL Easiest/Console Gifting, nominee modification, short delivery/auctions, and suspended stocks. 7 tough questions in a row, each with full data included — the caller reacts to how well you answer.',
-          scenario: 'You are on an escalation helpline. An experienced, technically sharp client calls in with four separate unresolved issues that were escalated to you: a CDSL/gifting transfer problem, a nominee-modification request, a short-delivery/auction charge dispute, and confusion about a suspended stock. The caller will raise 7 specific, data-heavy questions one at a time across these topics — answer each one accurately, confidently, and with empathy before the caller moves to the next.',
+          description: 'A single very difficult escalation call covering CDSL Easiest/Console Gifting, nominee modification, short delivery/auctions, and suspended stocks. 11 tough questions in a row, each with full data included — the caller reacts to how well you answer.',
+          scenario: 'You are on an escalation helpline. An experienced, technically sharp client calls in with four separate unresolved issues that were escalated to you: a CDSL/gifting transfer problem, a nominee-modification request, a short-delivery/auction charge dispute, and confusion about a suspended stock. The caller will raise 11 specific, data-heavy questions one at a time across these topics — answer each one accurately, confidently, and with empathy before the caller moves to the next.',
           checklist: [
             "Address the exact numbers, dates and cut-off times the caller quotes — do not give a vague or generic answer",
             "Clearly state whether something is a platform error, a regulatory/exchange rule, or expected process — do not let the caller assume the wrong one",
@@ -835,7 +835,11 @@ const DB = (() => {
             "I've got shares stuck in two different suspended companies — Murae Organiser and SIPTL. I heard Murae Organiser didn't even respond to the exchange and their registered office doesn't exist anymore, so is that the same as a delisting — are my shares gone for good like the Jaiprakash Associates case? And for SIPTL, can I at least sell it on some day, or is it also completely frozen like Murae?",
             "I want to move my shares out to my brother's demat account, but he's with a broker on a completely different depository — NSDL, I believe. Can I just use the usual trusted-account PIN process for this like any other Easiest transfer? And how much is this going to cost me, and how fast can it actually happen?",
             "I tried gifting 20 shares worth about ninety thousand rupees to my cousin. I completed my TPIN step at two-thirty in the afternoon, so I thought I was well within time, but then I got caught up with work and only finished the final CDSL OTP verification at eight-fifteen that night. Now it says the transfer has failed. First — why exactly did it fail? And second, once my cousin does eventually receive these shares, is he going to owe tax on them given how much they're worth?",
-            "I currently have two nominees on my account — I want to remove both of them and register three new nominees instead: my wife, my son, and my business partner. Can you just process this for me right now while I'm on the phone, and is there any rule against naming my business partner since he isn't a blood relative?"
+            "I currently have two nominees on my account — I want to remove both of them and register three new nominees instead: my wife, my son, and my business partner. Can you just process this for me right now while I'm on the phone, and is there any rule against naming my business partner since he isn't a blood relative?",
+            "Last year I gifted 50 shares to my sister with no issues at all. Now I'm trying to gift 15 shares of the same company to my nephew, but he's a minor — 17 years old. The transfer has been stuck at a pending-authorisation stage on the CDSL Easiest portal for three days now. Why would gifting to a minor be any different, and how long should this authorisation actually take?",
+            "I want to add three nominees to my demat account — my wife, my son, and my daughter. I want to give my wife 50%, but I'm not sure what to do about the other two — can I just write 'equal share' for the remaining 50% and leave it at that, or do I have to give exact numbers? Also, is there some SEBI limit on how many nominees I'm even allowed to add?",
+            "I sold 200 shares that I actually owned, but only 150 got delivered from my end because of some technical glitch — the remaining 50 went into short delivery. From the day of my trade until the auction settlement day, the highest this stock ever traded at was three hundred forty rupees. The closing price on the auction settlement day itself was three hundred rupees. So why does my contract note show I was charged three hundred sixty rupees per share for those 50 shares — that's HIGHER than the highest price the stock ever actually touched during that entire period? That can't be right.",
+            "My stock has been suspended from trading because of a SEBI investigation, but I just noticed the company still went ahead and paid a dividend, and I actually received it in my bank account. If trading is suspended, how is a dividend even possible? And separately — will I still be allowed to vote at their AGM, and can I apply for the buyback they announced last month while the stock is still suspended?"
           ],
           enabled: true
         },
@@ -883,6 +887,44 @@ const DB = (() => {
         }
         // Refresh existing list to be empty so all default topics are re-seeded
         existing = [];
+      }
+
+      // One-time content refresh for the Ops Escalation Call topic: it
+      // originally shipped with 7 questions, then 4 more were added (11
+      // total) under the SAME title. Seeding only INSERTS missing
+      // (module,title) pairs, so an already-seeded copy would otherwise be
+      // stuck on the old 7-question script forever. Detect the untouched
+      // original (still exactly 7 questions) and update it in place with
+      // the new 11-question script/description/scenario — this only ever
+      // matches that specific stale shape, so it's harmless to run on
+      // every load and won't touch a topic an admin has since customized
+      // to some other question count.
+      try {
+        const opsCallDefault = defaults.find(t => t.module === 'ops-call-assessment');
+        if (opsCallDefault) {
+          const staleRow = existing.find(t => t.module === 'ops-call-assessment' && t.title === opsCallDefault.title && Array.isArray(t.bot_script) && t.bot_script.length === 7);
+          if (staleRow) {
+            const patch = { description: opsCallDefault.description, scenario: opsCallDefault.scenario, checklist: opsCallDefault.checklist, bot_script: opsCallDefault.bot_script };
+            if (_useLocalStorage) {
+              const localTopics = _localGetAll('topics');
+              const idx = localTopics.findIndex(t => t.module === 'ops-call-assessment' && t.title === opsCallDefault.title);
+              if (idx !== -1) {
+                localTopics[idx] = { ...localTopics[idx], ...patch };
+                localStorage.setItem('commassess_topics', JSON.stringify(localTopics));
+                console.log('[DB] Refreshed Ops Escalation Call topic to the 11-question version (local).');
+              }
+            } else {
+              const { error: refreshErr } = await _sb.from('topics').update(patch).eq('module', 'ops-call-assessment').eq('title', opsCallDefault.title);
+              if (refreshErr) {
+                console.error('[DB] Failed to refresh Ops Escalation Call topic to 11 questions:', refreshErr);
+              } else {
+                console.log('[DB] Refreshed Ops Escalation Call topic to the 11-question version.');
+              }
+            }
+          }
+        }
+      } catch (refreshErr) {
+        console.warn('[DB] Ops Escalation Call content refresh skipped:', refreshErr.message || refreshErr);
       }
 
       const existingMap = new Set(existing.map(t => `${t.module}:${t.title}`));
