@@ -1929,6 +1929,35 @@ body {
   font-style: normal;
 }
 
+/* "Key details" data block inside an Ops Escalation Call/Writing bot
+   bubble — every number/date/fact the trainee needs is spelled out here,
+   deterministically, directly under the caller's question. */
+.mc-bubble-facts {
+  margin-top: 0.55rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed rgba(71, 85, 105, 0.3);
+  font-size: 0.83rem;
+  line-height: 1.45;
+}
+.mc-bubble-facts > strong {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: #334155;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.mc-bubble-facts ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+.mc-bubble-facts li {
+  margin-bottom: 0.2rem;
+}
+.mc-bubble-facts li:last-child {
+  margin-bottom: 0;
+}
+
 /* Customer mood indicator bar */
 .mc-mood-bar {
   display: flex;

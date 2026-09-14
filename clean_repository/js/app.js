@@ -111,6 +111,38 @@ const App = (() => {
   // ── AI-driven call state (live Claude customer, Takeover topic only) ──
   const MC_AI_TOPIC_TITLE = 'Takeover Offer – Client Insists Despite Higher Market Price';
   const MC_AI_MAX_TURNS   = 8;   // ~5-10 min depending on agent response length
+
+  // Fixed, hand-written transition lines used between questions in the Ops
+  // Escalation Call/Writing assessments — deliberately NOT AI-generated, so
+  // there is zero risk of the customer ever drifting onto an invented or
+  // off-scenario question. Each required question itself is always shown
+  // 100% verbatim from the topic's bot_script; one of these is just
+  // prepended (cycled by turn index, so it's stable and testable) to bridge
+  // from the trainee's previous answer into the next required question.
+  const OPS_CALL_TRANSITIONS = [
+    'Okay. Now, about the next issue —',
+    'Alright, moving on to another problem I have —',
+    'Right, there is also something else I need sorted —',
+    'Okay, let\'s move to my next concern —',
+    'Understood. Now, separately —',
+    'Noted. I have another issue too —',
+    'Okay, next thing —',
+    'Alright, on to another matter —',
+    'Fine. I also want to raise something else —',
+    'Got it. There is one more thing —'
+  ];
+  const OPS_WRITING_TRANSITIONS = [
+    'Okay, noted. I also have another question —',
+    'Thanks for that. Separately, I wanted to raise —',
+    'Understood. Moving to my next concern —',
+    'Alright, there is one more thing I need help with —',
+    'Okay. I also have a question about —',
+    'Noted, thank you. Next —',
+    'Got it. One more issue, separately —',
+    'Okay. I also wanted to ask about —',
+    'Thanks. Moving on to another matter —',
+    'Understood, appreciate it. Now, about something else —'
+  ];
   let _mcAiMode           = false;
   let _mcAiHistory        = [];   // [{bot: string, agent: string}, ...]
   let _mcAiTurnCount      = 0;
@@ -1346,6 +1378,18 @@ const App = (() => {
     runAiTurn(null); // first turn — no agent response yet
   }
 
+  // Inserts a plain-text sentence into a bot_script question right after
+  // its opening question sentence but before the "Key details" data block
+  // (if the question has one), instead of tacking it onto the very end
+  // after the bulleted facts.
+  function _insertBeforeFactsBlock(html, sentence) {
+    if (!sentence) return html;
+    const marker = '<div class="mc-bubble-facts"';
+    const idx = html.indexOf(marker);
+    if (idx === -1) return `${html} ${sentence}`;
+    return `${html.slice(0, idx)}${sentence} ${html.slice(idx)}`;
+  }
+
   // Build the alternating user/assistant message array for Claude
   function _buildAiMessages() {
     const msgs = [{ role: 'user', content: 'The agent has answered the call. Start as the customer with your opening complaint or question.' }];
@@ -1385,26 +1429,25 @@ const App = (() => {
 
     let botLine = '';
     if (_currentModule === 'ops-call-assessment') {
-      // The required question is always shown VERBATIM from bot_script —
-      // never AI-paraphrased — so the trainee is guaranteed the exact
-      // numbers/dates/facts every time, matching the answer key used to
-      // grade them. Claude is only asked for the short in-character
-      // reaction to the trainee's previous answer (no facts involved), and
-      // if that call fails for any reason the question still appears with
-      // no reaction line at all — it never falls back to a wrong/invented
-      // question.
+      // The required question is always shown 100% VERBATIM from
+      // bot_script — never AI-generated or paraphrased in any way — so the
+      // trainee is guaranteed the exact numbers/dates/facts every time,
+      // matching the answer key used to grade them. The lead-in between
+      // questions is one of a small set of fixed, hand-written transition
+      // phrases (no API call, no model output at all), so there is no way
+      // for this to ever ask about anything outside the given scenario.
       const script = _currentTopic.botScript || [];
       const idx = Math.min(_mcAiTurnCount - 1, Math.max(script.length - 1, 0));
-      const requiredQuestion = script[idx] || '';
-      let reaction = '';
-      if (_mcAiTurnCount > 1) {
-        try {
-          reaction = await ClaudeEvaluator.callAiOpsCallerReaction(_buildAiMessages(), isLast);
-        } catch (e) {
-          console.warn('AI reaction failed, continuing without it:', e.message);
-        }
+      let requiredQuestion = script[idx] || '';
+      const transition = _mcAiTurnCount > 1
+        ? OPS_CALL_TRANSITIONS[(_mcAiTurnCount - 2) % OPS_CALL_TRANSITIONS.length]
+        : '';
+      if (isLast) {
+        // Insert right after the question sentence, before the "Key
+        // details" block, rather than after it.
+        requiredQuestion = _insertBeforeFactsBlock(requiredQuestion, 'I need this resolved right now, before we end this call.');
       }
-      botLine = [reaction, requiredQuestion].filter(Boolean).join(' ');
+      botLine = [transition, requiredQuestion].filter(Boolean).join(' ');
     } else {
       try {
         botLine = await ClaudeEvaluator.callAiCustomer(
@@ -1941,19 +1984,17 @@ const App = (() => {
         let botLine = '';
         if (_currentModule === 'ops-writing-assessment') {
           // Same approach as the call module: the required question is
-          // always shown VERBATIM from bot_script — never AI-paraphrased —
-          // so the trainee gets the exact numbers/facts every time. Claude
-          // only supplies the short written reaction to the trainee's
-          // previous reply; if that call fails, the question still appears
-          // with no reaction line rather than a wrong/invented one.
-          const requiredQuestion = _wcChatTurns[_wcChatTurnIndex] || '';
-          let reaction = '';
-          try {
-            reaction = await ClaudeEvaluator.callAiOpsWriterReaction(_buildWcAiMessages(), isLastTurn);
-          } catch (e) {
-            console.warn('AI writer reaction failed, continuing without it:', e.message);
+          // always shown 100% VERBATIM from bot_script — never AI-generated
+          // or paraphrased — so the trainee gets the exact numbers/facts
+          // every time. The lead-in is one of a small set of fixed,
+          // hand-written transition phrases (no API call at all), so there
+          // is no way for this to ever raise anything outside the scenario.
+          let requiredQuestion = _wcChatTurns[_wcChatTurnIndex] || '';
+          const transition = OPS_WRITING_TRANSITIONS[(_wcChatTurnIndex - 1) % OPS_WRITING_TRANSITIONS.length];
+          if (isLastTurn) {
+            requiredQuestion = _insertBeforeFactsBlock(requiredQuestion, 'I need a written resolution on this ticket.');
           }
-          botLine = [reaction, requiredQuestion].filter(Boolean).join(' ');
+          botLine = [transition, requiredQuestion].filter(Boolean).join(' ');
         } else {
           try {
             const messages = _buildWcAiMessages();

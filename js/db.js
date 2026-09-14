@@ -316,6 +316,49 @@ const DB = (() => {
     }
   }
 
+  // Push a topic's current seed content onto an already-seeded row of the
+  // same (module,title) when the deployed version is newer than what's
+  // stored — see the call site inside _seedDefaults() for the full
+  // rationale. No-ops if the topic isn't seeded yet (the normal insert path
+  // will create it fresh, already correct) or if it's already current.
+  async function _refreshOpsScriptIfStale(module, currentVersion, defaults, existing) {
+    const def = defaults.find(t => t.module === module);
+    if (!def) return;
+    const liveRow = existing.find(t => t.module === module && t.title === def.title);
+    if (!liveRow) return;
+
+    const versionKey = `${module}ScriptVersion`;
+    let storedVersion = 0;
+    if (_useLocalStorage) {
+      const rec = _localGet('settings', versionKey);
+      storedVersion = rec ? (parseInt(rec.value || rec, 10) || 0) : 0;
+    } else {
+      const { data } = await _sb.from('settings').select('*').eq('key', versionKey);
+      storedVersion = (data && data[0]) ? (parseInt(data[0].value, 10) || 0) : 0;
+    }
+    if (storedVersion >= currentVersion) return;
+
+    const patch = { description: def.description, scenario: def.scenario, checklist: def.checklist, bot_script: def.bot_script };
+    if (_useLocalStorage) {
+      const localTopics = _localGetAll('topics');
+      const idx = localTopics.findIndex(t => t.module === module && t.title === def.title);
+      if (idx !== -1) {
+        localTopics[idx] = { ...localTopics[idx], ...patch };
+        localStorage.setItem('commassess_topics', JSON.stringify(localTopics));
+      }
+      _localPut('settings', { key: versionKey, value: String(currentVersion) });
+      console.log(`[DB] Refreshed ${module} topic content to v${currentVersion} (local).`);
+    } else {
+      const { error: refreshErr } = await _sb.from('topics').update(patch).eq('module', module).eq('title', def.title);
+      if (refreshErr) {
+        console.error(`[DB] Failed to refresh ${module} topic content:`, refreshErr);
+        return; // don't bump the version marker if the update itself failed
+      }
+      await _sb.from('settings').upsert({ key: versionKey, value: String(currentVersion) }, { onConflict: 'key' });
+      console.log(`[DB] Refreshed ${module} topic content to v${currentVersion}.`);
+    }
+  }
+
   // ---- Seed default topics on first run ----
   async function _seedDefaults(force = false) {
     try {
@@ -829,17 +872,17 @@ const DB = (() => {
             "Stay calm, professional and empathetic even when the caller is frustrated or challenges your numbers"
           ],
           bot_script: [
-            "On 10 March I opened a short position worth about six lakh rupees, and the stock hit the upper circuit before I could cover it. My account was debited for the full trade value AND an extra two lakh seventy-four thousand nine hundred ninety-six rupees — almost 40% more! The closing price on 10 March was seven ninety-four fifty, and on 11 March, the auction day, it closed at eight seventy point four zero. The highest the stock traded between those two days was nine twenty-eight eighty. So where does an auction settlement of one thousand and twenty rupees and thirty-three paise come from? That's not even close to any number I just gave you!",
-            "I short-sold 1,000 shares. The exchange could only buy back 800 of them in the auction, at 100 rupees each, and the other 200 got closed out at 120 rupees each. But my account statement shows a flat debit of 104 rupees a share for all 1,000 shares! Neither of those two prices is 104. Explain exactly where that number came from, and why I'm not simply being charged the two actual prices separately.",
-            "My entire holding in Jaiprakash Associates has vanished from my Kite app! I had a real position in that stock and now I see nothing at all. Did you sell it without telling me, or has your platform lost my holdings? I want this fixed right now — that was a serious amount of money.",
-            "I've got shares stuck in two different suspended companies — Murae Organiser and SIPTL. I heard Murae Organiser didn't even respond to the exchange and their registered office doesn't exist anymore, so is that the same as a delisting — are my shares gone for good like the Jaiprakash Associates case? And for SIPTL, can I at least sell it on some day, or is it also completely frozen like Murae?",
-            "I want to move my shares out to my brother's demat account, but he's with a broker on a completely different depository — NSDL, I believe. Can I just use the usual trusted-account PIN process for this like any other Easiest transfer? And how much is this going to cost me, and how fast can it actually happen?",
-            "I tried gifting 20 shares worth about ninety thousand rupees to my cousin. I completed my TPIN step at two-thirty in the afternoon, so I thought I was well within time, but then I got caught up with work and only finished the final CDSL OTP verification at eight-fifteen that night. Now it says the transfer has failed. First — why exactly did it fail? And second, once my cousin does eventually receive these shares, is he going to owe tax on them given how much they're worth?",
-            "I currently have two nominees on my account — I want to remove both of them and register three new nominees instead: my wife, my son, and my business partner. Can you just process this for me right now while I'm on the phone, and is there any rule against naming my business partner since he isn't a blood relative?",
-            "Last year I gifted 50 shares to my sister with no issues at all. Now I'm trying to gift 15 shares of the same company to my nephew, but he's a minor — 17 years old. The transfer has been stuck at a pending-authorisation stage on the CDSL Easiest portal for three days now. Why would gifting to a minor be any different, and how long should this authorisation actually take?",
-            "I want to add three nominees to my demat account — my wife, my son, and my daughter. I want to give my wife 50%, but I'm not sure what to do about the other two — can I just write 'equal share' for the remaining 50% and leave it at that, or do I have to give exact numbers? Also, is there some SEBI limit on how many nominees I'm even allowed to add?",
-            "I sold 200 shares that I actually owned, but only 150 got delivered from my end because of some technical glitch — the remaining 50 went into short delivery. From the day of my trade until the auction settlement day, the highest this stock ever traded at was three hundred forty rupees. The closing price on the auction settlement day itself was three hundred rupees. So why does my contract note show I was charged three hundred sixty rupees per share for those 50 shares — that's HIGHER than the highest price the stock ever actually touched during that entire period? That can't be right.",
-            "My stock has been suspended from trading because of a SEBI investigation, but I just noticed the company still went ahead and paid a dividend, and I actually received it in my bank account. If trading is suspended, how is a dividend even possible? And separately — will I still be allowed to vote at their AGM, and can I apply for the buyback they announced last month while the stock is still suspended?"
+            "My short position got hit with a massive extra charge once the stock went into upper circuit, and the numbers make no sense to me. Can you explain exactly why?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Short position opened on 10 March, worth approx ₹6,00,000 (six lakh)</li><li>Stock hit the upper circuit before the position could be covered</li><li>Account debited: full trade value PLUS an extra ₹2,74,996 (almost 40% more)</li><li>Closing price on 10 March (trade day): ₹794.50</li><li>Closing price on 11 March (auction day): ₹870.40</li><li>Highest price the stock traded between 10–11 March: ₹928.80</li><li>Auction settlement rate actually applied: ₹1,020.33 per share</li></ul></div>",
+            "I short-sold 1,000 shares, and I don't understand my settlement price at all. Walk me through exactly how you arrived at this number.<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Total shares short-sold: 1,000</li><li>Auction filled 800 shares at ₹100 per share</li><li>Remaining 200 shares closed out at ₹120 per share</li><li>Account statement shows a single flat rate of ₹104 per share applied to ALL 1,000 shares</li><li>Client wants to know why two separate prices weren't charged instead of one blended rate</li></ul></div>",
+            "My entire holding in Jaiprakash Associates has disappeared from my Kite app. Did you sell it without telling me, or has the platform lost my holdings? I want this fixed right now.<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Stock: Jaiprakash Associates</li><li>Client held a real, confirmed position before it disappeared</li><li>Exchange circular date: 17 March 2026</li><li>Trading suspended from: 18 March 2026</li><li>Reason cited in the circular: NCLT approved the company's insolvency resolution plan</li></ul></div>",
+            "I've got shares stuck in two different suspended companies — are they in the same situation, or is one different from the other?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Company 1 — Murae Organiser: did not respond to exchange notices; registered office found to be non-existent</li><li>Client's question on Murae Organiser: is this the same as a delisting/total wipeout, like the Jaiprakash Associates case?</li><li>Company 2 — SIPTL: client wants to know if it can still be sold on any day, or if it's completely frozen like Murae</li></ul></div>",
+            "I want to move my shares to my brother's demat account, but his broker is on a different depository. Can I use the usual trusted-account PIN process for this?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Client's depository: CDSL</li><li>Recipient's depository: NSDL (different depository — brother's account)</li><li>Client's assumption: this can be done like a normal Easiest trusted-account/PIN transfer</li><li>Client also wants to know: total cost of the transfer, and how fast it can be completed</li></ul></div>",
+            "I tried gifting shares to my cousin, and now it says the transfer failed, even though I thought I was well within time. Why did it fail, and will my cousin owe tax on this?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Shares gifted: 20 shares, worth approx ₹90,000</li><li>Recipient: cousin</li><li>TPIN authorisation step completed at: 2:30 PM</li><li>Final CDSL OTP verification completed at: 8:15 PM, same day</li><li>Client's question 1: why exactly did the transfer fail?</li><li>Client's question 2: once received, will the cousin (~₹90,000 value) owe any tax on the gifted shares?</li></ul></div>",
+            "I want to remove my two current nominees and register three new ones instead, right now while I'm on this call. Can you do that, and is there any rule against one of them not being a blood relative?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Current nominees on the account: 2 (to be removed)</li><li>New nominees to register: 3 — wife, son, and business partner</li><li>Client wants this processed immediately, during the call</li><li>Client's question: is there any rule against naming a non-relative (the business partner) as a nominee?</li></ul></div>",
+            "I gifted shares to my sister with no issues at all, but the same kind of gift to my minor nephew has been stuck for three days. Why would gifting to a minor be any different?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Earlier gift (went through fine): 50 shares to sister (adult)</li><li>Current gift: 15 shares to nephew, age 17 (minor)</li><li>Current status: stuck at \"pending authorisation\" on CDSL Easiest for 3 days</li><li>Client's question: why is a gift to a minor different, and how long should authorisation actually take?</li></ul></div>",
+            "I want to add three nominees to my account — my wife, my son, and my daughter. Can I just leave the remaining split as 'equal share' after giving my wife 50%, and how many nominees am I even allowed to add?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Nominees to be added: 3 — wife, son, daughter</li><li>Wife's intended share: 50%</li><li>Remaining 50% — client wants to just write \"equal share\" for son + daughter instead of exact numbers</li><li>Client's question: is there a SEBI/depository limit on how many nominees are allowed?</li></ul></div>",
+            "50 of my shares went into short delivery, and my contract note shows a close-out price that's HIGHER than the highest price the stock ever actually traded at. How is that even possible?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Shares sold: 200 total (150 delivered, 50 went into short delivery)</li><li>Highest traded price from trade day to the auction settlement day: ₹340</li><li>Closing price on the auction settlement day itself: ₹300</li><li>Close-out price charged on the contract note (for the 50 shares): ₹360 per share</li><li>Client's question: how can ₹360 be higher than the actual highest traded price of ₹340?</li></ul></div>",
+            "My stock is suspended from trading due to a SEBI investigation, but I still received a dividend. If trading is suspended, how is that possible — and can I still vote at the AGM or apply for the buyback?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Stock status: suspended from trading, due to a SEBI investigation</li><li>Client already received: a dividend payment, despite the suspension</li><li>Corporate action announced last month: a buyback offer</li><li>Client's 3 questions: (1) how is a dividend possible during suspension, (2) can they still vote at the AGM, (3) can they apply for the buyback</li></ul></div>"
           ],
           enabled: true
         },
@@ -858,10 +901,10 @@ const DB = (() => {
             "Keep a professional, empathetic tone throughout the written reply"
           ],
           bot_script: [
-            "Hi, I tried transferring 50 shares of TCS from my individual demat account to my HUF demat account using CDSL Easiest, and I selected 'Self Transfer' as the reason code, but the transaction is stuck/rejected. I am the karta of the HUF, so I assumed this counts as a self-transfer since it's technically still me. Can you tell me exactly what went wrong and what I need to do to complete this transfer correctly?",
-            "I want to replace my existing nominee, Mr. Sharma, with my daughter as the new nominee. I just checked and my registered mobile number is NOT linked to my Aadhaar. Can I still do this from the app or website, and if not, exactly what do I need to send you and how does the whole process work?",
-            "I bought 39 shares of a company on 22nd April. On T+2 my holdings showed a 39-share shortfall and the shares never arrived. I was told there was an auction for this, but I still don't have my shares or my money. What exactly happens now, and how will I be compensated for this?",
-            "I held 100 shares of a company, and suddenly my app is showing I now only have 36 shares of it, while the share price has jumped up a lot. Did you make an error, or did I lose two-thirds of my investment overnight? Please explain exactly what happened to my holding and whether I need to do anything about it."
+            "Hi, I tried transferring shares from my individual demat account to my HUF demat account using CDSL Easiest, and I selected 'Self Transfer' as the reason code, but the transaction is stuck/rejected. I'm the karta of the HUF, so I assumed this counts as a self-transfer. Can you tell me exactly what went wrong and what I need to do to complete this correctly?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Shares: 50 shares of TCS</li><li>From: individual demat account</li><li>To: HUF demat account (client is the karta of the HUF)</li><li>Reason code selected: \"Self Transfer\"</li><li>Current status: stuck / rejected</li></ul></div>",
+            "I want to replace my existing nominee with my daughter, but my registered mobile number is NOT linked to my Aadhaar. Can I still do this online, and if not, exactly what do I need to send you?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Current nominee to be replaced: Mr. Sharma</li><li>New nominee: daughter</li><li>Aadhaar-to-mobile link status: NOT linked</li></ul></div>",
+            "I bought 39 shares that never arrived due to a short delivery, and I was told there was an auction for it, but I still have neither the shares nor the money. What happens now, and how will I be compensated?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Shares purchased: 39 shares</li><li>Purchase date: 22nd April</li><li>Shortfall identified: on T+2, full 39-share shortfall (none delivered)</li><li>Client has received neither the shares nor any compensation so far</li></ul></div>",
+            "I held 100 shares of a company, and now my app is showing only 36, while the price has jumped up a lot. Did you make an error, or did I lose two-thirds of my investment overnight?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Shares held before: 100</li><li>Shares showing now: 36</li><li>Share price: has risen noticeably since the change</li></ul></div>"
           ],
           enabled: true
         }
@@ -889,42 +932,27 @@ const DB = (() => {
         existing = [];
       }
 
-      // One-time content refresh for the Ops Escalation Call topic: it
-      // originally shipped with 7 questions, then 4 more were added (11
-      // total) under the SAME title. Seeding only INSERTS missing
-      // (module,title) pairs, so an already-seeded copy would otherwise be
-      // stuck on the old 7-question script forever. Detect the untouched
-      // original (still exactly 7 questions) and update it in place with
-      // the new 11-question script/description/scenario — this only ever
-      // matches that specific stale shape, so it's harmless to run on
-      // every load and won't touch a topic an admin has since customized
-      // to some other question count.
+      // Versioned content refresh for the two Ops Escalation topics: seeding
+      // only ever INSERTS missing (module,title) pairs, so once a title is
+      // already seeded, any later edit to its bot_script/description/etc.
+      // in this file would otherwise never reach an already-seeded database.
+      // Each topic's script content is tagged with a version number below;
+      // _refreshOpsScriptIfStale compares that against a marker stored in
+      // `settings` and, if the deployed version is newer, overwrites the
+      // live row with the current content and bumps the marker. This is a
+      // deliberate content push, not a merge — it will also overwrite any
+      // hand-edit an admin made to this exact title after the marker was
+      // last bumped, since there's no way to tell the two apart. Given how
+      // new and low-traffic these two topics are, that tradeoff is fine for
+      // now; a general "seeded defaults vs. admin-edited" distinction would
+      // need real tracking if this pattern gets reused more broadly.
+      const OPS_CALL_SCRIPT_VERSION    = 3; // v1: 7Q · v2: 11Q · v3: 11Q reformatted with explicit "Key details" data blocks
+      const OPS_WRITING_SCRIPT_VERSION = 2; // v1: original 4Q · v2: reformatted with explicit "Key details" data blocks
       try {
-        const opsCallDefault = defaults.find(t => t.module === 'ops-call-assessment');
-        if (opsCallDefault) {
-          const staleRow = existing.find(t => t.module === 'ops-call-assessment' && t.title === opsCallDefault.title && Array.isArray(t.bot_script) && t.bot_script.length === 7);
-          if (staleRow) {
-            const patch = { description: opsCallDefault.description, scenario: opsCallDefault.scenario, checklist: opsCallDefault.checklist, bot_script: opsCallDefault.bot_script };
-            if (_useLocalStorage) {
-              const localTopics = _localGetAll('topics');
-              const idx = localTopics.findIndex(t => t.module === 'ops-call-assessment' && t.title === opsCallDefault.title);
-              if (idx !== -1) {
-                localTopics[idx] = { ...localTopics[idx], ...patch };
-                localStorage.setItem('commassess_topics', JSON.stringify(localTopics));
-                console.log('[DB] Refreshed Ops Escalation Call topic to the 11-question version (local).');
-              }
-            } else {
-              const { error: refreshErr } = await _sb.from('topics').update(patch).eq('module', 'ops-call-assessment').eq('title', opsCallDefault.title);
-              if (refreshErr) {
-                console.error('[DB] Failed to refresh Ops Escalation Call topic to 11 questions:', refreshErr);
-              } else {
-                console.log('[DB] Refreshed Ops Escalation Call topic to the 11-question version.');
-              }
-            }
-          }
-        }
+        await _refreshOpsScriptIfStale('ops-call-assessment', OPS_CALL_SCRIPT_VERSION, defaults, existing);
+        await _refreshOpsScriptIfStale('ops-writing-assessment', OPS_WRITING_SCRIPT_VERSION, defaults, existing);
       } catch (refreshErr) {
-        console.warn('[DB] Ops Escalation Call content refresh skipped:', refreshErr.message || refreshErr);
+        console.warn('[DB] Ops script content refresh skipped:', refreshErr.message || refreshErr);
       }
 
       const existingMap = new Set(existing.map(t => `${t.module}:${t.title}`));

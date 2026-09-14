@@ -538,81 +538,19 @@ Return ONLY your written chat message.`;
     return data.content[0].text.trim();
   }
 
-  // ---- Live AI caller for the trainee Ops Escalation Call assessment ----
-  // Walks through a fixed list of required (very difficult) questions, one
-  // per turn, while reacting to the trainee's previous answer — so the call
-  // stays adaptive without ever skipping or diluting the intended content.
-  // NOTE: this used to ask Claude to "raise exactly this question, in your
-  // own words" — in practice that compression (a whole data-heavy paragraph
-  // squeezed into "3-5 sentences") caused the model to drop, round, or
-  // outright invent numbers/dates instead of the real ones, so the trainee
-  // was sometimes answering a question that didn't match anything in the
-  // (never-shown) answer key. The required question is now inserted
-  // VERBATIM by the caller (js/app.js) from the topic's bot_script — this
-  // function only ever generates the short in-character REACTION to the
-  // trainee's previous answer, with numbers/facts explicitly disallowed,
-  // so there is nothing left for it to get wrong.
-  async function callAiOpsCallerReaction(messages, isLast) {
-    if (!isAvailable()) throw new Error('Claude proxy not configured');
-
-    const system = `You are roleplaying as a difficult, technically sharp customer on a stockbroker's escalation helpline call. You just heard the agent's answer to your previous question. React to it in ONE short spoken sentence only (roughly 6-15 words) — nothing more.
-
-RULES:
-- If their last answer sounded accurate, specific, and confident, acknowledge it briefly (e.g. "Okay, that actually makes sense.").
-- If their last answer was vague, evasive, or sounded wrong, push back briefly and firmly, the way a frustrated caller would (e.g. "That still doesn't add up." / "That's not really answering it.").
-- Do NOT restate, summarize, or invent any numbers, dates, amounts, or specific facts — this is a pure tone reaction only, never a question.
-- Do NOT ask a new question or introduce any new topic — the next question is added separately, after your reaction.
-- Stay fully in character as the customer at all times. No stage directions, no narration, no quotes.${isLast ? '\n- This is the caller\'s final turn, so this reaction can carry a bit more urgency/impatience than earlier turns.' : ''}
-
-Return ONLY the one-sentence reaction, nothing else.`;
-
-    const resp = await fetch(getProxyUrl(), {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ model: MODEL, max_tokens: 60, system, messages })
-    });
-
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}));
-      throw new Error(err.error?.message || `API error ${resp.status}`);
-    }
-    const data = await resp.json();
-    return data.content[0].text.trim();
-  }
-
-  // ---- Live AI customer for the trainee Ops Escalation Writing assessment ----
-  // Same rationale as callAiOpsCallerReaction above, for the written
-  // support-chat format: the required question is inserted VERBATIM by the
-  // caller from the topic's bot_script, so this only generates the short
-  // written reaction to the trainee's previous reply — no facts/numbers,
-  // so there's nothing for the model to get wrong.
-  async function callAiOpsWriterReaction(messages, isLast) {
-    if (!isAvailable()) throw new Error('Claude proxy not configured');
-
-    const system = `You are roleplaying as a customer writing into a stockbroker's support chat/ticket about a difficult depository or settlement operations issue. You just read the agent's reply to your previous message. React to it in ONE short written sentence only (roughly 6-15 words) — nothing more.
-
-RULES:
-- If their last reply was accurate, specific, and clearly explained, briefly acknowledge it in writing (e.g. "Okay, that makes sense, thanks.").
-- If their last reply was vague, evasive, or sounded wrong, push back briefly in writing (e.g. "That doesn't match what I was told." / "Can you double check that?").
-- Do NOT restate, summarize, or invent any numbers, dates, amounts, or specific facts — this is a pure tone reaction only, never a question.
-- Do NOT ask a new question or introduce any new topic — the next question is added separately, after your reaction.
-- Stay in character as the CUSTOMER at all times. No stage directions, no narration, no quotes, no headers like "Customer:".${isLast ? '\n- This is the customer\'s final message on this ticket, so this reaction can carry a bit more urgency than earlier turns.' : ''}
-
-Return ONLY the one-sentence reaction, nothing else.`;
-
-    const resp = await fetch(getProxyUrl(), {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ model: MODEL, max_tokens: 60, system, messages })
-    });
-
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}));
-      throw new Error(err.error?.message || `API error ${resp.status}`);
-    }
-    const data = await resp.json();
-    return data.content[0].text.trim();
-  }
+  // ---- Ops Escalation Call / Writing assessments ----
+  // These two modules intentionally involve NO live AI generation at all
+  // for the question content, and no AI-generated "reaction" between
+  // questions either. Earlier versions tried both: first asking Claude to
+  // "raise exactly this question, in your own words" (which, compressing a
+  // data-heavy paragraph into a few sentences, caused it to drop, round, or
+  // invent numbers/dates that didn't match the never-shown answer key), and
+  // then a narrower AI call for just a short reaction line between
+  // questions (which still risked occasionally drifting off-topic). Both
+  // are gone: js/app.js now shows each required question 100% VERBATIM
+  // from the topic's bot_script, with a small set of fixed, hand-written
+  // transition phrases (OPS_CALL_TRANSITIONS / OPS_WRITING_TRANSITIONS) —
+  // no API call, no model output, nothing that can ever go off-script.
 
   // ---- AI Employee for Manager Feedback Assessment ----
   // Plays the role of an employee receiving feedback from their manager.
@@ -1129,5 +1067,5 @@ Return ONLY a JSON object:
     };
   }
 
-  return { isAvailable, evaluate, evaluateBalanced, evaluateRewrite, callAiCustomer, callAiWrittenCustomer, callAiOpsCallerReaction, callAiOpsWriterReaction, callAiEmployee, evaluateManagerAssessment, evaluateManagerFeedback, evaluateSituationRoomA, evaluateSituationRoomB, evaluateOpsCall, evaluateOpsWriting, getCriteria, scoreTimeManagement, MOCK_CALL_CRITERIA };
+  return { isAvailable, evaluate, evaluateBalanced, evaluateRewrite, callAiCustomer, callAiWrittenCustomer, callAiEmployee, evaluateManagerAssessment, evaluateManagerFeedback, evaluateSituationRoomA, evaluateSituationRoomB, evaluateOpsCall, evaluateOpsWriting, getCriteria, scoreTimeManagement, MOCK_CALL_CRITERIA };
 })();
