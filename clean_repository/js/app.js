@@ -23,7 +23,7 @@ const App = (() => {
   let _wcChatStartTime = null;
   let _wcChatTimerInterval = null;
 
-  const WRITTEN_COMM_DEFAULT_PREFIX = "Thank you for writing to Broker.\n\n";
+  const WRITTEN_COMM_DEFAULT_PREFIX = "Thank you for writing to Zerodha.\n\n";
   const WRITTEN_COMM_DEFAULT_SUFFIX = "\n\nYou can update this ticket if you have any concerns or queries, and we will get back to you.\n\nPlease note: This ticket will auto-close after 24 hours of inactivity, but you can reopen it at any time or reach out to us via our Support Portal.";
 
   function getTraineeContent(text) {
@@ -31,9 +31,9 @@ const App = (() => {
     let cleaned = text;
 
     const prefixes = [
-      "Thank you for writing to Broker.",
-      "Thank you for writing to Broker.\n\n",
-      "Thank you for writing to Broker.\r\n\r\n"
+      "Thank you for writing to Zerodha.",
+      "Thank you for writing to Zerodha.\n\n",
+      "Thank you for writing to Zerodha.\r\n\r\n"
     ];
 
     const suffixes = [
@@ -1384,17 +1384,29 @@ const App = (() => {
     if (statusEl) statusEl.innerHTML = '<span style="color:#6366f1;font-style:italic">🤖 AI Customer is thinking…</span>';
 
     let botLine = '';
-    try {
-      if (_currentModule === 'ops-call-assessment') {
-        botLine = await ClaudeEvaluator.callAiOpsCaller(
-          _currentTopic.scenario || '',
-          _currentTopic.description || '',
-          _currentTopic.botScript || [],
-          _buildAiMessages(),
-          _mcAiTurnCount,
-          _mcAiMaxTurns
-        );
-      } else {
+    if (_currentModule === 'ops-call-assessment') {
+      // The required question is always shown VERBATIM from bot_script —
+      // never AI-paraphrased — so the trainee is guaranteed the exact
+      // numbers/dates/facts every time, matching the answer key used to
+      // grade them. Claude is only asked for the short in-character
+      // reaction to the trainee's previous answer (no facts involved), and
+      // if that call fails for any reason the question still appears with
+      // no reaction line at all — it never falls back to a wrong/invented
+      // question.
+      const script = _currentTopic.botScript || [];
+      const idx = Math.min(_mcAiTurnCount - 1, Math.max(script.length - 1, 0));
+      const requiredQuestion = script[idx] || '';
+      let reaction = '';
+      if (_mcAiTurnCount > 1) {
+        try {
+          reaction = await ClaudeEvaluator.callAiOpsCallerReaction(_buildAiMessages(), isLast);
+        } catch (e) {
+          console.warn('AI reaction failed, continuing without it:', e.message);
+        }
+      }
+      botLine = [reaction, requiredQuestion].filter(Boolean).join(' ');
+    } else {
+      try {
         botLine = await ClaudeEvaluator.callAiCustomer(
           _currentTopic.scenario || '',
           _currentTopic.description || '',
@@ -1402,14 +1414,8 @@ const App = (() => {
           _mcAiTurnCount,
           _mcAiMaxTurns
         );
-      }
-    } catch (e) {
-      console.warn('AI customer call failed, using fallback:', e.message);
-      if (_currentModule === 'ops-call-assessment' && _currentTopic.botScript && _currentTopic.botScript[_mcAiTurnCount - 1]) {
-        // Fall back to the exact required question verbatim so the trainee
-        // still gets the full data even if the live AI call fails.
-        botLine = _currentTopic.botScript[_mcAiTurnCount - 1];
-      } else {
+      } catch (e) {
+        console.warn('AI customer call failed, using fallback:', e.message);
         botLine = _mcAiTurnCount === 1
           ? "I'd like to apply for a takeover offer but your system is blocking me even though I'm willing to proceed. Why is that?"
           : "I still don't understand why I can't do this directly. Can you explain the exact policy?";
@@ -1933,19 +1939,24 @@ const App = (() => {
       // Subsequent turns: use Claude to dynamically reply to the agent's message
       (async () => {
         let botLine = '';
-        try {
-          const messages = _buildWcAiMessages();
-          if (_currentModule === 'ops-writing-assessment') {
-            botLine = await ClaudeEvaluator.callAiOpsWriter(
-              _currentTopic.title || '',
-              _currentTopic.scenario || '',
-              _currentTopic.description || '',
-              _currentTopic.botScript || _wcChatTurns,
-              messages,
-              _wcChatTurnIndex + 1,
-              _wcChatTurns.length
-            );
-          } else {
+        if (_currentModule === 'ops-writing-assessment') {
+          // Same approach as the call module: the required question is
+          // always shown VERBATIM from bot_script — never AI-paraphrased —
+          // so the trainee gets the exact numbers/facts every time. Claude
+          // only supplies the short written reaction to the trainee's
+          // previous reply; if that call fails, the question still appears
+          // with no reaction line rather than a wrong/invented one.
+          const requiredQuestion = _wcChatTurns[_wcChatTurnIndex] || '';
+          let reaction = '';
+          try {
+            reaction = await ClaudeEvaluator.callAiOpsWriterReaction(_buildWcAiMessages(), isLastTurn);
+          } catch (e) {
+            console.warn('AI writer reaction failed, continuing without it:', e.message);
+          }
+          botLine = [reaction, requiredQuestion].filter(Boolean).join(' ');
+        } else {
+          try {
+            const messages = _buildWcAiMessages();
             botLine = await ClaudeEvaluator.callAiWrittenCustomer(
               _currentTopic.title || '',
               _currentTopic.scenario || '',
@@ -1954,10 +1965,10 @@ const App = (() => {
               _wcChatTurnIndex + 1,
               _wcChatTurns.length
             );
+          } catch (e) {
+            console.warn('Claude written chat turn failed, using fallback:', e.message);
+            botLine = _wcChatTurns[_wcChatTurnIndex];
           }
-        } catch (e) {
-          console.warn('Claude written chat turn failed, using fallback:', e.message);
-          botLine = _wcChatTurns[_wcChatTurnIndex];
         }
         _wcChatHistory.push({ bot: botLine, agent: '' });
         displayBotBubble(botLine);

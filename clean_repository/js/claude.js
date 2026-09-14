@@ -542,39 +542,34 @@ Return ONLY your written chat message.`;
   // Walks through a fixed list of required (very difficult) questions, one
   // per turn, while reacting to the trainee's previous answer — so the call
   // stays adaptive without ever skipping or diluting the intended content.
-  async function callAiOpsCaller(scenario, description, requiredQuestions, messages, turnNumber, maxTurns) {
+  // NOTE: this used to ask Claude to "raise exactly this question, in your
+  // own words" — in practice that compression (a whole data-heavy paragraph
+  // squeezed into "3-5 sentences") caused the model to drop, round, or
+  // outright invent numbers/dates instead of the real ones, so the trainee
+  // was sometimes answering a question that didn't match anything in the
+  // (never-shown) answer key. The required question is now inserted
+  // VERBATIM by the caller (js/app.js) from the topic's bot_script — this
+  // function only ever generates the short in-character REACTION to the
+  // trainee's previous answer, with numbers/facts explicitly disallowed,
+  // so there is nothing left for it to get wrong.
+  async function callAiOpsCallerReaction(messages, isLast) {
     if (!isAvailable()) throw new Error('Claude proxy not configured');
 
-    const isLast = turnNumber >= maxTurns;
-    const idx = Math.min(turnNumber - 1, Math.max(requiredQuestions.length - 1, 0));
-    const thisQuestion = requiredQuestions[idx] || '';
+    const system = `You are roleplaying as a difficult, technically sharp customer on a stockbroker's escalation helpline call. You just heard the agent's answer to your previous question. React to it in ONE short spoken sentence only (roughly 6-15 words) — nothing more.
 
-    const system = `You are roleplaying as a difficult, technically sharp customer calling a stockbroker's escalation helpline about depository and settlement operations (CDSL transfers/gifting, nominee changes, short-delivery auctions, or suspended stocks).
+RULES:
+- If their last answer sounded accurate, specific, and confident, acknowledge it briefly (e.g. "Okay, that actually makes sense.").
+- If their last answer was vague, evasive, or sounded wrong, push back briefly and firmly, the way a frustrated caller would (e.g. "That still doesn't add up." / "That's not really answering it.").
+- Do NOT restate, summarize, or invent any numbers, dates, amounts, or specific facts — this is a pure tone reaction only, never a question.
+- Do NOT ask a new question or introduce any new topic — the next question is added separately, after your reaction.
+- Stay fully in character as the customer at all times. No stage directions, no narration, no quotes.${isLast ? '\n- This is the caller\'s final turn, so this reaction can carry a bit more urgency/impatience than earlier turns.' : ''}
 
-BACKGROUND CONTEXT: ${scenario || description || 'A client has an escalated operational issue with their trading/demat account.'}
-
-THIS TURN'S REQUIRED QUESTION (turn ${turnNumber} of ${maxTurns}) — you MUST raise exactly this situation/question this turn, in your own words, using ONLY the facts and figures given below. Do not invent, round, or change any numbers, dates, or rules:
-"""
-${thisQuestion}
-"""
-
-HOW TO REACT TO THE TRAINEE'S PREVIOUS ANSWER (there is no previous answer on turn 1 — skip straight to the required question):
-- If their last answer was accurate, specific, and confidently explained, acknowledge it in one short phrase, then move on to this turn's required question.
-- If their last answer was vague, evasive, or got the facts/numbers wrong, briefly and firmly call that out the way a frustrated escalation caller would (e.g. "That's still not clear to me" or "Those numbers don't add up"), THEN ask this turn's required question.
-- Never solve the question yourself and never reveal the correct answer.
-
-STRICT RULES:
-- You are the CUSTOMER on an escalation call — stay in character at all times, never break the fourth wall.
-- Reply in 3–5 sentences MAXIMUM — natural spoken phrasing for a phone call, not a written essay.
-- Speak the required question's numbers/dates naturally, as a person would say them aloud, without inventing new ones.
-- Do NOT ask about anything outside this turn's required question.${isLast ? '\n- This is the FINAL turn. After reacting to their last answer as above, ask this turn\'s required question, then say you need this resolved right now and are waiting for their final answer.' : ''}
-
-Return ONLY the customer's spoken dialogue. No stage directions, no narration, no quotes.`;
+Return ONLY the one-sentence reaction, nothing else.`;
 
     const resp = await fetch(getProxyUrl(), {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ model: MODEL, max_tokens: 220, system, messages })
+      body:    JSON.stringify({ model: MODEL, max_tokens: 60, system, messages })
     });
 
     if (!resp.ok) {
@@ -586,43 +581,29 @@ Return ONLY the customer's spoken dialogue. No stage directions, no narration, n
   }
 
   // ---- Live AI customer for the trainee Ops Escalation Writing assessment ----
-  // Same idea as callAiOpsCaller but for the written support-chat format:
-  // walks through a fixed list of required questions, reacting in writing
-  // to the trainee's previous reply.
-  async function callAiOpsWriter(topicTitle, topicScenario, topicDescription, requiredQuestions, messages, turnNumber, maxTurns) {
+  // Same rationale as callAiOpsCallerReaction above, for the written
+  // support-chat format: the required question is inserted VERBATIM by the
+  // caller from the topic's bot_script, so this only generates the short
+  // written reaction to the trainee's previous reply — no facts/numbers,
+  // so there's nothing for the model to get wrong.
+  async function callAiOpsWriterReaction(messages, isLast) {
     if (!isAvailable()) throw new Error('Claude proxy not configured');
 
-    const isLast = turnNumber >= maxTurns;
-    const idx = Math.min(turnNumber - 1, Math.max(requiredQuestions.length - 1, 0));
-    const thisQuestion = requiredQuestions[idx] || '';
+    const system = `You are roleplaying as a customer writing into a stockbroker's support chat/ticket about a difficult depository or settlement operations issue. You just read the agent's reply to your previous message. React to it in ONE short written sentence only (roughly 6-15 words) — nothing more.
 
-    const system = `You are roleplaying as a customer writing into a stockbroker's support chat/ticket about a difficult depository or settlement operations issue (CDSL Easiest transfers, nominee modification, short delivery/auctions, or suspended stocks).
+RULES:
+- If their last reply was accurate, specific, and clearly explained, briefly acknowledge it in writing (e.g. "Okay, that makes sense, thanks.").
+- If their last reply was vague, evasive, or sounded wrong, push back briefly in writing (e.g. "That doesn't match what I was told." / "Can you double check that?").
+- Do NOT restate, summarize, or invent any numbers, dates, amounts, or specific facts — this is a pure tone reaction only, never a question.
+- Do NOT ask a new question or introduce any new topic — the next question is added separately, after your reaction.
+- Stay in character as the CUSTOMER at all times. No stage directions, no narration, no quotes, no headers like "Customer:".${isLast ? '\n- This is the customer\'s final message on this ticket, so this reaction can carry a bit more urgency than earlier turns.' : ''}
 
-TOPIC: ${topicTitle || 'Operations Support Query'}
-BACKGROUND CONTEXT: ${topicScenario || topicDescription || 'A client has an escalated operational issue with their trading/demat account.'}
-
-THIS TURN'S REQUIRED QUESTION (turn ${turnNumber} of ${maxTurns}) — you MUST raise exactly this situation/question this turn, in your own words, using ONLY the facts and figures given below. Do not invent, round, or change any numbers, dates, or rules:
-"""
-${thisQuestion}
-"""
-
-HOW TO REACT TO THE AGENT'S PREVIOUS REPLY (there is no previous reply on turn 1 — skip straight to the required question):
-- If their last reply was accurate, specific, and clearly explained, briefly acknowledge it, then move to this turn's required question.
-- If their last reply was vague, evasive, or factually wrong, briefly push back in writing (e.g. "That doesn't match what I was told" or "Can you double check those numbers?"), THEN raise this turn's required question.
-- Never solve the question yourself and never reveal the correct answer.
-
-STRICT RULES:
-- Stay in character as the CUSTOMER at all times. Never break the fourth wall.
-- Reply in 2 to 4 sentences MAXIMUM — natural, written chat/ticket tone.
-- Write the required question's numbers/dates/amounts naturally, without inventing new ones.
-- Do NOT add stage directions, narration, quotes, or headers like "Customer:". Only output your message.${isLast ? '\n- This is your FINAL turn. After reacting as above, raise this turn\'s required question, then say you expect a written resolution on this ticket.' : ''}
-
-Return ONLY your written chat/ticket message.`;
+Return ONLY the one-sentence reaction, nothing else.`;
 
     const resp = await fetch(getProxyUrl(), {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ model: MODEL, max_tokens: 180, system, messages })
+      body:    JSON.stringify({ model: MODEL, max_tokens: 60, system, messages })
     });
 
     if (!resp.ok) {
@@ -1148,5 +1129,5 @@ Return ONLY a JSON object:
     };
   }
 
-  return { isAvailable, evaluate, evaluateBalanced, evaluateRewrite, callAiCustomer, callAiWrittenCustomer, callAiOpsCaller, callAiOpsWriter, callAiEmployee, evaluateManagerAssessment, evaluateManagerFeedback, evaluateSituationRoomA, evaluateSituationRoomB, evaluateOpsCall, evaluateOpsWriting, getCriteria, scoreTimeManagement, MOCK_CALL_CRITERIA };
+  return { isAvailable, evaluate, evaluateBalanced, evaluateRewrite, callAiCustomer, callAiWrittenCustomer, callAiOpsCallerReaction, callAiOpsWriterReaction, callAiEmployee, evaluateManagerAssessment, evaluateManagerFeedback, evaluateSituationRoomA, evaluateSituationRoomB, evaluateOpsCall, evaluateOpsWriting, getCriteria, scoreTimeManagement, MOCK_CALL_CRITERIA };
 })();
