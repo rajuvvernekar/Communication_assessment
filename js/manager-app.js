@@ -798,15 +798,20 @@ Let's get back on track.
   // ── Auth ─────────────────────────────────────────────────
   async function login() {
     const name  = $('mgr-auth-name').value.trim();
-    const empId = $('mgr-auth-empid').value.trim();
     const errEl = $('mgr-auth-error');
 
-    if (!name || !empId) {
-      errEl.textContent = 'Please enter your name and Employee ID.';
+    if (!name) {
+      errEl.textContent = 'Please enter your name.';
       errEl.classList.remove('hidden'); return;
     }
     errEl.classList.add('hidden');
 
+    // Employee ID is no longer collected — derive a stable internal key
+    // from the manager's name instead (used only to build the synthetic
+    // sign-in email/password pair; never shown to the person). Two
+    // managers sharing an exact name will share one account, same
+    // trade-off as on the trainee side.
+    const empId = name.toLowerCase().replace(/\s+/g, '-');
     const password = empId.toLowerCase() + '2024';
     const btn = $('btn-mgr-start');
     btn.disabled = true; btn.textContent = 'Signing in...';
@@ -837,7 +842,7 @@ Let's get back on track.
   async function logout() {
     try { await Auth.signOut(); } catch (e) { /* ignore */ }
     $('mgr-app-header').classList.add('hidden');
-    $('mgr-auth-name').value = ''; $('mgr-auth-empid').value = '';
+    $('mgr-auth-name').value = '';
     showScreen('mgr-screen-welcome');
   }
 
@@ -1774,7 +1779,7 @@ Let's get back on track.
     // Auth
     const btnStart = $('btn-mgr-start');
     if (btnStart) btnStart.addEventListener('click', login);
-    [$('mgr-auth-name'), $('mgr-auth-empid')].forEach(inp => {
+    [$('mgr-auth-name')].forEach(inp => {
       if (inp) inp.addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
     });
 

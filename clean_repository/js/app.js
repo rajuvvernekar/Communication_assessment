@@ -23,7 +23,7 @@ const App = (() => {
   let _wcChatStartTime = null;
   let _wcChatTimerInterval = null;
 
-  const WRITTEN_COMM_DEFAULT_PREFIX = "Thank you for writing to Zerodha.\n\n";
+  const WRITTEN_COMM_DEFAULT_PREFIX = "Thank you for writing to Broker.\n\n";
   const WRITTEN_COMM_DEFAULT_SUFFIX = "\n\nYou can update this ticket if you have any concerns or queries, and we will get back to you.\n\nPlease note: This ticket will auto-close after 24 hours of inactivity, but you can reopen it at any time or reach out to us via our Support Portal.";
 
   function getTraineeContent(text) {
@@ -31,9 +31,9 @@ const App = (() => {
     let cleaned = text;
 
     const prefixes = [
-      "Thank you for writing to Zerodha.",
-      "Thank you for writing to Zerodha.\n\n",
-      "Thank you for writing to Zerodha.\r\n\r\n"
+      "Thank you for writing to Broker.",
+      "Thank you for writing to Broker.\n\n",
+      "Thank you for writing to Broker.\r\n\r\n"
     ];
 
     const suffixes = [
@@ -382,13 +382,19 @@ const App = (() => {
 
     const doStart = async () => {
       const name       = $('auth-name').value.trim();
-      const employeeId = $('auth-empid').value.trim();
       const errorEl    = $('auth-error');
-      if (!name || !employeeId) {
-        errorEl.textContent = 'Please enter your name and Employee ID.';
+      if (!name) {
+        errorEl.textContent = 'Please enter your name.';
         errorEl.classList.remove('hidden');
         return;
       }
+      // Employee ID is no longer collected from the trainee — derive a
+      // stable internal key from their name instead so returning trainees
+      // (same name, case/spacing-insensitive) still match to the same
+      // record and keep their score history. Two trainees who happen to
+      // share an exact name will share a record; that's an accepted
+      // trade-off of dropping the ID field.
+      const employeeId = name.toLowerCase().replace(/\s+/g, '-');
       errorEl.classList.add('hidden');
       $('btn-start').disabled    = true;
       $('btn-start').textContent = 'Starting…';
@@ -418,7 +424,6 @@ const App = (() => {
 
     $('btn-start').addEventListener('click', doStart);
     $('auth-name').addEventListener('keydown',  (e) => { if (e.key === 'Enter') doStart(); });
-    $('auth-empid').addEventListener('keydown', (e) => { if (e.key === 'Enter') doStart(); });
   }
 
   function activateTrainee() {
@@ -429,7 +434,6 @@ const App = (() => {
       localStorage.removeItem('commassess_trainee');
       $('app-header').classList.add('hidden');
       if ($('auth-name'))  $('auth-name').value  = '';
-      if ($('auth-empid')) $('auth-empid').value = '';
       if ($('auth-error')) $('auth-error').classList.add('hidden');
       showScreen('welcome');
     };

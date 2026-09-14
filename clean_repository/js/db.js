@@ -887,6 +887,72 @@ const DB = (() => {
           enabled: true
         },
 
+        // Trainee Red Pen — Operations Escalation Call (Corporate Action / Bonus Mismatch, 4 very difficult questions, AI-adaptive)
+        {
+          module: 'ops-call-assessment',
+          title: 'Corporate Action Mismatch — Bonus Shares Credited in Wrong Ratio',
+          description: 'A difficult escalation call about a bonus share credit the client believes is wrong, plus knock-on questions about the adjusted cost basis and a pledge that was auto-created on the new shares. 4 tough questions in a row, each with full data included.',
+          scenario: 'You are on an escalation helpline. A client calls in angry because the bonus shares credited to their account do not match the ratio the company announced, and they are convinced the platform has shortchanged them. Answer each of the 4 data-heavy questions accurately and confidently before the caller moves to the next.',
+          checklist: [
+            "Address the exact numbers, dates and ratios the caller quotes — do not give a vague or generic answer",
+            "Clearly state whether something is a platform error, a depository/exchange process, or expected corporate-action mechanics — do not let the caller assume the wrong one",
+            "Correct any wrong assumption in the caller's question rather than agreeing with it to keep them calm",
+            "Give a clear next step and realistic timeline for anything still in progress",
+            "Stay calm, professional and empathetic even when the caller is frustrated or challenges your numbers"
+          ],
+          bot_script: [
+            "Meridian Textiles announced a 1:2 bonus, so on my 300 shares I should have gotten 150 new ones. I only see 149 credited. Where is my missing share?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Company: Meridian Textiles</li><li>Announced bonus ratio: 1:2 (1 additional share for every 2 held)</li><li>Shares held on record date: 300</li><li>Client's expected credit: 150 new shares</li><li>Actual credit shown in Kite: 149 shares</li><li>Fractional entitlement: 300 × 1/2 = 150.0 exactly — no fraction involved</li><li>Client wants the missing share credited immediately or a cash equivalent</li></ul></div>",
+            "Fine, if it really is 150, then why does my holdings page show the bonus shares credited on 5 March but my contract note says the record date was 8 March? Isn't that backwards?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Record date (fixed by the company): 8 March</li><li>Bonus shares actually credited to demat: 5 March</li><li>Client's assumption: credit date must be AFTER record date, so 5 March looks wrong</li><li>Reality to explain: the credit client is looking at on 5 March was an unrelated dividend memo entry, not the bonus credit — actual bonus credit landed on 12 March, 4 working days after the 8 March record date</li></ul></div>",
+            "Now my average buy price on the app looks completely wrong — it barely dropped at all after a 1:2 bonus. Is the app not adjusting for the bonus properly?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Original holding before bonus: 300 shares at average price ₹450 per share</li><li>Total original investment: ₹1,35,000</li><li>After 1:2 bonus: 450 shares total (300 original + 150 bonus)</li><li>Correct adjusted average price: ₹1,35,000 ÷ 450 = ₹300 per share</li><li>App is currently showing: ₹430 per share (stale, not yet recalculated)</li><li>Client's question: is this an app bug, and does it affect their tax cost basis</li></ul></div>",
+            "One more thing — 100 of my original shares are pledged for margin. Did the new bonus shares from those get auto-pledged too, or are they free in my account?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Shares pledged for margin (original, before bonus): 100 out of 300</li><li>Bonus ratio: 1:2, so bonus shares attributable to the pledged 100 = 50</li><li>Depository/exchange rule: bonus shares on a pledged holding are credited to the client's free balance first, NOT auto-pledged</li><li>Client must submit a fresh pledge request if they want the new 50 shares pledged too</li><li>Client's question: are the 50 new shares free right now, and do they need to do anything to use them as margin</li></ul></div>"
+          ],
+          enabled: true
+        },
+
+        // Trainee Red Pen — Operations Escalation Call (Dividend Shortfall / TDS, 4 very difficult questions, AI-adaptive)
+        {
+          module: 'ops-call-assessment',
+          title: 'Dividend Shortfall — Received Amount Doesn\'t Match Declared Per-Share Rate',
+          description: 'A difficult escalation call about a dividend payout the client believes is short, driven by TDS deduction and a partial holding technicality. 4 tough questions in a row, each with full data included.',
+          scenario: 'You are on an escalation helpline. A client calls in convinced they have been shortchanged on a dividend payout because the amount credited does not match a simple multiplication of shares held by the declared per-share rate. Answer each of the 4 data-heavy questions accurately and confidently before the caller moves to the next.',
+          checklist: [
+            "Address the exact numbers, dates and rates the caller quotes — do not give a vague or generic answer",
+            "Clearly state whether something is a platform error, a tax/regulatory deduction, or expected process — do not let the caller assume the wrong one",
+            "Correct any wrong assumption in the caller's question rather than agreeing with it to keep them calm",
+            "Give a clear next step and realistic timeline for anything still in progress",
+            "Stay calm, professional and empathetic even when the caller is frustrated or challenges your numbers"
+          ],
+          bot_script: [
+            "The company declared a dividend of ₹8 per share, I hold 500 shares, so I should have received ₹4,000. Only ₹3,600 landed in my bank. Where did ₹400 of my money go?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Declared dividend rate: ₹8 per share</li><li>Shares held on record date: 500</li><li>Gross dividend due: ₹4,000</li><li>TDS deducted under Section 194: 10%, i.e. ₹400</li><li>Net amount actually credited to bank: ₹3,600</li><li>Client did not know a dividend could be taxed at source</li></ul></div>",
+            "Nobody told me tax would be cut. Is 10% the standard rate for everyone, or did I get charged extra because of something on my account?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Standard TDS rate on dividends under Section 194: 10%, applies to all resident individual shareholders whose dividend from one company exceeds ₹5,000 in a financial year</li><li>Client's total dividend from this company this year: ₹4,000 (this single payout) — client also received an earlier ₹2,500 payout from the same company in April, taking the yearly total to ₹6,500, which is why the ₹5,000 threshold was crossed</li><li>No PAN-linkage issue or higher-rate penalty applies to this account</li><li>Client's question: was this a special/extra deduction or the normal rate everyone pays once past ₹5,000/year</li></ul></div>",
+            "I bought 200 of those 500 shares only 3 days before the record date. My friend says you need to hold for a minimum period to even get the dividend — did I actually qualify for the full amount?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Total shares held on record date: 500 (300 held long-term + 200 bought 3 days before record date)</li><li>Indian equity dividends: no minimum holding period requirement — any shares held on record date qualify in full, regardless of when purchased</li><li>Client's friend's claim (minimum holding period) is incorrect for this market</li><li>Client's question: did the recently-bought 200 shares reduce their payout in any way</li></ul></div>",
+            "Can I get this TDS refunded right now since I'm not liable to pay tax this year, and can you send me a certificate proving ₹400 was deducted?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>TDS deducted this payout: ₹400</li><li>TDS is deducted and deposited with the Income Tax Department by the company/registrar, not held by the broker — broker cannot refund it directly</li><li>Client can claim it back only when filing their Income Tax Return, if their total tax liability is lower than the TDS deducted</li><li>Proof document: Form 16A / TDS certificate, issued by the company's registrar (not the broker), typically available on the registrar's portal or via the company after quarter-end</li><li>Client's 2 questions: can broker refund it now (no), and where does the certificate come from</li></ul></div>"
+          ],
+          enabled: true
+        },
+
+        // Trainee Red Pen — Operations Escalation Call (Pledge Release Delay, 4 very difficult questions, AI-adaptive)
+        {
+          module: 'ops-call-assessment',
+          title: 'Pledge Release Delay — Margin Not Freed After Unpledging Shares for Fund Withdrawal',
+          description: 'A difficult escalation call about margin that has not been freed up after the client unpledged shares to withdraw funds, with a knock-on question about an open position getting squared off. 4 tough questions in a row, each with full data included.',
+          scenario: 'You are on an escalation helpline. A client unpledged shares yesterday expecting the margin to free up immediately, tried to withdraw funds, and is now angry that the money is not available and that a position got squared off along the way. Answer each of the 4 data-heavy questions accurately and confidently before the caller moves to the next.',
+          checklist: [
+            "Address the exact numbers, dates and timings the caller quotes — do not give a vague or generic answer",
+            "Clearly state whether something is a platform error, an exchange/depository settlement cycle, or expected process — do not let the caller assume the wrong one",
+            "Correct any wrong assumption in the caller's question rather than agreeing with it to keep them calm",
+            "Give a clear next step and realistic timeline for anything still in progress",
+            "Stay calm, professional and empathetic even when the caller is frustrated or challenges your numbers"
+          ],
+          bot_script: [
+            "I submitted an unpledge request yesterday morning at 10 AM for shares worth ₹5,00,000. It's now the next day and my available margin still hasn't gone up. Why is my money still stuck?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Unpledge request submitted: yesterday, 10:00 AM</li><li>Value of shares unpledged: ₹5,00,000</li><li>Standard unpledge processing: same-day if requested before the cut-off (typically before market close), reflecting in margin by next trading day morning</li><li>Client's request was submitted well before cut-off, so it should already reflect</li><li>Actual status to check/explain: unpledge was processed correctly and margin IS available as of this morning — client may be looking at a cached balance on an old app screen; ask them to refresh/re-login</li></ul></div>",
+            "Okay it's showing now, thank you. But I tried to withdraw ₹5,00,000 in cash right after that and it only let me withdraw ₹4,10,000. What happened to the rest?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Margin freed from unpledge: ₹5,00,000 (in the form of collateral/margin, not literal cash)</li><li>Client attempted cash withdrawal of: ₹5,00,000</li><li>Amount actually withdrawable: ₹4,10,000</li><li>Reason: ₹90,000 of the account's margin was still utilised against an existing open F&O position that day — only the UNUSED margin balance can be withdrawn as cash, freed collateral is not automatically cash</li><li>Client's question: why can't all ₹5,00,000 be withdrawn immediately</li></ul></div>",
+            "While all this was happening, my Nifty futures position got auto-squared-off at a loss. Did unpledging my shares cause my position to get closed?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Position affected: 1 lot Nifty futures, opened 2 days earlier</li><li>Square-off time: 3:15 PM, same day as the unpledge request</li><li>Reason for square-off: separate margin shortfall alert triggered at 1:45 PM that day, unrelated to the unpledge — shortfall was due to an adverse price move on the futures position itself, not the unpledge action</li><li>Unpledging shares only reduces AVAILABLE collateral if anything, it cannot by itself create a shortfall on an already-funded position</li><li>Client's question: is the unpledge the cause (no) — needs the actual shortfall reason explained clearly</li></ul></div>",
+            "This has cost me a real loss. Can you reverse the square-off, or at least waive the square-off penalty charge since I was in the middle of a legitimate unpledge request?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Square-off penalty charged: flat ₹50 + 18% GST per squared-off order, per exchange/broker policy</li><li>Square-offs triggered by a margin shortfall cannot be reversed once executed — the trade is final on the exchange</li><li>Penalty waivers are considered only case-by-case through a formal escalation/ticket process, not guaranteed and not something that can be promised on this call</li><li>Client's 2 questions: can the trade itself be reversed (no, final), and can the ₹50+GST fee be waived (can be escalated as a ticket, no promise)</li></ul></div>"
+          ],
+          enabled: true
+        },
+
         // Trainee Red Pen — Operations Escalation Writing (4 very difficult questions, AI-adaptive)
         {
           module: 'ops-writing-assessment',
@@ -1027,7 +1093,7 @@ Speak for 4-5 minutes: Your escalation approach, how you handle the agents, cust
         { id: 'mgr-sr9', module: 'mgr-situation-room', title: 'The Refund Threshold Dilemma', enabled: true, description: 'A high-value client demands a refund above your approval authority while your manager is unreachable.', scenario: 'A ₹40L client threatens to leave and post negative reviews unless refunded ₹12,000 — ₹7,000 above your ₹5,000 approval authority, with your manager unreachable.', checklist: [] },
 
         // ── Transcript Autopsy
-        { id: 'mgr-ta1', module: 'mgr-transcript-autopsy', title: 'SIP Debit With No Unit Allotment — 22 Min Call', enabled: true, description: 'Analyse a difficult inbound call with 8+ coaching opportunities across all key service competencies.', scenario: `BACKGROUND: Preethi Mehta is calling Zerodha support for the third time. Her ₹10,000 monthly SIP was debited on the 2nd but units were never allotted. Ticket TKT-88244 (raised 3 weeks ago) was falsely marked resolved.
+        { id: 'mgr-ta1', module: 'mgr-transcript-autopsy', title: 'SIP Debit With No Unit Allotment — 22 Min Call', enabled: true, description: 'Analyse a difficult inbound call with 8+ coaching opportunities across all key service competencies.', scenario: `BACKGROUND: Preethi Mehta is calling Broker support for the third time. Her ₹10,000 monthly SIP was debited on the 2nd but units were never allotted. Ticket TKT-88244 (raised 3 weeks ago) was falsely marked resolved.
 
 YOUR TASK: Write a structured coaching report. Identify at minimum 6 coaching opportunities.`, checklist: [] },
         { id: 'mgr-ta2', module: 'mgr-transcript-autopsy', title: 'Mutual Fund Redemption Blocked — 26 Min Call', enabled: true, description: 'A high-frustration escalation call with 9+ coaching opportunities across service quality dimensions.', scenario: `BACKGROUND: Vikram Shetty has been waiting 45 days for ₹2,50,000 redemption to credit. He has called 4 times, received conflicting explanations, and has a medical emergency.

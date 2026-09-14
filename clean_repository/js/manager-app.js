@@ -19,9 +19,9 @@ const MgrApp = (() => {
       {
         id: 'sr1',
         title: 'The Unexpected Resignation',
-        scenario: `Your top performer, Trainee B, has just walked into your office and quietly resigned — effective in 2 weeks. He handles 40% of your team's output. Peak season starts in 4 days. The rest of the team doesn't know yet. Your standup is in 20 minutes.\n\nTrainee B is sitting across from you, resignation letter on the desk. He looks uncomfortable but resolved. He's been with the team for 3 years and has always delivered.`,
-        sectionAPrompt: 'Write the EXACT words you say to Trainee B in the next 2–3 minutes — your immediate verbal response to him. Do not describe actions. Write what you actually say, word for word.',
-        wrongResponse: `"Trainee B, honestly I'm shocked. The timing couldn't be worse — we're literally going into peak season in 4 days and you're leaving us in an extremely difficult position. You know how much the team relies on you. Everyone is going to struggle. I need you to give me at least 4 weeks instead of 2 — is there any way you can do that? And can you tell me what we did wrong? Is it the salary? Because I may be able to do something about that if that's the issue."`,
+        scenario: `Your top performer, Vikram, has just walked into your office and quietly resigned — effective in 2 weeks. He handles 40% of your team's output. Peak season starts in 4 days. The rest of the team doesn't know yet. Your standup is in 20 minutes.\n\nVikram is sitting across from you, resignation letter on the desk. He looks uncomfortable but resolved. He's been with the team for 3 years and has always delivered.`,
+        sectionAPrompt: 'Write the EXACT words you say to Vikram in the next 2–3 minutes — your immediate verbal response to him. Do not describe actions. Write what you actually say, word for word.',
+        wrongResponse: `"Vikram, honestly I'm shocked. The timing couldn't be worse — we're literally going into peak season in 4 days and you're leaving us in an extremely difficult position. You know how much the team relies on you. Everyone is going to struggle. I need you to give me at least 4 weeks instead of 2 — is there any way you can do that? And can you tell me what we did wrong? Is it the salary? Because I may be able to do something about that if that's the issue."`,
       },
       {
         id: 'sr2',
@@ -86,13 +86,13 @@ You have called both leads into a conference room immediately. The rest of the f
     ],
     'mgr-transcript-autopsy': [
       { id:'ta1', title:'SIP Debit With No Unit Allotment — 22 Min Call',
-        scenario:`BACKGROUND: Trainee A is calling Broker support for the third time about her SIP not being processed. The ₹10,000 monthly SIP was debited from her bank on the 2nd but units were never allotted. She raised ticket TKT-88244 three weeks ago — it was marked "resolved" without any resolution. This is a critical coaching opportunity with 8+ identifiable mistakes.
+        scenario:`BACKGROUND: Preethi Mehta is calling Broker support for the third time about her SIP not being processed. The ₹10,000 monthly SIP was debited from her bank on the 2nd but units were never allotted. She raised ticket TKT-88244 three weeks ago — it was marked "resolved" without any resolution. This is a critical coaching opportunity with 8+ identifiable mistakes.
 
 ─── CALL TRANSCRIPT ─────────────────────────────────────────────
 
 AGENT: Hello, Broker support, how can I help?
 
-PREETHI: Hi, my name is Trainee A. I have been calling for three weeks about my SIP. My ₹10,000 was debited on the 2nd of this month but I haven't received any units. I also raised a ticket — TKT-88244 — and nobody has contacted me. This money is—
+PREETHI: Hi, my name is Preethi Mehta. I have been calling for three weeks about my SIP. My ₹10,000 was debited on the 2nd of this month but I haven't received any units. I also raised a ticket — TKT-88244 — and nobody has contacted me. This money is—
 
 AGENT: Can I have your account number please?
 
@@ -100,7 +100,7 @@ PREETHI: It's XJ7743-21. As I was saying, this money is meant for my daughter's 
 
 AGENT: And your name?
 
-PREETHI: I just said — Trainee A. I also gave you the ticket number. Can someone please—
+PREETHI: I just said — Preethi Mehta. I also gave you the ticket number. Can someone please—
 
 AGENT: One moment. [28-second silence with no explanation] Okay. What is the issue exactly?
 
@@ -202,7 +202,7 @@ AGENT: The callback will happen within 48 hours. That is the process.
 
 PREETHI: Can I at least have your employee ID and your name so I can reference this call?
 
-AGENT: My name is Agent B. I do not have an employee ID to share.
+AGENT: My name is Aryan. I do not have an employee ID to share.
 
 PREETHI: A call reference number?
 
@@ -227,13 +227,13 @@ Also provide: one "what the agent did well" observation (if any), and a 3-priori
 
 Minimum 250 words.` },
       { id:'ta2', title:'Mutual Fund Redemption Blocked — 26 Min Call',
-        scenario:`BACKGROUND: Trainee B called to redeem ₹2,50,000 from his liquid fund after an emergency medical need. The redemption request was placed 45 days ago and has still not been credited. He has called 4 times and received different explanations each time. This transcript contains 9+ coaching opportunities across multiple skill areas.
+        scenario:`BACKGROUND: Vikram Shetty called to redeem ₹2,50,000 from his liquid fund after an emergency medical need. The redemption request was placed 45 days ago and has still not been credited. He has called 4 times and received different explanations each time. This transcript contains 9+ coaching opportunities across multiple skill areas.
 
 ─── CALL TRANSCRIPT ─────────────────────────────────────────────
 
 AGENT: Hi, support, tell me your problem.
 
-VIKRAM: Good morning. My name is Trainee B. I placed a redemption request 45 days ago for ₹2,50,000 from my Broker Coin liquid fund. The money has still not hit my bank account. This is extremely urgent — I needed this for a medical emergency and I have been borrowing from relatives in the meantime.
+VIKRAM: Good morning. My name is Vikram Shetty. I placed a redemption request 45 days ago for ₹2,50,000 from my Broker Coin liquid fund. The money has still not hit my bank account. This is extremely urgent — I needed this for a medical emergency and I have been borrowing from relatives in the meantime.
 
 AGENT: What is your account?
 
@@ -319,11 +319,11 @@ AGENT: You can write to our grievance email.
 
 VIKRAM: What is that email?
 
-AGENT: [12-second silence] I believe it is support@Broker.com but I am not 100% certain.
+AGENT: [12-second silence] I believe it is support@broker.com but I am not 100% certain.
 
 VIKRAM: You are not certain of your own company's grievance email?
 
-AGENT: Let me check. [22-second silence] Yes, support@Broker.com.
+AGENT: Let me check. [22-second silence] Yes, support@broker.com.
 
 VIKRAM: That is the same general support email. Is there a specific grievance officer?
 
@@ -335,7 +335,7 @@ AGENT: I will escalate this to the senior team with highest priority. I am reall
 
 VIKRAM: What is your name?
 
-AGENT: Agent A.
+AGENT: Deepika.
 
 VIKRAM: Employee ID?
 
@@ -380,11 +380,11 @@ End with a "Development Priority Matrix" — rate the agent on 5 dimensions from
 
 Minimum 300 words.` },
       { id:'ta3', title:'NRI PIS Account & Currency Conversion Delay — 18 Min Call',
-        scenario:`BACKGROUND: Sunita Rao (NRI based in Dubai) called Zerodha support regarding her NRE PIS account opening delay. She submitted documents 3 weeks ago but her account remains pending, causing her to miss a major public infrastructure bond issue. The agent makes 8 critical errors during the call.
+        scenario:`BACKGROUND: Sunita Rao (NRI based in Dubai) called Broker support regarding her NRE PIS account opening delay. She submitted documents 3 weeks ago but her account remains pending, causing her to miss a major public infrastructure bond issue. The agent makes 8 critical errors during the call.
 
 ─── CALL TRANSCRIPT ─────────────────────────────────────────────
 
-AGENT: Hello, Zerodha support.
+AGENT: Hello, Broker support.
 
 SUNITA: Hello, my name is Sunita Rao. I applied for an NRE PIS account 3 weeks ago. Application number PIS-88219. I was assured it would take 3-5 business days. The infrastructure bond issue I wanted to invest in closes tomorrow, and my account is still not active!
 
@@ -404,7 +404,7 @@ SUNITA: I attested those documents at the Indian Consulate in Dubai! How could t
 
 AGENT: The bank handles the PIS permission, not us. We just forward the physical copy.
 
-SUNITA: But I paid Zerodha for the service! You are my broker. If there was a rejection, shouldn't your team have notified me immediately?
+SUNITA: But I paid Broker for the service! You are my broker. If there was a rejection, shouldn't your team have notified me immediately?
 
 AGENT: Our team updates the status on the portal. You should have checked the portal status.
 
@@ -798,15 +798,20 @@ Let's get back on track.
   // ── Auth ─────────────────────────────────────────────────
   async function login() {
     const name  = $('mgr-auth-name').value.trim();
-    const empId = $('mgr-auth-empid').value.trim();
     const errEl = $('mgr-auth-error');
 
-    if (!name || !empId) {
-      errEl.textContent = 'Please enter your name and Employee ID.';
+    if (!name) {
+      errEl.textContent = 'Please enter your name.';
       errEl.classList.remove('hidden'); return;
     }
     errEl.classList.add('hidden');
 
+    // Employee ID is no longer collected — derive a stable internal key
+    // from the manager's name instead (used only to build the synthetic
+    // sign-in email/password pair; never shown to the person). Two
+    // managers sharing an exact name will share one account, same
+    // trade-off as on the trainee side.
+    const empId = name.toLowerCase().replace(/\s+/g, '-');
     const password = empId.toLowerCase() + '2024';
     const btn = $('btn-mgr-start');
     btn.disabled = true; btn.textContent = 'Signing in...';
@@ -837,7 +842,7 @@ Let's get back on track.
   async function logout() {
     try { await Auth.signOut(); } catch (e) { /* ignore */ }
     $('mgr-app-header').classList.add('hidden');
-    $('mgr-auth-name').value = ''; $('mgr-auth-empid').value = '';
+    $('mgr-auth-name').value = '';
     showScreen('mgr-screen-welcome');
   }
 
@@ -1774,7 +1779,7 @@ Let's get back on track.
     // Auth
     const btnStart = $('btn-mgr-start');
     if (btnStart) btnStart.addEventListener('click', login);
-    [$('mgr-auth-name'), $('mgr-auth-empid')].forEach(inp => {
+    [$('mgr-auth-name')].forEach(inp => {
       if (inp) inp.addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
     });
 
