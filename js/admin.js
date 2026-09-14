@@ -2986,11 +2986,15 @@ window.Admin = (() => {
     if (itemModule === filterModule) return true;
     if (filterModule === 'pick-speak' && (itemModule === 'pick-speak-stock' || itemModule === 'pick-speak-general' || itemModule === 'pick-speak')) return true;
     if ((filterModule === 'pick-speak-stock' || filterModule === 'pick-speak-general') && itemModule === 'pick-speak') return true;
-    // Ops Escalation Call/Writing are trainee variants of Mock Call / Written
-    // Comm. (same screens, same scoring shape) — fold them into those tabs
-    // so they're findable without adding new top-level tab buttons.
-    if (filterModule === 'mock-call' && itemModule === 'ops-call-assessment') return true;
-    if (filterModule === 'written-comm' && itemModule === 'ops-writing-assessment') return true;
+    // NOTE: Ops Escalation Call/Writing used to be folded into the Mock Call /
+    // Written Comm tabs here (same screens/scoring shape as those modules).
+    // That caused a real incident: an admin managing "Mock Call" topics could
+    // not tell that toggling a card in that same tab was actually disabling
+    // the ONLY Ops Escalation Call topic (a different, separate module on the
+    // trainee side), so trainees got "no topics available" for Ops Escalation
+    // Call while Mock Call itself looked fine. They now have their own
+    // dedicated tab buttons (see admin.html) so each module's enabled state
+    // is only ever managed on its own tab.
     return false;
   }
 
