@@ -510,16 +510,28 @@ const App = (() => {
     // Defensive de-dup: two topics sharing the same (module, title) should
     // never legitimately exist — if it happens anyway (e.g. a race between
     // two sessions seeding defaults at the same time), keep only the most
-    // complete copy per title (longest bot_script) so a stray incomplete
-    // duplicate can never get randomly picked over the real one — this is
-    // what would otherwise make an 11-question call sometimes run as 8.
+    // complete copy per title so a stray incomplete/corrupted duplicate can
+    // never get randomly picked over the real one — this is what would
+    // otherwise make an 11-question call sometimes run as 8, or (seen live)
+    // show a completely blank first question if a race inserted a duplicate
+    // row whose bot_script entries are the right LENGTH but empty/blank
+    // strings — plain array-length comparison can't tell those apart, so
+    // score by how many entries actually have real content instead.
+    const _topicQuality = (t) => {
+      if (!Array.isArray(t.botScript)) return -1;
+      const validCount = t.botScript.filter(s => typeof s === 'string' && s.trim().length > 10).length;
+      const totalChars  = t.botScript.reduce((sum, s) => sum + (typeof s === 'string' ? s.length : 0), 0);
+      // Real questions matter far more than raw character count; total
+      // length only breaks ties between two otherwise-equal duplicates.
+      return validCount * 1000000 + totalChars;
+    };
     const byTitle = new Map();
     for (const t of rawTopics) {
       const key = t.title || t.id;
       const prev = byTitle.get(key);
-      const tLen = Array.isArray(t.botScript) ? t.botScript.length : 0;
-      const prevLen = prev && Array.isArray(prev.botScript) ? prev.botScript.length : -1;
-      if (!prev || tLen > prevLen) byTitle.set(key, t);
+      const q = _topicQuality(t);
+      const prevQ = prev ? _topicQuality(prev) : -1;
+      if (!prev || q > prevQ) byTitle.set(key, t);
     }
     const topics = Array.from(byTitle.values());
     if (!topics.length) {
@@ -1467,9 +1479,20 @@ const App = (() => {
       // questions is one of a small set of fixed, hand-written transition
       // phrases (no API call, no model output at all), so there is no way
       // for this to ever ask about anything outside the given scenario.
-      const script = _currentTopic.botScript || [];
+      const script = (_currentTopic.botScript && _currentTopic.botScript.length ? _currentTopic.botScript : _currentTopic.bot_script) || [];
       const idx = Math.min(_mcAiTurnCount - 1, Math.max(script.length - 1, 0));
       let requiredQuestion = script[idx] || '';
+      // Belt-and-braces: this question is meant to always come verbatim
+      // from the topic's script, but if the loaded topic row is somehow
+      // missing/empty content at this index (e.g. a corrupted duplicate
+      // slipped past the de-dup in openModule()), never show a silently
+      // blank bubble — fall back to any other non-empty question on the
+      // same topic, and log it clearly so it's easy to spot in the console.
+      if (!requiredQuestion.trim()) {
+        console.error('[MockCall] Empty ops-call question at index', idx, 'for topic', _currentTopic.title, '— falling back.', script);
+        requiredQuestion = script.find(s => typeof s === 'string' && s.trim().length > 10)
+          || 'Sorry, could you repeat the details of your issue once more? I want to make sure I have everything right before we continue.';
+      }
       const transition = _mcAiTurnCount > 1
         ? OPS_CALL_TRANSITIONS[(_mcAiTurnCount - 2) % OPS_CALL_TRANSITIONS.length]
         : '';
