@@ -608,9 +608,11 @@ window.Admin = (() => {
     'pick-speak-general':  'P&S — General',
     'pick-speak-stock':    'P&S — Stock Market',
     'mock-call':           'Mock Call',
+    'ops-call-assessment':    'Ops Escalation Call',
     'role-play':           'Role Play',
     'group-discussion':    'Group Discussion',
     'written-comm':        'Written Comm.',
+    'ops-writing-assessment': 'Ops Escalation Writing',
     'grammar-assessment':  'Grammar Assessment',
     'listening-assessment': 'Listening Assessment',
     'stock-market-mcq':    'NRI Stock Market',
@@ -628,9 +630,11 @@ window.Admin = (() => {
     'pick-speak-general':  '#3b82f6',
     'pick-speak-stock':    '#3b82f6',
     'mock-call':           '#8b5cf6',
+    'ops-call-assessment':    '#8b5cf6',
     'role-play':           '#f97316',
     'group-discussion':    '#10b981',
     'written-comm':        '#0ea5e9',
+    'ops-writing-assessment': '#0ea5e9',
     'grammar-assessment':  '#7c3aed',
     'listening-assessment': '#db2777'
   };
@@ -640,9 +644,11 @@ window.Admin = (() => {
     'pick-speak-general':  'badge-ps',
     'pick-speak-stock':    'badge-ps',
     'mock-call':           'badge-mc',
+    'ops-call-assessment':    'badge-mc',
     'role-play':           'badge-rp',
     'group-discussion':    'badge-gd',
     'written-comm':        'badge-wc',
+    'ops-writing-assessment': 'badge-wc',
     'grammar-assessment':  'badge-ga',
     'listening-assessment': 'badge-la',
     'stock-market-mcq':    'badge-smq',
@@ -2980,6 +2986,11 @@ window.Admin = (() => {
     if (itemModule === filterModule) return true;
     if (filterModule === 'pick-speak' && (itemModule === 'pick-speak-stock' || itemModule === 'pick-speak-general' || itemModule === 'pick-speak')) return true;
     if ((filterModule === 'pick-speak-stock' || filterModule === 'pick-speak-general') && itemModule === 'pick-speak') return true;
+    // Ops Escalation Call/Writing are trainee variants of Mock Call / Written
+    // Comm. (same screens, same scoring shape) — fold them into those tabs
+    // so they're findable without adding new top-level tab buttons.
+    if (filterModule === 'mock-call' && itemModule === 'ops-call-assessment') return true;
+    if (filterModule === 'written-comm' && itemModule === 'ops-writing-assessment') return true;
     return false;
   }
 
@@ -3021,6 +3032,7 @@ window.Admin = (() => {
         const isEnabled = t.enabled !== false;
         const desc = t.description || t.scenario || '';
         const shortDesc = desc.length > 120 ? desc.substring(0, 120) + '…' : desc;
+        const questionCount = Array.isArray(t.botScript) ? t.botScript.length : 0;
 
         return `
           <div class="topic-card ${!isEnabled ? 'disabled' : ''}" style="background:#fff;border:1px solid var(--border-color,#e2e8f0);border-radius:8px;padding:1rem;display:flex;flex-direction:column;justify-content:space-between">
@@ -3032,6 +3044,7 @@ window.Admin = (() => {
                 </button>
               </div>
               <h3 class="topic-card-title" style="font-size:1rem;font-weight:600;margin-bottom:0.4rem;color:var(--text-main,#1e293b)">${t.title || 'Untitled Topic'}</h3>
+              ${questionCount > 0 ? `<div style="font-size:0.78rem;font-weight:600;color:#4338ca;margin-bottom:0.4rem">🗨 ${questionCount} question${questionCount === 1 ? '' : 's'} in bot script</div>` : ''}
               <p class="topic-card-desc" style="font-size:0.85rem;color:var(--text-muted,#64748b);line-height:1.4;margin-bottom:0.8rem">${shortDesc || 'No description'}</p>
             </div>
             <div class="topic-card-actions" style="display:flex;gap:0.4rem;margin-top:0.5rem">
@@ -3071,6 +3084,111 @@ window.Admin = (() => {
 
     const saveBtn = $('btn-save-topic');
     if (saveBtn) saveBtn.onclick = saveTopic;
+
+    const addChecklistBtn = $('btn-add-checklist');
+    if (addChecklistBtn) addChecklistBtn.onclick = () => _addChecklistRow('');
+
+    const addBotLineBtn = $('btn-add-bot-line');
+    if (addBotLineBtn) addBotLineBtn.onclick = () => _addBotScriptRow('');
+
+    const modSelect = $('topic-module');
+    if (modSelect) modSelect.onchange = () => _updateTopicModalFieldsForModule(modSelect.value);
+  }
+
+  // ---- Topic modal: MCQ-shaped modules keep their questions in `checklist`
+  // in a different shape than the plain string list used everywhere else,
+  // so the generic checklist/bot-script editors below are hidden for them
+  // (their data is preserved on save rather than edited here).
+  const MCQ_SHAPED_MODULES = new Set(['grammar-assessment', 'listening-assessment', 'stock-market-mcq']);
+
+  function _updateTopicModalFieldsForModule(module) {
+    const isMcq = MCQ_SHAPED_MODULES.has(module);
+    const mcqGroup        = $('topic-mcq-group');
+    const checklistGroup  = $('topic-checklist-group');
+    const botScriptGroup  = $('topic-bot-script-group');
+    const callerAudioGroup = $('topic-caller-audio-group');
+    if (mcqGroup)         mcqGroup.style.display        = isMcq ? '' : 'none';
+    if (checklistGroup)   checklistGroup.style.display  = isMcq ? 'none' : '';
+    if (botScriptGroup)   botScriptGroup.style.display  = isMcq ? 'none' : '';
+    if (callerAudioGroup) callerAudioGroup.style.display = (module === 'mock-call' || module === 'ops-call-assessment') ? '' : 'none';
+  }
+
+  // ---- Checklist editor (plain string list — evaluation checklist) ----
+  function _renderChecklistEditor(items) {
+    const container = $('checklist-items');
+    if (!container) return;
+    container.innerHTML = '';
+    (items || []).forEach(val => _addChecklistRow(val));
+  }
+  function _addChecklistRow(value) {
+    const container = $('checklist-items');
+    if (!container) return;
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:0.4rem;margin-bottom:0.4rem;align-items:center';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'checklist-item-input';
+    input.style.cssText = 'flex:1';
+    input.value = value || '';
+    const rmBtn = document.createElement('button');
+    rmBtn.type = 'button';
+    rmBtn.className = 'btn-ghost small';
+    rmBtn.textContent = '✕';
+    rmBtn.onclick = () => row.remove();
+    row.appendChild(input);
+    row.appendChild(rmBtn);
+    container.appendChild(row);
+  }
+  function _getChecklistValues() {
+    return Array.from(document.querySelectorAll('#checklist-items .checklist-item-input'))
+      .map(el => el.value.trim())
+      .filter(Boolean);
+  }
+
+  // ---- Bot script editor (one textarea per customer turn — may contain
+  // HTML, e.g. the "Key details" data block markup used by the Ops
+  // Escalation topics, so it's edited as raw source text here) ----
+  function _renderBotScriptEditor(items) {
+    const container = $('bot-script-items');
+    if (!container) return;
+    container.innerHTML = '';
+    (items || []).forEach(val => _addBotScriptRow(val));
+  }
+  function _addBotScriptRow(value) {
+    const container = $('bot-script-items');
+    if (!container) return;
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:0.4rem;margin-bottom:0.5rem;align-items:flex-start';
+    const label = document.createElement('div');
+    label.textContent = `Q${container.children.length + 1}`;
+    label.style.cssText = 'font-size:0.75rem;font-weight:700;color:var(--text-muted,#64748b);padding-top:0.4rem;min-width:1.6rem';
+    const ta = document.createElement('textarea');
+    ta.className = 'bot-script-item-input';
+    ta.style.cssText = 'flex:1;min-height:90px;font-size:0.82rem;font-family:inherit;line-height:1.4';
+    ta.value = value || '';
+    const rmBtn = document.createElement('button');
+    rmBtn.type = 'button';
+    rmBtn.className = 'btn-ghost small';
+    rmBtn.style.marginTop = '0.2rem';
+    rmBtn.textContent = '✕';
+    rmBtn.onclick = () => { row.remove(); _renumberBotScriptRows(); };
+    row.appendChild(label);
+    row.appendChild(ta);
+    row.appendChild(rmBtn);
+    container.appendChild(row);
+  }
+  function _renumberBotScriptRows() {
+    const container = $('bot-script-items');
+    if (!container) return;
+    Array.from(container.children).forEach((row, idx) => {
+      const label = row.querySelector('div');
+      if (label) label.textContent = `Q${idx + 1}`;
+    });
+  }
+  function _getBotScriptValues() {
+    return Array.from(document.querySelectorAll('#bot-script-items .bot-script-item-input'))
+      .map(el => el.value.trim())
+      .filter(Boolean);
   }
 
   function closeTopicModal() {
@@ -3098,13 +3216,20 @@ window.Admin = (() => {
         if (inputTitle) inputTitle.value = t.title || '';
         if (inputDesc) inputDesc.value = t.description || '';
         if (inputScen) inputScen.value = t.scenario || '';
+        _renderChecklistEditor(t.checklist || []);
+        _renderBotScriptEditor(t.botScript || t.bot_script || []);
+        _updateTopicModalFieldsForModule(t.module || 'pick-speak');
       }
     } else {
       if (titleEl) titleEl.textContent = 'New Topic';
-      if (modSelect) modSelect.value = _topicsFilter !== 'all' ? _topicsFilter : 'pick-speak';
+      const initialModule = _topicsFilter !== 'all' ? _topicsFilter : 'pick-speak';
+      if (modSelect) modSelect.value = initialModule;
       if (inputTitle) inputTitle.value = '';
       if (inputDesc) inputDesc.value = '';
       if (inputScen) inputScen.value = '';
+      _renderChecklistEditor([]);
+      _renderBotScriptEditor([]);
+      _updateTopicModalFieldsForModule(initialModule);
     }
 
     modal.classList.remove('hidden');
@@ -3120,6 +3245,7 @@ window.Admin = (() => {
     const title = inputTitle ? inputTitle.value.trim() : '';
     const description = inputDesc ? inputDesc.value.trim() : '';
     const scenario = inputScen ? inputScen.value.trim() : '';
+    const isMcq = MCQ_SHAPED_MODULES.has(module);
 
     if (!title) {
       alert('Please enter a topic title.');
@@ -3127,14 +3253,24 @@ window.Admin = (() => {
     }
 
     try {
+      // This used to always write a brand-new object with no checklist/
+      // bot_script/enabled at all, which meant editing ANY existing topic
+      // through this modal silently wiped its checklist and bot-script
+      // content. Now: fetch what's already there (if editing) so an
+      // MCQ-shaped module's checklist (a different data shape, not edited
+      // here) and the enabled/created_at flags are preserved either way.
+      const existing = _editTopicId ? await DB.get('topics', _editTopicId) : null;
+
       const topic = {
         id: _editTopicId || ('topic_' + Date.now()),
         module,
         title,
         description,
         scenario,
-        enabled: true,
-        created_at: new Date().toISOString()
+        checklist: isMcq ? (existing ? existing.checklist : []) : _getChecklistValues(),
+        botScript: isMcq ? (existing ? (existing.botScript || existing.bot_script) : []) : _getBotScriptValues(),
+        enabled: existing ? (existing.enabled !== false) : true,
+        created_at: existing ? existing.created_at : new Date().toISOString()
       };
 
       await DB.put('topics', topic);

@@ -502,7 +502,22 @@ const App = (() => {
       return;
     }
 
-    const topics = enabledTopics(await DB.getByIndex('topics', 'module', module));
+    const rawTopics = enabledTopics(await DB.getByIndex('topics', 'module', module));
+    // Defensive de-dup: two topics sharing the same (module, title) should
+    // never legitimately exist — if it happens anyway (e.g. a race between
+    // two sessions seeding defaults at the same time), keep only the most
+    // complete copy per title (longest bot_script) so a stray incomplete
+    // duplicate can never get randomly picked over the real one — this is
+    // what would otherwise make an 11-question call sometimes run as 8.
+    const byTitle = new Map();
+    for (const t of rawTopics) {
+      const key = t.title || t.id;
+      const prev = byTitle.get(key);
+      const tLen = Array.isArray(t.botScript) ? t.botScript.length : 0;
+      const prevLen = prev && Array.isArray(prev.botScript) ? prev.botScript.length : -1;
+      if (!prev || tLen > prevLen) byTitle.set(key, t);
+    }
+    const topics = Array.from(byTitle.values());
     if (!topics.length) {
       toast('No topics available for this module. Ask your admin to add some.', 'error');
       return;
@@ -1129,7 +1144,19 @@ const App = (() => {
     showStep('mock-call', 'mc-step-scenario');
     $('mc-title').textContent = _currentTopic.title;
     $('mc-desc').textContent = _currentTopic.description || '';
-    $('mc-scenario-text').textContent = _currentTopic.scenario || '';
+    // ops-call-assessment: show the actual first question (with its full
+    // "Key details" data block) here too, not just the generic scenario
+    // paragraph — so the trainee sees a complete, data-heavy question
+    // before they even start, matching what every turn during the call
+    // itself shows. Everything else keeps the plain-text scenario as before.
+    const firstQuestion = (_currentModule === 'ops-call-assessment' && Array.isArray(_currentTopic.botScript) && _currentTopic.botScript[0])
+      ? _currentTopic.botScript[0]
+      : null;
+    if (firstQuestion) {
+      $('mc-scenario-text').innerHTML = `${_currentTopic.scenario || ''}<div style="margin-top:0.6rem;padding-top:0.6rem;border-top:1px solid #e2e8f0"><strong style="display:block;margin-bottom:0.3rem;font-size:0.8rem;color:#334155">First question:</strong>${firstQuestion}</div>`;
+    } else {
+      $('mc-scenario-text').textContent = _currentTopic.scenario || '';
+    }
 
     // Checklist
     const ul = $('mc-checklist');
@@ -1853,7 +1880,17 @@ const App = (() => {
     showStep('written-comm', 'wc-step-task');
     $('wc-title').textContent = _currentTopic.title;
     $('wc-desc').textContent = _currentTopic.description || '';
-    $('wc-scenario-text').textContent = _currentTopic.scenario || '';
+    // Same reasoning as initMockCall() above: show the actual first
+    // question (with its "Key details" block) here too for
+    // ops-writing-assessment, not just the generic scenario paragraph.
+    const firstQuestionWc = (_currentModule === 'ops-writing-assessment' && Array.isArray(_currentTopic.botScript) && _currentTopic.botScript[0])
+      ? _currentTopic.botScript[0]
+      : null;
+    if (firstQuestionWc) {
+      $('wc-scenario-text').innerHTML = `${_currentTopic.scenario || ''}<div style="margin-top:0.6rem;padding-top:0.6rem;border-top:1px solid #e2e8f0"><strong style="display:block;margin-bottom:0.3rem;font-size:0.8rem;color:#334155">First question:</strong>${firstQuestionWc}</div>`;
+    } else {
+      $('wc-scenario-text').textContent = _currentTopic.scenario || '';
+    }
 
     const ul = $('wc-checklist');
     ul.innerHTML = '';
