@@ -1737,40 +1737,76 @@ const App = (() => {
 
     if (statusEl) statusEl.classList.add('hidden');
 
-    try {
-      await DB.put('sessions', {
-        traineeId:     _trainee.id,
-        traineeName:   _trainee.name,
-        module:        _currentModule || 'mock-call',
-        topicId:       _currentTopic.id,
-        topicTitle:    _currentTopic.title,
-        recordingBlob: blob,
-        transcript:    fullTranscript,
-        aiScores,
-        adminScores:   null,
-        adminComment:  '',
-        status:        'ai-evaluated',
-        submittedAt:   new Date().toISOString(),
-        timeTaken:     Math.max(elapsed, 1),
-      });
-      toast('Mock call submitted!', 'success');
-    } catch (e) {
-      console.error('Session save failed:', e.message);
-      toast('⚠ Could not save session: ' + e.message, 'error');
-    }
+    const sessionPayload = {
+      traineeId:     _trainee.id,
+      traineeName:   _trainee.name,
+      module:        _currentModule || 'mock-call',
+      topicId:       _currentTopic.id,
+      topicTitle:    _currentTopic.title,
+      recordingBlob: blob,
+      transcript:    fullTranscript,
+      aiScores,
+      adminScores:   null,
+      adminComment:  '',
+      status:        'ai-evaluated',
+      submittedAt:   new Date().toISOString(),
+      timeTaken:     Math.max(elapsed, 1),
+    };
 
-    showMockCallResults(aiScores, fullTranscript, aiScores._method);
+    // Attempt the save, and make it retryable in place: previously, if
+    // DB.put() threw, the code logged/toasted the error but then went on to
+    // show the trainee the same "Thank you, submitted!" screen regardless —
+    // so a real save failure (e.g. a DB-side rejection of a value in this
+    // payload) looked identical to success and the call never actually
+    // reached the admin. Now the trainee sees an explicit failure state
+    // with a Retry button instead, and the full error (not just .message)
+    // is logged so the real cause is visible in the console.
+    async function attemptSave() {
+      try {
+        await DB.put('sessions', sessionPayload);
+        toast('Mock call submitted!', 'success');
+        showMockCallResults(aiScores, fullTranscript, aiScores._method, null, attemptSave);
+      } catch (e) {
+        console.error('Session save failed:', e);
+        toast('⚠ Could not save session: ' + (e.message || e), 'error');
+        showMockCallResults(aiScores, fullTranscript, aiScores._method, e, attemptSave);
+      }
+    }
+    await attemptSave();
     $('btn-mc-finish').disabled = false;
   }
 
-  function showMockCallResults(aiScores, transcript, method) {
-    // Trainee sees ONLY the thank-you message — no scores, no transcript, no summary
+  function showMockCallResults(aiScores, transcript, method, saveError, retryFn) {
+    // Trainee sees ONLY the thank-you message on success — no scores, no
+    // transcript, no summary. On a save failure, show an explicit error
+    // instead of pretending it went through, with a way to retry without
+    // losing the recording/scores (both are already in memory).
     const statusEl = $('mc-ai-scoring-status');
     if (statusEl) statusEl.classList.add('hidden');
     const scoresEl = $('mc-result-scores');
     if (scoresEl) scoresEl.classList.add('hidden');
     const transcriptBox = $('mc-result-transcript-box');
     if (transcriptBox) transcriptBox.classList.add('hidden');
+
+    if (saveError) {
+      $('mc-band-display').innerHTML = `
+        <div style="text-align:center;padding:1.5rem 1rem;background:#fef2f2;border:1px solid #fecaca;border-radius:12px;margin-bottom:1rem">
+          <div style="font-size:2.5rem;margin-bottom:0.5rem">⚠️</div>
+          <h3 style="color:#b91c1c;font-size:1.15rem;margin-bottom:0.4rem">Your call could not be submitted.</h3>
+          <p style="color:#991b1b;font-size:0.88rem;margin-bottom:1rem">Something went wrong saving your recording — it has NOT been sent to the Training Team yet. Please try again, or tell your admin if this keeps happening.</p>
+          <button id="btn-mc-retry-save" class="btn-primary" style="padding:0.5rem 1.25rem">Retry Submission</button>
+        </div>`;
+      $('mc-result-method').innerHTML = '';
+      const retryBtn = $('btn-mc-retry-save');
+      if (retryBtn && typeof retryFn === 'function') {
+        retryBtn.onclick = () => {
+          retryBtn.disabled = true;
+          retryBtn.textContent = 'Retrying…';
+          retryFn();
+        };
+      }
+      return;
+    }
 
     $('mc-band-display').innerHTML = `
       <div style="text-align:center;padding:1.5rem 1rem;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;margin-bottom:1rem">
@@ -2167,30 +2203,37 @@ const App = (() => {
     }
     aiScores._summary = SpeechEngine.generateCoachingSummary('written-comm', aiScores);
 
-    try {
-      await DB.put('sessions', {
-        traineeId: _trainee.id,
-        traineeName: _trainee.name,
-        module: _currentModule || 'written-comm',
-        topicId: _currentTopic.id,
-        topicTitle: _currentTopic.title,
-        recordingBlob: null,
-        writtenText: formattedChat,
-        transcript: formattedChat,
-        aiScores,
-        adminScores: null,
-        adminComment: '',
-        status: 'ai-evaluated',
-        submittedAt: new Date().toISOString(),
-        timeTaken: duration,
-        analysis
-      });
-    } catch (e) {
-      console.error('Session save failed:', e.message);
-      toast('⚠ Could not save session: ' + e.message, 'error');
-    }
+    const sessionPayload = {
+      traineeId: _trainee.id,
+      traineeName: _trainee.name,
+      module: _currentModule || 'written-comm',
+      topicId: _currentTopic.id,
+      topicTitle: _currentTopic.title,
+      recordingBlob: null,
+      writtenText: formattedChat,
+      transcript: formattedChat,
+      aiScores,
+      adminScores: null,
+      adminComment: '',
+      status: 'ai-evaluated',
+      submittedAt: new Date().toISOString(),
+      timeTaken: duration,
+      analysis
+    };
 
-    showWrittenCommResults(aiScores, traineeResponsesCombined, analysis, duration);
+    // Same fix as the mock-call flow: don't tell the trainee it was
+    // submitted if the save actually failed. Retryable in place since
+    // everything needed (scores, chat text) is already in memory.
+    async function attemptSave() {
+      try {
+        await DB.put('sessions', sessionPayload);
+        showWrittenCommResults(aiScores, traineeResponsesCombined, analysis, duration, null, attemptSave);
+      } catch (e) {
+        console.error('Session save failed:', e);
+        showWrittenCommResults(aiScores, traineeResponsesCombined, analysis, duration, e, attemptSave);
+      }
+    }
+    await attemptSave();
   }
 
   function startWrittenCommEditor() {
@@ -2282,8 +2325,32 @@ const App = (() => {
     showWrittenCommResults(aiScores, text, analysis, duration);
   }
 
-  function showWrittenCommResults(scores, text, analysis, duration) {
+  function showWrittenCommResults(scores, text, analysis, duration, saveError, retryFn) {
     showStep('written-comm', 'wc-step-results');
+
+    // Remove any banner from a previous attempt before (maybe) adding a new one
+    const existingBanner = document.getElementById('wc-save-error-banner');
+    if (existingBanner) existingBanner.remove();
+    if (saveError) {
+      const scoresEl = $('wc-ai-scores');
+      const banner = document.createElement('div');
+      banner.id = 'wc-save-error-banner';
+      banner.style.cssText = 'text-align:center;padding:1.25rem 1rem;background:#fef2f2;border:1px solid #fecaca;border-radius:12px;margin-bottom:1rem';
+      banner.innerHTML = `
+        <div style="font-size:2rem;margin-bottom:0.4rem">⚠️</div>
+        <h3 style="color:#b91c1c;font-size:1.05rem;margin-bottom:0.3rem">This submission was not saved.</h3>
+        <p style="color:#991b1b;font-size:0.85rem;margin-bottom:0.75rem">Your analysis below is only a local preview — it has NOT reached the Training Team yet. Please retry, or tell your admin if this keeps happening.</p>
+        <button id="btn-wc-retry-save" class="btn-primary" style="padding:0.45rem 1.1rem">Retry Submission</button>`;
+      if (scoresEl && scoresEl.parentNode) scoresEl.parentNode.insertBefore(banner, scoresEl);
+      const retryBtn = document.getElementById('btn-wc-retry-save');
+      if (retryBtn && typeof retryFn === 'function') {
+        retryBtn.onclick = () => {
+          retryBtn.disabled = true;
+          retryBtn.textContent = 'Retrying…';
+          retryFn();
+        };
+      }
+    }
 
     const labels = (_currentModule === 'ops-writing-assessment') ? {
       factualAccuracy:        'Factual & Numerical Accuracy',
@@ -2326,7 +2393,11 @@ const App = (() => {
       }
     }
 
-    toast('Writing submitted!', 'success');
+    if (saveError) {
+      toast('⚠ Could not save submission: ' + (saveError.message || saveError), 'error');
+    } else {
+      toast('Writing submitted!', 'success');
+    }
   }
 
   // ================================================================
