@@ -858,31 +858,98 @@ const DB = (() => {
           enabled: true
         },
 
-        // Trainee Red Pen — Operations Escalation Call (11 very difficult questions, AI-adaptive)
+        // Trainee Red Pen — Operations Escalation Call: CDSL Easiest & Gifting
+        // (4 conceptual questions, AI-adaptive). Split out from the old single
+        // "Operations Escalation Helpline" mega-topic, which bundled CDSL
+        // Easiest/gifting, nominee, short delivery and suspended stocks into
+        // one 11-question call — separated per admin request so each area is
+        // its own topic. These are deliberately concept/rule questions, not
+        // data-driven ones: no invented numbers or "Key details" blocks, just
+        // the caller probing the agent's actual understanding of how the
+        // process works.
         {
           module: 'ops-call-assessment',
-          title: 'Operations Escalation Helpline — CDSL, Nominee, Short Delivery & Suspended Stocks',
-          description: 'A single very difficult escalation call covering CDSL Easiest/Console Gifting, nominee modification, short delivery/auctions, and suspended stocks. 11 tough questions in a row, each with full data included — the caller reacts to how well you answer.',
-          scenario: 'You are on an escalation helpline. An experienced, technically sharp client calls in with four separate unresolved issues that were escalated to you: a CDSL/gifting transfer problem, a nominee-modification request, a short-delivery/auction charge dispute, and confusion about a suspended stock. The caller will raise 11 specific, data-heavy questions one at a time across these topics — answer each one accurately, confidently, and with empathy before the caller moves to the next.',
+          title: 'CDSL Easiest & Gifting — Transfer Rules (Conceptual)',
+          description: 'A theory-driven escalation call testing understanding of CDSL Easiest, gifting, and cross-depository transfers — no numbers or data, just the concepts and rules. 4 tough conceptual questions in a row.',
+          scenario: 'You are on an escalation helpline. A sharp, well-informed client has several conceptual questions about how CDSL Easiest, gifting, and cross-depository transfers actually work — they are not disputing a specific transaction, they want to understand the real rules so they trust your answer. Answer each of the 4 questions accurately and confidently before the caller moves to the next.',
           checklist: [
-            "Address the exact numbers, dates and cut-off times the caller quotes — do not give a vague or generic answer",
-            "Clearly state whether something is a platform error, a regulatory/exchange rule, or expected process — do not let the caller assume the wrong one",
-            "Correct any wrong assumption in the caller's question rather than agreeing with it to keep them calm",
-            "Give a clear next step and realistic timeline for anything still in progress",
-            "Stay calm, professional and empathetic even when the caller is frustrated or challenges your numbers"
+            "Explain the actual underlying rule or process correctly, not a guess or a half-remembered version",
+            "Clearly distinguish what is a technology/app step from what is a genuine regulatory or depository requirement",
+            "Correct any wrong assumption in the caller's understanding rather than agreeing with it to keep them calm",
+            "Use plain, precise language a non-technical client can actually follow",
+            "Stay calm, professional and confident even when the caller pushes back or challenges your explanation"
           ],
           bot_script: [
-            "My short position got hit with a massive extra charge once the stock went into upper circuit, and the numbers make no sense to me. Can you explain exactly why?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Short position opened on 10 March, worth approx ₹6,00,000 (six lakh)</li><li>Stock hit the upper circuit before the position could be covered</li><li>Account debited: full trade value PLUS an extra ₹2,74,996 (almost 40% more)</li><li>Closing price on 10 March (trade day): ₹794.50</li><li>Closing price on 11 March (auction day): ₹870.40</li><li>Highest price the stock traded between 10–11 March: ₹928.80</li><li>Auction settlement rate actually applied: ₹1,020.33 per share</li></ul></div>",
-            "I short-sold 1,000 shares, and I don't understand my settlement price at all. Walk me through exactly how you arrived at this number.<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Total shares short-sold: 1,000</li><li>Auction filled 800 shares at ₹100 per share</li><li>Remaining 200 shares closed out at ₹120 per share</li><li>Account statement shows a single flat rate of ₹104 per share applied to ALL 1,000 shares</li><li>Client wants to know why two separate prices weren't charged instead of one blended rate</li></ul></div>",
-            "My entire holding in Jaiprakash Associates has disappeared from my Kite app. Did you sell it without telling me, or has the platform lost my holdings? I want this fixed right now.<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Stock: Jaiprakash Associates</li><li>Client held a real, confirmed position before it disappeared</li><li>Exchange circular date: 17 March 2026</li><li>Trading suspended from: 18 March 2026</li><li>Reason cited in the circular: NCLT approved the company's insolvency resolution plan</li></ul></div>",
-            "I've got shares stuck in two different suspended companies — are they in the same situation, or is one different from the other?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Company 1 — Murae Organiser: did not respond to exchange notices; registered office found to be non-existent</li><li>Client's question on Murae Organiser: is this the same as a delisting/total wipeout, like the Jaiprakash Associates case?</li><li>Company 2 — SIPTL: client wants to know if it can still be sold on any day, or if it's completely frozen like Murae</li></ul></div>",
-            "I want to move my shares to my brother's demat account, but his broker is on a different depository. Can I use the usual trusted-account PIN process for this?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Client's depository: CDSL</li><li>Recipient's depository: NSDL (different depository — brother's account)</li><li>Client's assumption: this can be done like a normal Easiest trusted-account/PIN transfer</li><li>Client also wants to know: total cost of the transfer, and how fast it can be completed</li></ul></div>",
-            "I tried gifting shares to my cousin, and now it says the transfer failed, even though I thought I was well within time. Why did it fail, and will my cousin owe tax on this?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Shares gifted: 20 shares, worth approx ₹90,000</li><li>Recipient: cousin</li><li>TPIN authorisation step completed at: 2:30 PM</li><li>Final CDSL OTP verification completed at: 8:15 PM, same day</li><li>Client's question 1: why exactly did the transfer fail?</li><li>Client's question 2: once received, will the cousin (~₹90,000 value) owe any tax on the gifted shares?</li></ul></div>",
-            "I want to remove my two current nominees and register three new ones instead, right now while I'm on this call. Can you do that, and is there any rule against one of them not being a blood relative?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Current nominees on the account: 2 (to be removed)</li><li>New nominees to register: 3 — wife, son, and business partner</li><li>Client wants this processed immediately, during the call</li><li>Client's question: is there any rule against naming a non-relative (the business partner) as a nominee?</li></ul></div>",
-            "I gifted shares to my sister with no issues at all, but the same kind of gift to my minor nephew has been stuck for three days. Why would gifting to a minor be any different?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Earlier gift (went through fine): 50 shares to sister (adult)</li><li>Current gift: 15 shares to nephew, age 17 (minor)</li><li>Current status: stuck at \"pending authorisation\" on CDSL Easiest for 3 days</li><li>Client's question: why is a gift to a minor different, and how long should authorisation actually take?</li></ul></div>",
-            "I want to add three nominees to my account — my wife, my son, and my daughter. Can I just leave the remaining split as 'equal share' after giving my wife 50%, and how many nominees am I even allowed to add?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Nominees to be added: 3 — wife, son, daughter</li><li>Wife's intended share: 50%</li><li>Remaining 50% — client wants to just write \"equal share\" for son + daughter instead of exact numbers</li><li>Client's question: is there a SEBI/depository limit on how many nominees are allowed?</li></ul></div>",
-            "50 of my shares went into short delivery, and my contract note shows a close-out price that's HIGHER than the highest price the stock ever actually traded at. How is that even possible?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Shares sold: 200 total (150 delivered, 50 went into short delivery)</li><li>Highest traded price from trade day to the auction settlement day: ₹340</li><li>Closing price on the auction settlement day itself: ₹300</li><li>Close-out price charged on the contract note (for the 50 shares): ₹360 per share</li><li>Client's question: how can ₹360 be higher than the actual highest traded price of ₹340?</li></ul></div>",
-            "My stock is suspended from trading due to a SEBI investigation, but I still received a dividend. If trading is suspended, how is that possible — and can I still vote at the AGM or apply for the buyback?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Stock status: suspended from trading, due to a SEBI investigation</li><li>Client already received: a dividend payment, despite the suspension</li><li>Corporate action announced last month: a buyback offer</li><li>Client's 3 questions: (1) how is a dividend possible during suspension, (2) can they still vote at the AGM, (3) can they apply for the buyback</li></ul></div>"
+            "I always thought CDSL Easiest was only for gifting shares within family. Can I actually use it to transfer shares to a friend, or move shares to my own account at a completely different broker?",
+            "Why does a gift transfer need both a TPIN step from me AND a separate OTP step afterwards? What's actually different about what each of those two steps authorises — isn't one enough?",
+            "If my broker uses CDSL but my brother's broker uses NSDL, does that change how the transfer has to be done, or is it exactly the same process either way from my side?",
+            "Is there any real difference, from the depository's point of view, between a 'self transfer' — moving shares between two accounts I own — and a 'gift transfer' to someone else? Or is it just a label the app uses?"
+          ],
+          enabled: true
+        },
+
+        // Trainee Red Pen — Operations Escalation Call: Nominee Rules (Conceptual)
+        {
+          module: 'ops-call-assessment',
+          title: 'Nominee Modification — Rules & Limits (Conceptual)',
+          description: 'A theory-driven escalation call testing understanding of nominee rules on a demat account — how many are allowed, who can be one, and what makes a minor nominee different. 4 tough conceptual questions in a row.',
+          scenario: 'You are on an escalation helpline. A client has several conceptual questions about nominee rules on their demat account — they want to understand the actual regulatory limits and requirements, not just be told "yes" or "no." Answer each of the 4 questions accurately and confidently before the caller moves to the next.',
+          checklist: [
+            "State the actual rule or limit correctly rather than guessing or making one up",
+            "Clearly explain WHY a rule exists where relevant (e.g. extra verification for a minor), not just that it exists",
+            "Correct any wrong assumption in the caller's understanding rather than agreeing with it to keep them calm",
+            "Use plain, precise language a non-technical client can actually follow",
+            "Stay calm, professional and confident even when the caller pushes back or challenges your explanation"
+          ],
+          bot_script: [
+            "How many nominees am I actually allowed to add to a single demat account, and is there a rule about how the percentage share has to be split between them?",
+            "Can a nominee be someone who isn't a blood relative — like a close friend or a business partner — or does the rule restrict nominees to family only?",
+            "What's actually different about registering a minor as a nominee compared to an adult? Why would that need anything extra at all?",
+            "If my mobile number isn't linked to my Aadhaar, does that block me from changing my nominee altogether, or does it just mean I have to use a different method to do it?"
+          ],
+          enabled: true
+        },
+
+        // Trainee Red Pen — Operations Escalation Call: Short Delivery & Auctions (Conceptual)
+        {
+          module: 'ops-call-assessment',
+          title: 'Short Delivery & Auction Mechanics (Conceptual)',
+          description: 'A theory-driven escalation call testing understanding of why short delivery happens and how the auction settlement process actually works — no numbers, just the mechanics. 4 tough conceptual questions in a row.',
+          scenario: 'You are on an escalation helpline. A client wants to genuinely understand how short delivery and the auction process work — not dispute a specific number, but understand the mechanism well enough to trust the outcome next time it happens. Answer each of the 4 questions accurately and confidently before the caller moves to the next.',
+          checklist: [
+            "Explain the actual mechanism correctly rather than a simplified or incorrect version",
+            "Be clear about whose responsibility short delivery and its cost actually is, and why",
+            "Correct any wrong assumption in the caller's understanding rather than agreeing with it to keep them calm",
+            "Use plain, precise language a non-technical client can actually follow",
+            "Stay calm, professional and confident even when the caller pushes back or challenges your explanation"
+          ],
+          bot_script: [
+            "Can you explain, in plain terms, why a short delivery even happens in the first place? Is it always the seller's fault, or can it happen for reasons completely outside their control?",
+            "How is the auction settlement price for a short-delivered share actually decided? Is it just whatever the stock happened to close at that day, or is there a specific formula behind it?",
+            "If a stock simply doesn't trade during the auction session — nobody offers to sell it — what happens to the buyer who was supposed to receive those shares?",
+            "Is a short-delivery penalty a fine charged to the seller, or is it compensation paid out to the buyer? Where does that money actually end up going?"
+          ],
+          enabled: true
+        },
+
+        // Trainee Red Pen — Operations Escalation Call: Suspended Stocks (Conceptual)
+        {
+          module: 'ops-call-assessment',
+          title: 'Suspended Stocks — Trading Halts & Corporate Actions (Conceptual)',
+          description: 'A theory-driven escalation call testing understanding of what a trading suspension actually means and how it interacts with dividends, AGMs, and buybacks. 4 tough conceptual questions in a row.',
+          scenario: 'You are on an escalation helpline. A client holds a suspended stock and has several conceptual questions about what suspension actually means for their rights as a shareholder — not a specific transaction dispute, but genuine confusion about the rules. Answer each of the 4 questions accurately and confidently before the caller moves to the next.',
+          checklist: [
+            "Explain the actual distinction between suspension, delisting and similar terms correctly, not loosely or interchangeably",
+            "Be clear about what a suspension does and does NOT freeze (e.g. corporate actions vs trading itself)",
+            "Correct any wrong assumption in the caller's understanding rather than agreeing with it to keep them calm",
+            "Use plain, precise language a non-technical client can actually follow",
+            "Stay calm, professional and confident even when the caller pushes back or challenges your explanation"
+          ],
+          bot_script: [
+            "What's the actual difference between a stock being 'suspended' and being 'delisted'? I keep hearing both terms used and I'm not sure if they mean the same thing.",
+            "If a company's stock is suspended because of a SEBI investigation, does that automatically mean the company has done something wrong, or can trading be halted for other reasons entirely?",
+            "Can a company still pay a dividend, or run a buyback, while its own stock is suspended from trading? I would have assumed a suspension freezes everything about the company.",
+            "If my stock is suspended, can I still vote on resolutions at the company's AGM, or does the suspension affect my shareholder rights too?"
           ],
           enabled: true
         },

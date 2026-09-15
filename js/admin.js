@@ -860,6 +860,13 @@ window.Admin = (() => {
         e.preventDefault();
         const section = item.getAttribute('data-section');
         if (section) showSection(section);
+        // Re-fetch from the DB every time the Assessments tab is opened, not
+        // just once at login — a call submitted after login (by anyone,
+        // from any device) would otherwise never appear until a full page
+        // reload, since nothing else re-triggers this fetch.
+        if (section === 'assessments') {
+          try { loadAssessments(); } catch (_) {}
+        }
       };
     });
 
@@ -869,6 +876,7 @@ window.Admin = (() => {
     try { if (typeof loadAiAuditScores === 'function') loadAiAuditScores(); } catch (_) {}
     try { if (typeof loadComm360Report === 'function') loadComm360Report(); } catch (_) {}
     try { if (typeof loadMgrAssessments === 'function') loadMgrAssessments(); } catch (_) {}
+    try { loadAssessments(); } catch (_) {}
   }
 
   function doLogin() {
@@ -1589,6 +1597,46 @@ window.Admin = (() => {
     _selectedSessionIds.clear();
     applyAssessmentFilters(_cachedSessions, _cachedTopicMap);
     await updatePendingBadge();
+  }
+
+  // ---- Load (or reload) the Assessments tab's data from the DB ----
+  // THIS WAS MISSING ENTIRELY: every call site below (including the one in
+  // _setSessionsArchived() just above, and the rescore/reset/delete flows
+  // further down) called loadAssessments() assuming it existed, but no such
+  // function was ever defined — a ReferenceError on every call, always
+  // silently caught further up the stack. Because of that, _cachedSessions
+  // and _cachedTopicMap (declared near the top of this file) were NEVER
+  // populated with real data, so the Assessments tab always rendered "No
+  // assessments found," no matter what had actually been submitted — for
+  // every module, not just the new Ops Escalation ones. This is what was
+  // making a trainee's submitted call invisible in the admin panel.
+  async function loadAssessments() {
+    try {
+      await _loadArchivedIds(); // also never wired up before now
+      const [sessions, topics] = await Promise.all([
+        DB.getAll('sessions'),
+        DB.getAll('topics')
+      ]);
+      _cachedTopicMap = {};
+      topics.forEach(t => { _cachedTopicMap[t.id] = t; });
+      _cachedSessions = sessions;
+      _refreshArchiveCounts(_cachedSessions);
+      applyAssessmentFilters(_cachedSessions, _cachedTopicMap);
+      await updatePendingBadge();
+    } catch (e) {
+      console.error('loadAssessments failed:', e);
+      const tbody = $('assessments-tbody');
+      if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Failed to load assessments: ${e.message}</td></tr>`;
+    }
+  }
+
+  // ---- Pending-review count badge on the Assessments nav item ----
+  // Also previously missing (see loadAssessments() note above) — every
+  // caller assumed it existed.
+  async function updatePendingBadge() {
+    const pending = _cachedSessions.filter(s => !s.adminScores && !_archivedIds.has(s.id)).length;
+    const badge = document.getElementById('pending-badge');
+    if (badge) badge.textContent = pending > 0 ? String(pending) : '0';
   }
 
   async function archiveSelectedSessions() {
@@ -3719,6 +3767,43 @@ window.Admin = (() => {
           </td>
         </tr>`;
     }).join('');
+  }
+
+  // ---- Best-effort: snapshot a trainee's current comm360 contribution
+  // before their session row is deleted, so the score doesn't silently
+  // vanish from Reports/Comm360 unless the admin explicitly chose to also
+  // delete it from there (deleteFromReports). This was another call to a
+  // function that didn't exist anywhere in the file (see loadAssessments()
+  // above for the matching note) — every assessment deletion threw before
+  // ever reaching DB.del(), so deleting an assessment has never actually
+  // worked. Mirrors the exact scaled fields _buildLiveScoreMap() already
+  // reads back from settings.preservedReportScores as a fallback.
+  async function _preserveScoresBeforeDeletion(sessions, deleteFromReports) {
+    if (deleteFromReports) return; // admin explicitly chose not to preserve
+    try {
+      const allSessions = await DB.getAll('sessions'); // still includes the row(s) about to be deleted
+      const rec = await DB.get('settings', 'preservedReportScores');
+      const preserved = rec && rec.value ? JSON.parse(rec.value) : {};
+      const r2 = v => Math.round(v * 100) / 100;
+
+      for (const session of sessions) {
+        if (!session || !session.traineeId) continue;
+        const canonical = _resolveAlias(session.traineeName || '');
+        if (!canonical) continue;
+        const { scores } = computeAgentScores(session.traineeId, allSessions);
+        const entry = preserved[canonical] || {};
+        if (scores['pick-speak']           != null) entry.psScore   = r2(scores['pick-speak']           / 100 * 20);
+        if (scores['listening-assessment'] != null) entry.lisScore  = r2(scores['listening-assessment']  / 100 * 20);
+        if (scores['mock-call']            != null) entry.mcScore   = r2(scores['mock-call']             / 100 * 20);
+        if (scores['grammar-assessment']   != null) entry.gramScore = r2(scores['grammar-assessment']    / 100 * 25);
+        preserved[canonical] = entry;
+      }
+
+      await DB.put('settings', { key: 'preservedReportScores', value: JSON.stringify(preserved) });
+    } catch (e) {
+      // Best-effort only — never let this block the actual deletion.
+      console.warn('_preserveScoresBeforeDeletion failed (deletion will continue):', e);
+    }
   }
 
   // ---- Delete Session ----
