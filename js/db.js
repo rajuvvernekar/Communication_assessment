@@ -319,13 +319,20 @@ const DB = (() => {
   // Push a topic's current seed content onto an already-seeded row of the
   // same (module,title) when the deployed version is newer than what's
   // stored — see the call site inside _seedDefaults() for the full
-  // rationale. No-ops if the topic isn't seeded yet (the normal insert path
-  // will create it fresh, already correct) or if it's already current.
+  // rationale. No-ops for a title that isn't seeded yet (the normal insert
+  // path will create it fresh, already correct) or if it's already current.
+  //
+  // NOTE: this used to only look up `defaults.find(t => t.module === module)`
+  // — i.e. exactly ONE default title per module. That was fine back when
+  // 'ops-call-assessment' was a single bundled topic, but it silently broke
+  // once that topic was split into 4 separate conceptual titles (CDSL,
+  // Nominee, Short Delivery, Suspended Stocks): only the first of the 4 ever
+  // got refreshed, so the 4-questions-per-topic content survived in
+  // already-seeded databases even after this file was updated to 8 questions
+  // per topic. Fixed to loop over every default title for the module.
   async function _refreshOpsScriptIfStale(module, currentVersion, defaults, existing) {
-    const def = defaults.find(t => t.module === module);
-    if (!def) return;
-    const liveRow = existing.find(t => t.module === module && t.title === def.title);
-    if (!liveRow) return;
+    const defsForModule = defaults.filter(t => t.module === module);
+    if (!defsForModule.length) return;
 
     const versionKey = `${module}ScriptVersion`;
     let storedVersion = 0;
@@ -338,25 +345,36 @@ const DB = (() => {
     }
     if (storedVersion >= currentVersion) return;
 
-    const patch = { description: def.description, scenario: def.scenario, checklist: def.checklist, bot_script: def.bot_script };
-    if (_useLocalStorage) {
-      const localTopics = _localGetAll('topics');
-      const idx = localTopics.findIndex(t => t.module === module && t.title === def.title);
-      if (idx !== -1) {
-        localTopics[idx] = { ...localTopics[idx], ...patch };
-        localStorage.setItem('commassess_topics', JSON.stringify(localTopics));
+    let hadError = false;
+    for (const def of defsForModule) {
+      const liveRow = existing.find(t => t.module === module && t.title === def.title);
+      if (!liveRow) continue; // not seeded yet — the normal insert path below creates it fresh, already correct
+
+      const patch = { description: def.description, scenario: def.scenario, checklist: def.checklist, bot_script: def.bot_script };
+      if (_useLocalStorage) {
+        const localTopics = _localGetAll('topics');
+        const idx = localTopics.findIndex(t => t.module === module && t.title === def.title);
+        if (idx !== -1) {
+          localTopics[idx] = { ...localTopics[idx], ...patch };
+          localStorage.setItem('commassess_topics', JSON.stringify(localTopics));
+        }
+      } else {
+        const { error: refreshErr } = await _sb.from('topics').update(patch).eq('module', module).eq('title', def.title);
+        if (refreshErr) {
+          console.error(`[DB] Failed to refresh ${module} topic "${def.title}":`, refreshErr);
+          hadError = true;
+        }
       }
-      _localPut('settings', { key: versionKey, value: String(currentVersion) });
-      console.log(`[DB] Refreshed ${module} topic content to v${currentVersion} (local).`);
-    } else {
-      const { error: refreshErr } = await _sb.from('topics').update(patch).eq('module', module).eq('title', def.title);
-      if (refreshErr) {
-        console.error(`[DB] Failed to refresh ${module} topic content:`, refreshErr);
-        return; // don't bump the version marker if the update itself failed
-      }
-      await _sb.from('settings').upsert({ key: versionKey, value: String(currentVersion) }, { onConflict: 'key' });
-      console.log(`[DB] Refreshed ${module} topic content to v${currentVersion}.`);
     }
+
+    if (hadError) return; // don't bump the version marker if any update failed — retry on next load
+
+    if (_useLocalStorage) {
+      _localPut('settings', { key: versionKey, value: String(currentVersion) });
+    } else {
+      await _sb.from('settings').upsert({ key: versionKey, value: String(currentVersion) }, { onConflict: 'key' });
+    }
+    console.log(`[DB] Refreshed ${module} topic content (${defsForModule.length} title(s)) to v${currentVersion}.`);
   }
 
   // ---- Seed default topics on first run ----
@@ -1109,7 +1127,7 @@ const DB = (() => {
       // new and low-traffic these two topics are, that tradeoff is fine for
       // now; a general "seeded defaults vs. admin-edited" distinction would
       // need real tracking if this pattern gets reused more broadly.
-      const OPS_CALL_SCRIPT_VERSION    = 3; // v1: 7Q · v2: 11Q · v3: 11Q reformatted with explicit "Key details" data blocks
+      const OPS_CALL_SCRIPT_VERSION    = 4; // v1: 7Q · v2: 11Q · v3: 11Q reformatted with "Key details" blocks · v4: split into 4 conceptual topics (CDSL, Nominee, Short Delivery, Suspended) at 8 questions each (was 4Q each — this is the version bump that actually pushes the 8Q content to already-seeded databases)
       const OPS_WRITING_SCRIPT_VERSION = 2; // v1: original 4Q · v2: reformatted with explicit "Key details" data blocks
       try {
         await _refreshOpsScriptIfStale('ops-call-assessment', OPS_CALL_SCRIPT_VERSION, defaults, existing);
