@@ -925,44 +925,42 @@ Q3 (39 shares bought, T+2 shortfall, auction could not procure shares): Per the 
 Q4 (100 shares became 36, price jumped up): This is a capital reduction corporate action, not a platform error or a loss of two-thirds of the investment. The company cancels the old shares and issues fewer new shares at a proportionally higher price, so the total value is designed to stay roughly the same immediately after the change (though in restructuring/insolvency-linked cases the value can genuinely decrease — that nuance should be mentioned as a possibility, not asserted as certain here). The stock is typically suspended temporarily during this process — not visible on Kite but still visible (marked suspended) on Console. Any fractional shares are paid out in cash, and normal trading resumes once the new shares (sometimes under a new ISIN) are credited.
 `.trim();
 
-  // ---- Strict Ops evaluation for the trainee Call assessment ----
+  // ---- Ops Escalation Call evaluation ----
+  // Uses the SAME 7 call-quality parameters as the standard Mock Call rubric
+  // (Call Opening, Acknowledgment, Communication Clarity, Call Essence, Hold
+  // Procedure, Extra Mile, Call Closing) — per admin request, so there is one
+  // consistent, duplicate-free parameter set end-to-end: AI scoring here, the
+  // trainee's coaching summary, and admin's manual scoring UI all read the
+  // same MOCK_CALL_CRITERIA keys. (Previously this used a separate 5-criteria
+  // factual/procedural rubric tied to the old bundled 11-question call —
+  // replaced now that the topic itself asks 8 concept/rule questions per
+  // area rather than data-heavy ones.)
   async function evaluateOpsCall(transcript, fullTranscript) {
     if (!isAvailable()) throw new Error('Claude proxy not configured');
 
-    const systemPrompt = `You are a strict senior operations trainer evaluating a trainee's SPOKEN answers on an escalation call covering CDSL Easiest/Console Gifting, nominee modification, short delivery/auctions, and suspended stocks. The call asked 11 very difficult, data-heavy questions in sequence.
+    const keys = MOCK_CALL_CRITERIA.map(c => c.key);
+    const criteriaBlock = MOCK_CALL_CRITERIA
+      .map((c, i) => `${i + 1}. ${c.key} (${c.label}):\n${c.prompt.replace(/\n?Return ONLY a JSON:.*$/s, '').trim()}`)
+      .join('\n\n');
 
-REFERENCE ANSWER KEY (ground truth — use this to judge factual/procedural correctness; the trainee never saw this key):
-${OPS_CALL_ANSWER_KEY}
+    const systemPrompt = `You are a strict senior operations trainer evaluating a trainee's SPOKEN answers on a difficult conceptual escalation call. Score the call on these call-quality parameters — the SAME ones used for standard Mock Call evaluations — judging each independently, exactly per its own rubric below.
 
-SCORING STANDARDS:
-- Score 3 = average — gets the basic gist right but misses specifics, numbers, or nuances from the answer key
-- Score 4 = genuinely strong — cites the correct figures/rules precisely and explains the reasoning clearly
-- Score 5 = exceptional — rare; matches the answer key with precision AND communicates it confidently and empathetically
-- Score 2 = a meaningful factual or procedural error, or a vague non-answer
-- Score 1 = mostly wrong, contradicts the answer key, or fails to attempt most questions
-Be strict — this is a "very difficult" assessment by design. Do NOT give credit for confident-sounding answers that get the numbers or rules wrong.
-
-Evaluate the trainee's spoken answers (transcript below, "You:" lines are the trainee) on these 5 dimensions (1-5 each):
-1. factualAccuracy: Are the numbers, dates, cut-offs, and rules the trainee cites correct, per the answer key?
-2. proceduralCorrectness: Did the trainee describe the right process/steps (forms, timelines, escalation paths) rather than a generic or incorrect process?
-3. complianceJudgment: Did the trainee correctly identify what is a platform error vs. a regulatory/exchange rule vs. an irreversible outcome (e.g. wipeout, tax liability, cut-off miss), without over-promising or misleading the client?
-4. clarityProfessionalism: Is the explanation clear, well-structured, and delivered in a confident, professional, empathetic tone?
-5. ownershipResolution: Did the trainee take ownership and give the client a clear resolution or concrete next step, rather than deflecting or leaving things open-ended?
+${criteriaBlock}
 
 CALL TRANSCRIPT (Customer/You):
 """
 ${fullTranscript || transcript || '(no transcript available)'}
 """
 
-Return ONLY a JSON object:
-{"factualAccuracy":<1-5>,"proceduralCorrectness":<1-5>,"complianceJudgment":<1-5>,"clarityProfessionalism":<1-5>,"ownershipResolution":<1-5>,"reasons":{"factualAccuracy":"<sentence>","proceduralCorrectness":"<sentence>","complianceJudgment":"<sentence>","clarityProfessionalism":"<sentence>","ownershipResolution":"<sentence>"}}`;
+Return ONLY a JSON object with a score (per each criterion's own scale above) and a one-sentence reason for each, e.g.:
+{${keys.map(k => `"${k}":<score>`).join(',')},"reasons":{${keys.map(k => `"${k}":"<sentence>"`).join(',')}}}`;
 
     const resp = await fetch(getProxyUrl(), {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({
         model:      MODEL,
-        max_tokens: 700,
+        max_tokens: 900,
         system:     systemPrompt,
         messages:   [{ role: 'user', content: 'Please evaluate this call now, per the instructions.' }],
       }),
@@ -978,22 +976,14 @@ Return ONLY a JSON object:
     const match = text.match(/\{[\s\S]*\}/);
     if (!match) throw new Error('No JSON in response');
 
-    const parsed = JSON.parse(match[0]);
-    const keys   = ['factualAccuracy','proceduralCorrectness','complianceJudgment','clarityProfessionalism','ownershipResolution'];
-    const sum    = keys.reduce((s, k) => s + (parsed[k] || 0), 0);
+    const parsed  = JSON.parse(match[0]);
+    const sum     = keys.reduce((s, k) => s + (parsed[k] || 0), 0);
     const overall = parseFloat(((sum / (keys.length * 5)) * 100).toFixed(1));
 
-    return {
-      scores: {
-        factualAccuracy:        parsed.factualAccuracy,
-        proceduralCorrectness:  parsed.proceduralCorrectness,
-        complianceJudgment:     parsed.complianceJudgment,
-        clarityProfessionalism: parsed.clarityProfessionalism,
-        ownershipResolution:    parsed.ownershipResolution,
-      },
-      overall,
-      reasons: parsed.reasons || {},
-    };
+    const scores = {};
+    keys.forEach(k => { scores[k] = parsed[k]; });
+
+    return { scores, overall, reasons: parsed.reasons || {} };
   }
 
   // ---- Strict Ops evaluation for the trainee Writing assessment ----

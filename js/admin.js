@@ -684,6 +684,9 @@ window.Admin = (() => {
         feedback: 'Consistently strong call quality! Excellent adherence to protocol, genuine empathy throughout, and professional communication from opening to closing.' }
     ]
   };
+  // Ops Escalation Call uses the exact same rubric/bands as Mock Call (same
+  // 7 parameters end-to-end — see SCORING_CRITERIA below).
+  SCORE_BANDS['ops-call-assessment'] = SCORE_BANDS['mock-call'];
 
   function getBand(module, overallScore) {
     // overallScore is 0-100
@@ -736,6 +739,20 @@ window.Admin = (() => {
         desc: 'Completes within given time; balanced coverage of points' },
     ],
     'mock-call': [
+      { label: 'Call Opening',              key: 'callOpening',          desc: 'Greeting + self-intro + company intro + offer to assist (all 4 elements = 5)' },
+      { label: 'Acknowledgment',            key: 'acknowledgment',       desc: 'Acknowledged issue promptly with genuine empathy' },
+      { label: 'Communication Clarity',     key: 'communicationClarity', desc: 'Speech rate, grammar, tone, no fillers, no dead air' },
+      { label: 'Call Essence',              key: 'callEssence',          desc: 'Politeness, empathy, rapport building throughout' },
+      { label: 'Hold Procedure',            key: 'holdProcedure',        scale135: true, desc: 'Asked permission + reason + time expectation' },
+      { label: 'Extra Mile',                key: 'extraMile',            scale135: true, desc: 'Offered proactive help beyond the asked query' },
+      { label: 'Call Closing',              key: 'callClosing',          scale135: true, desc: 'Confirmed resolution + asked for anything else + branded close' }
+    ],
+    // Ops Escalation Call: same 7 parameters as Mock Call, on purpose — one
+    // consistent, duplicate-free rubric so admin scores this exactly like a
+    // regular Mock Call session (per request: "take all the parameters, do
+    // not add any duplicate parameter, same parameters should be available
+    // to admin"). See evaluateOpsCall() in claude.js for the matching AI side.
+    'ops-call-assessment': [
       { label: 'Call Opening',              key: 'callOpening',          desc: 'Greeting + self-intro + company intro + offer to assist (all 4 elements = 5)' },
       { label: 'Acknowledgment',            key: 'acknowledgment',       desc: 'Acknowledged issue promptly with genuine empathy' },
       { label: 'Communication Clarity',     key: 'communicationClarity', desc: 'Speech rate, grammar, tone, no fillers, no dead air' },
@@ -871,6 +888,7 @@ window.Admin = (() => {
     });
 
     initTopics();
+    initScoringModal();
     renderTopicsList();
     try { if (typeof generateAllAgentsReport === 'function') generateAllAgentsReport(); } catch (_) {}
     try { if (typeof loadAiAuditScores === 'function') loadAiAuditScores(); } catch (_) {}
@@ -3769,6 +3787,324 @@ window.Admin = (() => {
     }).join('');
   }
 
+  // ============================================================
+  // Session Scoring Modal (Assessments tab → "Score" / "Review")
+  // ------------------------------------------------------------
+  // The #scoring-modal markup (playback + criteria sliders + comment box)
+  // has existed in admin.html for a long time, but nothing in this file ever
+  // wired it up: the "Score"/"Review" button called Admin.openScoring(),
+  // which was never defined — so clicking it silently did nothing for every
+  // module (Mock Call, Ops Escalation Call, Written Comm, Pick & Speak, all
+  // of it), not just Ops Escalation. Implemented here so admin can actually
+  // listen to a session's recording and score it per-criterion — needed for
+  // Ops Escalation Call's parameters, but this fixes manual scoring for
+  // every module at once. (_scoringSessionId itself was already declared
+  // with the rest of the module state near the top of this file — also
+  // scaffolded ahead of time and never used until now.)
+
+  function _escScoring(t) {
+    return (t == null ? '' : String(t)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function openScoring(sessionId) {
+    const session = _cachedSessions.find(s => s.id === sessionId);
+    if (!session) { toast('Session not found.', 'error'); return; }
+    _scoringSessionId = sessionId;
+
+    const modal = $('scoring-modal');
+    if (!modal) return;
+
+    const module    = session.module;
+    const isWritten = module === 'written-comm' || module === 'ops-writing-assessment';
+    const isMcq     = module === 'grammar-assessment' || module === 'listening-assessment';
+    const isAudio   = !isWritten && !isMcq;
+
+    const traineeEl = $('scoring-trainee');
+    const badgeEl   = $('scoring-module-badge');
+    const topicEl   = $('scoring-topic');
+    const dateEl    = $('scoring-date');
+    if (traineeEl) traineeEl.textContent = session.traineeName || '—';
+    if (badgeEl) {
+      badgeEl.className   = `module-badge ${MODULE_BADGE_CLASS[module] || ''}`;
+      badgeEl.textContent = MODULE_LABELS[module] || module;
+    }
+    if (topicEl)   topicEl.textContent   = session.topicTitle || '—';
+    if (dateEl)    dateEl.textContent    = 'Submitted ' + formatDate(session.submittedAt);
+
+    // Left panel: audio / written / MCQ + transcript
+    const audioSection      = $('scoring-audio-section');
+    const writtenSection    = $('scoring-written-section');
+    const mcqSection        = $('scoring-mcq-section');
+    const transcriptSection = $('scoring-transcript-section');
+    const audioEl           = $('scoring-audio');
+
+    if (audioSection) audioSection.classList.toggle('hidden', !isAudio);
+    if (audioEl) {
+      if (isAudio && session.recordingUrl) audioEl.src = session.recordingUrl;
+      else audioEl.removeAttribute('src');
+    }
+
+    if (writtenSection) {
+      writtenSection.classList.toggle('hidden', !isWritten);
+      if (isWritten) {
+        const txt = $('scoring-written-text');
+        if (txt) txt.innerHTML = _escScoring(session.writtenText || session.transcript || '(no text)').replace(/\n/g, '<br>');
+      }
+    }
+
+    if (mcqSection) {
+      mcqSection.classList.toggle('hidden', !isMcq);
+      if (isMcq) {
+        const ai = session.aiScores || {};
+        const scoreEl = $('scoring-mcq-score');
+        if (scoreEl) scoreEl.textContent = `${ai.correct ?? 0}/${ai.total ?? '—'} correct — ${ai.overall ?? 0}%`;
+        const reviewEl = $('scoring-mcq-review');
+        if (reviewEl) reviewEl.innerHTML = '';
+      }
+    }
+
+    if (transcriptSection) {
+      transcriptSection.classList.toggle('hidden', isWritten || isMcq);
+      if (!isWritten && !isMcq) {
+        const tEl = $('scoring-transcript');
+        if (tEl) tEl.innerHTML = _escScoring(session.transcript || '(no transcript)').replace(/\n/g, '<br>');
+      }
+    }
+
+    // AI band card
+    const ai = session.aiScores || {};
+    const bandEl = $('scoring-ai-band');
+    if (bandEl) {
+      if (ai.overall != null) {
+        const overallPct = normalizeOverall(ai.overall);
+        const band = getBand(module, overallPct);
+        bandEl.innerHTML = band ? `
+          <div class="band-card ${band.cls}">
+            <div class="band-header">
+              <span class="band-icon">${band.icon}</span>
+              <div class="band-info">
+                <div class="band-label">${band.label}</div>
+                <div class="band-score">${overallPct}/100 (AI)</div>
+              </div>
+            </div>
+            <div class="band-feedback">${band.feedback}</div>
+          </div>` : '';
+      } else {
+        bandEl.innerHTML = '';
+      }
+    }
+
+    // AI per-criterion scores (reference only, shown on the left)
+    const criteria = SCORING_CRITERIA[module] || [];
+    const aiScoresEl = $('scoring-ai-scores-display');
+    if (aiScoresEl) {
+      let html = criteria.map(c => {
+        const val = ai[c.key];
+        if (val == null) return '';
+        const pct    = ((val / 5) * 100).toFixed(0);
+        const stars  = '★'.repeat(Math.round(val)) + '☆'.repeat(5 - Math.round(val));
+        const reason = (ai._reasons && ai._reasons[c.key]) ? `<div class="score-reason">${_escScoring(ai._reasons[c.key])}</div>` : '';
+        return `<div class="ai-score-row"><span class="score-label">${c.label}</span><div class="score-bar"><div class="score-bar-fill" style="width:${pct}%"></div></div><span class="score-stars">${stars}</span><span class="score-val">${val}/5</span></div>${reason}`;
+      }).join('');
+      if (ai.overall != null) {
+        const overallPct = normalizeOverall(ai.overall);
+        html += `<div class="ai-score-row" style="background:#eff6ff;border:1px solid #dbeafe"><span class="score-label" style="font-weight:800">Overall AI Score</span><div class="score-bar"><div class="score-bar-fill" style="width:${overallPct}%;background:#3b82f6"></div></div><span class="score-val" style="color:#3b82f6;font-weight:700">${overallPct}/100</span></div>`;
+      }
+      aiScoresEl.innerHTML = html;
+    }
+
+    // Right panel: admin scoring inputs
+    _renderScoringCriteria(session, criteria);
+
+    const commentEl = $('scoring-comment');
+    if (commentEl) commentEl.value = session.adminComment || '';
+
+    modal.classList.remove('hidden');
+  }
+
+  function _renderScoringCriteria(session, criteria) {
+    const criteriaEl = $('scoring-criteria');
+    if (!criteriaEl) return;
+
+    if (!criteria.length) {
+      criteriaEl.innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem">This module is auto-scored — there are no manual criteria to set. You can still add a comment below.</p>';
+      _updateScoringTotal();
+      return;
+    }
+
+    const existing = session.adminScores || {};
+    const ai       = session.aiScores    || {};
+    let lastGroup  = null;
+    const rows = [];
+
+    criteria.forEach(c => {
+      if (c.group && c.group !== lastGroup) {
+        lastGroup = c.group;
+        rows.push(`<div class="criterion-group-header">${c.group}</div>`);
+      }
+      const val  = existing[c.key] != null ? existing[c.key] : (ai[c.key] != null ? ai[c.key] : (c.scale135 ? 3 : 3));
+      const desc = c.desc ? `<div class="criterion-desc">${c.desc}</div>` : '';
+
+      if (c.scale135) {
+        const opts = [1, 3, 5].map(n => {
+          const lbl = n === 1 ? 'Not Met' : n === 3 ? 'Partial' : 'Fully Met';
+          return `<label class="scale-135-option ${val === n ? 'selected-' + n : ''}" data-key="${c.key}" data-n="${n}">
+            <input type="radio" name="scoring-${c.key}" value="${n}" ${val === n ? 'checked' : ''} />${lbl}
+          </label>`;
+        }).join('');
+        rows.push(`<div class="criterion-row" data-key="${c.key}" data-scale135="1">
+          <div class="criterion-label"><span>${c.label}</span></div>
+          ${desc}
+          <div class="scale-135-group">${opts}</div>
+        </div>`);
+      } else {
+        rows.push(`<div class="criterion-row" data-key="${c.key}">
+          <div class="criterion-label"><span>${c.label}</span><span class="criterion-val" data-val-for="${c.key}">${val}</span></div>
+          ${desc}
+          <input type="range" min="1" max="5" step="0.5" value="${val}" class="criterion-slider" data-key="${c.key}" />
+        </div>`);
+      }
+    });
+
+    criteriaEl.innerHTML = rows.join('');
+
+    criteriaEl.querySelectorAll('.criterion-slider').forEach(sl => {
+      sl.addEventListener('input', () => {
+        const out = criteriaEl.querySelector(`[data-val-for="${sl.dataset.key}"]`);
+        if (out) out.textContent = sl.value;
+        _updateScoringTotal();
+      });
+    });
+
+    criteriaEl.querySelectorAll('.scale-135-option').forEach(opt => {
+      opt.addEventListener('click', () => {
+        const key = opt.dataset.key;
+        criteriaEl.querySelectorAll(`.scale-135-option[data-key="${key}"]`).forEach(o => {
+          o.classList.remove('selected-1', 'selected-3', 'selected-5');
+        });
+        opt.classList.add('selected-' + opt.dataset.n);
+        const radio = opt.querySelector('input');
+        if (radio) radio.checked = true;
+        _updateScoringTotal();
+      });
+    });
+
+    _updateScoringTotal();
+  }
+
+  function _readScoringInputs() {
+    const criteriaEl = $('scoring-criteria');
+    const scores = {};
+    let sum = 0, count = 0;
+    if (criteriaEl) {
+      criteriaEl.querySelectorAll('.criterion-row').forEach(row => {
+        const key = row.dataset.key;
+        let val = null;
+        if (row.dataset.scale135) {
+          const checked = row.querySelector('input[type="radio"]:checked');
+          val = checked ? parseFloat(checked.value) : null;
+        } else {
+          const slider = row.querySelector('.criterion-slider');
+          val = slider ? parseFloat(slider.value) : null;
+        }
+        if (val != null && !isNaN(val)) { scores[key] = val; sum += val; count++; }
+      });
+    }
+    const overall = count > 0 ? parseFloat(((sum / (count * 5)) * 100).toFixed(1)) : null;
+    return { scores, overall };
+  }
+
+  function _updateScoringTotal() {
+    const { overall } = _readScoringInputs();
+    const totalEl = $('scoring-total-display');
+    if (totalEl) totalEl.textContent = overall != null ? overall : '—';
+    const bandInline = $('admin-band-inline');
+    if (bandInline) {
+      const session = _cachedSessions.find(s => s.id === _scoringSessionId);
+      const band = (session && overall != null) ? getBand(session.module, overall) : null;
+      bandInline.textContent = band ? `${band.icon} ${band.label}` : '';
+    }
+  }
+
+  function useAiFeedback() {
+    if (!_scoringSessionId) return;
+    const session = _cachedSessions.find(s => s.id === _scoringSessionId);
+    const commentEl = $('scoring-comment');
+    if (!session || !commentEl) return;
+    const ai = session.aiScores || {};
+
+    if (ai._summary) {
+      const div = document.createElement('div');
+      div.innerHTML = ai._summary;
+      commentEl.value = (div.textContent || div.innerText || '').trim();
+      return;
+    }
+    if (ai._reasons) {
+      const criteria = SCORING_CRITERIA[session.module] || [];
+      const lines = criteria
+        .map(c => ai._reasons[c.key] ? `${c.label}: ${ai._reasons[c.key]}` : null)
+        .filter(Boolean);
+      if (lines.length) { commentEl.value = lines.join('\n'); return; }
+    }
+    toast('No AI feedback available for this session.', '');
+  }
+
+  function closeScoring() {
+    const modal = $('scoring-modal');
+    if (modal) modal.classList.add('hidden');
+    _scoringSessionId = null;
+  }
+
+  async function saveScoring() {
+    if (!_scoringSessionId) return;
+    const session = _cachedSessions.find(s => s.id === _scoringSessionId);
+    if (!session) return;
+
+    const criteria = SCORING_CRITERIA[session.module] || [];
+    let adminScores;
+    if (criteria.length) {
+      const read = _readScoringInputs();
+      adminScores = read.scores;
+      adminScores.overall = read.overall;
+    } else {
+      // Auto-scored modules (grammar/listening): admin "score" mirrors the AI score
+      adminScores = Object.assign({}, session.aiScores || {});
+    }
+
+    const commentEl = $('scoring-comment');
+    const comment = commentEl ? commentEl.value.trim() : '';
+    const sessionId = _scoringSessionId;
+
+    try {
+      await DB.patch('sessions', sessionId, { adminScores, adminComment: comment, status: 'scored' });
+      const idx = _cachedSessions.findIndex(s => s.id === sessionId);
+      if (idx >= 0) {
+        _cachedSessions[idx].adminScores  = adminScores;
+        _cachedSessions[idx].adminComment = comment;
+        _cachedSessions[idx].status       = 'scored';
+      }
+      await updatePendingBadge();
+      toast('Score saved and shared with trainee.', 'success');
+      closeScoring();
+      applyAssessmentFilters(_cachedSessions, _cachedTopicMap);
+    } catch (e) {
+      toast('Failed to save score: ' + e.message, 'error');
+    }
+  }
+
+  function initScoringModal() {
+    const closeBtn = $('btn-close-scoring');
+    if (closeBtn) closeBtn.onclick = closeScoring;
+    const saveBtn = $('btn-save-score');
+    if (saveBtn) saveBtn.onclick = saveScoring;
+    const aiFeedbackBtn = $('btn-use-ai-feedback');
+    if (aiFeedbackBtn) aiFeedbackBtn.onclick = useAiFeedback;
+    const modal = $('scoring-modal');
+    if (modal) {
+      modal.addEventListener('click', (e) => { if (e.target === modal) closeScoring(); });
+    }
+  }
+
   // ---- Best-effort: snapshot a trainee's current comm360 contribution
   // before their session row is deleted, so the score doesn't silently
   // vanish from Reports/Comm360 unless the admin explicitly chose to also
@@ -3886,6 +4222,10 @@ window.Admin = (() => {
     restoreSelectedSessions,
     archiveSingleSession,
     restoreSingleSession,
+    openScoring,
+    closeScoring,
+    saveScoring,
+    useAiFeedback,
     drillIntoManager,
     backToManagers,
     archiveAllManagerSessions,

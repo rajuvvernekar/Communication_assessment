@@ -859,19 +859,20 @@ const DB = (() => {
         },
 
         // Trainee Red Pen — Operations Escalation Call: CDSL Easiest & Gifting
-        // (4 conceptual questions, AI-adaptive). Split out from the old single
+        // (8 conceptual questions, AI-adaptive). Split out from the old single
         // "Operations Escalation Helpline" mega-topic, which bundled CDSL
         // Easiest/gifting, nominee, short delivery and suspended stocks into
         // one 11-question call — separated per admin request so each area is
-        // its own topic. These are deliberately concept/rule questions, not
-        // data-driven ones: no invented numbers or "Key details" blocks, just
-        // the caller probing the agent's actual understanding of how the
-        // process works.
+        // its own topic, then expanded from 4 to a full 8-question flow drawn
+        // from the CDSL Easiest / Console Gifting reference material. These
+        // are deliberately concept/rule questions, not data-driven ones: no
+        // invented numbers or "Key details" blocks, just the caller probing
+        // the agent's actual understanding of how the process works.
         {
           module: 'ops-call-assessment',
           title: 'CDSL Easiest & Gifting — Transfer Rules (Conceptual)',
-          description: 'A theory-driven escalation call testing understanding of CDSL Easiest, gifting, and cross-depository transfers — no numbers or data, just the concepts and rules. 4 tough conceptual questions in a row.',
-          scenario: 'You are on an escalation helpline. A sharp, well-informed client has several conceptual questions about how CDSL Easiest, gifting, and cross-depository transfers actually work — they are not disputing a specific transaction, they want to understand the real rules so they trust your answer. Answer each of the 4 questions accurately and confidently before the caller moves to the next.',
+          description: 'A theory-driven escalation call testing understanding of CDSL Easiest, gifting, and cross-depository transfers — no numbers or data, just the concepts and rules. 8 tough conceptual questions in a row.',
+          scenario: 'You are on an escalation helpline. A sharp, well-informed client has several conceptual questions about how CDSL Easiest, gifting, and cross-depository transfers actually work — they are not disputing a specific transaction, they want to understand the real rules so they trust your answer. Answer each of the 8 questions accurately and confidently before the caller moves to the next.',
           checklist: [
             "Explain the actual underlying rule or process correctly, not a guess or a half-remembered version",
             "Clearly distinguish what is a technology/app step from what is a genuine regulatory or depository requirement",
@@ -883,17 +884,25 @@ const DB = (() => {
             "I always thought CDSL Easiest was only for gifting shares within family. Can I actually use it to transfer shares to a friend, or move shares to my own account at a completely different broker?",
             "Why does a gift transfer need both a TPIN step from me AND a separate OTP step afterwards? What's actually different about what each of those two steps authorises — isn't one enough?",
             "If my broker uses CDSL but my brother's broker uses NSDL, does that change how the transfer has to be done, or is it exactly the same process either way from my side?",
-            "Is there any real difference, from the depository's point of view, between a 'self transfer' — moving shares between two accounts I own — and a 'gift transfer' to someone else? Or is it just a label the app uses?"
+            "Is there any real difference, from the depository's point of view, between a 'self transfer' — moving shares between two accounts I own — and a 'gift transfer' to someone else? Or is it just a label the app uses?",
+            "What's the actual difference between a 'Trusted Account' transfer and an 'Account of Choice' transfer on CDSL Easiest? Why is one capped at a handful of accounts while the other needs a digital signature certificate?",
+            "I keep hearing about 'adding a beneficiary' and 'adding a trusted account' as if they're two separate steps — aren't they the same thing? Why would a transfer need both before it goes through?",
+            "If I miss the cut-off time on a gifting transaction, does it just quietly carry over and process the next day, or does the entire gift request have to be started over from scratch? Why would a time cut-off matter that much for something like this?",
+            "If I gift some of my shares to my brother, does he have to pay any tax on receiving them, or is tax only a concern if I gift shares to someone who isn't a relative?"
           ],
           enabled: true
         },
 
         // Trainee Red Pen — Operations Escalation Call: Nominee Rules (Conceptual)
+        // Expanded from 4 to a full 8-question flow drawn from the Nominee
+        // Modification reference scenarios (add / replace / add-additional /
+        // partial-replace / remove-one / remove-all-add-new / remove-all-opt-out /
+        // detail-correction-only).
         {
           module: 'ops-call-assessment',
           title: 'Nominee Modification — Rules & Limits (Conceptual)',
-          description: 'A theory-driven escalation call testing understanding of nominee rules on a demat account — how many are allowed, who can be one, and what makes a minor nominee different. 4 tough conceptual questions in a row.',
-          scenario: 'You are on an escalation helpline. A client has several conceptual questions about nominee rules on their demat account — they want to understand the actual regulatory limits and requirements, not just be told "yes" or "no." Answer each of the 4 questions accurately and confidently before the caller moves to the next.',
+          description: 'A theory-driven escalation call testing understanding of nominee rules on a demat account — how many are allowed, who can be one, and what makes a minor nominee different. 8 tough conceptual questions in a row.',
+          scenario: 'You are on an escalation helpline. A client has several conceptual questions about nominee rules on their demat account — they want to understand the actual regulatory limits and requirements, not just be told "yes" or "no." Answer each of the 8 questions accurately and confidently before the caller moves to the next.',
           checklist: [
             "State the actual rule or limit correctly rather than guessing or making one up",
             "Clearly explain WHY a rule exists where relevant (e.g. extra verification for a minor), not just that it exists",
@@ -905,17 +914,25 @@ const DB = (() => {
             "How many nominees am I actually allowed to add to a single demat account, and is there a rule about how the percentage share has to be split between them?",
             "Can a nominee be someone who isn't a blood relative — like a close friend or a business partner — or does the rule restrict nominees to family only?",
             "What's actually different about registering a minor as a nominee compared to an adult? Why would that need anything extra at all?",
-            "If my mobile number isn't linked to my Aadhaar, does that block me from changing my nominee altogether, or does it just mean I have to use a different method to do it?"
+            "If my mobile number isn't linked to my Aadhaar, does that block me from changing my nominee altogether, or does it just mean I have to use a different method to do it?",
+            "If I already have two nominees and just want to swap one of them out for someone new, is that treated any differently from wiping out both nominees and starting fresh with completely new ones?",
+            "Am I required to always have at least one nominee once I've added one, or can I remove all my nominees and opt out of the nomination facility altogether?",
+            "If all I want to do is correct my nominee's name or update their address, do I really have to go through the entire nomination process again, the same as adding a brand-new nominee?",
+            "Why would the process ask for both a physically signed form AND a digital eSign on top of it — isn't a digital signature alone enough to make this legally valid these days?"
           ],
           enabled: true
         },
 
         // Trainee Red Pen — Operations Escalation Call: Short Delivery & Auctions (Conceptual)
+        // Expanded from 4 to a full 8-question flow drawn from the Short
+        // Delivery / Auction Market reference material (close-out vs auction
+        // charge, T2T and corporate-action carve-outs, holding-in-demat vs
+        // genuine short scenarios, partial-fulfilment WAP pricing).
         {
           module: 'ops-call-assessment',
           title: 'Short Delivery & Auction Mechanics (Conceptual)',
-          description: 'A theory-driven escalation call testing understanding of why short delivery happens and how the auction settlement process actually works — no numbers, just the mechanics. 4 tough conceptual questions in a row.',
-          scenario: 'You are on an escalation helpline. A client wants to genuinely understand how short delivery and the auction process work — not dispute a specific number, but understand the mechanism well enough to trust the outcome next time it happens. Answer each of the 4 questions accurately and confidently before the caller moves to the next.',
+          description: 'A theory-driven escalation call testing understanding of why short delivery happens and how the auction settlement process actually works — no numbers, just the mechanics. 8 tough conceptual questions in a row.',
+          scenario: 'You are on an escalation helpline. A client wants to genuinely understand how short delivery and the auction process work — not dispute a specific number, but understand the mechanism well enough to trust the outcome next time it happens. Answer each of the 8 questions accurately and confidently before the caller moves to the next.',
           checklist: [
             "Explain the actual mechanism correctly rather than a simplified or incorrect version",
             "Be clear about whose responsibility short delivery and its cost actually is, and why",
@@ -927,17 +944,26 @@ const DB = (() => {
             "Can you explain, in plain terms, why a short delivery even happens in the first place? Is it always the seller's fault, or can it happen for reasons completely outside their control?",
             "How is the auction settlement price for a short-delivered share actually decided? Is it just whatever the stock happened to close at that day, or is there a specific formula behind it?",
             "If a stock simply doesn't trade during the auction session — nobody offers to sell it — what happens to the buyer who was supposed to receive those shares?",
-            "Is a short-delivery penalty a fine charged to the seller, or is it compensation paid out to the buyer? Where does that money actually end up going?"
+            "Is a short-delivery penalty a fine charged to the seller, or is it compensation paid out to the buyer? Where does that money actually end up going?",
+            "Is an 'auction charge' and a 'close-out amount' really just two names for the same penalty, or are they genuinely two different things that apply in different situations?",
+            "Why would a stock being in the trade-to-trade category, or being under a corporate action, change how a shortage gets settled instead of just running the normal auction like any other stock?",
+            "If I already hold the shares in my demat account when I sell them, can a short delivery even happen to me, or does that situation only come up when someone sells shares they don't actually own yet?",
+            "When the exchange can only buy back part of the missing shares in the auction and has to close out the rest in cash, how is the final price worked out for everyone — is it two separate prices, or one blended rate applied to the whole quantity?"
           ],
           enabled: true
         },
 
         // Trainee Red Pen — Operations Escalation Call: Suspended Stocks (Conceptual)
+        // Expanded from 4 to a full 8-question flow drawn from the Suspended
+        // Stocks reference material (weekly-trading vs full suspension,
+        // off-market transfer/gifting rights during suspension, IRP vs plain
+        // suspension, capital reduction as a corporate action that itself
+        // triggers a temporary halt).
         {
           module: 'ops-call-assessment',
           title: 'Suspended Stocks — Trading Halts & Corporate Actions (Conceptual)',
-          description: 'A theory-driven escalation call testing understanding of what a trading suspension actually means and how it interacts with dividends, AGMs, and buybacks. 4 tough conceptual questions in a row.',
-          scenario: 'You are on an escalation helpline. A client holds a suspended stock and has several conceptual questions about what suspension actually means for their rights as a shareholder — not a specific transaction dispute, but genuine confusion about the rules. Answer each of the 4 questions accurately and confidently before the caller moves to the next.',
+          description: 'A theory-driven escalation call testing understanding of what a trading suspension actually means and how it interacts with dividends, AGMs, and buybacks. 8 tough conceptual questions in a row.',
+          scenario: 'You are on an escalation helpline. A client holds a suspended stock and has several conceptual questions about what suspension actually means for their rights as a shareholder — not a specific transaction dispute, but genuine confusion about the rules. Answer each of the 8 questions accurately and confidently before the caller moves to the next.',
           checklist: [
             "Explain the actual distinction between suspension, delisting and similar terms correctly, not loosely or interchangeably",
             "Be clear about what a suspension does and does NOT freeze (e.g. corporate actions vs trading itself)",
@@ -949,7 +975,11 @@ const DB = (() => {
             "What's the actual difference between a stock being 'suspended' and being 'delisted'? I keep hearing both terms used and I'm not sure if they mean the same thing.",
             "If a company's stock is suspended because of a SEBI investigation, does that automatically mean the company has done something wrong, or can trading be halted for other reasons entirely?",
             "Can a company still pay a dividend, or run a buyback, while its own stock is suspended from trading? I would have assumed a suspension freezes everything about the company.",
-            "If my stock is suspended, can I still vote on resolutions at the company's AGM, or does the suspension affect my shareholder rights too?"
+            "If my stock is suspended, can I still vote on resolutions at the company's AGM, or does the suspension affect my shareholder rights too?",
+            "If my stock only trades once a week now instead of every day, has the suspension actually been lifted, or is that still a form of restriction dressed up to look like normal trading?",
+            "Does a stock being suspended stop me from transferring it off-market to someone else or gifting it, or is buying and selling on the exchange the only thing that's actually blocked?",
+            "What's genuinely different between a company going through insolvency resolution and a stock that's simply suspended for something like a compliance lapse? Do both restrict me the exact same way?",
+            "If a company reduces the number of shares I hold as part of a corporate restructuring, does that happen while the stock keeps trading normally, or is trading usually paused during that kind of process?"
           ],
           enabled: true
         },
