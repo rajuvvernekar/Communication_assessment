@@ -160,11 +160,19 @@ body {
   color: var(--text-muted);
 }
 
-/* ---- Welcome Screen ---- */
-#screen-welcome {
+/* ---- Welcome Screen ----
+   NOTE: display MUST stay scoped to `#screen-welcome.active` — this ID
+   selector otherwise beats `.screen { display:none }` / `.screen.active
+   { display:block }` on specificity alone, which meant this screen never
+   actually hid after a trainee logged in (it kept rendering, full-height,
+   stacked in front of #screen-modules) — trainees saw what looked like a
+   broken/no-op login even though the login itself succeeded underneath. */
+#screen-welcome.active {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+#screen-welcome {
   background: linear-gradient(140deg, #1a1f2e 0%, #2d3654 60%, #1e3a5f 100%);
   min-height: 100vh;
 }

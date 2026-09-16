@@ -367,8 +367,19 @@ const App = (() => {
   }
 
   // ---- Auth Screen ----
-  function initAuth() {
-    // Restore trainee from previous session (same browser/device)
+  // `dbReady` is the in-flight DB.init() promise (see init() below). Login
+  // used to be gated entirely behind `await DB.init()` finishing before this
+  // function even ran — meaning the Start Assessment button had literally no
+  // click listener attached yet for however long DB.init() took (up to 6s
+  // when Supabase is slow or unreachable, e.g. blocked by network/extension
+  // policy). A trainee clicking in that window saw nothing happen at all and
+  // reasonably assumed login was broken. Now initAuth() runs and wires up
+  // the listener immediately; only the actual DB read/write inside doStart()
+  // waits on dbReady, and the button shows "Starting…" right away so a click
+  // during that window still gives visible feedback instead of looking dead.
+  function initAuth(dbReady) {
+    // Restore trainee from previous session (same browser/device) — this
+    // only touches localStorage, not DB, so it doesn't need to wait either.
     const cached = localStorage.getItem('commassess_trainee');
     if (cached) {
       try {
@@ -399,6 +410,7 @@ const App = (() => {
       $('btn-start').disabled    = true;
       $('btn-start').textContent = 'Starting…';
       try {
+        await dbReady; // wait for DB.init() (Supabase check / localStorage fallback) before touching DB
         // Look up existing trainee by employee_id or create a new one
         const rows = await DB.getByIndex('trainees', 'employee_id', employeeId);
         let traineeId;
@@ -3672,8 +3684,13 @@ const App = (() => {
 
   // ---- Init ----
   async function init() {
-    await DB.init();
-    initAuth();
+    // Kick off DB.init() (Supabase reachability check + fallback, up to a
+    // 6s timeout) without blocking the rest of startup on it. initAuth()
+    // wires up the login button right away — see the comment on initAuth()
+    // for why that matters — and gets the promise so doStart() can await
+    // it only at the point it actually needs the DB.
+    const dbReady = DB.init();
+    initAuth(dbReady);
     bindNavigation();
     initCalculator();
 
@@ -3682,6 +3699,8 @@ const App = (() => {
       const canvas = $(`${prefix}-waveform`);
       if (canvas) Recorder.drawIdleWaveform(canvas);
     });
+
+    await dbReady;
   }
 
   return { init };
