@@ -1535,15 +1535,17 @@ const App = (() => {
     $('mc-chat-thread').appendChild(bubble);
     $('mc-chat-thread').scrollTop = $('mc-chat-thread').scrollHeight;
 
-    // Speak it, then hand off to trainee or finish
+    // Speak it, then always hand off to the trainee for their turn — even on
+    // the final question. This used to skip straight to the "Finish Call"
+    // button when isLast was true, which meant the trainee never got the
+    // 2-minute answer window (or the mic/recording UI at all) for the last
+    // question — the call would speak the final question and immediately
+    // offer to end, with no chance to answer it. endTraineeTurn() already
+    // handles showing the "Finish Call" button correctly once this (the
+    // last) turn's answer has been captured, so isLast only needs to affect
+    // the turn label/badge above, not whether the trainee gets to respond.
     speakAiCustomer(botLine, () => {
-      if (isLast) {
-        $('mc-bot-status').style.display = 'none';
-        $('btn-mc-finish').style.display = '';
-        $('btn-mc-finish').onclick = finishBotCall;
-      } else {
-        startTraineeTurn();
-      }
+      startTraineeTurn();
     }, mood);
   }
   // ─────────────────────────────────────────────────────────────────────────
