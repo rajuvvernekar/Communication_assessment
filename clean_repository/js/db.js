@@ -282,6 +282,25 @@ const DB = (() => {
   }
 
   // ---- Migrate data saved locally during outage back to Supabase ----
+  //
+  // Two bugs fixed here (2026-09-16), found while investigating ~15 trainees
+  // whose completed assessments never showed up in admin after a Supabase
+  // project pause:
+  //
+  // 1. Supabase-js v2 calls do NOT throw on an API-level error (400, 409,
+  //    RLS rejection, etc.) — they resolve normally with `{ data, error }`.
+  //    The old code never checked `error`, so a rejected upsert/insert was
+  //    silently treated as a success: no warning was ever logged for it.
+  //    Every `_sb...` call below now destructures `error` and throws it so
+  //    the per-item catch below actually sees these failures.
+  //
+  // 2. Regardless of (1), the old code called `_localClear(store)`
+  //    unconditionally after the per-item loop — even for items whose
+  //    migration had failed. That permanently discarded the only copy of
+  //    that trainee's local data. Now only items that migrated successfully
+  //    are cleared; anything that failed is written back to local storage
+  //    so it's retried automatically on the trainee's next visit instead of
+  //    being lost.
   async function _migrateLocalStorageToSupabase() {
     try {
       const stores = ['trainees', 'topics', 'sessions', 'ai_audit_scores', 'settings'];
@@ -290,25 +309,36 @@ const DB = (() => {
         if (localItems.length === 0) continue;
 
         console.log(`[DB] Found ${localItems.length} unsynced items in local storage for ${store}. Migrating to Supabase...`);
+        const failedItems = [];
         for (const item of localItems) {
           try {
             if (store === 'settings') {
               // Settings key merge (e.g. merge team assignments, avoid overwriting adminUsers entirely unless default)
               if (item.key === 'adminUsers') continue; // don't push default admins over customized cloud database admins
-              await _sb.from('settings').upsert({ key: item.key, value: item.value }, { onConflict: 'key' });
+              const { error } = await _sb.from('settings').upsert({ key: item.key, value: item.value }, { onConflict: 'key' });
+              if (error) throw error;
             } else {
               const dbData = _toDB(store, item);
+              let error;
               if (item.id) {
-                await _sb.from(store).upsert(dbData, { onConflict: 'id' });
+                ({ error } = await _sb.from(store).upsert(dbData, { onConflict: 'id' }));
               } else {
-                await _sb.from(store).insert(dbData);
+                ({ error } = await _sb.from(store).insert(dbData));
               }
+              if (error) throw error;
             }
           } catch (itemErr) {
-            console.warn(`[DB] Migration failed for item in ${store}:`, itemErr.message);
+            console.warn(`[DB] Migration failed for item in ${store} (kept in local storage for retry):`, itemErr.message || itemErr);
+            failedItems.push(item);
           }
         }
-        _localClear(store);
+        // Only clear what actually made it to Supabase — see note above.
+        if (failedItems.length > 0) {
+          localStorage.setItem('commassess_' + store, JSON.stringify(failedItems));
+          console.warn(`[DB] ${failedItems.length} of ${localItems.length} item(s) in ${store} failed to migrate and were kept locally; will retry next load.`);
+        } else {
+          _localClear(store);
+        }
         console.log(`[DB] Completed migration for ${store}.`);
       }
     } catch (e) {
