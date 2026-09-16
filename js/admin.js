@@ -2623,6 +2623,22 @@ window.Admin = (() => {
     const isSR      = session.module === 'mgr-situation-room';
     const isWritten = ['mgr-transcript-autopsy','mgr-eq','mgr-management-skills'].includes(session.module);
     const isFeedback = session.module === 'mgr-feedback';
+    const isAudio    = session.module === 'mgr-mock-call';
+
+    // Recording playback — Mock Call and Feedback (Red Pen) both capture a
+    // voice recording (see manager-app.js _submitAudio / _finishFeedbackConversation),
+    // but this modal previously only ever rendered the text transcript, so
+    // admins had no way to actually listen to the call. Show the player
+    // whenever a recording URL made it through (DB.put uploads recordingBlob
+    // to Supabase Storage and maps it back as session.recordingUrl).
+    const audioSection = modal.querySelector('#mgr-modal-audio-section');
+    const audioEl       = modal.querySelector('#mgr-modal-audio');
+    const hasRecording  = (isAudio || isFeedback) && !!session.recordingUrl;
+    if (audioSection) audioSection.classList.toggle('hidden', !hasRecording);
+    if (audioEl) {
+      if (hasRecording) audioEl.src = session.recordingUrl;
+      else { audioEl.removeAttribute('src'); audioEl.load && audioEl.load(); }
+    }
 
     const transcriptBox = modal.querySelector('#mgr-modal-transcript');
 

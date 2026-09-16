@@ -508,26 +508,244 @@ YOUR TASK: Write a full escalation-tier coaching analysis for this call. Identif
 Also answer: this call ended with the customer disconnecting with no resolution and no real acknowledgment. Write the exact closing exchange — from "Sir, as per our policy…" to the end — the way it should have gone, and explain what, if anything, could realistically have been offered within policy (the square-off itself was correct; no refund is owed).
 
 Minimum 300 words.` },
+      { id:'ta5', title:'Dividend Credited to a Closed Bank Account — 19 Min Call',
+        scenario:`BACKGROUND: Ms. Kavita Desai submitted a bank account update request 6 weeks ago after closing her old HDFC account. Her mutual fund dividend of ₹18,400 was credited to the old, closed account 4 days ago because the mandate update was never applied at the fund house. This is the second time in three months this exact bank-update issue has recurred for her — a previous ticket (TKT-77120) was marked "resolved" without the fund-house-side record actually being confirmed. This transcript has 7+ identifiable mistakes.
+
+─── CALL TRANSCRIPT ─────────────────────────────────────────────
+
+AGENT: Hello, Zerodha support, how can I help you today?
+
+KAVITA: Hi, this is Kavita Desai. My mutual fund dividend of ₹18,400 was paid out 4 days ago, but it went to my old HDFC account — which I closed two months ago. I submitted a bank change request for this exact reason six weeks ago.
+
+AGENT: Okay, can I get your client ID?
+
+KAVITA: KD-6612. I already explained the account was closed — this is not the first time this has happened either. Three months ago the same thing happened with a redemption payout.
+
+AGENT: Let me check. [50-second silence] I can see a bank change request from 6 weeks ago, status shows "processed."
+
+KAVITA: Then why did my dividend go to the closed account?
+
+AGENT: Sometimes the fund house has its own separate bank record that doesn't update automatically.
+
+KAVITA: Nobody told me I needed to update it separately with each fund house! I updated it with Zerodha — isn't Zerodha supposed to sync this?
+
+AGENT: We send the updated bank details, but the fund house needs to process it on their end too.
+
+KAVITA: So basically you're saying it's not your fault?
+
+AGENT: I'm not saying that, I'm just explaining the process.
+
+KAVITA: This happened before, three months ago, and I was told then that it was "fixed." Was it not actually fixed?
+
+AGENT: I don't have visibility into that previous case from here.
+
+KAVITA: Can you check the ticket? I have the number — TKT-77120.
+
+AGENT: [40-second silence] I see it. It was closed as resolved.
+
+KAVITA: Resolved how? The exact same problem happened again!
+
+AGENT: The notes just say "bank details updated."
+
+KAVITA: Updated where? With Zerodha or with the fund house? Can you tell the difference?
+
+AGENT: I can't tell from these notes, ma'am.
+
+KAVITA: Okay. So what happens to my ₹18,400 that went to a closed bank account?
+
+AGENT: It will bounce back to the fund house since the account is closed, and then get reprocessed.
+
+KAVITA: How long will that take?
+
+AGENT: Usually 7 to 10 working days.
+
+KAVITA: And will it go to the correct account this time, or the same closed one?
+
+AGENT: It should go to whichever account is updated in our system.
+
+KAVITA: "Should"? Can you confirm right now, with certainty, which bank account is on file with the fund house — not with Zerodha, with the actual fund house — for my folio?
+
+AGENT: I don't have that visibility from this screen.
+
+KAVITA: Then how can you promise it will work this time?
+
+AGENT: I understand your frustration.
+
+KAVITA: I don't need you to understand my frustration, I need this fixed. Can I speak to whoever handles fund-house bank mandate sync specifically?
+
+AGENT: That would be a back-end team, we don't have a direct line to them.
+
+KAVITA: Then how do I make sure this isn't a third time?
+
+AGENT: I'll raise a ticket requesting confirmation of the fund house-side bank details.
+
+KAVITA: What's the ticket number and when will I hear back?
+
+AGENT: TKT-91345. You should hear back in 3 to 5 working days.
+
+KAVITA: Please note in the ticket that this is a repeat issue, ticket TKT-77120 was falsely marked resolved, and I need explicit confirmation of the correct bank account before the reprocessed dividend is sent, not after.
+
+AGENT: I've added a note.
+
+KAVITA: Can you read back what you wrote?
+
+AGENT: "Customer reports repeat bank mandate issue."
+
+KAVITA: That's it? None of the specifics I just gave you?
+
+AGENT: I can add more. [25-second silence] Done.
+
+KAVITA: Is there anything else that can be done today?
+
+AGENT: Not from my end, no.
+
+KAVITA: Alright.
+
+AGENT: Is there anything else I can help with?
+
+KAVITA: No.
+
+AGENT: Thank you for calling, have a good day. [Disconnects]
+
+─── END OF TRANSCRIPT ──────────────────────────────────────────
+
+YOUR TASK: Write a structured coaching report for this call. Identify a minimum of 7 coaching opportunities, including at least one on how the agent handled (or failed to handle) the fact that this is a documented repeat issue. For each opportunity:
+(a) Quote the exact moment from the transcript
+(b) Explain the impact on the customer's trust, given this is the second occurrence
+(c) Write the improved response the agent should have delivered
+
+Also answer: what specific, verifiable action (not a generic "I'll raise a ticket") should the agent have taken to make sure this cannot recur a third time?
+
+Minimum 250 words.` },
+      { id:'ta6', title:'Suspicious Activity Freeze During a Market Rally — 21 Min Call',
+        scenario:`BACKGROUND: Mr. Faisal Ahmed's trading account was frozen for a "suspicious activity review" two days ago, in the middle of a Nifty rally, and he has been unable to exit positions that have since given back their gains — an estimated ₹58,000 in unrealized profit he could not lock in. The actual cause is a routine SEBI-mandated surveillance flag triggered by his own unusually high-frequency trading pattern — nothing improper, just a review that takes time — but the agent never manages to explain this clearly or usefully. This transcript has 8+ identifiable mistakes.
+
+─── CALL TRANSCRIPT ─────────────────────────────────────────────
+
+AGENT: Hello, Zerodha support.
+
+FAISAL: Hi, my account has been frozen for two days now — I can't place any trades. My client ID is FA-3391. This happened right during the Nifty rally and I've lost close to ₹58,000 in gains I could have booked.
+
+AGENT: Let me check. [35-second silence] I see a hold on your account.
+
+FAISAL: Why? Nobody told me anything. I just tried to sell my position and got an error.
+
+AGENT: It says "under review."
+
+FAISAL: Review for what? I haven't done anything wrong.
+
+AGENT: I can't see the specific reason from here.
+
+FAISAL: Then who can? This is costing me real money every hour it stays frozen.
+
+AGENT: It might be related to KYC.
+
+FAISAL: My KYC is fully done, I've been trading for 4 years.
+
+AGENT: Sometimes it's re-verification.
+
+FAISAL: Is it KYC or not? You said "sometimes."
+
+AGENT: I'm not 100% sure, let me check again. [45-second silence] Actually it looks like a surveillance flag.
+
+FAISAL: What does that mean? Am I being accused of something?
+
+AGENT: It's usually for high-frequency trading patterns.
+
+FAISAL: I trade actively, that's my strategy! Is active trading illegal now?
+
+AGENT: No sir, it's just a standard review.
+
+FAISAL: Then why can't you unfreeze it right now if it's just "standard"?
+
+AGENT: These reviews take time to clear.
+
+FAISAL: How much time? I'm losing money every single hour!
+
+AGENT: I don't have an exact timeline.
+
+FAISAL: Give me an estimate then.
+
+AGENT: Maybe 3 to 5 working days.
+
+FAISAL: Three to five days? In a volatile market? That could cost me lakhs!
+
+AGENT: I understand, but this process is regulatory, we can't skip it.
+
+FAISAL: I'm not asking you to skip it, I'm asking for a status update and a real explanation of why I specifically got flagged.
+
+AGENT: I can raise a query with the surveillance team.
+
+FAISAL: Has anyone already raised this in the last two days? I never got a call.
+
+AGENT: I don't see any outbound call logged.
+
+FAISAL: So for two days nobody was even working on this?
+
+AGENT: I can't confirm that.
+
+FAISAL: Can I speak to the surveillance team directly?
+
+AGENT: They don't take direct calls, only email queries.
+
+FAISAL: What's the email?
+
+AGENT: [20-second silence] It's the compliance team address — I'd need to check the exact one.
+
+FAISAL: You don't know your own compliance team's email?
+
+AGENT: I'll get the correct one added to your ticket.
+
+FAISAL: What ticket? Is there already one open?
+
+AGENT: I'll create one now. TKT-64210.
+
+FAISAL: Please note: two-day freeze during a live rally, no prior communication, unrealized gains lost, and I need a specific timeline, not "3 to 5 days maybe."
+
+AGENT: Noted.
+
+FAISAL: Read it back to me.
+
+AGENT: "Customer account frozen, requesting update."
+
+FAISAL: That's not what I said at all.
+
+AGENT: I'll expand it. [30-second silence] Updated.
+
+FAISAL: Is there truly nothing that can be done today?
+
+AGENT: Not from my side, no.
+
+FAISAL: Fine.
+
+AGENT: Anything else?
+
+FAISAL: No.
+
+AGENT: Thank you, have a nice day. [Disconnects]
+
+─── END OF TRANSCRIPT ──────────────────────────────────────────
+
+YOUR TASK: Write a structured coaching report identifying a minimum of 7 coaching opportunities across: Call Opening, Explaining the Freeze, Handling "Am I being accused of something?", Urgency/Financial Impact, Escalation Access, and Call Closing. For each:
+(a) Quote the exact transcript moment
+(b) Explain the impact on the customer
+(c) Write the improved response
+
+Also answer: this agent never actually explained, in plain terms, why a surveillance-driven freeze cannot be rushed even though it is "standard." Write the exact explanation the agent should have given — one that is honest about the timeline while still being genuinely useful about the financial impact.
+
+Minimum 250 words.` },
     ],
     'mgr-mock-call': [
-      { id:'mc1', title:'C-Suite Escalation',
-        scenario:'You are on a call with the VP Operations of your biggest client. Three major deliverables were missed this quarter due to internal resourcing issues. The VP is furious and says:\n\n"I have been patient enough. We pay premium rates for a premium service and we are getting junior-level delivery. I am reviewing this contract tomorrow. Give me ONE reason why we should continue with you."\n\nHandle this call professionally. You have 4-5 minutes.' },
+      { id:'mc1', title:'C-Suite Escalation — Contract at Final Risk',
+        scenario:'You are the Relationship Manager for Altus Capital, a ₹80 crore institutional client relationship spanning 4 years. The CFO, Priya Nair, is on the line, visibly frustrated. Three consecutive quarter-end portfolio reports were delivered late — 2 days, then 4 days, then this last one 6 days late — arriving after Altus\'s own board meeting where those numbers were needed. Priya already escalated once by email two weeks ago and nothing visibly changed. She opens:\n\n"I have been more than patient. This is the third quarter in a row. Our board asked me questions I could not answer because your numbers weren\'t in my hand. I am reviewing this relationship with my CEO tomorrow morning. Give me one reason why we should not move to a different provider."\n\nWhat you know (use it): the root cause is a data-reconciliation bottleneck in your operations team, already identified, with a fix roughly 3 weeks from being fully rolled out.\n\nHandle this call for 5-6 minutes: acknowledge the full pattern, explain the real fix and timeline, propose a concrete interim safety net for the next quarter-end, and make a credible commitment Priya can take to her CEO tomorrow.' },
+      { id:'mc2', title:'Regulatory Audit Call — Explain Team Non-Compliance',
+        scenario:'You are on a call with Meera Krishnamurthy, the Internal Compliance Auditor, following a routine review of your team\'s call-closure records. Her audit sampled 40 calls from last quarter and found 11 were marked "first-call resolved" in the CRM while the customer\'s actual ticket remained open in the ticketing system for an average of 6 more days afterward. Two of those 11 cases involve customers who called back angry and were re-logged as fresh complaints, which also understates your team\'s repeat-contact rate. Meera has flagged this to your regional head and needs your explanation today — her report is due to leadership by Friday. She is procedural and fact-driven, not hostile, but will press for specifics: is this a training gap or a systemic process gap, and what corrective action plan can she attach to her report.\n\nHandle this call for 5-6 minutes: be transparent about what you actually know versus don\'t yet know, take appropriate ownership without unfairly naming individual agents before you\'ve verified anything, and propose both an immediate fix and a systemic prevention measure.' },
+      { id:'mc3', title:'Performance Review Call — The Defensive Underperformer',
+        scenario:'You are conducting a formal, documented performance review call with Arvind, a team member who has missed his resolution-quality target for two consecutive months (78% and 74% against an 85% target), following an informal conversation last month that didn\'t move the needle. He joins the call already defensive:\n\n"I know the numbers don\'t look good, but honestly the leads I\'m getting are lower quality and the product team keeps changing workflows without telling us — I don\'t think the target is realistic right now."\n\nWhat you know (use it): the workflow changes are real — 3 in the last 6 weeks — but every other agent on the team is still hitting 82%+ despite them, so it isn\'t purely an external factor.\n\nHandle this call for 5-6 minutes: acknowledge the real pressure without accepting it as the sole explanation, use the team-comparison data without attacking Arvind personally, and close with a specific, time-bound improvement plan with agreed check-in points.' },
       { id:'mc4', title:'Margin Call Penalty Dispute',
-        scenario:'A high-volume corporate trader calls in a rage after receiving a ₹1.8 Lakh margin penalty. They claim the automated risk management system closed their position prematurely without sending a margin call alert. They threaten to move their ₹12 Crore portfolio to a competing broker unless the penalty is refunded today. Handle this 4-minute call.' },
+        scenario:'You are handling an inbound call from Rajesh Oberoi, a high-volume corporate trading client with a ₹12 Crore portfolio, who was just charged a ₹1.8 Lakh penalty after the automated risk-management system squared off his leveraged Nifty futures position this morning. He is furious and insists he never received a margin-call alert — he checked his phone immediately after the square-off and found nothing. Your system logs show 2 SMS alerts and 1 app push notification sent, timestamped 40 and 15 minutes before the square-off — but you also know, from an internal ops bulletin circulated this week, that the SMS gateway had a documented 20-30 minute delivery delay affecting a subset of clients yesterday and this morning, which front-line staff haven\'t yet been briefed to check for. He threatens to move his entire ₹12 Crore portfolio to a competing broker by end of day unless the penalty is refunded in full right now.\n\nHandle this call for 5-6 minutes: verify the alert timeline factually without dismissing his experience, proactively disclose the known SMS delay rather than defending a system you have reason to doubt, and resolve within your actual authority — you can waive the penalty as goodwill pending investigation, but cannot reinstate the squared-off position since the market has moved.' },
       { id:'mc5', title:'Cross-Border Regulatory Freeze',
-        scenario:'An NRI client based in London has their Demat account suddenly frozen due to pending FATCA re-declaration. They are currently travelling and unable to access their registered Indian mobile number for OTP verification. They need to liquidate ₹15 Lakhs for an emergency medical payment today. Handle this call.' },
-      { id:'mc2', title:'Contract at Risk',
-        scenario:'A key enterprise client worth ₹45 crores annually is on the line. Their procurement head says:\n\n"We have been getting better proposals from two other vendors. Our leadership is already leaning towards switching. Your team has been reactive, not proactive. I\'m giving you this call as a courtesy — convince me why we should stay."\n\nHandle this retention conversation. You have 4-5 minutes.' },
-      { id:'mc4', title:'Margin Call Penalty Dispute',
-        scenario:'A high-volume corporate trader calls in a rage after receiving a ₹1.8 Lakh margin penalty. They claim the automated risk management system closed their position prematurely without sending a margin call alert. They threaten to move their ₹12 Crore portfolio to a competing broker unless the penalty is refunded today. Handle this 4-minute call.' },
-      { id:'mc5', title:'Cross-Border Regulatory Freeze',
-        scenario:'An NRI client based in London has their Demat account suddenly frozen due to pending FATCA re-declaration. They are currently travelling and unable to access their registered Indian mobile number for OTP verification. They need to liquidate ₹15 Lakhs for an emergency medical payment today. Handle this call.' },
-      { id:'mc3', title:'Performance Review Call',
-        scenario:'You are conducting a formal performance review call with a team member who has missed targets for 2 consecutive months. They begin defensively:\n\n"I know the numbers don\'t look good but these targets are unrealistic. The leads I\'m getting are poor quality and the product team keeps changing things without warning us. I\'m not the problem here."\n\nConduct a structured, empathetic but direct performance conversation. You have 4-5 minutes.' },
-      { id:'mc4', title:'Margin Call Penalty Dispute',
-        scenario:'A high-volume corporate trader calls in a rage after receiving a ₹1.8 Lakh margin penalty. They claim the automated risk management system closed their position prematurely without sending a margin call alert. They threaten to move their ₹12 Crore portfolio to a competing broker unless the penalty is refunded today. Handle this 4-minute call.' },
-      { id:'mc5', title:'Cross-Border Regulatory Freeze',
-        scenario:'An NRI client based in London has their Demat account suddenly frozen due to pending FATCA re-declaration. They are currently travelling and unable to access their registered Indian mobile number for OTP verification. They need to liquidate ₹15 Lakhs for an emergency medical payment today. Handle this call.' },
+        scenario:'You are on a call with Fatima Hussain, an NRI client based in London, whose Demat account was automatically frozen three days ago pending a mandatory FATCA re-declaration. Compliance emailed her about it, but the email went to an old address she no longer actively checks. She is currently travelling for work and cannot access her registered Indian mobile number for the OTP needed to complete the re-declaration online. She has a ₹15 Lakh medical emergency for a family member back in India and needs to liquidate holdings today. She is calm but growing more desperate as the call goes on.\n\nWhat you know (use it): the freeze and OTP-verified re-declaration are non-negotiable, but there are alternative verification paths — a video KYC re-verification call, or a physical branch visit by a registered Power of Attorney holder in India — instead of just insisting she "must complete this online."\n\nHandle this call for 5-6 minutes: acknowledge the urgency without over-promising a same-day fix, walk her through the real alternative paths, and give a realistic timeline for each.' },
     ],
     'mgr-feedback': [
       { id:'fb1', title:'The High Performer Who Suddenly Disengaged',
