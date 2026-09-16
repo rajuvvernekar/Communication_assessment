@@ -283,9 +283,10 @@ const DB = (() => {
 
   // ---- Migrate data saved locally during outage back to Supabase ----
   //
-  // Two bugs fixed here (2026-09-16), found while investigating ~15 trainees
-  // whose completed assessments never showed up in admin after a Supabase
-  // project pause:
+  // Three bugs fixed here (2026-09-16), found while investigating ~15
+  // trainees whose completed assessments never showed up in admin after a
+  // Supabase project pause, and then a wave of duplicated topics reported
+  // in admin (66 titles, 2-5 copies each, dating back to June):
   //
   // 1. Supabase-js v2 calls do NOT throw on an API-level error (400, 409,
   //    RLS rejection, etc.) — they resolve normally with `{ data, error }`.
@@ -301,6 +302,23 @@ const DB = (() => {
   //    are cleared; anything that failed is written back to local storage
   //    so it's retried automatically on the trainee's next visit instead of
   //    being lost.
+  //
+  // 3. `topics` is catalog/reference content seeded by _seedDefaults(), not
+  //    trainee- or session-scoped data — every browser that ever ran the
+  //    LocalStorage fallback got its own full local copy of the topic
+  //    catalog (via _seedLocalStorageDefaults), each item tagged with a
+  //    throwaway `local-xxxx` id. This function used to migrate `topics`
+  //    exactly like any other store: `upsert(dbData, {onConflict:'id'})`.
+  //    Since a `local-xxxx` id never matches any real UUID already in the
+  //    `topics` table, that "upsert" always inserted a brand-new row — so
+  //    every reconnect after an outage re-seeded the ENTIRE topic catalog
+  //    as duplicates. `topics` is now matched by its real natural key
+  //    (module + title) against what's already live, instead of by id:
+  //    a match is skipped (the content already exists — _seedDefaults'
+  //    versioned refresh keeps it current, this function's job is only to
+  //    not blow away trainee/session data), and only a genuinely new title
+  //    is inserted, with a fresh server-generated id rather than the local
+  //    placeholder one.
   async function _migrateLocalStorageToSupabase() {
     try {
       const stores = ['trainees', 'topics', 'sessions', 'ai_audit_scores', 'settings'];
@@ -310,6 +328,20 @@ const DB = (() => {
 
         console.log(`[DB] Found ${localItems.length} unsynced items in local storage for ${store}. Migrating to Supabase...`);
         const failedItems = [];
+
+        // Catalog content: match by (module, title), never by the local
+        // placeholder id — see note (3) above. Fetch what's already live
+        // once, up front, rather than per item.
+        let liveTopicKeys = null;
+        if (store === 'topics') {
+          const { data: liveTopics, error: liveErr } = await _sb.from('topics').select('module, title');
+          if (liveErr) {
+            console.warn('[DB] Could not read live topics for dedup check; skipping topic migration this run:', liveErr.message || liveErr);
+          } else {
+            liveTopicKeys = new Set((liveTopics || []).map(t => `${t.module}:${t.title}`));
+          }
+        }
+
         for (const item of localItems) {
           try {
             if (store === 'settings') {
@@ -317,6 +349,25 @@ const DB = (() => {
               if (item.key === 'adminUsers') continue; // don't push default admins over customized cloud database admins
               const { error } = await _sb.from('settings').upsert({ key: item.key, value: item.value }, { onConflict: 'key' });
               if (error) throw error;
+            } else if (store === 'topics') {
+              if (!liveTopicKeys) {
+                // Couldn't verify what's already live this run — leave the
+                // item in local storage and retry on the next load rather
+                // than risk inserting a duplicate blind.
+                failedItems.push(item);
+                continue;
+              }
+              const key = `${item.module}:${item.title}`;
+              if (liveTopicKeys.has(key)) {
+                // Already present in Supabase (seeded there directly, or
+                // migrated from another browser already) — nothing to do.
+                continue;
+              }
+              const dbData = _toDB('topics', item);
+              delete dbData.id; // never write the local-xxxx placeholder id — let Postgres generate a real one
+              const { error } = await _sb.from('topics').insert(dbData);
+              if (error) throw error;
+              liveTopicKeys.add(key); // avoid re-inserting the same new title twice within this same run
             } else {
               const dbData = _toDB(store, item);
               let error;
