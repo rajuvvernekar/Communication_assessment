@@ -148,6 +148,65 @@ const App = (() => {
   let _mcAiTurnCount      = 0;
   let _mcAiMaxTurns       = MC_AI_MAX_TURNS; // per-call override (e.g. ops-call-assessment uses its own question count)
 
+  // ── Ops Escalation Call — ADAPTIVE test mode (2026-09-18) ──────────────
+  // Every other ops-call-assessment topic still uses the fixed, verbatim
+  // bot_script flow above (OPS_CALL_TRANSITIONS etc.) — deliberately
+  // untouched, so nothing changes for the ~10 trainees who already have
+  // live sessions on those topics. This is a scoped test, for ONE topic
+  // only, of a genuinely adaptive flow: instead of always asking the next
+  // question from a fixed array, the AI customer reacts to what the
+  // trainee actually just said and asks its next question accordingly —
+  // pushing back on a wrong/incomplete answer instead of moving on, or
+  // moving to the next concept once the trainee gets the current one
+  // right. This is safe to try on Nominee Modification specifically
+  // because it is a pure concept/rules topic — no invented numbers or
+  // "Key details" data blocks that an adaptive rephrasing could corrupt
+  // (that was the actual reason the data-heavy ops topics were kept
+  // strictly verbatim — see the comment in claude.js above
+  // evaluateOpsCall/OPS_CALL transitions).
+  //
+  // Add more titles here later if this test goes well; remove the title
+  // (or the whole block) to fall back to the standard verbatim flow.
+  const OPS_ADAPTIVE_TEST_TOPICS = new Set([
+    'Nominee Modification — Rules & Limits (Conceptual)'
+  ]);
+
+  // Concept areas to probe, in order — sent to Claude as private planning
+  // guidance only (never shown to the trainee, never read out verbatim).
+  // These mirror the 8 questions already on the topic's bot_script, as
+  // concise labels rather than full scripted sentences, so Claude phrases
+  // its own question naturally instead of reciting fixed text.
+  const OPS_ADAPTIVE_CONCEPT_GUIDES = {
+    'Nominee Modification — Rules & Limits (Conceptual)': [
+      'Maximum number of nominees allowed on a demat account, and the percentage-share requirement when there is more than one',
+      'Whether a nominee must be a blood relative, or can be any person the account holder chooses',
+      'What is different about registering a minor as a nominee compared to an adult',
+      'Whether an Aadhaar-to-mobile link is required to change a nomination online',
+      'Whether swapping out one nominee among several is treated any differently from removing all nominees and adding entirely new ones',
+      'Whether a nominee is compulsory, or the account holder can opt out of nomination altogether',
+      'Whether correcting an existing nominee\'s name or address requires going through the full nomination process again',
+      'Why a process might require both a physical wet-ink signature AND a digital eSign, rather than the eSign alone'
+    ]
+  };
+
+  // Ground-truth rules for the AI customer to react and push back against —
+  // sent to Claude only, never shown to the trainee. This is training-
+  // simulation reference content assembled for this test, not a citation
+  // of an official circular — sanity-check it against current depository
+  // rules before relying on it for real scoring/feedback.
+  const OPS_ADAPTIVE_ANSWER_KEYS = {
+    'Nominee Modification — Rules & Limits (Conceptual)': `
+1. A demat account holder may register up to 3 nominees. If more than one nominee is added, the holder must specify an exact percentage share for each nominee, and those percentages must add up to exactly 100% — there is no vague "equal share" option; every nominee's percentage must be stated explicitly (e.g. 34/33/33).
+2. There is no rule requiring a nominee to be a blood relative. A nominee can be a friend, a business partner, or any other person the account holder chooses — nomination is not restricted to family.
+3. A minor CAN be named as a nominee, but a legal guardian (natural guardian or court-appointed) must also be furnished at the time of nomination, since a minor cannot independently operate a demat account or give authorisations. The guardian acts on the minor's behalf on that nomination until the minor turns 18. This guardian requirement is the key difference from nominating an adult.
+4. If the account holder's Aadhaar is not linked to their registered mobile number, they cannot use the online/eSign (OTP-based) route to change their nomination — they must use the offline route: a physical form with a wet signature matching the specimen on file from account opening.
+5. Replacing one nominee among several, and removing all nominees to add entirely new ones, are both simply "change of nomination" requests and go through the exact same modification process/form — there is no procedural difference between the two.
+6. Nomination is NOT compulsory to keep — an account holder can formally opt out of nomination altogether (by signing the prescribed opt-out declaration) rather than being required to always have at least one active nominee.
+7. Correcting an existing nominee's details (e.g. a name spelling or address) without changing WHO the nominee is, is treated as a simpler detail-update/modification, not a full fresh nomination of a new person — it still needs a signed request, but it is not the same as adding, removing, or replacing a nominee's identity.
+8. Some processes require both a wet-ink physical signature (matched against the specimen collected at account opening) AND a digital eSign/OTP step, because the two serve different purposes — the physical signature verifies against the historical KYC specimen, while the eSign authenticates the live request; a digital signature alone does not yet replace the physical signature-matching step in this process.
+`.trim()
+  };
+
   // ── TTS voice cache — Chrome loads voices async; pre-cache on first event ──
   let _ttsVoices = [];
   if (window.speechSynthesis) {
@@ -1177,7 +1236,11 @@ const App = (() => {
     // paragraph — so the trainee sees a complete, data-heavy question
     // before they even start, matching what every turn during the call
     // itself shows. Everything else keeps the plain-text scenario as before.
-    const firstQuestion = (_currentModule === 'ops-call-assessment' && Array.isArray(_currentTopic.botScript) && _currentTopic.botScript[0])
+    // Skip this preview for an adaptive-test topic (see
+    // OPS_ADAPTIVE_TEST_TOPICS): its live opening question is generated
+    // fresh by Claude each time and won't match bot_script[0] verbatim, so
+    // showing that fixed text here would just set a wrong expectation.
+    const firstQuestion = (_currentModule === 'ops-call-assessment' && !OPS_ADAPTIVE_TEST_TOPICS.has(_currentTopic.title) && Array.isArray(_currentTopic.botScript) && _currentTopic.botScript[0])
       ? _currentTopic.botScript[0]
       : null;
     if (firstQuestion) {
@@ -1483,7 +1546,28 @@ const App = (() => {
     if (statusEl) statusEl.innerHTML = '<span style="color:#6366f1;font-style:italic">🤖 AI Customer is thinking…</span>';
 
     let botLine = '';
-    if (_currentModule === 'ops-call-assessment') {
+    const isOpsAdaptiveTest = _currentModule === 'ops-call-assessment' && OPS_ADAPTIVE_TEST_TOPICS.has(_currentTopic.title);
+    if (isOpsAdaptiveTest) {
+      // Scoped test — see the OPS_ADAPTIVE_TEST_TOPICS comment above. Real
+      // Claude call, reacting to what the trainee just said, instead of a
+      // fixed script line.
+      try {
+        botLine = await ClaudeEvaluator.callOpsAdaptiveConceptualCustomer(
+          _currentTopic.title,
+          _currentTopic.scenario || '',
+          OPS_ADAPTIVE_CONCEPT_GUIDES[_currentTopic.title] || [],
+          OPS_ADAPTIVE_ANSWER_KEYS[_currentTopic.title] || '',
+          _buildAiMessages(),
+          _mcAiTurnCount,
+          _mcAiMaxTurns
+        );
+      } catch (e) {
+        console.warn('Ops adaptive AI customer call failed, falling back to verbatim script for this turn:', e.message);
+        const script = (_currentTopic.botScript && _currentTopic.botScript.length ? _currentTopic.botScript : _currentTopic.bot_script) || [];
+        const idx = Math.min(_mcAiTurnCount - 1, Math.max(script.length - 1, 0));
+        botLine = script[idx] || 'Sorry, could you go over that once more? I want to make sure I have it right before we continue.';
+      }
+    } else if (_currentModule === 'ops-call-assessment') {
       // The required question is always shown 100% VERBATIM from
       // bot_script — never AI-generated or paraphrased in any way — so the
       // trainee is guaranteed the exact numbers/dates/facts every time,

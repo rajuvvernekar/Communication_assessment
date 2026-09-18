@@ -551,6 +551,74 @@ Return ONLY your written chat message.`;
   // from the topic's bot_script, with a small set of fixed, hand-written
   // transition phrases (OPS_CALL_TRANSITIONS / OPS_WRITING_TRANSITIONS) —
   // no API call, no model output, nothing that can ever go off-script.
+  //
+  // 2026-09-18: the reasoning above is specific to the DATA-heavy ops
+  // topics (invented numbers/dates that must match a hidden answer key).
+  // For a pure concept/rules topic there is no such data to corrupt, so
+  // js/app.js now routes ONE topic — Nominee Modification — through the
+  // function below instead, as a scoped test of a genuinely adaptive flow:
+  // real Claude generation, reacting to what the trainee actually said,
+  // rather than a fixed script. See OPS_ADAPTIVE_TEST_TOPICS in app.js.
+
+  // ---- Adaptive conceptual customer for the Ops Escalation Call test ----
+  // Unlike callAiCustomer() above (an open-ended irritated customer),
+  // this plays a sharp, well-informed caller specifically quizzing the
+  // agent's understanding of a set of rules, reacting genuinely to
+  // correctness: acknowledging and moving on when the agent gets it
+  // right, pushing back specifically when they don't. `conceptGuide` is
+  // the ordered list of concept areas to eventually cover (private
+  // planning input, never read out verbatim); `answerKey` is the ground
+  // truth used only to judge the agent's last answer and react
+  // accurately — never revealed to the trainee.
+  async function callOpsAdaptiveConceptualCustomer(topicTitle, scenario, conceptGuide, answerKey, messages, turnNumber, maxTurns) {
+    if (!isAvailable()) throw new Error('Claude proxy not configured');
+
+    const isLast = turnNumber >= maxTurns;
+    const conceptList = (conceptGuide || []).map((c, i) => `${i + 1}. ${c}`).join('\n');
+
+    const system = `You are roleplaying as a sharp, well-informed client on an escalation helpline, testing the support agent's real understanding of "${topicTitle}".
+
+SCENARIO: ${scenario || 'A client has several conceptual questions about the rules on their account and wants to understand them properly, not just be told yes or no.'}
+
+GROUND-TRUTH RULES (for YOUR use only — never quote, read out, or hint at this text directly; use it only to judge whether the agent's spoken answer is right, and to push back accurately and specifically if it is wrong or incomplete):
+${answerKey || '(no reference rules provided)'}
+
+CONCEPT AREAS TO COVER OVER THE CALL, ROUGHLY IN THIS ORDER (private planning guide only — do not read these labels out or follow their exact wording; ask about each one in your own natural spoken phrasing, adapted to how the conversation has actually gone):
+${conceptList || '(none provided)'}
+
+HOW TO RUN THIS CALL:
+- This is question ${turnNumber} of ${maxTurns} total.
+- You are the CUSTOMER. Stay in character at all times, never break the fourth wall, and never mention "concept areas", "answer key", "turns", grading, or that this is a training exercise.
+- Turn 1: ask your opening question, raising the FIRST concept area above, framed naturally as something you genuinely want to understand.
+- Every later turn: you have just heard the agent's spoken answer to your previous question (it is the most recent "user" message below). React to it specifically and adaptively:
+  * If it is correct and reasonably complete per the ground-truth rules, briefly acknowledge it like a real person would (not "Correct!" — something natural, e.g. referencing what they said), then move to the NEXT uncovered concept area from the guide.
+  * If it is wrong, incomplete, vague, or contradicts the ground-truth rules, do NOT move on — push back on the SPECIFIC part that's wrong or missing, the way a sharp client who suspects they're being fobbed off would, and give the agent one more chance to get that same concept right before moving on.
+  * Never state or hint at the correct answer yourself — you are testing the agent, not teaching them.
+  * Cover only ONE concept area per question — never combine two concepts in the same turn.
+- Budget your turns: there are ${(conceptGuide || []).length} concept areas and ${maxTurns} total questions. Don't spend more than 2 consecutive turns pushing on the same concept — if turns are running low with concepts still uncovered, move on to a new one rather than dwelling.
+- Ask ONE clear, specific question or make ONE clear statement per turn, in 1-3 sentences, natural conversational spoken style — never a bulleted list, never multiple questions stacked together.
+- Do not invent any number, date, percentage, or rule that isn't already implied by the ground-truth rules above.${isLast ? '\n- This is the FINAL question. Ask it the same as any other turn — do not thank the agent, wrap up, or end the call yourself; the call simply ends after this.' : ''}
+
+Return ONLY your spoken dialogue — no stage directions, no narration, no quotation marks, no labels like "Customer:".`;
+
+    const resp = await fetch(getProxyUrl(), {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        model:      MODEL,
+        max_tokens: 150,
+        system,
+        messages
+      })
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error?.message || `API error ${resp.status}`);
+    }
+    const data = await resp.json();
+    return data.content[0].text.trim();
+  }
 
   // ---- AI Employee for Manager Feedback Assessment ----
   // Plays the role of an employee receiving feedback from their manager.
@@ -1057,5 +1125,5 @@ Return ONLY a JSON object:
     };
   }
 
-  return { isAvailable, evaluate, evaluateBalanced, evaluateRewrite, callAiCustomer, callAiWrittenCustomer, callAiEmployee, evaluateManagerAssessment, evaluateManagerFeedback, evaluateSituationRoomA, evaluateSituationRoomB, evaluateOpsCall, evaluateOpsWriting, getCriteria, scoreTimeManagement, MOCK_CALL_CRITERIA };
+  return { isAvailable, evaluate, evaluateBalanced, evaluateRewrite, callAiCustomer, callAiWrittenCustomer, callOpsAdaptiveConceptualCustomer, callAiEmployee, evaluateManagerAssessment, evaluateManagerFeedback, evaluateSituationRoomA, evaluateSituationRoomB, evaluateOpsCall, evaluateOpsWriting, getCriteria, scoreTimeManagement, MOCK_CALL_CRITERIA };
 })();
