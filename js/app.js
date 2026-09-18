@@ -148,6 +148,11 @@ const App = (() => {
   let _mcAiTurnCount      = 0;
   let _mcAiMaxTurns       = MC_AI_MAX_TURNS; // per-call override (e.g. ops-call-assessment uses its own question count)
 
+  // ── Gemini Live "Voice AI (Beta)" mode (2026-09-18) — see gemini-live.js
+  let _liveCallController = null; // { stop() } returned by GeminiLive.startCall()
+  let _liveTurns          = [];   // [{ role: 'bot'|'trainee', text }, ...]
+  let _liveStartTime      = 0;
+
   // ── Ops Escalation Call — ADAPTIVE test mode (2026-09-18) ──────────────
   // Every other ops-call-assessment topic still uses the fixed, verbatim
   // bot_script flow above (OPS_CALL_TRANSITIONS etc.) — deliberately
@@ -1280,6 +1285,159 @@ const App = (() => {
         startMockCallRecording(); // legacy single-recording fallback
       }
     };
+
+    // Voice AI (Beta): real-time Gemini Live speech-to-speech, offered as an
+    // alternative to the recording-based flow above — scoped for now to the
+    // same adaptive conceptual topic(s) as the text-based adaptive test, so
+    // it only ever shows up somewhere with no invented numbers/data to
+    // garble and no live trainee history to disturb.
+    const liveBtn = $('btn-mc-live-voice-start');
+    if (liveBtn) {
+      const showLiveBtn = _currentModule === 'ops-call-assessment'
+        && OPS_ADAPTIVE_TEST_TOPICS.has(_currentTopic.title)
+        && typeof GeminiLive !== 'undefined' && GeminiLive.isAvailable();
+      liveBtn.classList.toggle('hidden', !showLiveBtn);
+      liveBtn.onclick = () => startLiveVoiceCall();
+    }
+  }
+
+  // ================================================================
+  //  MOCK CALL — GEMINI LIVE VOICE AI (BETA)
+  // ================================================================
+
+  function startLiveVoiceCall() {
+    showStep('mock-call', 'mc-step-live-voice');
+    _liveTurns = [];
+    $('mc-live-transcript-thread').innerHTML = '';
+    $('mc-live-sc-title').textContent = _currentTopic.title || '';
+    $('mc-live-sc-desc').textContent = _currentTopic.description || '';
+    const clEl = $('mc-live-sc-checklist');
+    clEl.innerHTML = '';
+    (_currentTopic.checklist || []).forEach(item => { clEl.innerHTML += `<li>${item}</li>`; });
+
+    const scBody = $('mc-live-sc-body');
+    const scToggle = $('btn-mc-live-sc-toggle');
+    let scVisible = true;
+    scToggle.onclick = () => {
+      scVisible = !scVisible;
+      scBody.classList.toggle('mc-bot-sc-collapsed', !scVisible);
+      scToggle.textContent = scVisible ? 'Hide ▲' : 'Show ▼';
+    };
+
+    const stateEl = $('mc-live-voice-state');
+    const STATE_LABELS = {
+      connecting: '🔌 Connecting…',
+      listening:  '🎙️ Listening — go ahead and speak',
+      speaking:   '🔊 Customer is speaking…',
+      error:      '⚠️ Connection problem — try Cancel and use the normal recording flow',
+      ended:      '📴 Call ended',
+    };
+
+    _liveStartTime = Date.now();
+
+    const conceptGuide = OPS_ADAPTIVE_CONCEPT_GUIDES[_currentTopic.title] || [];
+    const answerKey     = OPS_ADAPTIVE_ANSWER_KEYS[_currentTopic.title] || '';
+    const conceptList   = conceptGuide.map((c, i) => `${i + 1}. ${c}`).join('\n');
+    const systemInstruction = `You are roleplaying, BY VOICE, as a sharp, well-informed client on an escalation helpline, testing the support agent's real understanding of "${_currentTopic.title}".
+SCENARIO: ${_currentTopic.scenario || ''}
+GROUND-TRUTH RULES (for YOUR use only — never read this list out loud or hint that it exists): ${answerKey || '(no reference rules provided)'}
+CONCEPT AREAS TO COVER OVER THE CALL, roughly one at a time: ${conceptList || '(none provided)'}
+HOW TO RUN THIS CALL:
+- Speak naturally, the way a real person sounds on a phone call — short, conversational sentences, not a written essay.
+- Open the call yourself with your first question as soon as it connects — do not wait for the agent to speak first.
+- React specifically and adaptively to what the agent actually says: acknowledge and move to the next concept if they're right; push back on the specific wrong or missing part if they're not, and give them one more chance before moving on.
+- Don't spend more than 2 consecutive exchanges pushing on the same concept.
+- Cover roughly ${conceptGuide.length || 8} concept areas in total, then politely wrap up and end the call.
+- Never mention "concept areas", "answer key", grading, tokens, or that you are an AI.`;
+
+    $('btn-mc-live-end').disabled = false;
+    $('btn-mc-live-end').onclick = () => finishLiveVoiceCall();
+    $('btn-mc-live-cancel').onclick = () => {
+      if (_liveCallController) { _liveCallController.stop(); _liveCallController = null; }
+      showStep('mock-call', 'mc-step-scenario');
+    };
+
+    _liveCallController = GeminiLive.startCall({
+      systemInstruction,
+      onStateChange: (state) => {
+        if (stateEl) stateEl.textContent = STATE_LABELS[state] || state;
+      },
+      onTurn: ({ role, text }) => {
+        _liveTurns.push({ role, text });
+        const bubble = document.createElement('div');
+        bubble.className = `mc-bubble ${role === 'bot' ? 'bot' : 'trainee'}`;
+        bubble.textContent = text;
+        $('mc-live-transcript-thread').appendChild(bubble);
+        $('mc-live-transcript-thread').scrollTop = $('mc-live-transcript-thread').scrollHeight;
+      },
+      onError: (err) => {
+        console.error('GeminiLive error:', err);
+        toast('⚠ Voice AI error: ' + (err.message || err) + ' — you can cancel and use the normal recording flow instead.', 'error');
+      },
+    });
+  }
+
+  async function finishLiveVoiceCall() {
+    if (!_liveCallController && _liveTurns.length === 0) return; // nothing to submit
+    $('btn-mc-live-end').disabled = true;
+    if (_liveCallController) { _liveCallController.stop(); _liveCallController = null; }
+    const elapsed = Math.max(1, Math.floor((Date.now() - _liveStartTime) / 1000));
+
+    const fullTranscript = _liveTurns.map(t => `${t.role === 'bot' ? 'Customer' : 'You'}: ${t.text}`).join('\n\n');
+    const traineeOnly = _liveTurns.filter(t => t.role === 'trainee').map(t => t.text).join(' ').trim();
+
+    showStep('mock-call', 'mc-step-done');
+    const statusEl = $('mc-ai-scoring-status');
+    if (statusEl) { statusEl.textContent = '⏳ Analyzing your call...'; statusEl.classList.remove('hidden'); }
+
+    let aiScores = null;
+    if (traineeOnly && typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
+      try {
+        if (statusEl) statusEl.textContent = '🤖 Claude AI is scoring your call...';
+        const result = await ClaudeEvaluator.evaluateOpsCall(traineeOnly, fullTranscript);
+        if (result && result.overall !== null) {
+          aiScores = { ...result.scores, overall: result.overall, _reasons: result.reasons, _method: 'claude' };
+        }
+      } catch (e) { console.warn('Claude scoring failed:', e.message); }
+    }
+    if (!aiScores) {
+      aiScores = SpeechEngine.scoreMockCall(traineeOnly);
+      aiScores._method = 'js';
+    }
+    aiScores._summary = SpeechEngine.generateCoachingSummary('mock-call', aiScores);
+    aiScores._voiceEngine = 'gemini-live-beta'; // distinguishes this from the normal Recorder-based flow in admin/session data
+
+    if (statusEl) statusEl.classList.add('hidden');
+
+    const sessionPayload = {
+      traineeId:     _trainee.id,
+      traineeName:   _trainee.name,
+      module:        _currentModule || 'mock-call',
+      topicId:       _currentTopic.id,
+      topicTitle:    _currentTopic.title,
+      recordingBlob: null, // Gemini Live plays audio directly; no local recording is captured in this beta
+      transcript:    fullTranscript,
+      aiScores,
+      adminScores:   null,
+      adminComment:  '',
+      status:        'ai-evaluated',
+      submittedAt:   new Date().toISOString(),
+      timeTaken:     elapsed,
+    };
+
+    async function attemptSave() {
+      try {
+        await DB.put('sessions', sessionPayload);
+        toast('Voice AI call submitted!', 'success');
+        showMockCallResults(aiScores, fullTranscript, aiScores._method, null, attemptSave);
+      } catch (e) {
+        console.error('Session save failed:', e);
+        toast('⚠ Could not save session: ' + (e.message || e), 'error');
+        showMockCallResults(aiScores, fullTranscript, aiScores._method, e, attemptSave);
+      }
+    }
+    await attemptSave();
+    $('btn-mc-live-end').disabled = false;
   }
 
   function startMockCallRecording() {

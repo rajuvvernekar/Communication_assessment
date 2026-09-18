@@ -475,6 +475,49 @@
       <button id="btn-mc-ready" class="btn-primary" style="background:var(--mc-color)">
         I'm Ready → Start Recording
       </button>
+      <button id="btn-mc-live-voice-start" class="btn-secondary hidden" style="margin-top:0.6rem;width:100%">
+        🎙️ Try Gemini Voice AI (Beta) — real-time spoken conversation
+      </button>
+    </div>
+  </div>
+
+  <!-- Step 2c: Gemini Live real-time voice call (Beta) -->
+  <div class="step-container hidden" id="mc-step-live-voice">
+    <div class="step-card mc-bot-call-card">
+      <div class="mc-bot-sc-bar" id="mc-live-sc-bar">
+        <span>📋 Scenario</span>
+        <button class="mc-bot-sc-toggle" id="btn-mc-live-sc-toggle">Hide ▲</button>
+      </div>
+      <div id="mc-live-sc-body" class="mc-bot-sc-body">
+        <div class="scenario-card mc-scenario mc-bot-sc-inner">
+          <h3 id="mc-live-sc-title"></h3>
+          <p id="mc-live-sc-desc"></p>
+          <div class="checklist-section" style="margin-top:0.75rem">
+            <h4>You will be evaluated on:</h4>
+            <ul id="mc-live-sc-checklist" class="evaluation-checklist"></ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="mc-bot-call-inner">
+        <div class="mc-turn-header">
+          <div class="step-label">🧪 Beta — Gemini Voice AI</div>
+          <div class="mc-call-rec-badge"><span class="rec-dot-pulse"></span> Live</div>
+        </div>
+        <div id="mc-live-voice-indicator" class="mc-mood-bar" style="background:#eef2ff;color:#4338ca">
+          <span class="mc-mood-emoji">🎙️</span> <span id="mc-live-voice-state">Connecting…</span>
+        </div>
+        <div id="mc-live-transcript-thread" class="mc-chat-thread"></div>
+      </div>
+
+      <div class="mc-bot-call-controls">
+        <button id="btn-mc-live-end" class="btn-primary" style="background:var(--mc-color);width:100%">
+          ⏹ End Call &amp; Submit
+        </button>
+        <button id="btn-mc-live-cancel" class="btn-ghost" style="margin-top:0.5rem;width:100%;font-size:0.82rem;color:#64748b">
+          ← Cancel and go back
+        </button>
+      </div>
     </div>
   </div>
 
@@ -1190,6 +1233,7 @@
 <script src="js/recorder.js?v=100"></script>
 <script src="js/speech.js?v=100"></script>
 <script src="js/claude.js?v=2026091801"></script>
-<script src="js/app.js?v=110"></script>
+<script src="js/gemini-live.js?v=1"></script>
+<script src="js/app.js?v=111"></script>
 </body>
 </html>
