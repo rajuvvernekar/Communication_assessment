@@ -778,6 +778,100 @@ const DB = (() => {
             "I held 100 shares of a company, and now my app is showing only 36, while the price has jumped up a lot. Did you make an error, or did I lose two-thirds of my investment overnight?<div class=\"mc-bubble-facts\"><strong>Key details:</strong><ul><li>Shares held before: 100</li><li>Shares showing now: 36</li><li>Share price: has risen noticeably since the change</li></ul></div>"
           ],
           enabled: true
+        },
+
+        // Trainee Red Pen — Operations Escalation Writing: CDSL Easiest & Gifting
+        // (4 conceptual questions). Mirrors the ops-call-assessment conceptual
+        // split above, but as a written ticket and trimmed to 4 questions
+        // (writing a full reply per turn takes longer than answering on a
+        // call, so this uses half the question count of the 8Q call version).
+        // Deliberately concept/rule questions, not data-driven ones: no
+        // invented numbers or "Key details" blocks.
+        {
+          module: 'ops-writing-assessment',
+          title: 'CDSL Easiest & Gifting — Transfer Rules (Conceptual)',
+          description: 'A theory-driven written escalation ticket testing understanding of CDSL Easiest, gifting, and cross-depository transfers — no numbers or data, just the concepts and rules. 4 tough conceptual questions, one at a time.',
+          scenario: 'A client has written in with several conceptual questions about how CDSL Easiest, gifting, and cross-depository transfers actually work — they are not disputing a specific transaction, they want to understand the real rules well enough to trust your written answer. Reply to each of the 4 questions accurately and professionally before the client raises the next one.',
+          checklist: [
+            "Explain the actual underlying rule or process correctly, not a guess or a half-remembered version",
+            "Clearly distinguish what is a technology/app step from what is a genuine regulatory or depository requirement",
+            "Correct any wrong assumption in the client's message rather than agreeing with it",
+            "Use plain, precise written language a non-technical client can actually follow",
+            "Keep a professional, confident tone throughout the written reply, even if the client pushes back"
+          ],
+          bot_script: [
+            "Hi, I always thought CDSL Easiest was only for gifting shares within family. Can I actually use it to transfer shares to a friend, or to move shares to my own account at a completely different broker? I don't want to submit the wrong kind of request.",
+            "Thanks for that. One more thing — is there any real difference, from the depository's point of view, between a 'self transfer' (moving shares between two accounts I own) and a 'gift transfer' to someone else? Or is that just a label the app uses internally?",
+            "I also noticed the app mentions a 'Trusted Account' option and a separate 'Account of Choice' option for transfers. Why would one of those be capped at a handful of accounts while the other needs a digital signature certificate? What's actually different between them?",
+            "Last question on this — if I do end up gifting some shares to my brother, does he have to pay any tax on receiving them, or is tax only something I need to worry about if I gift shares to someone who isn't a relative? Please confirm clearly since I want to close this ticket today."
+          ],
+          enabled: true
+        },
+
+        // Trainee Red Pen — Operations Escalation Writing: Nominee Rules (Conceptual)
+        {
+          module: 'ops-writing-assessment',
+          title: 'Nominee Modification — Rules & Limits (Conceptual)',
+          description: 'A theory-driven written escalation ticket testing understanding of nominee rules on a demat account — how many are allowed, who can be one, and what verification is required. 4 tough conceptual questions, one at a time.',
+          scenario: 'A client has written in with several conceptual questions about nominee rules on their demat account — they want to understand the actual regulatory limits and requirements, not just be told "yes" or "no" in writing. Reply to each of the 4 questions accurately and professionally before the client raises the next one.',
+          checklist: [
+            "State the actual rule or limit correctly rather than guessing or making one up",
+            "Clearly explain WHY a rule exists where relevant (e.g. extra verification for a minor), not just that it exists",
+            "Correct any wrong assumption in the client's message rather than agreeing with it",
+            "Use plain, precise written language a non-technical client can actually follow",
+            "Keep a professional, confident tone throughout the written reply, even if the client pushes back"
+          ],
+          bot_script: [
+            "Hi, I'd like to understand the nominee rules on my demat account before I make any changes. How many nominees am I actually allowed to add, and is there a rule about how the percentage share has to be split between them?",
+            "That's helpful. Can a nominee be someone who isn't a blood relative — like a close friend or a business partner — or does the rule restrict nominees to family only?",
+            "My registered mobile number isn't linked to my Aadhaar. Does that block me from changing my nominee altogether, or does it just mean I have to use a different method to submit the request?",
+            "Last thing — why would the process ask for both a physically signed form AND a digital eSign on top of it? Isn't a digital signature alone enough to make this legally valid these days? Please explain clearly so I know exactly what to send you."
+          ],
+          enabled: true
+        },
+
+        // Trainee Red Pen — Operations Escalation Writing: Short Delivery & Auctions (Conceptual)
+        {
+          module: 'ops-writing-assessment',
+          title: 'Short Delivery & Auction Mechanics (Conceptual)',
+          description: 'A theory-driven written escalation ticket testing understanding of why short delivery happens and how the auction settlement process actually works — no numbers, just the mechanics. 4 tough conceptual questions, one at a time.',
+          scenario: 'A client has written in wanting to genuinely understand how short delivery and the auction process work — not dispute a specific number, but understand the mechanism well enough to trust the outcome next time it happens. Reply to each of the 4 questions accurately and professionally before the client raises the next one.',
+          checklist: [
+            "Explain the actual mechanism correctly rather than a simplified or incorrect version",
+            "Be clear about whose responsibility short delivery and its cost actually is, and why",
+            "Correct any wrong assumption in the client's message rather than agreeing with it",
+            "Use plain, precise written language a non-technical client can actually follow",
+            "Keep a professional, confident tone throughout the written reply, even if the client pushes back"
+          ],
+          bot_script: [
+            "Hi, can you explain in plain terms why a short delivery even happens in the first place? Is it always the seller's fault, or can it happen for reasons completely outside their control?",
+            "Understood. Is a short-delivery penalty a fine charged to the seller, or is it compensation paid out to the buyer? Where does that money actually end up going?",
+            "Why would a stock being in the trade-to-trade category, or being under a corporate action, change how a shortage gets settled instead of just running the normal auction like any other stock?",
+            "One last question — when the exchange can only buy back part of the missing shares in the auction and has to close out the rest in cash, how is the final price worked out for everyone? Is it two separate prices, or one blended rate applied to the whole quantity? Please confirm in writing so I can close this out."
+          ],
+          enabled: true
+        },
+
+        // Trainee Red Pen — Operations Escalation Writing: Suspended Stocks (Conceptual)
+        {
+          module: 'ops-writing-assessment',
+          title: 'Suspended Stocks — Trading Halts & Corporate Actions (Conceptual)',
+          description: 'A theory-driven written escalation ticket testing understanding of what a trading suspension actually means and how it interacts with dividends, AGMs, and off-market transfers. 4 tough conceptual questions, one at a time.',
+          scenario: 'A client holds a suspended stock and has written in with several conceptual questions about what suspension actually means for their rights as a shareholder — not a specific transaction dispute, but genuine confusion about the rules. Reply to each of the 4 questions accurately and professionally before the client raises the next one.',
+          checklist: [
+            "Explain the actual distinction between suspension, delisting and similar terms correctly, not loosely or interchangeably",
+            "Be clear about what a suspension does and does NOT freeze (e.g. corporate actions vs trading itself)",
+            "Correct any wrong assumption in the client's message rather than agreeing with it",
+            "Use plain, precise written language a non-technical client can actually follow",
+            "Keep a professional, confident tone throughout the written reply, even if the client pushes back"
+          ],
+          bot_script: [
+            "Hi, what's the actual difference between a stock being 'suspended' and being 'delisted'? I keep hearing both terms used and I'm not sure if they mean the same thing.",
+            "Okay, that makes sense. Can a company still pay a dividend, or run a buyback, while its own stock is suspended from trading? I would have assumed a suspension freezes everything about the company.",
+            "Does a stock being suspended stop me from transferring it off-market to someone else or gifting it, or is buying and selling on the exchange the only thing that's actually blocked?",
+            "Last question — what's genuinely different between a company going through insolvency resolution and a stock that's simply suspended for something like a compliance lapse? Do both restrict me the exact same way? Please lay it out clearly so I can close this ticket."
+          ],
+          enabled: true
         }
       ];
 
@@ -818,7 +912,7 @@ const DB = (() => {
       // now; a general "seeded defaults vs. admin-edited" distinction would
       // need real tracking if this pattern gets reused more broadly.
       const OPS_CALL_SCRIPT_VERSION    = 4; // v1: 7Q · v2: 11Q · v3: 11Q reformatted with "Key details" blocks · v4: split into 4 conceptual topics (CDSL, Nominee, Short Delivery, Suspended) at 8 questions each (was 4Q each — this is the version bump that actually pushes the 8Q content to already-seeded databases)
-      const OPS_WRITING_SCRIPT_VERSION = 2; // v1: original 4Q · v2: reformatted with explicit "Key details" data blocks
+      const OPS_WRITING_SCRIPT_VERSION = 2; // v1: original 4Q · v2: reformatted with explicit "Key details" data blocks · added 4 new conceptual writing topics (CDSL, Nominee, Short Delivery, Suspended) at 4Q each alongside the original numeric ticket — no version bump needed since these are new (module,title) pairs, not edits to an existing one
       try {
         await _refreshOpsScriptIfStale('ops-call-assessment', OPS_CALL_SCRIPT_VERSION, defaults, existing);
         await _refreshOpsScriptIfStale('ops-writing-assessment', OPS_WRITING_SCRIPT_VERSION, defaults, existing);
