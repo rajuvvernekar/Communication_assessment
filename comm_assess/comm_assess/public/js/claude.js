@@ -14,6 +14,15 @@ const ClaudeEvaluator = (() => {
     return !!url && !url.includes('YOUR_WORKER');
   }
 
+  // TODO (2026-09-18): Google's Gemini 3.8 Live (speech-to-speech, incl. an
+  // "Extended Thinking (High)" variant) is a candidate alternative/fallback
+  // path for the AI-customer calling flow below — it does native voice-to-
+  // voice rather than our current layered Web Speech STT + text LLM + TTS.
+  // Not wired up: this Worker (worker.js) only proxies to the Anthropic
+  // Claude API today, so adding Gemini here would mean a real architecture
+  // change (new Worker route + client-side integration), not a quick
+  // config toggle. Revisit only if/when that tradeoff is worth taking on.
+
   // ---- Mock Call Scoring Prompts (from Excel rubric) ----
   const MOCK_CALL_CRITERIA = [
     {
