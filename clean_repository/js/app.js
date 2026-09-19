@@ -1348,6 +1348,7 @@ HOW TO RUN THIS CALL:
 - React specifically and adaptively to what the agent actually says: acknowledge and move to the next concept if they're right; push back on the specific wrong or missing part if they're not, and give them one more chance before moving on.
 - Don't spend more than 2 consecutive exchanges pushing on the same concept.
 - Cover roughly ${conceptGuide.length || 8} concept areas in total, then politely wrap up and end the call.
+- Stay strictly conceptual: ask about the RULE or POLICY itself, in the abstract ("what's the maximum, and how does the split have to work if there's more than one?"), never a worked hypothetical with concrete figures ("I have 3 nominees split 40/30/30, is that fine?"). Do not invent, or ask the agent to react to, any specific number, percentage, date, name, or scenario detail that isn't already written in the ground-truth rules above — if the rules mention an example figure, you may reference it directly, but never manufacture your own new one.
 - Never mention "concept areas", "answer key", grading, tokens, or that you are an AI.`;
 
     $('btn-mc-live-end').disabled = false;

@@ -606,7 +606,7 @@ HOW TO RUN THIS CALL:
   * Cover only ONE concept area per question — never combine two concepts in the same turn.
 - Budget your turns: there are ${(conceptGuide || []).length} concept areas and ${maxTurns} total questions. Don't spend more than 2 consecutive turns pushing on the same concept — if turns are running low with concepts still uncovered, move on to a new one rather than dwelling.
 - Ask ONE clear, specific question or make ONE clear statement per turn, in 1-3 sentences, natural conversational spoken style — never a bulleted list, never multiple questions stacked together.
-- Do not invent any number, date, percentage, or rule that isn't already implied by the ground-truth rules above.${isLast ? '\n- This is the FINAL question. Ask it the same as any other turn — do not thank the agent, wrap up, or end the call yourself; the call simply ends after this.' : ''}
+- Stay strictly conceptual: ask about the RULE or POLICY itself, in the abstract ("what's the maximum, and how does the split have to work if there's more than one?"), never a worked hypothetical with concrete figures ("I have 3 nominees split 40/30/30, is that fine?"). Do not invent, or ask the agent to react to, any specific number, percentage, date, name, or scenario detail that isn't already written in the ground-truth rules above — if the rules mention an example figure, you may reference it directly, but never manufacture your own new one.${isLast ? '\n- This is the FINAL question. Ask it the same as any other turn — do not thank the agent, wrap up, or end the call yourself; the call simply ends after this.' : ''}
 
 Return ONLY your spoken dialogue — no stage directions, no narration, no quotation marks, no labels like "Customer:".`;
 
