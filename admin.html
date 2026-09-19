@@ -767,6 +767,34 @@
   </div>
 </div>
 
+<!-- ============================================================
+     TRAINEE SESSIONS MODAL (view-only list of one trainee's sessions)
+     ============================================================ -->
+<div id="trainee-sessions-modal" class="modal-overlay hidden">
+  <div class="modal-card large-modal">
+    <div class="modal-header">
+      <h2 id="trainee-sessions-title">Sessions</h2>
+      <button class="btn-close" onclick="Admin.closeTraineeSessionsModal()">✕</button>
+    </div>
+    <div class="modal-body" style="padding:1rem">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Module</th>
+            <th>Topic</th>
+            <th>Submitted</th>
+            <th style="text-align:center">AI Score</th>
+            <th style="text-align:center">Admin Score</th>
+          </tr>
+        </thead>
+        <tbody id="trainee-sessions-tbody">
+          <tr><td colspan="5" class="empty-state">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <!-- Toast Notifications -->
 <div id="toast-container"></div>
 
@@ -778,6 +806,6 @@
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <script src="js/mgr-eval-criteria.js?v=2026091901"></script>
 <script src="js/claude.js?v=2026091902"></script>
-<script src="js/admin.js?v=2026091903"></script>
+<script src="js/admin.js?v=2026091904"></script>
 </body>
 </html>

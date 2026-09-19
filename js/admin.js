@@ -575,6 +575,8 @@ window.Admin = (() => {
   let _cachedTopicMap  = {};   // topicId → topic from last loadAssessments call
   let _selectedTraineeIds = new Set(); // trainee ids checked in the trainees table
   let _allFilteredTrainees = [];       // trainees currently rendered in the table
+  let _allTrainees = [];               // full unfiltered trainee list from last loadTrainees() call
+  let _traineeSessionsForTable = [];   // all sessions, cached from last loadTrainees() call
   // Assessments multi-select + archive
   let _selectedSessionIds    = new Set(); // checked session ids
   let _allRenderedSessions   = [];        // sessions currently in the table
@@ -884,12 +886,23 @@ window.Admin = (() => {
         if (section === 'assessments') {
           try { loadAssessments(); } catch (_) {}
         }
+        // Trainees tab: re-fetch every time it's opened, same reasoning as Assessments above.
+        if (section === 'trainees') {
+          try { loadTrainees(); } catch (_) {}
+        }
       };
     });
 
     initTopics();
     initScoringModal();
     renderTopicsList();
+    const traineeSearchEl = $('trainee-search');
+    if (traineeSearchEl) traineeSearchEl.oninput = () => searchTrainees();
+    const traineeModal = $('trainee-sessions-modal');
+    if (traineeModal) {
+      traineeModal.addEventListener('click', (e) => { if (e.target === traineeModal) closeTraineeSessionsModal(); });
+    }
+    try { loadTrainees(); } catch (_) {}
     try { if (typeof generateAllAgentsReport === 'function') generateAllAgentsReport(); } catch (_) {}
     try { if (typeof loadAiAuditScores === 'function') loadAiAuditScores(); } catch (_) {}
     try { if (typeof loadComm360Report === 'function') loadComm360Report(); } catch (_) {}
@@ -959,6 +972,213 @@ window.Admin = (() => {
     } catch (e) {
       console.warn('[Admin] DB.init warning:', e);
     }
+  }
+
+  // ================================================================
+  //  TRAINEES TAB
+  // ================================================================
+  // The Trainees table (trainees-tbody) was never populated by any code
+  // path -- _selectedTraineeIds/_allFilteredTrainees were declared but
+  // nothing ever loaded a trainee into them, and the checkbox/team/action
+  // buttons in admin.html called Admin.toggleAllTrainees / .deleteSelectedTrainees /
+  // .deleteAllTrainees / .setTraineeTeam / .viewTraineeSessions, none of which
+  // existed. Implemented from scratch below, reusing the trainees + sessions
+  // data already loaded elsewhere (DB 'trainees' store, computeAgentScores()).
+
+  async function _loadTeamAssignments() {
+    try {
+      const rec = await DB.get('settings', 'traineeTeamAssignments');
+      _teamAssignments = (rec && rec.value) ? JSON.parse(rec.value) : {};
+    } catch (e) {
+      console.warn('_loadTeamAssignments failed:', e);
+      _teamAssignments = {};
+    }
+  }
+
+  async function loadTrainees() {
+    const tbody = $('trainees-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Loading…</td></tr>';
+    try {
+      const [trainees, sessions] = await Promise.all([DB.getAll('trainees'), DB.getAll('sessions')]);
+      if (!Object.keys(_teamAssignments).length) await _loadTeamAssignments();
+      _allTrainees = trainees;
+      _traineeSessionsForTable = sessions;
+      _renderTraineesTable();
+    } catch (e) {
+      console.error('loadTrainees error:', e);
+      tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Failed to load trainees: ${e.message}</td></tr>`;
+    }
+  }
+
+  function _updateTraineeActionBtns() {
+    const btn = $('btn-delete-selected-trainees');
+    if (!btn) return;
+    const n = _selectedTraineeIds.size;
+    btn.disabled = n === 0;
+    btn.textContent = n > 0 ? `🗑 Delete Selected (${n})` : '🗑 Delete Selected';
+  }
+
+  function _renderTraineesTable() {
+    const tbody = $('trainees-tbody');
+    if (!tbody) return;
+    const searchEl = $('trainee-search');
+    const q = ((searchEl && searchEl.value) || '').trim().toLowerCase();
+    const sessions = _traineeSessionsForTable;
+
+    let rows = _allTrainees.filter(t => !q || (t.name || '').toLowerCase().includes(q));
+    rows.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    _allFilteredTrainees = rows;
+
+    // Drop selections for trainees no longer in view (deleted or filtered out)
+    const visibleIds = new Set(rows.map(t => t.id));
+    [..._selectedTraineeIds].forEach(id => { if (!visibleIds.has(id)) _selectedTraineeIds.delete(id); });
+
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="7" class="empty-state">${q ? 'No trainees match your search.' : 'No trainees yet.'}</td></tr>`;
+      _updateTraineeActionBtns();
+      const allCb = $('select-all-trainees');
+      if (allCb) { allCb.checked = false; allCb.indeterminate = false; }
+      return;
+    }
+
+    tbody.innerHTML = rows.map(t => {
+      const tSessions = sessions.filter(s => s.traineeId === t.id);
+      const sessionCount = tSessions.length;
+      const lastActive = tSessions.reduce((max, s) => {
+        if (!s.submittedAt) return max;
+        return (!max || new Date(s.submittedAt) > new Date(max)) ? s.submittedAt : max;
+      }, null);
+      const { overall } = computeAgentScores(t.id, sessions);
+      const team = _teamAssignments[t.id] || '';
+      const checked = _selectedTraineeIds.has(t.id) ? 'checked' : '';
+      const safeName = (t.name || 'Unknown').replace(/</g, '&lt;');
+      const safeTeam = team.replace(/"/g, '&quot;');
+      return `<tr>
+        <td style="text-align:center"><input type="checkbox" class="trainee-cb" ${checked} onchange="Admin.toggleTraineeCheckbox('${t.id}', this.checked)" /></td>
+        <td><strong>${safeName}</strong></td>
+        <td style="text-align:center">${sessionCount}</td>
+        <td>${lastActive ? formatDate(lastActive) : '—'}</td>
+        <td style="text-align:center">${overall != null ? overall + '%' : '—'}</td>
+        <td>
+          <input type="text" class="team-input" value="${safeTeam}" placeholder="Unassigned"
+            style="width:140px;font-size:0.82rem;padding:0.3rem 0.5rem;border:1px solid var(--border);border-radius:6px"
+            onkeydown="if(event.key==='Enter'){Admin.setTraineeTeam('${t.id}', this.value); this.blur();}"
+            title="Type a team name and press Enter to save" />
+        </td>
+        <td><button class="btn-ghost" style="font-size:0.78rem;padding:0.3rem 0.6rem;white-space:nowrap" onclick="Admin.viewTraineeSessions('${t.id}')">👁 View Sessions</button></td>
+      </tr>`;
+    }).join('');
+
+    _updateTraineeActionBtns();
+    const allCb = $('select-all-trainees');
+    if (allCb) {
+      const n = _selectedTraineeIds.size;
+      allCb.indeterminate = n > 0 && n < rows.length;
+      allCb.checked = n > 0 && n === rows.length;
+    }
+  }
+
+  function searchTrainees() {
+    _renderTraineesTable();
+  }
+
+  function toggleTraineeCheckbox(id, checked) {
+    if (checked) _selectedTraineeIds.add(id);
+    else _selectedTraineeIds.delete(id);
+    _updateTraineeActionBtns();
+    const allCb = $('select-all-trainees');
+    if (allCb && _allFilteredTrainees.length > 0) {
+      const n = _selectedTraineeIds.size;
+      allCb.indeterminate = n > 0 && n < _allFilteredTrainees.length;
+      allCb.checked = n === _allFilteredTrainees.length;
+    }
+  }
+
+  function toggleAllTrainees(checked) {
+    if (checked) _allFilteredTrainees.forEach(t => _selectedTraineeIds.add(t.id));
+    else _allFilteredTrainees.forEach(t => _selectedTraineeIds.delete(t.id));
+    document.querySelectorAll('.trainee-cb').forEach(cb => { cb.checked = checked; });
+    _updateTraineeActionBtns();
+  }
+
+  async function setTraineeTeam(traineeId, teamName) {
+    const name = (teamName || '').trim();
+    if (name) _teamAssignments[traineeId] = name;
+    else delete _teamAssignments[traineeId];
+    try {
+      await DB.put('settings', { key: 'traineeTeamAssignments', value: JSON.stringify(_teamAssignments) });
+      toast(name ? `Team set to "${name}".` : 'Team assignment cleared.', 'success');
+    } catch (e) {
+      console.error('setTraineeTeam error:', e);
+      toast('Failed to save team assignment: ' + e.message, 'error');
+    }
+  }
+
+  async function deleteSelectedTrainees() {
+    const n = _selectedTraineeIds.size;
+    if (!n) return;
+    const names = _allFilteredTrainees.filter(t => _selectedTraineeIds.has(t.id)).map(t => t.name || 'Unknown').join(', ');
+    const confirmed = confirm(
+      `Delete ${n} selected trainee(s) from the roster?\n\n${names}\n\nThis removes them from the Trainees list. Their past assessment records are kept in the Assessments tab.`
+    );
+    if (!confirmed) return;
+    let failed = 0;
+    for (const id of [..._selectedTraineeIds]) {
+      try { await DB.del('trainees', id); } catch (e) { console.error('Delete trainee failed:', id, e); failed++; }
+    }
+    _selectedTraineeIds.clear();
+    toast(failed ? `Deleted ${n - failed} of ${n} trainee(s) — ${failed} failed.` : `Deleted ${n} trainee(s).`, failed ? 'error' : 'success');
+    loadTrainees();
+  }
+
+  async function deleteAllTrainees() {
+    if (!_allTrainees.length) { toast('No trainees to delete.', ''); return; }
+    const step1 = confirm(`Delete ALL ${_allTrainees.length} trainees from the roster?\n\nThis cannot be undone. Their past assessment records are kept in the Assessments tab.`);
+    if (!step1) return;
+    const step2 = confirm('Are you absolutely sure? This will permanently remove every trainee from the roster.');
+    if (!step2) return;
+    let failed = 0;
+    const total = _allTrainees.length;
+    for (const t of [..._allTrainees]) {
+      try { await DB.del('trainees', t.id); } catch (e) { console.error('Delete trainee failed:', t.id, e); failed++; }
+    }
+    _selectedTraineeIds.clear();
+    toast(failed ? `Deleted ${total - failed} of ${total} trainee(s) — ${failed} failed.` : 'All trainees deleted.', failed ? 'error' : 'success');
+    loadTrainees();
+  }
+
+  function viewTraineeSessions(traineeId) {
+    const trainee = _allTrainees.find(t => t.id === traineeId);
+    const sessions = _traineeSessionsForTable
+      .filter(s => s.traineeId === traineeId)
+      .sort((a, b) => new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0));
+    const modal = $('trainee-sessions-modal');
+    const title = $('trainee-sessions-title');
+    const tbody = $('trainee-sessions-tbody');
+    if (!modal || !tbody) return;
+    if (title) title.textContent = `Sessions — ${trainee ? trainee.name : 'Unknown trainee'}`;
+    if (!sessions.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No sessions found for this trainee.</td></tr>';
+    } else {
+      tbody.innerHTML = sessions.map(s => {
+        const aiScore    = s.aiScores    ? normalizeOverall(s.aiScores.overall) : null;
+        const adminScore = s.adminScores ? calcAdminAvg(s.adminScores)          : null;
+        return `<tr>
+          <td>${moduleBadge(s.module)}</td>
+          <td>${s.topicTitle || '—'}</td>
+          <td>${formatDate(s.submittedAt)}</td>
+          <td style="text-align:center">${aiScore != null ? aiScore + '%' : '—'}</td>
+          <td style="text-align:center">${adminScore != null ? adminScore + '%' : '—'}</td>
+        </tr>`;
+      }).join('');
+    }
+    modal.classList.remove('hidden');
+  }
+
+  function closeTraineeSessionsModal() {
+    const modal = $('trainee-sessions-modal');
+    if (modal) modal.classList.add('hidden');
   }
 
   // ================================================================
@@ -2234,6 +2454,33 @@ window.Admin = (() => {
     if (count) count.textContent = `Showing ${_comm360Filtered.length} of ${_comm360AllRows.length} agent${_comm360AllRows.length !== 1 ? 's' : ''}`;
   }
 
+  // Exports whatever is currently shown (respects the team filter + search box),
+  // same "current view" convention as exportAssessmentsExcel().
+  function downloadMasterExcel() {
+    const rows = _comm360Filtered || [];
+    if (!rows.length) { toast('No records in the current view to export.', 'error'); return; }
+    if (typeof XLSX === 'undefined') { toast('Excel library not loaded — try refreshing the page.', 'error'); return; }
+    const data = rows.map((r, i) => ({
+      '#':                    i + 1,
+      'Name':                 r.name,
+      'Manager':              r.manager,
+      'Team':                 r.team,
+      'Self Assessment':      r.selfAssessment != null ? r.selfAssessment : '',
+      'AI Audit':             r.aiAudit        != null ? r.aiAudit        : '',
+      'P&S /20':              r.psScore        != null ? r.psScore        : '',
+      'Listening /20':        r.lisScore       != null ? r.lisScore       : '',
+      'Mock Call/Ticket /20': r.mcScore        != null ? r.mcScore        : '',
+      'Grammar /25':          r.gramScore      != null ? r.gramScore      : '',
+      'Total /100':           r.totalScore     != null ? r.totalScore     : '',
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    ws['!cols'] = [{ wch: 5 }, { wch: 22 }, { wch: 20 }, { wch: 10 }, { wch: 14 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 18 }, { wch: 12 }, { wch: 12 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Comm360 Master');
+    const filename = `comm360_master_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    XLSX.writeFile(wb, filename);
+    toast(`Exported ${data.length} record(s) to ${filename}`, 'success');
+  }
 
   async function deleteEntireComm360Report() {
     const step1 = confirm("⚠️ Are you sure you want to delete the ENTIRE Comm360 Master Report?\n\nThis will clear all historical master scores and preserved scores. (Live assessment sessions in the DB will remain intact).");
@@ -4367,6 +4614,50 @@ window.Admin = (() => {
     }
   }
 
+  // ---- Delete All (Assessments tab) ----
+  // Scoped to whatever is currently shown in the table (respects the
+  // Active/Archive tab, manager drill-down, and the filter bar) — same
+  // "current view" scoping convention as disableAllTopics/enableAllTopics.
+  async function deleteAllSessions() {
+    const sessions = _currentFilteredSessions || [];
+    if (!sessions.length) { toast('No assessments in the current view to delete.', 'error'); return; }
+
+    const step1 = confirm(
+      `Delete all ${sessions.length} assessment(s) currently shown (${_viewArchive ? 'Archive' : 'Active'} view)?\n\nThis will remove session details (recordings & transcripts) but PRESERVE scores in Reports.`
+    );
+    if (!step1) return;
+
+    let deleteFromReports = false;
+    const confirmReports = confirm(
+      `Do you also want to permanently delete these scores from Reports and the Comm360 Master Sheet?\n\n(Warning: This requires separate admin confirmation)`
+    );
+    if (confirmReports) {
+      const pin = prompt('Enter Admin Password to confirm deletion from reports:');
+      const pwRec = await DB.get('settings', 'adminPassword');
+      const correctPw = pwRec ? pwRec.value : 'admin123';
+      if (pin === correctPw) {
+        deleteFromReports = true;
+      } else {
+        alert('Invalid password. Scores will be preserved in reports.');
+      }
+    }
+
+    try {
+      await _preserveScoresBeforeDeletion(sessions, deleteFromReports);
+      let failed = 0;
+      for (const s of sessions) {
+        try { await DB.del('sessions', s.id); } catch (e) { console.error('Delete session failed:', s.id, e); failed++; }
+      }
+      const n = sessions.length;
+      toast(failed ? `Deleted ${n - failed} of ${n} assessment(s) — ${failed} failed.` : `Deleted ${n} assessment(s).`, failed ? 'error' : 'success');
+      loadAssessments();
+    } catch (e) {
+      console.error('deleteAllSessions error:', e);
+      toast('Failed to delete assessments: ' + e.message, 'error');
+      loadAssessments();
+    }
+  }
+
   async function forceReSeed() {
     const btn = document.getElementById('btn-force-seed');
     if (btn) {
@@ -4443,16 +4734,28 @@ window.Admin = (() => {
     isComm360Deleted: () => _comm360ReportDeleted,
     deleteEntireComm360Report,
     restoreEntireComm360Report,
+    downloadMasterExcel,
     // Manager Assessments
     loadMgrAssessments,
     renderMgrAssessments,
     openMgrScoreModal,
     saveMgrScore,
     seedStockMarketMcq,
-    // Assessments tab — Export Excel / Download recordings
+    // Assessments tab — Export Excel / Download recordings / Delete All
     downloadRecording,
     downloadAllRecordings,
     exportAssessmentsExcel,
+    deleteAllSessions,
+    // Trainees tab
+    loadTrainees,
+    searchTrainees,
+    toggleTraineeCheckbox,
+    toggleAllTrainees,
+    setTraineeTeam,
+    deleteSelectedTrainees,
+    deleteAllTrainees,
+    viewTraineeSessions,
+    closeTraineeSessionsModal,
   };
 })();
 
