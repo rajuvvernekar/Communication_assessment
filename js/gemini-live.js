@@ -263,7 +263,17 @@ const GeminiLive = (() => {
         const token = await _getEphemeralToken();
         if (stopped) return;
 
-        const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?access_token=${encodeURIComponent(token)}`;
+        // NOTE (2026-09-19): the plain "BidiGenerateContent" method rejects
+        // an ephemeral token with a 1008 close ("Method doesn't allow
+        // unregistered callers"). Ephemeral tokens are only accepted by the
+        // "Constrained" variant of this method — confirmed by testing
+        // directly against the live API, which returned a real
+        // `setupComplete` only once this suffix was added. This also
+        // happens to be Google's documented secure pattern for a
+        // browser-exposed token, since the Constrained endpoint won't let
+        // the client override session config the server-side token was
+        // scoped to.
+        const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token=${encodeURIComponent(token)}`;
         ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {
