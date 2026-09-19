@@ -161,6 +161,7 @@ const GeminiLive = (() => {
     let silentGain = null;
     let playbackCtx = null;
     let playbackRecordDest = null;
+    let micRecordDest = null;
     let nextPlayTime = 0;
     let stopped = false;
     let setupDone = false;
@@ -180,6 +181,7 @@ const GeminiLive = (() => {
     let recStarted = false;
     let recordingDonePromise = null;
     let recordingResolve = null;
+    let recSetupPromise = null;
 
     let curBotText = '';
     let curTraineeText = '';
@@ -219,46 +221,76 @@ const GeminiLive = (() => {
     // times; only actually starts once. Never throws: a recording failure
     // (unsupported browser, permissions quirk, etc.) should never break the
     // call itself, so any error here is logged and swallowed.
+    //
+    // IMPORTANT: this deliberately does NOT hand the raw `micStream` (the
+    // actual getUserMedia hardware track, already consumed by `sourceNode`
+    // in `micCtx` for the send-to-Gemini path) to a second AudioContext.
+    // Attaching one live hardware MediaStreamTrack to source nodes in two
+    // different AudioContexts at once is a known-flaky pattern — several
+    // browsers silently deliver silence to the second consumer instead of
+    // erroring. Instead, `micRecordDest` (set up in startMicCapture) taps
+    // the mic via the SAME `sourceNode`/`micCtx` that's already reliably
+    // capturing it, producing a synthetic MediaStream; only that synthetic
+    // stream (and the equivalent `playbackRecordDest` one for the AI's
+    // voice) ever crosses into this recording-only context. Bridging two
+    // contexts via a destination-node's stream feeding a source-node in
+    // another context is the standard, well-supported way to connect
+    // separate Web Audio graphs — unlike re-tapping one hardware track twice.
     function _startRecordingIfReady() {
       if (recStarted || stopped) return;
-      if (!micStream || !playbackRecordDest) return;
+      if (!micRecordDest || !playbackRecordDest) return;
+      recStarted = true; // lock immediately — setup below is async and this can be called from two call sites in quick succession
       if (typeof MediaRecorder === 'undefined') {
         _warn('MediaRecorder not supported in this browser — call will not be recorded');
-        recStarted = true; // don't keep retrying
+        recordingDonePromise = Promise.resolve(null);
         return;
       }
-      try {
-        recMixCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const micSrc = recMixCtx.createMediaStreamSource(micStream);
-        const botSrc = recMixCtx.createMediaStreamSource(playbackRecordDest.stream);
-        const mixDest = recMixCtx.createMediaStreamDestination();
-        micSrc.connect(mixDest);
-        botSrc.connect(mixDest);
+      recSetupPromise = (async () => {
+        try {
+          recMixCtx = new (window.AudioContext || window.webkitAudioContext)();
+          // A context with no audible output of its own (nothing here ever
+          // reaches actual speakers) can be left "suspended" by the browser
+          // rather than auto-starting — if so, nothing would flow through
+          // this graph and the recording would come out silent. Force it.
+          if (recMixCtx.state === 'suspended') {
+            try { await recMixCtx.resume(); } catch (_) {}
+          }
+          if (stopped) { try { recMixCtx.close(); } catch (_) {} recordingDonePromise = Promise.resolve(null); return; }
 
-        recMimeType = RECORDING_MIME_CANDIDATES.find(t => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) || '';
-        recMediaRecorder = recMimeType ? new MediaRecorder(mixDest.stream, { mimeType: recMimeType }) : new MediaRecorder(mixDest.stream);
-        recChunks = [];
-        recMediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size) recChunks.push(e.data); };
-        recordingDonePromise = new Promise((resolve) => { recordingResolve = resolve; });
-        recMediaRecorder.onstop = () => {
-          try { if (recMixCtx) recMixCtx.close(); } catch (_) {}
-          const blob = recChunks.length ? new Blob(recChunks, { type: recMimeType || 'audio/webm' }) : null;
-          if (recordingResolve) recordingResolve(blob);
-        };
-        recMediaRecorder.start(1000); // 1s timeslices so we always have flushed data if the tab is killed abruptly
-        recStarted = true;
-        _log('call recording started (mic + AI voice, mixed) —', recMimeType || 'browser default format');
-      } catch (e) {
-        _warn('could not start call recording — continuing without one', e);
-        recStarted = true;
-      }
+          const micSrc = recMixCtx.createMediaStreamSource(micRecordDest.stream);
+          const botSrc = recMixCtx.createMediaStreamSource(playbackRecordDest.stream);
+          const mixDest = recMixCtx.createMediaStreamDestination();
+          micSrc.connect(mixDest);
+          botSrc.connect(mixDest);
+
+          recMimeType = RECORDING_MIME_CANDIDATES.find(t => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) || '';
+          recMediaRecorder = recMimeType ? new MediaRecorder(mixDest.stream, { mimeType: recMimeType }) : new MediaRecorder(mixDest.stream);
+          recChunks = [];
+          recMediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size) recChunks.push(e.data); };
+          recordingDonePromise = new Promise((resolve) => { recordingResolve = resolve; });
+          recMediaRecorder.onstop = () => {
+            try { if (recMixCtx) recMixCtx.close(); } catch (_) {}
+            const blob = recChunks.length ? new Blob(recChunks, { type: recMimeType || 'audio/webm' }) : null;
+            if (recordingResolve) recordingResolve(blob);
+          };
+          recMediaRecorder.start(1000); // 1s timeslices so we always have flushed data if the tab is killed abruptly
+          _log('call recording started (mic + AI voice, mixed) —', recMimeType || 'browser default format');
+          if (stopped) { try { recMediaRecorder.stop(); } catch (_) {} } // call ended in the brief window while this was setting up
+        } catch (e) {
+          _warn('could not start call recording — continuing without one', e);
+          recordingDonePromise = Promise.resolve(null);
+        }
+      })();
     }
 
     // Resolves to the recorded call audio (Blob) once recording has been
-    // stopped and flushed, or null if no recording was ever started.
+    // stopped and flushed, or null if no recording was ever started (or it
+    // failed to set up). Waits for `_startRecordingIfReady`'s async setup to
+    // finish first, so a call ended within that brief window still resolves
+    // correctly instead of racing ahead of it.
     function getRecording() {
-      if (!recordingDonePromise) return Promise.resolve(null);
-      return recordingDonePromise;
+      if (!recStarted) return Promise.resolve(null);
+      return Promise.resolve(recSetupPromise).then(() => recordingDonePromise || Promise.resolve(null));
     }
 
     function handleServerMessage(msg) {
@@ -330,6 +362,13 @@ const GeminiLive = (() => {
       sourceNode.connect(processorNode);
       processorNode.connect(silentGain);
       silentGain.connect(micCtx.destination);
+      // A second, silent tap of the SAME already-working sourceNode/micCtx —
+      // feeds the call recording without ever handing the raw hardware
+      // stream to a different AudioContext (see the note on
+      // _startRecordingIfReady for why that matters).
+      micRecordDest = micCtx.createMediaStreamDestination();
+      sourceNode.connect(micRecordDest);
+      _startRecordingIfReady();
 
       processorNode.onaudioprocess = (e) => {
         if (stopped || !setupDone || !ws || ws.readyState !== WebSocket.OPEN) return;
@@ -412,8 +451,7 @@ const GeminiLive = (() => {
           if (!stopped) setState('ended');
         };
 
-        await startMicCapture();
-        _startRecordingIfReady();
+        await startMicCapture(); // also starts the recording tap once the mic side is ready — see startMicCapture()
       } catch (e) {
         _warn('connect() failed', e);
         setState('error');
@@ -433,6 +471,7 @@ const GeminiLive = (() => {
       try { if (processorNode) { processorNode.onaudioprocess = null; processorNode.disconnect(); } } catch (_) {}
       try { if (sourceNode) sourceNode.disconnect(); } catch (_) {}
       try { if (silentGain) silentGain.disconnect(); } catch (_) {}
+      try { if (micRecordDest) micRecordDest.disconnect(); } catch (_) {}
       try { if (micCtx) micCtx.close(); } catch (_) {}
       try { if (playbackCtx) playbackCtx.close(); } catch (_) {}
       if (micStream) micStream.getTracks().forEach(t => t.stop());
