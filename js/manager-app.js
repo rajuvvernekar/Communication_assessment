@@ -832,15 +832,19 @@ Let's get back on track.
       'time-limit': '⏱️ 9-minute limit reached — wrapping up and submitting…',
     };
 
-    const systemInstruction = `You are roleplaying, BY VOICE, as the customer in this call to a brokerage support line.
+    const systemInstruction = `You are roleplaying, BY VOICE, as a customer of the brokerage on a call with a customer support manager. You are the CUSTOMER, not an agent and not the manager — you are the one asking questions, and the manager is the one answering them.
 
-SCENARIO: ${_currentScenario.scenario}
+TOPIC / SITUATION CONTEXT (use this as the subject matter for your questions): ${_currentScenario.scenario}
 
 HOW TO RUN THIS CALL:
+- You are a genuinely curious, slightly concerned customer trying to understand this topic properly — you are not filing a complaint or demanding compensation, you are asking the manager to explain things to you.
+- Ask ONE conceptual question at a time, then stop and actually listen to the manager's full answer before asking anything else.
+- Every question you ask must be a complete, natural spoken question of at least 10-15 words — never a bare one- or two-word follow-up like "why?" or "how so?". Phrase it the way a real customer would voice a genuine concern, in full sentences.
+- Base your FIRST question directly on the topic/situation context above, adapted into natural spoken language.
+- For every question after the first, build it directly from what the manager just said: pick up on a specific term, number, or claim in their answer and ask them to go deeper on it, clarify it, or explain what it means for you specifically — never ask a generic or scripted question that ignores their actual answer.
 - Speak naturally, the way a real person sounds on a phone call — short, conversational sentences, not a written essay or a script read verbatim.
-- Open the call yourself with your opening line (per the scenario above, adapted naturally to spoken language) as soon as the call connects — do not wait for the manager to speak first.
-- Raise the escalation beats described in the scenario if the manager's handling doesn't already address them, reacting in the moment rather than reciting them as a list.
-- Keep the call to roughly 5-6 minutes of back-and-forth, then let it wind down naturally once the manager has offered a resolution within their realistic authority — you don't have to explicitly announce the call is ending.
+- Open the call yourself with your first question as soon as the call connects — do not wait for the manager to speak first.
+- Keep the call to roughly 5-6 minutes of back-and-forth questions and answers, then let it wind down naturally once you feel your questions have genuinely been answered — you don't have to explicitly announce the call is ending.
 - Never mention that you are an AI, a script, grading, evaluation criteria, or that this is a training exercise.`;
 
     $('btn-mgr-audio-live-end').onclick = () => _finishAudioLiveVoice();
