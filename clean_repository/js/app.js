@@ -155,34 +155,57 @@ const App = (() => {
   let _liveFinishing      = false; // guards against a double-submit if the 9-min auto-cutoff and a manual "End Call" click land at the same moment
 
   // ── Ops Escalation Call — ADAPTIVE test mode (2026-09-18) ──────────────
-  // Every other ops-call-assessment topic still uses the fixed, verbatim
-  // bot_script flow above (OPS_CALL_TRANSITIONS etc.) — deliberately
-  // untouched, so nothing changes for the ~10 trainees who already have
-  // live sessions on those topics. This is a scoped test, for ONE topic
-  // only, of a genuinely adaptive flow: instead of always asking the next
-  // question from a fixed array, the AI customer reacts to what the
-  // trainee actually just said and asks its next question accordingly —
-  // pushing back on a wrong/incomplete answer instead of moving on, or
-  // moving to the next concept once the trainee gets the current one
-  // right. This is safe to try on Nominee Modification specifically
-  // because it is a pure concept/rules topic — no invented numbers or
-  // "Key details" data blocks that an adaptive rephrasing could corrupt
-  // (that was the actual reason the data-heavy ops topics were kept
-  // strictly verbatim — see the comment in claude.js above
-  // evaluateOpsCall/OPS_CALL transitions).
+  // The two DATA-heavy ops-call-assessment topics ("Corporate Action
+  // Mismatch", "Dividend Shortfall" — the ones with "Key details" blocks
+  // full of rupee amounts, dates and account-specific figures) still use
+  // the fixed, verbatim bot_script flow above (OPS_CALL_TRANSITIONS etc.),
+  // deliberately untouched — an adaptive rephrasing risks dropping, rounding
+  // or inventing numbers that must match a hidden answer key, and this
+  // whole adaptive mode is expressly meant to never ask about a specific
+  // charge, amount, or account detail in the first place.
   //
-  // Add more titles here later if this test goes well; remove the title
-  // (or the whole block) to fall back to the standard verbatim flow.
+  // The four purely conceptual/rules topics below (no numbers, no invented
+  // account-specific data at all — see the checklists/bot_scripts in
+  // db.js) all route through the adaptive flow instead: the AI customer
+  // reacts to what the trainee actually just said and asks its next
+  // question accordingly, pushing back on a wrong/incomplete answer instead
+  // of moving on, or moving to the next concept once the trainee gets the
+  // current one right. This started 2026-09-18 as a scoped test on Nominee
+  // Modification alone; extended 2026-09-19 to all four conceptual topics
+  // once that test held up, including for the Gemini Live Voice AI (Beta)
+  // mode (see startLiveVoiceCall), which is scoped to exactly this Set too.
   const OPS_ADAPTIVE_TEST_TOPICS = new Set([
-    'Nominee Modification — Rules & Limits (Conceptual)'
+    'CDSL Easiest & Gifting — Transfer Rules (Conceptual)',
+    'Nominee Modification — Rules & Limits (Conceptual)',
+    'Short Delivery & Auction Mechanics (Conceptual)',
+    'Suspended Stocks — Trading Halts & Corporate Actions (Conceptual)',
   ]);
 
-  // Concept areas to probe, in order — sent to Claude as private planning
-  // guidance only (never shown to the trainee, never read out verbatim).
-  // These mirror the 8 questions already on the topic's bot_script, as
-  // concise labels rather than full scripted sentences, so Claude phrases
-  // its own question naturally instead of reciting fixed text.
+  // Every adaptive-test call — text-based or Gemini Live voice — stops at
+  // whichever comes first: this many questions, or (for the voice mode
+  // specifically) the 9-minute call cap in gemini-live.js/startLiveVoiceCall.
+  // Deliberately one fewer than the 8 concept areas below per topic, so the
+  // AI has to prioritize rather than rush through all 8 to hit the count.
+  const OPS_ADAPTIVE_MAX_TURNS = 7;
+
+  // Concept areas to probe, in order — sent to Claude/Gemini as private
+  // planning guidance only (never shown to the trainee, never read out
+  // verbatim). These mirror the 8 questions already on each topic's
+  // bot_script, as concise labels rather than full scripted sentences, so
+  // the AI phrases its own question naturally instead of reciting fixed
+  // text. Every label here is deliberately about a RULE or MECHANISM, never
+  // a specific charge, fee, amount, or account detail.
   const OPS_ADAPTIVE_CONCEPT_GUIDES = {
+    'CDSL Easiest & Gifting — Transfer Rules (Conceptual)': [
+      'Whether CDSL Easiest / gift transfers are limited to family members, or can go to any recipient, including a different broker',
+      'Why a gift transfer needs both a TPIN step and a separate OTP step, and what each one actually authorises',
+      'Whether a cross-depository transfer (sender on CDSL, recipient on NSDL) changes the process from the sender\'s side',
+      'Whether a "self transfer" (between one\'s own accounts) and a "gift transfer" (to someone else) are genuinely different at the depository level, or just different app labels',
+      'The actual difference between a "Trusted Account" transfer and an "Account of Choice" transfer, and why one needs a digital signature certificate',
+      'Whether "adding a beneficiary" and "adding a trusted account" are the same step or two genuinely different ones',
+      'What happens if a gifting transaction misses its daily cut-off time',
+      'Whether the recipient of a gifted share has any tax obligation, and whether that depends on their relationship to the giver'
+    ],
     'Nominee Modification — Rules & Limits (Conceptual)': [
       'Maximum number of nominees allowed on a demat account, and the percentage-share requirement when there is more than one',
       'Whether a nominee must be a blood relative, or can be any person the account holder chooses',
@@ -192,15 +215,48 @@ const App = (() => {
       'Whether a nominee is compulsory, or the account holder can opt out of nomination altogether',
       'Whether correcting an existing nominee\'s name or address requires going through the full nomination process again',
       'Why a process might require both a physical wet-ink signature AND a digital eSign, rather than the eSign alone'
+    ],
+    'Short Delivery & Auction Mechanics (Conceptual)': [
+      'Whether short delivery is always the seller\'s fault, or can happen for reasons outside their control',
+      'How the auction settlement price for a short-delivered share is actually decided, as a mechanism — not a figure',
+      'What happens to the buyer when the auction session cannot procure the missing shares at all',
+      'Whether the short-delivery penalty is a fine kept by the exchange or compensation paid to the buyer',
+      'Whether "auction charge" and "close-out amount" are the same penalty under two names, or genuinely different things',
+      'Why a stock being trade-to-trade or under a corporate action changes how a shortage gets settled',
+      'Whether short delivery can happen even when the seller already holds the shares in their demat account',
+      'When only part of a shortfall is bought back in auction and the rest is cash-closed-out, whether that\'s one blended rate or two separate prices'
+    ],
+    'Suspended Stocks — Trading Halts & Corporate Actions (Conceptual)': [
+      'The actual difference between a stock being "suspended" and being "delisted"',
+      'Whether a SEBI-investigation suspension automatically means wrongdoing, or can happen for other reasons',
+      'Whether a company can still pay dividends or run a buyback while its stock is suspended',
+      'Whether a suspended stock\'s shareholders retain their voting/AGM rights',
+      'Whether trading resuming just once a week means the suspension has actually been lifted',
+      'Whether suspension blocks off-market transfer/gifting, or only exchange buying and selling',
+      'The difference between insolvency resolution and a plain suspension for something like a compliance lapse',
+      'Whether trading continues normally during a capital-reduction corporate action, or is typically paused'
     ]
   };
 
   // Ground-truth rules for the AI customer to react and push back against —
-  // sent to Claude only, never shown to the trainee. This is training-
-  // simulation reference content assembled for this test, not a citation
-  // of an official circular — sanity-check it against current depository
-  // rules before relying on it for real scoring/feedback.
+  // sent to Claude/Gemini only, never shown to the trainee. This is
+  // training-simulation reference content assembled for this feature, not a
+  // citation of an official circular — sanity-check it against current
+  // depository/exchange rules before relying on it for real scoring or
+  // feedback. Deliberately written with no invented numbers, charges, or
+  // account-specific figures — every line describes a rule or mechanism in
+  // the abstract, matching what the AI is instructed to ask about.
   const OPS_ADAPTIVE_ANSWER_KEYS = {
+    'CDSL Easiest & Gifting — Transfer Rules (Conceptual)': `
+1. CDSL Easiest / off-market gift transfers are not restricted to family members — shares can be gifted to any person, and a transfer to one's own account at a different broker/depository participant is also allowed. It is a general transfer facility, not a family-only feature.
+2. The TPIN step and the OTP step authorise two different things: TPIN is the sender's authorisation that they intend to debit these specific shares from their own account, while the OTP is a separate verification step confirming the transaction request itself — one does not substitute for the other, which is why both are required.
+3. Whether the recipient's broker/DP sits on CDSL or NSDL does not change the process from the sender's side — the sender still initiates a standard off-market transfer; the inter-depository movement is handled behind the scenes by the depositories, not by the client.
+4. A "self transfer" and a "gift transfer" are the same underlying off-market transfer mechanism at the depository level — the only difference is who owns the receiving account. The depository does not process them differently; it is only an app/UI label.
+5. A "Trusted Account" transfer is a simplified mode limited to a small number of pre-verified recipient accounts; an "Account of Choice" transfer allows sending to any account that isn't pre-added as trusted, but requires a Digital Signature Certificate precisely because it lacks that pre-verification step — the DSC substitutes for the missing verification.
+6. "Adding a beneficiary" and "adding a trusted account" are two distinct steps: adding a beneficiary registers the recipient's account details with the depository at all; marking it "trusted" is a separate step that grants it the simplified, lower-friction transfer mode. A beneficiary can exist without being trusted, in which case Account-of-Choice rules apply to transfers to it.
+7. A gifting transaction that misses its daily cut-off does not silently carry forward and complete on its own — it does not go through within that window, and the client should check its actual status rather than assume it processed automatically overnight.
+8. Tax exposure on a gifted share depends on the recipient's relationship to the giver: a gift between specified relatives (as defined under tax law — e.g. spouse, siblings, lineal ascendants/descendants) is not taxable to the recipient; a gift to someone who does not qualify as a "relative" under that definition can be taxable to the recipient once it crosses the exempt threshold. Tax exposure is not automatic just because shares changed hands as a gift — it depends on who received them.
+`.trim(),
     'Nominee Modification — Rules & Limits (Conceptual)': `
 1. A demat account holder may register up to 3 nominees. If more than one nominee is added, the holder must specify an exact percentage share for each nominee, and those percentages must add up to exactly 100% — there is no vague "equal share" option; every nominee's percentage must be stated explicitly (e.g. 34/33/33).
 2. There is no rule requiring a nominee to be a blood relative. A nominee can be a friend, a business partner, or any other person the account holder chooses — nomination is not restricted to family.
@@ -210,6 +266,26 @@ const App = (() => {
 6. Nomination is NOT compulsory to keep — an account holder can formally opt out of nomination altogether (by signing the prescribed opt-out declaration) rather than being required to always have at least one active nominee.
 7. Correcting an existing nominee's details (e.g. a name spelling or address) without changing WHO the nominee is, is treated as a simpler detail-update/modification, not a full fresh nomination of a new person — it still needs a signed request, but it is not the same as adding, removing, or replacing a nominee's identity.
 8. Some processes require both a wet-ink physical signature (matched against the specimen collected at account opening) AND a digital eSign/OTP step, because the two serve different purposes — the physical signature verifies against the historical KYC specimen, while the eSign authenticates the live request; a digital signature alone does not yet replace the physical signature-matching step in this process.
+`.trim(),
+    'Short Delivery & Auction Mechanics (Conceptual)': `
+1. Short delivery is not always the seller's fault — while it commonly happens due to insufficient or late delivery by the seller, it can also occur for reasons outside their direct control, such as another intermediary in the settlement chain failing to deliver on time. The exchange's auction mechanism responds to the shortfall itself, regardless of exactly why it occurred.
+2. The auction settlement price is not simply "whatever the stock closed at" — the exchange runs a special auction session and settles using the price(s) at which the missing shares actually get bought back in that session (or a penal, price-based formula when the auction can't fully procure them), rather than an arbitrary or purely closing-price-based figure.
+3. If the auction session cannot procure the missing shares at all, the buyer does not simply go without — the shortfall is cash-settled: the buyer is compensated in cash under the close-out formula rather than ultimately receiving the shares.
+4. The short-delivery penalty functions as compensation TO the buyer, not merely a fine retained by the exchange — the amount collected through the shortfall/close-out process flows to the buyer who did not receive their shares.
+5. "Auction charge" and "close-out amount" are related but not identical: an auction charge/price applies when the shares ARE bought back in the auction session; a close-out amount is the cash-settlement figure used specifically when the auction cannot procure the shares at all. They are two different outcomes of the same shortfall process, not interchangeable names for one thing.
+6. A stock in the trade-to-trade category or under a corporate action is handled differently because normal auction settlement assumes ordinary, freely tradeable shares; T2T and corporate-action states carry restrictions (such as delivery-only trading or a pending share adjustment) that make a standard auction impractical, so adapted settlement rules apply to shortfalls in those categories instead of the default process.
+7. Short delivery is about failing to deliver shares that were sold by the settlement deadline — the relevant moment is whether the shares were available and transferred in time, not whether the seller generally holds similar shares elsewhere; holding shares in demat doesn't retroactively prevent a shortfall if delivery on that specific sale wasn't completed on time.
+8. When only part of the shortfall is bought back in the auction, settlement uses ONE blended/weighted rate applied to the entire shortfall quantity — combining the auction-bought portion and the cash-closed-out portion into a single average price — rather than charging two separate prices to different parts of the same shortfall.
+`.trim(),
+    'Suspended Stocks — Trading Halts & Corporate Actions (Conceptual)': `
+1. "Suspended" means trading in the stock is temporarily halted on the exchange while the company continues to exist and the shares remain in shareholders' demat accounts; "delisted" means the shares are permanently removed from exchange trading altogether. Suspension is inherently a temporary/reversible-in-principle state; delisting is a permanent removal from trading (and is not automatically the same as the shares themselves being wiped out, unless paired with a separate insolvency/wipeout event).
+2. A suspension does not automatically mean the company did something wrong — while it can follow an investigation or compliance lapse, exchanges also suspend stocks for procedural reasons, such as pending corporate-action processing or a routine filing/disclosure lapse, which are not necessarily allegations of wrongdoing.
+3. A trading suspension only halts buying and selling activity on the exchange — it does not suspend the company's obligations to its existing shareholders, so dividends and buybacks (particularly a tender-offer/off-exchange buyback, which doesn't require an active trading market) can still proceed for holders on the company's register.
+4. Suspension does not remove a shareholder's rights as a registered holder — voting rights at the AGM continue to apply based on the shareholder register, independent of whether the stock is currently tradeable on the exchange.
+5. Trading resumed only once a week is still a restricted, limited form of tradeability, not a full lifting of the suspension — it should not be treated as equivalent to normal daily trading having resumed.
+6. A trading suspension specifically blocks exchange-based buying and selling; it does not, by itself, block an off-market transfer or gift of the shares between demat accounts, since that mechanism operates independently of exchange trading.
+7. Insolvency resolution is a formal legal process that can end with the company's existing shares being cancelled or extinguished as part of a resolution plan, potentially leaving shareholders with a total loss; a plain suspension for something like a compliance lapse does not, by itself, threaten the shares' existence — they remain intact in the shareholder's account, just untradeable, until resolved.
+8. Trading is typically paused temporarily during a capital reduction, since the process changes the number and value of shares outstanding and needs to be reflected consistently before normal trading can resume against the adjusted holding.
 `.trim()
   };
 
@@ -1350,8 +1426,8 @@ HOW TO RUN THIS CALL:
 - Open the call yourself with your first question as soon as it connects — do not wait for the agent to speak first.
 - React specifically and adaptively to what the agent actually says: acknowledge and move to the next concept if they're right; push back on the specific wrong or missing part if they're not, and give them one more chance before moving on.
 - Don't spend more than 2 consecutive exchanges pushing on the same concept.
-- Cover roughly ${conceptGuide.length || 8} concept areas in total, then politely wrap up and end the call.
-- Stay strictly conceptual: ask about the RULE or POLICY itself, in the abstract ("what's the maximum, and how does the split have to work if there's more than one?"), never a worked hypothetical with concrete figures ("I have 3 nominees split 40/30/30, is that fine?"). Do not invent, or ask the agent to react to, any specific number, percentage, date, name, or scenario detail that isn't already written in the ground-truth rules above — if the rules mention an example figure, you may reference it directly, but never manufacture your own new one.
+- You have a HARD MAXIMUM of ${OPS_ADAPTIVE_MAX_TURNS} questions total for this call (there are ${conceptGuide.length || 8} concept areas listed, one more than your question budget — prioritize covering the most important ones well rather than rushing through all of them). Once you've asked your ${OPS_ADAPTIVE_MAX_TURNS}th question and heard the agent's answer, politely wrap up and end the call — do not ask another question after that even if concept areas remain uncovered. The call will also be cut off automatically at 9 minutes if it runs long, whichever limit is reached first.
+- Stay strictly conceptual, with NOTHING account-specific: ask only about the RULE or POLICY itself, in the abstract ("what's the maximum, and how does the split have to work if there's more than one?"), never a worked hypothetical with concrete figures ("I have 3 nominees split 40/30/30, is that fine?"). NEVER ask about, or invent, a specific charge, fee, rupee amount, percentage, date, account number, transaction ID, or any other account-specific or personal detail — this call tests understanding of the RULES in general, never a specific account's numbers. Do not invent any figure that isn't already written in the ground-truth rules above — if the rules mention an example figure, you may reference it directly, but never manufacture your own new one.
 - Never mention "concept areas", "answer key", grading, tokens, or that you are an AI.`;
 
     $('btn-mc-live-end').disabled = false;
@@ -1629,10 +1705,15 @@ HOW TO RUN THIS CALL:
     _mcCallFinishing = false;
     // ops-call-assessment walks through its own fixed list of required
     // questions (one per turn) rather than the generic open-ended chat —
-    // so the turn count matches the number of questions on the topic.
-    _mcAiMaxTurns = (_currentModule === 'ops-call-assessment' && Array.isArray(_currentTopic.botScript) && _currentTopic.botScript.length)
-      ? _currentTopic.botScript.length
-      : MC_AI_MAX_TURNS;
+    // so the turn count matches the number of questions on the topic. The
+    // adaptive conceptual topics cap lower (7, not their 8-item bot_script
+    // length) to match the same "7 questions or 9 minutes, whichever comes
+    // first" limit the Gemini Live voice mode uses for these same topics.
+    _mcAiMaxTurns = (_currentModule === 'ops-call-assessment' && OPS_ADAPTIVE_TEST_TOPICS.has(_currentTopic.title))
+      ? OPS_ADAPTIVE_MAX_TURNS
+      : (_currentModule === 'ops-call-assessment' && Array.isArray(_currentTopic.botScript) && _currentTopic.botScript.length)
+        ? _currentTopic.botScript.length
+        : MC_AI_MAX_TURNS;
 
     showStep('mock-call', 'mc-step-bot-call');
     $('mc-chat-thread').innerHTML = '';
