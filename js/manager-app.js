@@ -422,6 +422,21 @@ Let's get back on track.
     ttsAudioEl: null, // for cancelling TTS audio
   };
 
+  // ── Gemini Live (Beta) real-time voice call state ───────
+  // Shared across both call-shaped modules that offer it (Paper Trade /
+  // mgr-mock-call and Red Pen / mgr-feedback) since only one such call ever
+  // runs at a time. `kind` tracks which one is active so the shared finish
+  // handler knows which scoring path and screen to use. Mirrors the pattern
+  // already proven out on the trainee side (js/app.js's Voice AI (Beta)
+  // Mock Call flow) — same GeminiLive module, same call shape.
+  let _mgrLive = {
+    kind: null,           // 'mock-call' | 'feedback'
+    turns: [],            // [{ role: 'bot'|'trainee', text }]
+    controller: null,     // { stop(), getRecording() } from GeminiLive.startCall()
+    startTime: 0,
+    finishing: false,
+  };
+
   // ── TTS voice cache ──────────────────────────────────────
   let _ttsVoices = [];
   if (window.speechSynthesis) {
@@ -631,6 +646,18 @@ Let's get back on track.
     $('mgr-record-phase').classList.add('hidden');
     $('mgr-live-transcript').innerHTML = '<span class="placeholder">Your speech will appear here in real time...</span>';
 
+    // Gemini Voice AI (Beta) — real-time speech-to-speech, offered as an
+    // alternative to the normal recording flow for Paper Trade only (it's
+    // the module built as a live customer call, so it's the natural fit —
+    // see manager.html for the actual call screen this launches).
+    const liveBtn = $('btn-mgr-audio-live-voice-start');
+    if (liveBtn) {
+      const showLiveBtn = _currentModule === 'mgr-mock-call'
+        && typeof GeminiLive !== 'undefined' && GeminiLive.isAvailable();
+      liveBtn.classList.toggle('hidden', !showLiveBtn);
+      liveBtn.onclick = () => _startAudioLiveVoice();
+    }
+
     showScreen('mgr-screen-audio');
     _startPrepTimer();
   }
@@ -773,6 +800,142 @@ Let's get back on track.
     } catch (e) {
       toast('Error saving session: ' + e.message, 'error');
       console.error('_submitAudio error:', e);
+    }
+  }
+
+  // ── Paper Trade — Gemini Live real-time voice call (Beta) ─
+  // Same architecture as the trainee side's Voice AI (Beta) Mock Call flow
+  // in js/app.js: one persistent WebSocket for the whole call via
+  // GeminiLive, offered as an alternative to the record-then-transcribe
+  // flow above. The scenario text already contains the customer's opening
+  // line and escalation beats, so it doubles directly as the roleplay brief.
+  function _startAudioLiveVoice() {
+    _clearPrepTimer();
+    const meta = MODULE_META[_currentModule];
+
+    $('mgr-audio-live-module-title').textContent = `${meta.icon} ${meta.label} — Voice AI (Beta)`;
+    $('mgr-audio-live-topic-title').textContent  = _currentScenario.title;
+    $('mgr-audio-live-scenario-text').textContent = _currentScenario.scenario;
+    _renderEvalCriteriaPanel(_currentModule, 'mgr-audio-live-scenario-text');
+    $('mgr-audio-live-thread').innerHTML = '';
+    $('btn-mgr-audio-live-end').disabled = false;
+
+    _mgrLive = { kind: 'mock-call', turns: [], controller: null, startTime: Date.now(), finishing: false };
+
+    const stateEl = $('mgr-audio-live-state');
+    const STATE_LABELS = {
+      connecting: '🔌 Connecting…',
+      listening:  '🎙️ Listening — go ahead and speak',
+      speaking:   '🔊 Customer is speaking…',
+      error:      '⚠️ Connection problem — try Cancel and use the normal recording flow',
+      ended:      '📴 Call ended',
+      'time-limit': '⏱️ 9-minute limit reached — wrapping up and submitting…',
+    };
+
+    const systemInstruction = `You are roleplaying, BY VOICE, as the customer in this call to a brokerage support line.
+
+SCENARIO: ${_currentScenario.scenario}
+
+HOW TO RUN THIS CALL:
+- Speak naturally, the way a real person sounds on a phone call — short, conversational sentences, not a written essay or a script read verbatim.
+- Open the call yourself with your opening line (per the scenario above, adapted naturally to spoken language) as soon as the call connects — do not wait for the manager to speak first.
+- Raise the escalation beats described in the scenario if the manager's handling doesn't already address them, reacting in the moment rather than reciting them as a list.
+- Keep the call to roughly 5-6 minutes of back-and-forth, then let it wind down naturally once the manager has offered a resolution within their realistic authority — you don't have to explicitly announce the call is ending.
+- Never mention that you are an AI, a script, grading, evaluation criteria, or that this is a training exercise.`;
+
+    $('btn-mgr-audio-live-end').onclick = () => _finishAudioLiveVoice();
+    $('btn-mgr-audio-live-cancel').onclick = () => {
+      if (_mgrLive.controller) { _mgrLive.controller.stop(); _mgrLive.controller = null; }
+      _launchAudio();
+    };
+
+    showScreen('mgr-screen-audio-live');
+
+    _mgrLive.controller = GeminiLive.startCall({
+      systemInstruction,
+      onStateChange: (state) => {
+        if (stateEl) stateEl.textContent = STATE_LABELS[state] || state;
+        if (state === 'time-limit') {
+          toast('⏱️ Reached the 9-minute call limit — submitting what was covered so far.', '');
+          _finishAudioLiveVoice();
+        }
+      },
+      onTurn: ({ role, text }) => {
+        _mgrLive.turns.push({ role, text });
+        const bubble = document.createElement('div');
+        bubble.className = `mc-bubble ${role === 'bot' ? 'bot' : 'trainee'}`;
+        bubble.textContent = text;
+        $('mgr-audio-live-thread').appendChild(bubble);
+        $('mgr-audio-live-thread').scrollTop = $('mgr-audio-live-thread').scrollHeight;
+      },
+      onError: (err) => {
+        console.error('GeminiLive error (Paper Trade):', err);
+        toast('⚠ Voice AI error: ' + (err.message || err) + ' — you can cancel and use the normal recording flow instead.', 'error');
+      },
+    });
+  }
+
+  async function _finishAudioLiveVoice() {
+    if (_mgrLive.finishing) return;
+    if (!_mgrLive.controller && _mgrLive.turns.length === 0) return;
+    _mgrLive.finishing = true;
+    $('btn-mgr-audio-live-end').disabled = true;
+
+    const controller = _mgrLive.controller;
+    _mgrLive.controller = null;
+    let recordingBlob = null;
+    if (controller) {
+      controller.stop();
+      try { recordingBlob = await controller.getRecording(); } catch (e) { console.warn('Call recording could not be finalized:', e.message || e); }
+    }
+    const durationSecs = Math.max(1, Math.floor((Date.now() - _mgrLive.startTime) / 1000));
+
+    const fullTranscript = _mgrLive.turns.map(t => `${t.role === 'bot' ? 'Customer' : 'You'}: ${t.text}`).join('\n\n');
+    const managerOnly    = _mgrLive.turns.filter(t => t.role === 'trainee').map(t => t.text).join(' ').trim();
+    const wordCount = managerOnly.split(/\s+/).filter(Boolean).length;
+
+    let aiScores = { overall: null, _method: 'mgr-live-js', _module: _currentModule, _scenarioId: _currentScenario.id };
+    if (wordCount >= 25 && typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
+      try {
+        const result = await ClaudeEvaluator.evaluatePaperTrade(fullTranscript, _currentScenario.scenario || '');
+        aiScores = {
+          ...result.scores,
+          overall:     result.overall,
+          earnedMarks: result.earnedMarks,
+          maxMarks:    result.maxMarks,
+          _reasons:    result.reasons,
+          _method:     'mgr-mock-call-ai',
+          _module:     _currentModule,
+          _scenarioId: _currentScenario.id,
+        };
+      } catch (e) {
+        console.warn('Paper Trade live-call content eval failed:', e.message);
+      }
+    }
+    aiScores._voiceEngine = 'gemini-live-beta';
+
+    try {
+      await Auth.ensureTraineeRecord();
+      await DB.put('sessions', {
+        traineeId:    Auth.getId(),
+        traineeName:  Auth.getName(),
+        traineeEmail: Auth.getEmail(),
+        module:       _currentModule,
+        topicId:      (_currentScenario._hardcoded ? null : (_currentScenario.id || null)),
+        topicTitle:   _currentScenario.title,
+        transcript:   fullTranscript,
+        recordingBlob: recordingBlob || null,
+        writtenText:  '',
+        aiScores,
+        timeTaken:    durationSecs,
+        submittedAt:  new Date().toISOString(),
+        status:       'ai-evaluated',
+      });
+      _showResult(aiScores, 'audio');
+    } catch (e) {
+      toast('Error saving session: ' + e.message, 'error');
+      console.error('_finishAudioLiveVoice error:', e);
+      _mgrLive.finishing = false;
     }
   }
 
@@ -1032,7 +1195,155 @@ Let's get back on track.
       };
     }
 
+    // Gemini Voice AI (Beta) — real-time speech-to-speech alternative to the
+    // turn-based recorded conversation below. Red Pen is an adversarial
+    // back-and-forth with a persona, which is exactly the shape Gemini
+    // Live's duplex voice is built for.
+    const liveBtn = $('btn-mgr-fb-live-voice-start');
+    if (liveBtn) {
+      const showLiveBtn = typeof GeminiLive !== 'undefined' && GeminiLive.isAvailable();
+      liveBtn.classList.toggle('hidden', !showLiveBtn);
+      liveBtn.onclick = () => _startFeedbackLiveVoice();
+    }
+
     showScreen('mgr-screen-feedback');
+  }
+
+  // ── Red Pen — Gemini Live real-time voice call (Beta) ────
+  // Same GeminiLive architecture as Paper Trade above. The employee's
+  // `persona` field is already written as a full character brief (identity,
+  // situation, defensiveness pattern, verbatim pushback lines) — built for
+  // exactly this purpose — so it's used directly as the roleplay brief.
+  function _startFeedbackLiveVoice() {
+    const emp = FB_EMPLOYEES[_currentScenario.id] || FB_EMPLOYEES['fb1'];
+
+    $('mgr-fb-live-emp-name').textContent = emp.name;
+    $('mgr-fb-live-sc-title').textContent = _currentScenario.title;
+    $('mgr-fb-live-sc-text').textContent  = _currentScenario.scenario;
+    _renderEvalCriteriaPanel('mgr-feedback', 'mgr-fb-live-sc-text');
+    $('mgr-fb-live-thread').innerHTML = '';
+    $('btn-mgr-fb-live-end').disabled = false;
+
+    _mgrLive = { kind: 'feedback', turns: [], controller: null, startTime: Date.now(), finishing: false };
+
+    const stateEl = $('mgr-fb-live-state');
+    const STATE_LABELS = {
+      connecting: '🔌 Connecting…',
+      listening:  '🎙️ Listening — go ahead and speak',
+      speaking:   `🔊 ${emp.name} is speaking…`,
+      error:      '⚠️ Connection problem — try Cancel and use the normal recorded flow',
+      ended:      '📴 Conversation ended',
+      'time-limit': '⏱️ 9-minute limit reached — wrapping up and submitting…',
+    };
+
+    const systemInstruction = `You are roleplaying, BY VOICE, as ${emp.name}, an employee in a one-on-one feedback conversation with your manager.
+
+${emp.persona}
+
+HOW TO RUN THIS CONVERSATION:
+- Speak naturally, the way a real person sounds face-to-face — short, conversational sentences, not a written essay.
+- Open the conversation yourself with something like: "${emp.opening}" (adapted naturally to spoken language) as soon as it connects — do not wait for the manager to speak first.
+- React specifically to what the manager actually says: use your default pushback lines (verbatim or adapted) when they judge, threaten, generalize, or argue the rule itself instead of the behaviour; soften and become more receptive when they use calm, specific, evidence-based feedback and propose a concrete plan.
+- Keep the conversation to roughly 4-6 exchanges, then let it wind down naturally once the manager has proposed next steps you can react to (agree, partially agree, or ask a clarifying question) — you don't have to explicitly end the conversation.
+- Stay in character as ${emp.name} throughout — never break character, never mention that you are an AI, a script, grading, evaluation criteria, or that this is a training exercise.`;
+
+    $('btn-mgr-fb-live-end').onclick = () => _finishFeedbackLiveVoice();
+    $('btn-mgr-fb-live-cancel').onclick = () => {
+      if (_mgrLive.controller) { _mgrLive.controller.stop(); _mgrLive.controller = null; }
+      _launchFeedbackAI();
+    };
+
+    showScreen('mgr-screen-feedback-live');
+
+    _mgrLive.controller = GeminiLive.startCall({
+      systemInstruction,
+      onStateChange: (state) => {
+        if (stateEl) stateEl.textContent = STATE_LABELS[state] || state;
+        if (state === 'time-limit') {
+          toast('⏱️ Reached the 9-minute call limit — submitting what was covered so far.', '');
+          _finishFeedbackLiveVoice();
+        }
+      },
+      onTurn: ({ role, text }) => {
+        _mgrLive.turns.push({ role, text });
+        const bubble = document.createElement('div');
+        bubble.className = `mc-bubble ${role === 'bot' ? 'bot' : 'trainee'}`;
+        bubble.textContent = text;
+        $('mgr-fb-live-thread').appendChild(bubble);
+        $('mgr-fb-live-thread').scrollTop = $('mgr-fb-live-thread').scrollHeight;
+      },
+      onError: (err) => {
+        console.error('GeminiLive error (Red Pen):', err);
+        toast('⚠ Voice AI error: ' + (err.message || err) + ' — you can cancel and use the normal recorded flow instead.', 'error');
+      },
+    });
+  }
+
+  async function _finishFeedbackLiveVoice() {
+    if (_mgrLive.finishing) return;
+    if (!_mgrLive.controller && _mgrLive.turns.length === 0) return;
+    _mgrLive.finishing = true;
+    $('btn-mgr-fb-live-end').disabled = true;
+
+    const emp = FB_EMPLOYEES[_currentScenario.id] || FB_EMPLOYEES['fb1'];
+    const controller = _mgrLive.controller;
+    _mgrLive.controller = null;
+    let recordingBlob = null;
+    if (controller) {
+      controller.stop();
+      try { recordingBlob = await controller.getRecording(); } catch (e) { console.warn('Call recording could not be finalized:', e.message || e); }
+    }
+    const durationSecs = Math.max(1, Math.floor((Date.now() - _mgrLive.startTime) / 1000));
+
+    const fullTranscript = _mgrLive.turns.map(t => `${t.role === 'bot' ? emp.name : 'You'}: ${t.text}`).join('\n\n');
+
+    let aiScores = { overall: null, _method: 'mgr-feedback-live-js', _module: 'mgr-feedback' };
+    if (fullTranscript && typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
+      try {
+        const result = await ClaudeEvaluator.evaluateManagerFeedback(
+          fullTranscript, _currentScenario.scenario || _currentScenario.title || '',
+          _currentScenario.goodLooksLike || [], _currentScenario.commonPitfalls || []
+        );
+        aiScores = {
+          ...result.scores,
+          overall:     result.overall,
+          earnedMarks: result.earnedMarks,
+          maxMarks:    result.maxMarks,
+          _reasons:    result.reasons,
+          _method:     'mgr-feedback-params',
+        };
+      } catch (e) {
+        console.warn('Red Pen live-call eval failed:', e.message);
+      }
+    }
+    aiScores._module     = 'mgr-feedback';
+    aiScores._turns      = _mgrLive.turns.length;
+    aiScores._scenarioId = _currentScenario.id;
+    aiScores._voiceEngine = 'gemini-live-beta';
+
+    try {
+      await Auth.ensureTraineeRecord();
+      await DB.put('sessions', {
+        traineeId:    Auth.getId(),
+        traineeName:  Auth.getName(),
+        traineeEmail: Auth.getEmail(),
+        module:       'mgr-feedback',
+        topicId:      (_currentScenario._hardcoded ? null : (_currentScenario.id || null)),
+        topicTitle:   _currentScenario.title,
+        transcript:   fullTranscript,
+        recordingBlob: recordingBlob || null,
+        writtenText:  '',
+        aiScores,
+        timeTaken:    durationSecs,
+        submittedAt:  new Date().toISOString(),
+        status:       'ai-evaluated',
+      });
+      _showResult(aiScores, 'feedback-ai');
+    } catch (e) {
+      toast('Error saving session: ' + e.message, 'error');
+      console.error('_finishFeedbackLiveVoice error:', e);
+      _mgrLive.finishing = false;
+    }
   }
 
   async function _startFeedbackConversation() {
@@ -1487,10 +1798,14 @@ Let's get back on track.
       }
     } else if (type === 'feedback-ai') {
       const emp = FB_EMPLOYEES[_currentScenario.id] || FB_EMPLOYEES['fb1'];
-      $('mgr-result-subtitle').textContent = `Feedback Conversation with ${emp.name} — ${_fb.history.length} exchange(s)`;
+      // aiScores._turns is set on both the turn-based recorded flow
+      // (_fb.history.length) and the Gemini Live voice flow (_mgrLive.turns.length)
+      // so this works regardless of which one produced the result.
+      const turnCount = aiScores._turns != null ? aiScores._turns : _fb.history.length;
+      $('mgr-result-subtitle').textContent = `Feedback Conversation with ${emp.name} — ${turnCount} exchange(s)`;
       $('mgr-result-score').textContent = aiScores.overall != null ? `${aiScores.overall}%` : '—';
       const grid = _critGridHTML('mgr-feedback', aiScores);
-      $('mgr-score-grid').innerHTML = grid || `<div class="mgr-score-item"><div class="label">Exchanges</div><div class="val">${_fb.history.length} turns</div></div>`;
+      $('mgr-score-grid').innerHTML = grid || `<div class="mgr-score-item"><div class="label">Exchanges</div><div class="val">${turnCount} turns</div></div>`;
     } else if (type === 'situation-room') {
       $('mgr-result-subtitle').textContent = `Situation Room — ${_currentScenario ? _currentScenario.title : 'Assessment complete'}`;
       $('mgr-result-score').textContent = `${aiScores.overall}%`;
@@ -1538,6 +1853,8 @@ Let's get back on track.
     try { SpeechEngine.stopTranscription(); } catch(e){}
     try { Recorder.stop(); } catch (e) {}
     try { Recorder.stopTimer(); } catch (e) {}
+    // Cancel a Gemini Live voice call in progress, if any
+    if (_mgrLive.controller) { try { _mgrLive.controller.stop(); } catch (e) {} _mgrLive.controller = null; }
     _recordingPromise = null;
     _fb.blobPromise   = null;
     showScreen('mgr-screen-modules');
