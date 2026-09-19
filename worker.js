@@ -110,6 +110,16 @@ export default {
       const expireTime = new Date(now + 30 * 60 * 1000).toISOString();            // token itself valid 30 min
       const newSessionExpireTime = new Date(now + 2 * 60 * 1000).toISOString();   // must open the session within 2 min
 
+      // NOTE (2026-09-19): Google's own ephemeral-tokens guide shows this
+      // constrained under a "liveConnectConstraints" field, but the live API
+      // actually rejects that field name ("Unknown name liveConnectConstraints
+      // at 'auth_token'") — confirmed by testing against the real endpoint.
+      // The AuthToken resource's real REST field (per
+      // https://ai.google.dev/api/rest/v1beta/AuthToken) is
+      // "bidiGenerateContentSetup", taking a full BidiGenerateContentSetup
+      // object — the same shape used for the WebSocket setup message in
+      // gemini-live.js. Trust this over the guide's example if Google's docs
+      // drift again.
       const upstream = await fetch(GEMINI_TOKEN_API, {
         method: 'POST',
         headers: {
@@ -120,9 +130,9 @@ export default {
           uses: 1,
           expireTime,
           newSessionExpireTime,
-          liveConnectConstraints: {
+          bidiGenerateContentSetup: {
             model: GEMINI_LIVE_MODEL,
-            config: { responseModalities: ['AUDIO'] },
+            generationConfig: { responseModalities: ['AUDIO'] },
           },
         }),
       });
