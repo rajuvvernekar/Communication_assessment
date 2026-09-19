@@ -890,6 +890,13 @@ window.Admin = (() => {
         if (section === 'trainees') {
           try { loadTrainees(); } catch (_) {}
         }
+        // Manager Assessments tab: same reasoning -- this was never wired to
+        // re-fetch on open, so a manager's newly-completed assessment (and
+        // the pending-review count badge) would stay stale/wrong until the
+        // admin manually clicked "Refresh" or reloaded the whole page.
+        if (section === 'mgr-assessments') {
+          try { loadMgrAssessments(); } catch (_) {}
+        }
       };
     });
 
@@ -1857,7 +1864,15 @@ window.Admin = (() => {
       ]);
       _cachedTopicMap = {};
       topics.forEach(t => { _cachedTopicMap[t.id] = t; });
-      _cachedSessions = sessions;
+      // Manager assessments (module starts with 'mgr-') have their own
+      // dedicated "Manager Assessments" tab/table (_mgrSessions, below) --
+      // matchesModuleFilter() previously let them pass through the trainee
+      // Assessments tab's "All Modules" filter too, so a manager's completed
+      // assessment would show up here mixed in with trainee sessions, and
+      // would also inflate/skew the Active/Archive and Pending Review counts.
+      // Excluded at the source so every count and view derived from
+      // _cachedSessions is trainee-only.
+      _cachedSessions = sessions.filter(s => !(s.module && s.module.startsWith('mgr-')));
       _refreshArchiveCounts(_cachedSessions);
       applyAssessmentFilters(_cachedSessions, _cachedTopicMap);
       await updatePendingBadge();

@@ -488,19 +488,19 @@ Let's get back on track.
     let panel = $(panelId);
     if (!criteria) { if (panel) panel.remove(); return; }
 
+    // Managers should only see WHAT is being evaluated (the parameter names/
+    // descriptions), never the marks/weights/max-marks behind them — those
+    // are for admin scoring only.
     const rows = criteria.parameters.map(p =>
-      `<div style="display:flex;justify-content:space-between;gap:0.75rem;padding:0.4rem 0;border-bottom:1px solid rgba(0,0,0,0.06)">
-        <div style="flex:1">
-          <div style="font-weight:600;font-size:0.85rem">${p.label}</div>
-          <div style="font-size:0.78rem;color:var(--text-muted, #666);margin-top:0.15rem">${p.desc}</div>
-        </div>
-        <div style="flex-shrink:0;font-weight:700;font-size:0.85rem;color:#7c3aed;white-space:nowrap">${p.weight} pts</div>
+      `<div style="padding:0.4rem 0;border-bottom:1px solid rgba(0,0,0,0.06)">
+        <div style="font-weight:600;font-size:0.85rem">${p.label}</div>
+        <div style="font-size:0.78rem;color:var(--text-muted, #666);margin-top:0.15rem">${p.desc}</div>
       </div>`
     ).join('');
 
     const html = `
       <details id="${panelId}" style="margin-top:0.75rem;border:1px solid rgba(124,58,237,0.25);border-radius:8px;background:rgba(124,58,237,0.04);padding:0.6rem 0.85rem">
-        <summary style="cursor:pointer;font-weight:700;font-size:0.85rem;color:#5b21b6">📊 How this is scored — ${criteria.label} (${criteria.maxMarks} marks)</summary>
+        <summary style="cursor:pointer;font-weight:700;font-size:0.85rem;color:#5b21b6">📋 How this is evaluated — ${criteria.label}</summary>
         <div style="margin-top:0.5rem">${rows}</div>
       </details>`;
 
