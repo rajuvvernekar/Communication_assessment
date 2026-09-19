@@ -18,837 +18,312 @@ const MgrApp = (() => {
     'mgr-situation-room': [
       {
         id: 'sr1',
-        title: 'The Unexpected Resignation',
-        scenario: `Your top performer, Vikram, has just walked into your office and quietly resigned — effective in 2 weeks. He handles 40% of your team's output. Peak season starts in 4 days. The rest of the team doesn't know yet. Your standup is in 20 minutes.\n\nVikram is sitting across from you, resignation letter on the desk. He looks uncomfortable but resolved. He's been with the team for 3 years and has always delivered.`,
-        sectionAPrompt: 'Write the EXACT words you say to Vikram in the next 2–3 minutes — your immediate verbal response to him. Do not describe actions. Write what you actually say, word for word.',
-        wrongResponse: `"Vikram, honestly I'm shocked. The timing couldn't be worse — we're literally going into peak season in 4 days and you're leaving us in an extremely difficult position. You know how much the team relies on you. Everyone is going to struggle. I need you to give me at least 4 weeks instead of 2 — is there any way you can do that? And can you tell me what we did wrong? Is it the salary? Because I may be able to do something about that if that's the issue."`,
+        title: 'Order Execution Failure During a Market Crash',
+        scenario: `A high-net-worth client placed a large sell order on a volatile derivatives position during a sharp intraday market crash. The order failed to execute due to a system slowdown during peak load. By the time it went through manually, the client had lost ₹8.4 lakh more than if the order had executed on time. The client has called the branch manager directly, furious.\n\nPart A — What Would You Say? Write your full verbal response, opening to close.\nPart B — The Wrong Response: A flawed manager reply to this situation follows below. Identify every error, explain the impact of each, and rewrite the response correctly.`,
+        sectionAPrompt: 'Part A — Write the EXACT words you would say to this client, opening to close: the opening (first 60 seconds), the body of the resolution, and the close.',
+        wrongResponse: `"Sir, I understand markets crashed today, these things happen during high volatility, it's not really something we could have controlled. Our system did process your order, just with some delay because of the load — that's normal during a crash like this. I can see you're upset about the ₹8.4 lakh, but honestly, if the market hadn't moved against you in that window it wouldn't even be an issue, so it's really just bad timing. I can log a technical complaint if you want, but I can't promise anything will come of it since the system did technically work, just slower than usual."`,
       },
       {
         id: 'sr2',
-        title: 'The Compliance Breach',
-        scenario: `Your compliance lead has just informed you that two of your senior agents — Priya (3 years on the team) and Ravi (4 years) — bypassed the mandatory documentation protocol for 6 consecutive weeks to hit their monthly targets. This has caused 14 customer escalations that were falsely marked as resolved.\n\nYou've called them both into the meeting room. They don't know what it's about. They're both seated, looking at you.`,
-        sectionAPrompt: 'Write the EXACT words you say to open this conversation. The next 60 seconds will determine whether this becomes a productive accountability conversation or a defensive standoff.',
-        wrongResponse: `"Okay, I'll get straight to the point. What you two have done is a serious compliance violation and I am extremely disappointed in both of you. I honestly cannot believe that senior people on this team would do this. Compliance is already involved and so is HR — this could be a termination-level issue. I want both of you to tell me right now why you thought bypassing protocols for six weeks was acceptable. And I want the real reason, not excuses."`,
+        title: 'Unauthorized Trade Dispute',
+        scenario: `A client discovers three trades in their account they insist they never placed — all executed on the same day the market moved sharply against those positions, resulting in a loss of ₹3.1 lakh. The client suspects either a system glitch attributed the trades wrongly, or unauthorized access. They are alleging fraud.\n\nPart A — What Would You Say? Write your full verbal response, opening to close.\nPart B — The Wrong Response: A flawed manager reply to this situation follows below. Identify every error, explain the impact of each, and rewrite the response correctly.`,
+        sectionAPrompt: 'Part A — Write the EXACT words you would say to this client, opening to close: the opening (first 60 seconds), the body of the resolution, and the close.',
+        wrongResponse: `"Ma'am, I can see three trades on your account, so somebody must have placed them — our systems don't just execute trades on their own. Are you sure nobody else has access to your login, maybe a family member? I'm not saying you're lying, but fraud is a serious word and without clear proof of unauthorized access there's not much we can do on our end beyond noting it down. I'll flag this to our security team, though these investigations usually take a few weeks and don't always come back with a clear answer."`,
       },
       {
         id: 'sr3',
-        title: 'The Public Recovery Presentation',
-        scenario: `Your team missed Q3 target by 35% — the only team in the region to miss by double digits. Your Regional Director has called an unscheduled all-hands. There are 15 people in the room: 3 other team managers, their leads, and your own team members.\n\nThe Regional Director has just said directly to you: "Your team is the only one that missed by double digits this quarter. Walk us through what happened and what you plan to do about it."\n\nAll eyes are on you. You have 90 seconds.`,
-        sectionAPrompt: 'Write the EXACT words of your response — what you say in the next 60–90 seconds in front of the room.',
-        wrongResponse: `"The targets this quarter were honestly set above realistic market benchmarks — I've been raising this concern since July. My team also faced significant headwinds: the product changes in August disrupted our workflow for nearly 3 weeks, and we didn't receive the resource support that was committed to us. I take responsibility in the sense that I should have escalated more aggressively earlier. But the structural issues here are systemic and beyond any individual team's control. I do have a 60-day recovery plan ready to present."`,
+        title: 'RMS Auto Square-Off During Margin Shortfall',
+        scenario: `A client's leveraged intraday position was auto-squared-off by the Risk Management System after a sudden margin shortfall triggered by a gap-down opening. The client was travelling and unreachable for the margin call SMS/call. The square-off locked in a loss of ₹5.6 lakh, and the client believes that had it not been squared off, the position would have recovered by market close (it did, in hindsight). The client is irate.\n\nPart A — What Would You Say? Write your full verbal response, opening to close.\nPart B — The Wrong Response: A flawed manager reply to this situation follows below. Identify every error, explain the impact of each, and rewrite the response correctly.`,
+        sectionAPrompt: 'Part A — Write the EXACT words you would say to this client, opening to close: the opening (first 60 seconds), the body of the resolution, and the close.',
+        wrongResponse: `"Sir, the square-off is completely standard procedure when there's a margin shortfall, we sent the required alerts as per policy, so from our side everything was done correctly. I understand the market recovered afterward, but honestly that's just how trading works sometimes — you can't blame the system for a call that in hindsight didn't need to be made, we can't predict the market any better than you can. If you're travelling, that's really something you need to plan around when you're holding leveraged positions, we can't be responsible for that."`,
       },
       {
         id: 'sr4',
-        title: 'The Breakdown in the Team Meeting',
-        scenario: `You are running the weekly team standup — 12 people on a video call. Mid-meeting, Kavya — a reliable, mid-level team member — suddenly says:\n\n"I'm sorry. I just can't. I can't do this anymore. I am completely overwhelmed and I feel like nothing I do is ever enough."\n\nShe looks close to tears. Everyone else has gone silent. There is a 5-second pause. The whole team is watching you.`,
-        sectionAPrompt: 'Write the EXACT words you say in the next 30 seconds — with the full team watching. What you say here determines both Kavya\'s trust in you and how safe every other team member feels.',
-        wrongResponse: `"Kavya, I think we can all relate to feeling a bit overwhelmed sometimes, it's been a tough quarter for everyone. Why don't we take a quick 5-minute break and come back? And Kavya, maybe we can connect after the call and have a chat about what's going on — I'm sure it'll look a lot better once you've had a bit of a rest. Alright team, 5-minute break, and then we'll pick up from slide 7."`
+        title: 'KYC Freeze Blocking an Urgent Withdrawal',
+        scenario: `A client's trading account and linked funds were frozen for a mandatory periodic KYC re-verification, flagged as overdue by compliance. The client had a ₹12 lakh withdrawal pending to cover a personal emergency (a family medical situation) and only discovered the freeze when the withdrawal failed. The client is distressed and angry, not at the requirement itself but at the timing and lack of warning.\n\nPart A — What Would You Say? Write your full verbal response, opening to close.\nPart B — The Wrong Response: A flawed manager reply to this situation follows below. Identify every error, explain the impact of each, and rewrite the response correctly.`,
+        sectionAPrompt: 'Part A — Write the EXACT words you would say to this client, opening to close: the opening (first 60 seconds), the body of the resolution, and the close.',
+        wrongResponse: `"Sir, KYC re-verification is a regulatory requirement, it's not something we can waive, and we did send a notice about it. I understand there's a medical emergency, but the process still has to be followed properly — I can't make exceptions just because the timing is bad for you. Once you complete the re-verification the freeze will lift, so I'd suggest doing that as soon as possible so we can move forward. Is there anything else I can help with?"`,
       },
       {
         id: 'sr5',
-        title: 'The HNW Portfolio Delay Crisis',
-        scenario: `Your High-Net-Worth (HNW) client, Mr. Rakesh Kapoor, had initiated a ₹75 Lakh portfolio transfer to a new PMS structure. Due to a documentation backlog in your operations team, the transfer took 10 working days instead of 2. During this window, the market rallied 4.5%, resulting in an estimated ₹3.5 Lakh opportunity loss for the client.
-
-Mr. Kapoor has just called your cell phone. He is furious, threatening to initiate legal proceedings and file a complaint with SEBI. He demands a face-to-face meeting in your office in 30 minutes.`,
-        sectionAPrompt: 'Write the EXACT words you say to open this meeting with Mr. Kapoor — your opening 60–90 seconds. How do you address the financial impact, demonstrate ownership, and de-escalate without making unauthorized promises?',
-        wrongResponse: `"Mr. Kapoor, thank you for coming in. Look, I understand you're upset about the 10-day timeline, but as I tried explaining on the phone, the delay was entirely at the clearing house and depository participant level — our internal team processed your documents within 24 hours. The market rally was unpredictable, so calling it a ₹3.5 Lakh loss isn't entirely accurate. We cannot reimburse market opportunity losses, but I can ask our compliance team if we can waive next quarter's advisory fees as a goodwill gesture."`
-      },
-      {
-        id: 'sr6',
-        title: 'The Multi-Team Outage Conflict',
-        scenario: `During morning market opening hours, a system glitch caused 45 high-priority trade orders to fail silently. Your Operations lead and IT Infrastructure lead are in a heated argument in the hallway in front of 20 team members. Operations blames IT for server misconfiguration; IT blames Operations for uploading corrupted batch files.
-
-You have called both leads into a conference room immediately. The rest of the floor is tense and watching.`,
-        sectionAPrompt: 'Write your EXACT opening words in the next 60 seconds to reset the meeting, stop the blame game, and pivot both leads toward root-cause resolution.',
-        wrongResponse: `"Alright, shut the door. What was that embarrassing display out on the floor? You two are senior leads acting like trainees. I don't care who started it — if this isn't resolved in the next 20 minutes, I am issuing formal written warnings to both of you. Operations, stop blaming IT. IT, fix the batch script right now. We'll figure out who screwed up during the post-mortem."`
-      },
-      {
-        id: 'sr7',
-        title: 'The Rejected Sell Order — Escalated Twice',
-        scenario: `You're the escalation manager. A customer, Mr. Aditya Rane, has just been transferred to you after two prior support agents closed his complaint without resolving it. His original message: "I placed a sell order for 500 shares of Infosys at 9:16 AM. The order got rejected. By the time I figured it out and placed it again, the price had dropped ₹47. That's ₹23,500 I lost because of your system. I want my money back." You've reviewed the logs yourself — the order was correctly rejected for insufficient margin. This was a shortfall on his own account, not a platform error.\n\nTwo things make this harder than a routine callback: he's a 9-year client with a ₹1.2 Crore portfolio, and he opens the call by saying "I'm recording this, and I have 40,000 followers on X. I'm giving you one shot to make this right before I post the whole thing." You also notice, while pulling his account, that the margin-utilisation figure shown in his app that morning carried a stale 6-hour-old timestamp — a known cosmetic display bug that did not cause the rejection, but makes his confusion genuinely understandable.\n\nHe's already been told "there's nothing we can do" twice today, by two different people.`,
-        sectionAPrompt: "Write the EXACT words you say in the first 60 seconds of this call — knowing he's recording it and has already been dismissed twice today. Then, in 2–3 sentences, say what you will deliberately NOT say in this call, and why.",
-        wrongResponse: `"Sir, I've reviewed everything and honestly, our first two agents were right — this was a margin shortfall on your end, not a system error, so there's really nothing to refund. I know that's frustrating given how long you've been with us, so let me see what I can personally approve as a one-time gesture — would ₹23,500 work to close this out today? Also, just so you're aware, whatever you post online, we do have call logs showing you were informed about the margin requirement, so we're covered on our end regardless."`,
-      },
-      {
-        id: 'sr8',
-        title: 'The Surveillance Hold During a Volatile Session',
-        scenario: `A client's trading account was blocked for two full trading sessions during a period of unusually high volatility. He estimates he lost ₹1.8 Lakh in missed exits because he couldn't square off positions in time. He has already spoken to two agents today — one told him it was a "technical glitch," the other said it was a "compliance hold" — and the contradiction between the two answers has made him angrier than the block itself.\n\nThe real reason, visible only in your escalation queue notes: Risk & Surveillance flagged his account as part of a SEBI-mandated review into a suspicious trading pattern across three linked accounts. You are not permitted to disclose the specific reason, the linked-account detail, or that a regulator is involved — only that the account is "under a mandatory compliance review" until it clears.\n\nHe says: "I've been with you people for six years and you've never explained anything to me properly. I'm filing with the SEBI SCORES portal today, and I'm telling everyone in my trading community exactly what happened here."`,
-        sectionAPrompt: 'Write the EXACT words you use to open this call and explain the situation — knowing you legally cannot disclose the actual reason for the hold, and that two colleagues already gave him two different, contradictory explanations today.',
-        wrongResponse: `"I understand your concern. As per our policy, accounts are blocked for regulatory reasons that are beyond our control. I would suggest you check your email for any communication we may have sent. As for what my colleagues told you earlier, I can't really speak to that — I can only tell you what I see on my end, which is that this is a compliance matter. Is there anything else I can help you with?"`,
-      },
-      {
-        id: 'sr9',
-        title: 'The Refund Threshold Dilemma',
-        scenario: `A long-standing client with ₹40 Lakh in his account calls you directly, bypassing the floor. He says he will move his entire relationship to a competitor and post a negative review on every platform he can find unless you refund his last 3 months of brokerage — ₹12,000 — over a complaint that is genuine but minor (a delayed contract note that caused him no financial loss).\n\nYour approval authority as escalation manager is capped at ₹5,000 per case. Your reporting manager is travelling and unreachable for the next several hours. The client is waiting on the line for your answer right now — he says he doesn't want to "go back and forth over email."`,
-        sectionAPrompt: "Write your exact words to the client explaining your decision. Then, in a separate short paragraph, walk through exactly how you arrived at that decision given that the ask (₹12,000) is above what you're authorised to approve (₹5,000) and your manager can't be reached.",
-        wrongResponse: `"I hear you, and honestly, losing a client of your standing over ₹12,000 doesn't make sense for anyone. I'm going to go ahead and approve the full refund right now as a one-time exception — you've been with us a long time and you deserve better than a delayed contract note turning into all this. Consider it done, no further action needed from your side."`,
+        title: 'Trading App Outage During a Volatile Session',
+        scenario: `During a session with unusually high volatility around a major macroeconomic announcement, the trading app crashed for approximately 40 minutes for a segment of users, including this client, who was holding an open leveraged position and unable to exit. When the app came back, the position had moved sharply against the client, resulting in a ₹6.7 lakh loss the client believes was entirely avoidable had they been able to exit when they tried. The client is threatening to go public.\n\nPart A — What Would You Say? Write your full verbal response, opening to close.\nPart B — The Wrong Response: A flawed manager reply to this situation follows below. Identify every error, explain the impact of each, and rewrite the response correctly.`,
+        sectionAPrompt: 'Part A — Write the EXACT words you would say to this client, opening to close: the opening (first 60 seconds), the body of the resolution, and the close.',
+        wrongResponse: `"I hear you, outages happen sometimes with high traffic during volatile sessions, it's an unfortunate coincidence that it happened while you had an open position. Technically the loss happened because of how the market moved, not directly because of the outage, so I'm not sure compensation is really justified here. Go ahead and post about it if you feel you need to — we stand by our system uptime record overall, this was a one-off. I can log a technical ticket, but I wouldn't expect much beyond an apology from that."`,
       },
     ],
     'mgr-transcript-autopsy': [
-      { id:'ta1', title:'SIP Debit With No Unit Allotment — 22 Min Call',
-        scenario:`BACKGROUND: Preethi Mehta is calling Zerodha support for the third time about her SIP not being processed. The ₹10,000 monthly SIP was debited from her bank on the 2nd but units were never allotted. She raised ticket TKT-88244 three weeks ago — it was marked "resolved" without any resolution. This is a critical coaching opportunity with 8+ identifiable mistakes.
+      { id:'ta1', title:'Brokerage & Charges Dispute',
+        scenario:`BACKGROUND: A high-value client disputes ~₹42,000 in brokerage and fees never explained at onboarding, escalating when offered a tariff-sheet PDF instead of an explanation.
 
 ─── CALL TRANSCRIPT ─────────────────────────────────────────────
 
-AGENT: Hello, Zerodha support, how can I help?
+CLIENT: "I just reconciled my account statement for the last quarter and I've been charged nearly ₹42,000 more in brokerage and fees than what was quoted to me when I opened this account. This is unacceptable."
 
-PREETHI: Hi, my name is Preethi Mehta. I have been calling for three weeks about my SIP. My ₹10,000 was debited on the 2nd of this month but I haven't received any units. I also raised a ticket — TKT-88244 — and nobody has contacted me. This money is—
+MANAGER: "Sir, brokerage charges are clearly mentioned in the account opening documents you signed. If you didn't read them carefully, that's not really something we can help with now."
 
-AGENT: Can I have your account number please?
+CLIENT: "I did read them. I was quoted a flat rate, and I'm seeing multiple additional charges I was never told about — STT, exchange fees, stamp duty, and something called 'transaction charges' stacked on top."
 
-PREETHI: It's XJ7743-21. As I was saying, this money is meant for my daughter's education fund and—
+MANAGER: "Those are statutory and exchange-level charges, sir, every broker charges them, it's not specific to us. I don't understand why this is a surprise to you at this point."
 
-AGENT: And your name?
+CLIENT: "It's a surprise because nobody explained the full cost breakdown to me when I signed up. I feel like I was misled into this account."
 
-PREETHI: I just said — Preethi Mehta. I also gave you the ticket number. Can someone please—
+MANAGER: "We never mislead clients. All charges are disclosed in the tariff sheet on our website. You could have checked it any time in the last eight months."
 
-AGENT: One moment. [28-second silence with no explanation] Okay. What is the issue exactly?
+CLIENT: "So you're telling me it's my fault for not double-checking your website after your own team quoted me a number?"
 
-PREETHI: I just explained. My SIP was debited but I have no units. Ticket TKT-88244. It has been three weeks.
+MANAGER: "I'm just saying the information was available, sir. I can send you the tariff sheet again if that helps."
 
-AGENT: Okay. Which fund?
+CLIENT: "I don't want a PDF, I want someone to explain why what I was told at onboarding doesn't match what I'm being charged, and I want to know what you're going to do about the difference."
 
-PREETHI: Axis Bluechip Fund — Direct Growth.
+MANAGER: "There isn't really a 'difference' to correct, sir — the charges are accurate as per our published rates. I can raise a general feedback ticket about the onboarding conversation if you'd like."
 
-AGENT: And the amount?
+CLIENT: "A feedback ticket? I'm talking about forty-two thousand rupees and eight months of being charged incorrectly by your team's own account, and you're offering a feedback ticket?"
 
-PREETHI: ₹10,000. I said that already.
+MANAGER: "I understand you're upset, but without a recording of that original onboarding call, there's no way to verify what was actually said to you."
 
-AGENT: Hold please. [Puts customer on hold without asking — silence for 3 min 12 sec]
+CLIENT: "So now you're saying I'm lying about what your representative told me."
 
-AGENT: Hello? Are you there?
+MANAGER: "I'm not saying that, sir, I'm just saying we can't act on it without proof. I can escalate this to my senior if you want, but I don't think the outcome will be different."
 
-PREETHI: Yes, I have been waiting. What did you find?
-
-AGENT: So the debit went through on the 2nd. The units take 5 to 7 working days to be allotted.
-
-PREETHI: It has been twenty-one days. That is not 5 to 7 working days by any calculation.
-
-AGENT: Sometimes there are delays at the fund house end.
-
-PREETHI: Can you confirm whether units have actually been allotted or not?
-
-AGENT: I am checking. [42-second silence] I need to check with the back-end team. Please hold. [Second hold without asking — 4 min 48 sec]
-
-AGENT: Hello? Still there?
-
-PREETHI: Barely. What is happening?
-
-AGENT: So there was a NACH mandate rejection.
-
-PREETHI: What is that? Why was I never told this? And my money was still debited!
-
-AGENT: It means the automatic payment instruction was rejected. But your bank released the funds separately.
-
-PREETHI: So where is my ₹10,000 right now?
-
-AGENT: It should get reversed to your bank account.
-
-PREETHI: Should? You are not sure? This is money for my daughter's education. If it is sitting somewhere in limbo—
-
-AGENT: It will come back. These things take some time.
-
-PREETHI: How much time? I need a specific answer.
-
-AGENT: Around 7 to 10 days.
-
-PREETHI: From today or from the 2nd?
-
-AGENT: From when the reversal is processed. I cannot tell you the exact date.
-
-PREETHI: Can I speak to a senior? I want this escalated.
-
-AGENT: I will need to raise a new ticket. I cannot transfer you directly to a supervisor.
-
-PREETHI: What happened to TKT-88244?
-
-AGENT: Let me check. [23-second silence] It was marked resolved on the 9th.
-
-PREETHI: Resolved? Nobody called me! Nothing was resolved! Who marked it resolved?
-
-AGENT: I am not able to see who updated it. These things happen sometimes.
-
-PREETHI: That is not acceptable. This is the third call I am making. I want a supervisor.
-
-AGENT: I understand your frustration. I will raise a high-priority ticket and someone will call back within 48 hours.
-
-PREETHI: 48 hours? I have been waiting three weeks. I need this resolved today.
-
-AGENT: I am sorry, same-day resolution is not possible from my end.
-
-PREETHI: What can you actually guarantee me right now?
-
-AGENT: I will mark it high priority.
-
-PREETHI: What is the new ticket number?
-
-AGENT: [15-second silence] TKT-99501.
-
-PREETHI: What exactly are you documenting in this ticket?
-
-AGENT: SIP debit with no unit allotment, customer requesting callback.
-
-PREETHI: Have you noted the NACH rejection? The three-week history? The fact that the previous ticket was falsely marked resolved?
-
-AGENT: I can add that. [38-second silence] Done.
-
-PREETHI: I would also like written confirmation of this call — can I get an email?
-
-AGENT: We do not send email confirmations from calls.
-
-PREETHI: The last ticket showed as resolved in the app and nothing was done. How do I verify anything?
-
-AGENT: The callback will happen within 48 hours. That is the process.
-
-PREETHI: Can I at least have your employee ID and your name so I can reference this call?
-
-AGENT: My name is Aryan. I do not have an employee ID to share.
-
-PREETHI: A call reference number?
-
-AGENT: TKT-99501 is your reference.
-
-PREETHI: Is there anything else that can actually be done right now?
-
-AGENT: No. We have to wait for the back-end team.
-
-PREETHI: Alright. [6-second silence — customer waits for agent to formally close the call]
-
-AGENT: Have a nice day. [Disconnects without checking if customer has anything else]
-
-─── END OF TRANSCRIPT ──────────────────────────────────────────
-
-YOUR TASK: Write a structured coaching report for this call. Identify a minimum of 6 specific coaching opportunities. For each:
-(a) Quote the exact moment from the transcript
-(b) Explain the impact it had on the customer experience
-(c) Write a specific improved response or action the agent should have taken
-
-Also provide: one "what the agent did well" observation (if any), and a 3-priority action plan for this agent's development.
-
-Minimum 250 words.` },
-      { id:'ta2', title:'Mutual Fund Redemption Blocked — 26 Min Call',
-        scenario:`BACKGROUND: Vikram Shetty called to redeem ₹2,50,000 from his liquid fund after an emergency medical need. The redemption request was placed 45 days ago and has still not been credited. He has called 4 times and received different explanations each time. This transcript contains 9+ coaching opportunities across multiple skill areas.
+CLIENT: "This is exactly why I'm moving my account elsewhere and posting a review about this exact conversation."` },
+      { id:'ta2', title:'IPO Allotment Display Error',
+        scenario:`BACKGROUND: A client's app briefly showed 400 IPO shares allotted, then zero — the manager insists it's someone else's problem at every turn.
 
 ─── CALL TRANSCRIPT ─────────────────────────────────────────────
 
-AGENT: Hi, support, tell me your problem.
+CLIENT: "Your app showed me IPO allotment confirmed on Tuesday morning — 400 shares. Now today it shows zero allotment. What happened?"
 
-VIKRAM: Good morning. My name is Vikram Shetty. I placed a redemption request 45 days ago for ₹2,50,000 from my Zerodha Coin liquid fund. The money has still not hit my bank account. This is extremely urgent — I needed this for a medical emergency and I have been borrowing from relatives in the meantime.
+MANAGER: "Sir, that must have been a display glitch on your end. Our backend never confirms allotment before the registrar's official file is processed."
 
-AGENT: What is your account?
+CLIENT: "It wasn't a glitch, I have a screenshot with a timestamp. It clearly said 'Allotted: 400 shares' with a congratulatory banner."
 
-VIKRAM: ZC-4421-88. The redemption request number is RED-20240813-7741. I have called four times already. Each time I get a different explanation.
+MANAGER: "Even if the app showed that, it's not something we can act on — allotment is decided by the registrar and the exchange, not us."
 
-AGENT: Let me pull up your account. [1 min 34 sec silence — no explanation given to customer]
+CLIENT: "I understand the registrar decides allotment, but your platform told me I got it, and I made plans — I told my family, I was counting on the listing gains you people market so heavily."
 
-AGENT: Okay I see it.
+MANAGER: "We can't be responsible for plans you made based on an app screen, sir. These things happen sometimes with high demand IPOs."
 
-VIKRAM: Great. What is the status of RED-20240813-7741?
+CLIENT: "So a technical error on your platform is just something I have to absorb with no accountability from your side?"
 
-AGENT: It looks like there might be a KYC issue.
+MANAGER: "I mean, technically the error is on the display layer, not the actual allotment process, so there's no financial loss to compensate for."
 
-VIKRAM: A KYC issue? I have been investing on Zerodha for six years. My KYC was verified when I opened the account. Why would it be an issue now?
+CLIENT: "There's no financial loss because I never got the shares I was told I had — but there's real damage to my trust in this platform, and I want to know how this happened."
 
-AGENT: Sometimes the KYC needs to be re-verified.
+MANAGER: "I can log a technical complaint, but I can't promise you any explanation timeline. These backend sync issues are handled by a different team entirely."
 
-VIKRAM: Is it a KYC issue or not? Can you check specifically?
+CLIENT: "This is the third time I'm being told 'a different team handles that.' At some point someone in front of me has to actually own this."
 
-AGENT: I am checking. Actually, hold on. [Puts on hold without informing — 2 min 50 sec]
+MANAGER: "I understand your frustration, sir, but I genuinely don't have visibility into what caused the display error. I can only pass this along."
 
-AGENT: So actually the issue might be a bank mandate problem. Your bank details may not be updated.
+CLIENT: "Then pass it along with urgency, because I am seriously considering filing a complaint with the exchange about misleading allotment information."
 
-VIKRAM: My bank details? I have been receiving dividends in this same account for years. The IFSC is the same. Nothing has changed.
+MANAGER: "You're welcome to do that, sir, that's entirely your choice. I've noted your complaint on our end as well."
 
-AGENT: Let me verify. [27-second silence] Yes, the bank account on record ends in 4821. Is that correct?
-
-VIKRAM: Yes. That is my SBI savings account. The same account I have always used.
-
-AGENT: Then it is not a bank issue.
-
-VIKRAM: Then what is it? First you said KYC, then bank mandate. Now neither?
-
-AGENT: It may be a technical issue from the fund house side.
-
-VIKRAM: Okay. What is being done about it?
-
-AGENT: I will raise a ticket.
-
-VIKRAM: There are already three tickets raised. TKT-11234, TKT-11509, and TKT-11788. What happened to those?
-
-AGENT: I can see TKT-11234. [Silence] I don't see the others.
-
-VIKRAM: How can you not see them? They were raised by your colleagues on previous calls. Are tickets being deleted?
-
-AGENT: I am sure they are there somewhere. The system is slow today.
-
-VIKRAM: In one of my previous calls I was told the money would be credited in 3 to 5 working days. That was six weeks ago.
-
-AGENT: I understand that is frustrating but I cannot speak to what my colleagues said.
-
-VIKRAM: What can you tell me? When will my ₹2,50,000 reach my bank account?
-
-AGENT: I honestly cannot give you a confirmed date.
-
-VIKRAM: Honestly? My family has been borrowing money for 45 days because of this. Is there any escalation option?
-
-AGENT: I can mark this as urgent and escalate to the senior team.
-
-VIKRAM: When will they respond?
-
-AGENT: Usually 24 to 48 working hours.
-
-VIKRAM: You mean 24 to 48 hours or 24 to 48 working hours? Those are very different.
-
-AGENT: [Pause] Working hours.
-
-VIKRAM: So potentially 6 business days more?
-
-AGENT: Hopefully less.
-
-VIKRAM: Hopefully. Can I speak to a supervisor right now?
-
-AGENT: Supervisors are not available to take calls directly. They respond through tickets.
-
-VIKRAM: In 45 days, not a single supervisor could call me back?
-
-AGENT: I understand this has been a long wait.
-
-VIKRAM: What is the escalation I can file? Is there a grievance process?
-
-AGENT: You can write to our grievance email.
-
-VIKRAM: What is that email?
-
-AGENT: [12-second silence] I believe it is support@zerodha.com but I am not 100% certain.
-
-VIKRAM: You are not certain of your own company's grievance email?
-
-AGENT: Let me check. [22-second silence] Yes, support@zerodha.com.
-
-VIKRAM: That is the same general support email. Is there a specific grievance officer?
-
-AGENT: I can note your concern.
-
-VIKRAM: I have been noting concerns for 45 days. I want a name, a designation, a direct contact for someone who will take ownership of this.
-
-AGENT: I will escalate this to the senior team with highest priority. I am really sorry for the trouble.
-
-VIKRAM: What is your name?
-
-AGENT: Deepika.
-
-VIKRAM: Employee ID?
-
-AGENT: I am not supposed to share that.
-
-VIKRAM: Ticket number for this call?
-
-AGENT: TKT-11901.
-
-VIKRAM: And what is written in the ticket?
-
-AGENT: Customer facing delay in redemption credit. High priority escalation requested.
-
-VIKRAM: Please also note: this is the fifth call, three previous tickets unresolved, customer has a medical emergency, and the amount is ₹2,50,000 outstanding for 45 days.
-
-AGENT: I have noted that.
-
-VIKRAM: Is there anything — anything at all — that can be done today?
-
-AGENT: Unfortunately the actual credit is handled by the fund house and the banking system. We cannot manually push the transaction.
-
-VIKRAM: That is your answer after 45 days?
-
-AGENT: I am sorry. The escalation will be the fastest path forward.
-
-VIKRAM: Fine. [Silence]
-
-AGENT: Is there anything else I can help you with?
-
-VIKRAM: No.
-
-AGENT: Thank you for calling Zerodha. Have a wonderful day. [Disconnects]
-
-─── END OF TRANSCRIPT ──────────────────────────────────────────
-
-YOUR TASK: Write a full coaching analysis for this 26-minute call. Identify a minimum of 8 coaching opportunities — including at least one each from: Call Opening, Information Verification, Hold Procedure, Empathy, Problem Ownership, Escalation Process, and Call Closing. For each opportunity:
-(a) Cite the exact transcript moment
-(b) Identify which communication/service standard was violated
-(c) Write the improved response the agent should have delivered
-
-End with a "Development Priority Matrix" — rate the agent on 5 dimensions from 1 (critical gap) to 5 (competent), and identify the top 2 immediate training priorities.
-
-Minimum 300 words.` },
-      { id:'ta3', title:'NRI PIS Account & Currency Conversion Delay — 18 Min Call',
-        scenario:`BACKGROUND: Sunita Rao (NRI based in Dubai) called Zerodha support regarding her NRE PIS account opening delay. She submitted documents 3 weeks ago but her account remains pending, causing her to miss a major public infrastructure bond issue. The agent makes 8 critical errors during the call.
+CLIENT: "This entire conversation has told me you have no real answers and no real ownership of your own platform's mistakes."` },
+      { id:'ta3', title:'DP/Demat Block Before a Board Announcement',
+        scenario:`BACKGROUND: A client's shares were blocked in demat right before a board announcement that later moved the stock 14%, and the manager cannot explain why or who is responsible.
 
 ─── CALL TRANSCRIPT ─────────────────────────────────────────────
 
-AGENT: Hello, Zerodha support.
+CLIENT: "I tried to sell my entire holding in [Company] yesterday morning before the board meeting outcome, and the sell order failed because my shares showed as 'blocked' in demat. Why?"
 
-SUNITA: Hello, my name is Sunita Rao. I applied for an NRE PIS account 3 weeks ago. Application number PIS-88219. I was assured it would take 3-5 business days. The infrastructure bond issue I wanted to invest in closes tomorrow, and my account is still not active!
+MANAGER: "Sometimes shares get blocked if there's a pending pledge or a previous instruction not yet processed, sir. It's a system-level thing."
 
-AGENT: Can I have your Client ID?
+CLIENT: "I never pledged these shares. I've held them for two years, untouched. Can you tell me exactly why they were blocked at that specific moment?"
 
-SUNITA: It's SR-9941.
+MANAGER: "I'd have to check the DP logs for that, but honestly this kind of thing is common and usually resolves itself within a day or two."
 
-AGENT: Hold on. [40-second silence with no hold request]
+CLIENT: "A day or two was too late — the board announcement came out and the stock dropped 14% right after. I lost the entire window because of your block."
 
-AGENT: The documents were rejected by the partner bank.
+MANAGER: "I understand that's frustrating, but demat blocks aren't something the trading desk controls, it's a depository-level issue, completely separate from us."
 
-SUNITA: What? Rejected? Why was I not informed? I haven't received an email or SMS!
+CLIENT: "You're the broker I trusted with this account. I don't care how many departments are involved internally — I need someone to explain what actually happened."
 
-AGENT: The bank rejected it due to signature mismatch on the PIS permission letter.
+MANAGER: "I hear you, sir, but I genuinely can't speak to depository-side processing, that's outside what I can access from here."
 
-SUNITA: I attested those documents at the Indian Consulate in Dubai! How could there be a signature mismatch? And why did nobody inform me for 3 weeks?
+CLIENT: "So who can? Because right now I've lost a significant amount of money and all I'm getting is 'not my department.'"
 
-AGENT: The bank handles the PIS permission, not us. We just forward the physical copy.
+MANAGER: "I can raise a ticket to our demat operations team, but resolution and root cause usually takes several working days to come back."
 
-SUNITA: But I paid Zerodha for the service! You are my broker. If there was a rejection, shouldn't your team have notified me immediately?
+CLIENT: "Several working days for an explanation of something that cost me money in a matter of hours. Do you understand how that sounds?"
 
-AGENT: Our team updates the status on the portal. You should have checked the portal status.
+MANAGER: "I do understand, sir, and I'm sorry you're going through this, but I can't speed up an internal investigation just because it's urgent for you."
 
-SUNITA: The portal status showed "Under Processing by Bank" until this morning!
+CLIENT: "This isn't just urgent for me, it should be urgent for you — your operational failure potentially cost me lakhs."
 
-AGENT: Well, the bank sent the rejection list yesterday evening.
+MANAGER: "I've logged your concern, sir. Once operations reverts with the root cause, we'll let you know what corrective steps, if any, are appropriate."
 
-SUNITA: So what do I do now? The bond issue closes tomorrow at 4 PM!
-
-AGENT: You will have to re-sign the PIS letter and courier physical copies to our Bangalore office again.
-
-SUNITA: Courier physical copies from Dubai? That will take at least 4 days! Is there no digital or email verification option?
-
-AGENT: No. PIS is RBI regulated. Physical signature is mandatory.
-
-SUNITA: Can I speak to your manager or PIS department head?
-
-AGENT: Manager is in a meeting. And PIS team doesn't take direct calls.
-
-SUNITA: This is completely unacceptable! I have lost an investment opportunity because of your lack of communication.
-
-AGENT: Ma'am, RBI guidelines are strict. We cannot bypass regulations.
-
-SUNITA: I am not asking to bypass regulations! I am asking why you didn't notify me 2 weeks ago when the bank rejected it!
-
-AGENT: I understand, but there's nothing I can do about past delays. Do you want me to email you the fresh PIS form?
-
-SUNITA: Yes, email it. But I want an official explanation for why the rejection notification was delayed by 3 weeks.
-
-AGENT: I will raise a internal query. Anything else?
-
-SUNITA: What is the query reference number?
-
-AGENT: Q-4410. You will get reply in 3-4 working days.
-
-SUNITA: Okay. Good-bye.
-
-AGENT: Bye. [Disconnects instantly]
-
-─── END OF TRANSCRIPT ──────────────────────────────────────────
-
-YOUR TASK: Provide a detailed transcript autopsy covering:
-1. Identify all 8 communication & process errors committed by the agent.
-2. Pinpoint the exact turning point where the call turned hostile.
-3. Write the exact revised response for the agent to de-escalate Sunita and offer constructive solutions.
-Minimum 200 words.` },
-      { id:'ta4', title:'The Margin Call Dispute — Escalation Call',
-        scenario:`BACKGROUND: A customer's open Nifty futures position was squared off by RMS due to a margin shortfall. He's lost ₹31,000 on the square-off and believes the system acted without warning. This call has already reached the escalation tier — the customer asked for someone senior and was connected directly to the manager below. That means every mistake in this call has no further internal escalation path left for the customer. This is a live line-by-line transcript with 8+ identifiable mistakes.
+CLIENT: "'If any' is exactly the problem. I want a commitment that this gets investigated properly, not passed around until I give up."` },
+      { id:'ta4', title:'Algo/API Order Duplication Fault',
+        scenario:`BACKGROUND: A client's automated trading script fired the same order 11 times after a delayed API acknowledgment — with logs proving the delay originated server-side.
 
 ─── CALL TRANSCRIPT ─────────────────────────────────────────────
 
-CUSTOMER: Hello, I want to speak to someone senior. Your system squared off my position without any warning and I've lost ₹31,000.
+CLIENT: "Your API fired the same buy order eleven times in ninety seconds this morning. I ended up with eleven times the position I intended, and I had to unwind it all at a loss."
 
-MANAGER: Good afternoon, sir. I'm the escalation manager here. Can you tell me your client ID?
+MANAGER: "API issues are usually on the client's script side, sir — did you check your own order logic for a retry loop?"
 
-CUSTOMER: It's ZR4821. I've already given this 3 times today.
+CLIENT: "I've run this exact script for six months with no issues. This morning your API acknowledgment response was delayed, which is what triggered my system's retry logic to fire again."
 
-MANAGER: Okay, let me pull up your account. (30 second pause) Yes, I can see the square-off happened at 11:43 AM today.
+MANAGER: "If it's a delayed acknowledgment issue, that's still technically a network-level thing, could be your internet, could be ours, hard to say without a deep investigation."
 
-CUSTOMER: Yes. Without any warning. I had no idea.
+CLIENT: "I have the request and response logs with timestamps showing the delay originated on your servers, not mine. I'm not asking you to guess — I'm asking you to look at the actual data."
 
-MANAGER: Sir, our system sends SMS and email alerts when margin falls below the required level. Did you check?
+MANAGER: "Sir, we get a lot of these claims and in most cases it turns out to be client-side. I'm not saying that's definitely the case here, but statistically that's usually how it goes."
 
-CUSTOMER: I'm telling you I got no alert.
+CLIENT: "I'm not most cases. I'm telling you I have logs. This cost me close to nine lakh rupees in an unintended position I had to exit at a loss."
 
-MANAGER: It shows alerts were sent at 10:55 AM and 11:20 AM to your registered mobile number.
+MANAGER: "I can forward the logs to our tech team for review, but I want to set expectations — even if it is confirmed as a server-side delay, compensation isn't guaranteed."
 
-CUSTOMER: Then maybe it didn't come. Your system has problems.
+CLIENT: "I'm not even asking about compensation yet. I'm asking for someone to actually investigate before jumping to 'compensation isn't guaranteed.'"
 
-MANAGER: Sir, the alerts are system-generated and they are recorded on our end. They would have been sent.
+MANAGER: "Understood, sir, I just wanted to be upfront so there's no misunderstanding later. I'll forward what you have."
 
-CUSTOMER: Are you calling me a liar?
+CLIENT: "It would help if the first thing I heard from you was 'let's look into this properly' instead of managing my expectations downward before you've even seen the evidence."
 
-MANAGER: No sir, I'm not saying that. I'm just saying the records show the alerts were sent.
+MANAGER: "Fair point, sir. Send over the logs and I'll get the technical review started today."
 
-CUSTOMER: This is ridiculous. I want my ₹31,000 back.
+CLIENT: "I sent them to your support email an hour before I called you. Nobody has acknowledged them yet."
 
-MANAGER: Sir, as per our policy, if margin falls below the required level, we have the right to square off positions. This is mentioned in the terms and conditions you agreed to.
+MANAGER: "Let me check on that and make sure it's been picked up. I'll call you back by end of day with a status, not a resolution, just a status."
 
-CUSTOMER: I don't care about terms and conditions. I want a solution.
-
-MANAGER: I understand, but there isn't much I can do in this case since the square-off was done as per policy. I can log a grievance if you'd like.
-
-CUSTOMER: A grievance? I asked for someone senior and I got you. Where does this even go from here if you can't fix it?
-
-MANAGER: I can escalate it internally, but I can't promise a different outcome — the square-off itself was correctly executed.
-
-CUSTOMER: So what was the point of this call? You've told me nothing I didn't already hear from the first two agents.
-
-MANAGER: I understand your frustration, sir. Is there anything else I can help you with?
-
-CUSTOMER: No. There's clearly nothing you're willing to do. (disconnects)
-
-─── END OF TRANSCRIPT ──────────────────────────────────────────
-
-YOUR TASK: Write a full escalation-tier coaching analysis for this call. Identify a minimum of 8 coaching opportunities — including at least one each from: Call Opening, Information Verification, Handling the "Are you calling me a liar?" moment, Policy Communication, and Call Closing. For each opportunity:
-(a) Quote the exact transcript moment
-(b) Explain why this mistake is more damaging here than it would be from a frontline agent — this customer has already reached the escalation tier and has nowhere further to go internally
-(c) Write the improved response the manager should have delivered
-
-Also answer: this call ended with the customer disconnecting with no resolution and no real acknowledgment. Write the exact closing exchange — from "Sir, as per our policy…" to the end — the way it should have gone, and explain what, if anything, could realistically have been offered within policy (the square-off itself was correct; no refund is owed).
-
-Minimum 300 words.` },
-      { id:'ta5', title:'Dividend Credited to a Closed Bank Account — 19 Min Call',
-        scenario:`BACKGROUND: Ms. Kavita Desai submitted a bank account update request 6 weeks ago after closing her old HDFC account. Her mutual fund dividend of ₹18,400 was credited to the old, closed account 4 days ago because the mandate update was never applied at the fund house. This is the second time in three months this exact bank-update issue has recurred for her — a previous ticket (TKT-77120) was marked "resolved" without the fund-house-side record actually being confirmed. This transcript has 7+ identifiable mistakes.
+CLIENT: "That's the first useful thing I've heard in this entire call."` },
+      { id:'ta5', title:'Senior Citizen Product-Suitability Complaint',
+        scenario:`BACKGROUND: A 72-year-old pensioner was activated for leveraged F&O trading and lost ₹6 lakh — his son calls, and every answer deflects to 'a different team' or 'he signed a form.'
 
 ─── CALL TRANSCRIPT ─────────────────────────────────────────────
 
-AGENT: Hello, Zerodha support, how can I help you today?
+CALLER: "My father is 72 years old, retired, living on a fixed pension, and somehow your team sold him futures and options trading with leverage. He's lost almost ₹6 lakh of his retirement savings. How did this happen?"
 
-KAVITA: Hi, this is Kavita Desai. My mutual fund dividend of ₹18,400 was paid out 4 days ago, but it went to my old HDFC account — which I closed two months ago. I submitted a bank change request for this exact reason six weeks ago.
+MANAGER: "Sir, every client signs a risk disclosure document before F&O activation, so legally he consented to the risk involved."
 
-AGENT: Okay, can I get your client ID?
+CALLER: "He barely understands what F&O even stands for. Did anyone actually assess whether this was suitable for a 72-year-old pensioner before activating it?"
 
-KAVITA: KD-6612. I already explained the account was closed — this is not the first time this has happened either. Three months ago the same thing happened with a redemption payout.
+MANAGER: "There's a standard suitability questionnaire, but ultimately it's self-declared by the client, we can't force someone to answer honestly."
 
-AGENT: Let me check. [50-second silence] I can see a bank change request from 6 weeks ago, status shows "processed."
+CALLER: "So you're saying it's his fault for not filling out a form correctly, when he didn't understand what the form was even asking?"
 
-KAVITA: Then why did my dividend go to the closed account?
+MANAGER: "I'm not blaming him, sir, I'm just explaining the process. If he had concerns he could have asked before trading."
 
-AGENT: Sometimes the fund house has its own separate bank record that doesn't update automatically.
+CALLER: "He trusted whoever called him and told him this could 'boost his returns.' That's what he told me. Was he cold-called about this product?"
 
-KAVITA: Nobody told me I needed to update it separately with each fund house! I updated it with Zerodha — isn't Zerodha supposed to sync this?
+MANAGER: "I don't have visibility into individual sales calls, sir, that would be a different team's outreach."
 
-AGENT: We send the updated bank details, but the fund house needs to process it on their end too.
+CALLER: "This is my father's life savings we're discussing, and every answer I get is 'different team' or 'he signed a form.' I need someone to actually take this seriously."
 
-KAVITA: So basically you're saying it's not your fault?
+MANAGER: "I do take it seriously, sir, but without evidence of specific misrepresentation, there isn't much action we can take beyond noting your concern."
 
-AGENT: I'm not saying that, I'm just explaining the process.
+CALLER: "The evidence is that a 72-year-old pensioner with zero trading history suddenly has an active F&O account and a six lakh rupee loss within two months. That pattern should be evidence enough."
 
-KAVITA: This happened before, three months ago, and I was told then that it was "fixed." Was it not actually fixed?
+MANAGER: "I understand it looks concerning, but I'm not in a position to make a suitability judgment call over the phone. I can log this as a complaint."
 
-AGENT: I don't have visibility into that previous case from here.
+CALLER: "Log it as more than a complaint. I want to know if this is a broader pattern with elderly clients, because if it is, I am taking this to SEBI directly."
 
-KAVITA: Can you check the ticket? I have the number — TKT-77120.
+MANAGER: "You're free to do that, sir. I'll make sure the complaint is recorded accurately on our end."
 
-AGENT: [40-second silence] I see it. It was closed as resolved.
-
-KAVITA: Resolved how? The exact same problem happened again!
-
-AGENT: The notes just say "bank details updated."
-
-KAVITA: Updated where? With Zerodha or with the fund house? Can you tell the difference?
-
-AGENT: I can't tell from these notes, ma'am.
-
-KAVITA: Okay. So what happens to my ₹18,400 that went to a closed bank account?
-
-AGENT: It will bounce back to the fund house since the account is closed, and then get reprocessed.
-
-KAVITA: How long will that take?
-
-AGENT: Usually 7 to 10 working days.
-
-KAVITA: And will it go to the correct account this time, or the same closed one?
-
-AGENT: It should go to whichever account is updated in our system.
-
-KAVITA: "Should"? Can you confirm right now, with certainty, which bank account is on file with the fund house — not with Zerodha, with the actual fund house — for my folio?
-
-AGENT: I don't have that visibility from this screen.
-
-KAVITA: Then how can you promise it will work this time?
-
-AGENT: I understand your frustration.
-
-KAVITA: I don't need you to understand my frustration, I need this fixed. Can I speak to whoever handles fund-house bank mandate sync specifically?
-
-AGENT: That would be a back-end team, we don't have a direct line to them.
-
-KAVITA: Then how do I make sure this isn't a third time?
-
-AGENT: I'll raise a ticket requesting confirmation of the fund house-side bank details.
-
-KAVITA: What's the ticket number and when will I hear back?
-
-AGENT: TKT-91345. You should hear back in 3 to 5 working days.
-
-KAVITA: Please note in the ticket that this is a repeat issue, ticket TKT-77120 was falsely marked resolved, and I need explicit confirmation of the correct bank account before the reprocessed dividend is sent, not after.
-
-AGENT: I've added a note.
-
-KAVITA: Can you read back what you wrote?
-
-AGENT: "Customer reports repeat bank mandate issue."
-
-KAVITA: That's it? None of the specifics I just gave you?
-
-AGENT: I can add more. [25-second silence] Done.
-
-KAVITA: Is there anything else that can be done today?
-
-AGENT: Not from my end, no.
-
-KAVITA: Alright.
-
-AGENT: Is there anything else I can help with?
-
-KAVITA: No.
-
-AGENT: Thank you for calling, have a good day. [Disconnects]
-
-─── END OF TRANSCRIPT ──────────────────────────────────────────
-
-YOUR TASK: Write a structured coaching report for this call. Identify a minimum of 7 coaching opportunities, including at least one on how the agent handled (or failed to handle) the fact that this is a documented repeat issue. For each opportunity:
-(a) Quote the exact moment from the transcript
-(b) Explain the impact on the customer's trust, given this is the second occurrence
-(c) Write the improved response the agent should have delivered
-
-Also answer: what specific, verifiable action (not a generic "I'll raise a ticket") should the agent have taken to make sure this cannot recur a third time?
-
-Minimum 250 words.` },
-      { id:'ta6', title:'Suspicious Activity Freeze During a Market Rally — 21 Min Call',
-        scenario:`BACKGROUND: Mr. Faisal Ahmed's trading account was frozen for a "suspicious activity review" two days ago, in the middle of a Nifty rally, and he has been unable to exit positions that have since given back their gains — an estimated ₹58,000 in unrealized profit he could not lock in. The actual cause is a routine SEBI-mandated surveillance flag triggered by his own unusually high-frequency trading pattern — nothing improper, just a review that takes time — but the agent never manages to explain this clearly or usefully. This transcript has 8+ identifiable mistakes.
-
-─── CALL TRANSCRIPT ─────────────────────────────────────────────
-
-AGENT: Hello, Zerodha support.
-
-FAISAL: Hi, my account has been frozen for two days now — I can't place any trades. My client ID is FA-3391. This happened right during the Nifty rally and I've lost close to ₹58,000 in gains I could have booked.
-
-AGENT: Let me check. [35-second silence] I see a hold on your account.
-
-FAISAL: Why? Nobody told me anything. I just tried to sell my position and got an error.
-
-AGENT: It says "under review."
-
-FAISAL: Review for what? I haven't done anything wrong.
-
-AGENT: I can't see the specific reason from here.
-
-FAISAL: Then who can? This is costing me real money every hour it stays frozen.
-
-AGENT: It might be related to KYC.
-
-FAISAL: My KYC is fully done, I've been trading for 4 years.
-
-AGENT: Sometimes it's re-verification.
-
-FAISAL: Is it KYC or not? You said "sometimes."
-
-AGENT: I'm not 100% sure, let me check again. [45-second silence] Actually it looks like a surveillance flag.
-
-FAISAL: What does that mean? Am I being accused of something?
-
-AGENT: It's usually for high-frequency trading patterns.
-
-FAISAL: I trade actively, that's my strategy! Is active trading illegal now?
-
-AGENT: No sir, it's just a standard review.
-
-FAISAL: Then why can't you unfreeze it right now if it's just "standard"?
-
-AGENT: These reviews take time to clear.
-
-FAISAL: How much time? I'm losing money every single hour!
-
-AGENT: I don't have an exact timeline.
-
-FAISAL: Give me an estimate then.
-
-AGENT: Maybe 3 to 5 working days.
-
-FAISAL: Three to five days? In a volatile market? That could cost me lakhs!
-
-AGENT: I understand, but this process is regulatory, we can't skip it.
-
-FAISAL: I'm not asking you to skip it, I'm asking for a status update and a real explanation of why I specifically got flagged.
-
-AGENT: I can raise a query with the surveillance team.
-
-FAISAL: Has anyone already raised this in the last two days? I never got a call.
-
-AGENT: I don't see any outbound call logged.
-
-FAISAL: So for two days nobody was even working on this?
-
-AGENT: I can't confirm that.
-
-FAISAL: Can I speak to the surveillance team directly?
-
-AGENT: They don't take direct calls, only email queries.
-
-FAISAL: What's the email?
-
-AGENT: [20-second silence] It's the compliance team address — I'd need to check the exact one.
-
-FAISAL: You don't know your own compliance team's email?
-
-AGENT: I'll get the correct one added to your ticket.
-
-FAISAL: What ticket? Is there already one open?
-
-AGENT: I'll create one now. TKT-64210.
-
-FAISAL: Please note: two-day freeze during a live rally, no prior communication, unrealized gains lost, and I need a specific timeline, not "3 to 5 days maybe."
-
-AGENT: Noted.
-
-FAISAL: Read it back to me.
-
-AGENT: "Customer account frozen, requesting update."
-
-FAISAL: That's not what I said at all.
-
-AGENT: I'll expand it. [30-second silence] Updated.
-
-FAISAL: Is there truly nothing that can be done today?
-
-AGENT: Not from my side, no.
-
-FAISAL: Fine.
-
-AGENT: Anything else?
-
-FAISAL: No.
-
-AGENT: Thank you, have a nice day. [Disconnects]
-
-─── END OF TRANSCRIPT ──────────────────────────────────────────
-
-YOUR TASK: Write a structured coaching report identifying a minimum of 7 coaching opportunities across: Call Opening, Explaining the Freeze, Handling "Am I being accused of something?", Urgency/Financial Impact, Escalation Access, and Call Closing. For each:
-(a) Quote the exact transcript moment
-(b) Explain the impact on the customer
-(c) Write the improved response
-
-Also answer: this agent never actually explained, in plain terms, why a surveillance-driven freeze cannot be rushed even though it is "standard." Write the exact explanation the agent should have given — one that is honest about the timeline while still being genuinely useful about the financial impact.
-
-Minimum 250 words.` },
+CALLER: "'Recorded accurately' isn't what I came here for. I came here for someone to say this was wrong and commit to actually looking into it."` },
     ],
     'mgr-mock-call': [
-      { id:'mc1', title:'C-Suite Escalation — Contract at Final Risk',
-        scenario:'You are the Relationship Manager for Altus Capital, a ₹80 crore institutional client relationship spanning 4 years. The CFO, Priya Nair, is on the line, visibly frustrated. Three consecutive quarter-end portfolio reports were delivered late — 2 days, then 4 days, then this last one 6 days late — arriving after Altus\'s own board meeting where those numbers were needed. Priya already escalated once by email two weeks ago and nothing visibly changed. She opens:\n\n"I have been more than patient. This is the third quarter in a row. Our board asked me questions I could not answer because your numbers weren\'t in my hand. I am reviewing this relationship with my CEO tomorrow morning. Give me one reason why we should not move to a different provider."\n\nWhat you know (use it): the root cause is a data-reconciliation bottleneck in your operations team, already identified, with a fix roughly 3 weeks from being fully rolled out.\n\nHandle this call for 5-6 minutes: acknowledge the full pattern, explain the real fix and timeline, propose a concrete interim safety net for the next quarter-end, and make a credible commitment Priya can take to her CEO tomorrow.' },
-      { id:'mc2', title:'Regulatory Audit Call — Explain Team Non-Compliance',
-        scenario:'You are on a call with Meera Krishnamurthy, the Internal Compliance Auditor, following a routine review of your team\'s call-closure records. Her audit sampled 40 calls from last quarter and found 11 were marked "first-call resolved" in the CRM while the customer\'s actual ticket remained open in the ticketing system for an average of 6 more days afterward. Two of those 11 cases involve customers who called back angry and were re-logged as fresh complaints, which also understates your team\'s repeat-contact rate. Meera has flagged this to your regional head and needs your explanation today — her report is due to leadership by Friday. She is procedural and fact-driven, not hostile, but will press for specifics: is this a training gap or a systemic process gap, and what corrective action plan can she attach to her report.\n\nHandle this call for 5-6 minutes: be transparent about what you actually know versus don\'t yet know, take appropriate ownership without unfairly naming individual agents before you\'ve verified anything, and propose both an immediate fix and a systemic prevention measure.' },
-      { id:'mc3', title:'Performance Review Call — The Defensive Underperformer',
-        scenario:'You are conducting a formal, documented performance review call with Arvind, a team member who has missed his resolution-quality target for two consecutive months (78% and 74% against an 85% target), following an informal conversation last month that didn\'t move the needle. He joins the call already defensive:\n\n"I know the numbers don\'t look good, but honestly the leads I\'m getting are lower quality and the product team keeps changing workflows without telling us — I don\'t think the target is realistic right now."\n\nWhat you know (use it): the workflow changes are real — 3 in the last 6 weeks — but every other agent on the team is still hitting 82%+ despite them, so it isn\'t purely an external factor.\n\nHandle this call for 5-6 minutes: acknowledge the real pressure without accepting it as the sole explanation, use the team-comparison data without attacking Arvind personally, and close with a specific, time-bound improvement plan with agreed check-in points.' },
-      { id:'mc4', title:'Margin Call Penalty Dispute',
-        scenario:'You are handling an inbound call from Rajesh Oberoi, a high-volume corporate trading client with a ₹12 Crore portfolio, who was just charged a ₹1.8 Lakh penalty after the automated risk-management system squared off his leveraged Nifty futures position this morning. He is furious and insists he never received a margin-call alert — he checked his phone immediately after the square-off and found nothing. Your system logs show 2 SMS alerts and 1 app push notification sent, timestamped 40 and 15 minutes before the square-off — but you also know, from an internal ops bulletin circulated this week, that the SMS gateway had a documented 20-30 minute delivery delay affecting a subset of clients yesterday and this morning, which front-line staff haven\'t yet been briefed to check for. He threatens to move his entire ₹12 Crore portfolio to a competing broker by end of day unless the penalty is refunded in full right now.\n\nHandle this call for 5-6 minutes: verify the alert timeline factually without dismissing his experience, proactively disclose the known SMS delay rather than defending a system you have reason to doubt, and resolve within your actual authority — you can waive the penalty as goodwill pending investigation, but cannot reinstate the squared-off position since the market has moved.' },
-      { id:'mc5', title:'Cross-Border Regulatory Freeze',
-        scenario:'You are on a call with Fatima Hussain, an NRI client based in London, whose Demat account was automatically frozen three days ago pending a mandatory FATCA re-declaration. Compliance emailed her about it, but the email went to an old address she no longer actively checks. She is currently travelling for work and cannot access her registered Indian mobile number for the OTP needed to complete the re-declaration online. She has a ₹15 Lakh medical emergency for a family member back in India and needs to liquidate holdings today. She is calm but growing more desperate as the call goes on.\n\nWhat you know (use it): the freeze and OTP-verified re-declaration are non-negotiable, but there are alternative verification paths — a video KYC re-verification call, or a physical branch visit by a registered Power of Attorney holder in India — instead of just insisting she "must complete this online."\n\nHandle this call for 5-6 minutes: acknowledge the urgency without over-promising a same-day fix, walk her through the real alternative paths, and give a realistic timeline for each.' },
+      { id:'mc1', title:'Failed Stop-Loss During a Gap-Down',
+        scenario:'The customer\'s stop-loss order on a large equity position failed to trigger during a sharp gap-down opening due to a liquidity gap at that price level, resulting in a much larger loss than the stop-loss was meant to protect against. The customer wants immediate compensation for the difference.\\n\\nThe customer opens the call by saying:\\n\\n"My stop-loss was supposed to protect me from exactly this. It didn\'t trigger, and now I\'m down four times what I should have lost. I want the difference compensated, today."\\n\\nEscalation beats the customer will raise if your handling doesn\'t already address them: (1) "A stop-loss is a promise, isn\'t it? Otherwise what\'s the point of offering it?" (2) "I don\'t care about liquidity gaps, that\'s your platform\'s problem to solve, not mine." (3) "If you can\'t compensate me, tell me exactly who can, right now."\\n\\nHandle this call for 5-6 minutes: acknowledge the issue and the customer\'s frustration without over-explaining excuses, take clear ownership of what your organization controls, respond to each escalation beat as it comes up, and close with a resolution that is realistic and within your actual authority.' },
+      { id:'mc2', title:'Suspected Account Access Breach',
+        scenario:'The customer noticed a login from an unrecognized device and location in their account activity log, alongside two small unfamiliar orders that were later reversed by risk monitoring before settlement. The customer is alarmed about a possible security breach and is considering going to the media.\\n\\nThe customer opens the call by saying:\\n\\n"Someone accessed my trading account from a device and city I\'ve never used. There were unauthorized orders. I want to know right now how secure my money actually is with you, or I\'m going to the press about this."\\n\\nEscalation beats the customer will raise if your handling doesn\'t already address them: (1) "How do I know this hasn\'t happened before without me noticing?" (2) "I want my account frozen and a full security audit, not a generic \'we take security seriously\' line." (3) "If this becomes public and your stock or reputation takes a hit, that\'s on you, not me."\\n\\nHandle this call for 5-6 minutes: acknowledge the issue and the customer\'s frustration without over-explaining excuses, take clear ownership of what your organization controls, respond to each escalation beat as it comes up, and close with a resolution that is realistic and within your actual authority.' },
+      { id:'mc3', title:'Forced Liquidation of Pledged Shares',
+        scenario:'The customer had pledged shares against a loan facility; a sudden fall in the pledged stock\'s value triggered a margin call that the customer missed (traveling internationally), leading to forced liquidation of the pledged shares at a steep loss. The customer says they never received adequate notice.\\n\\nThe customer opens the call by saying:\\n\\n"You sold my pledged shares while I was on a flight with no signal. I got one SMS and that was it. That\'s not a fair warning process for something this serious."\\n\\nEscalation beats the customer will raise if your handling doesn\'t already address them: (1) "One SMS is not \'reasonable notice\' for liquidating my holdings." (2) "Why wasn\'t there an email, a call, anything with more than one attempt?" (3) "I\'m not asking you to reverse it, I\'m asking why your notice process is this thin for something irreversible."\\n\\nHandle this call for 5-6 minutes: acknowledge the issue and the customer\'s frustration without over-explaining excuses, take clear ownership of what your organization controls, respond to each escalation beat as it comes up, and close with a resolution that is realistic and within your actual authority.' },
+      { id:'mc4', title:'Wrong Brokerage Plan Applied',
+        scenario:'The customer was onboarded onto a higher-cost brokerage plan due to an internal error, despite having requested and been verbally confirmed for a discount plan at account opening. This has been ongoing for five months, and the customer wants both a correction going forward and retroactive reimbursement.\\n\\nThe customer opens the call by saying:\\n\\n"I specifically asked for the discount brokerage plan when I opened this account, and I was told yes. Five months later I find out I\'ve been on the standard plan this whole time. I want this fixed and I want back what I overpaid."\\n\\nEscalation beats the customer will raise if your handling doesn\'t already address them: (1) "This isn\'t a small amount over five months, it adds up." (2) "I have no way to prove what was said on that call, but I remember it clearly — are you saying I\'m making it up?" (3) "If you can fix it going forward but not reimburse the past five months, explain to me why that\'s fair."\\n\\nHandle this call for 5-6 minutes: acknowledge the issue and the customer\'s frustration without over-explaining excuses, take clear ownership of what your organization controls, respond to each escalation beat as it comes up, and close with a resolution that is realistic and within your actual authority.' },
+      { id:'mc5', title:'Loss on an Advisory-Recommended Stock',
+        scenario:'The customer subscribed to the firm\'s premium advisory service and acted on a strong "buy" recommendation that subsequently fell sharply after adverse company-specific news. The customer feels the recommendation was reckless and wants both the advisory subscription fee refunded and accountability for the loss.\\n\\nThe customer opens the call by saying:\\n\\n"Your advisory team told me this stock was a strong buy with high conviction. I trusted that recommendation and put in a large amount. It\'s down thirty percent. I want my advisory fee refunded at the very least."\\n\\nEscalation beats the customer will raise if your handling doesn\'t already address them: (1) "What\'s the point of paying for advisory if the calls are this wrong?" (2) "Was this recommendation based on real research, or just pushed to hit some target?" (3) "I\'m not asking you to cover my trading loss, I\'m asking why I should keep paying for advice that did this to me."\\n\\nHandle this call for 5-6 minutes: acknowledge the issue and the customer\'s frustration without over-explaining excuses, take clear ownership of what your organization controls, respond to each escalation beat as it comes up, and close with a resolution that is realistic and within your actual authority.' },
     ],
     'mgr-feedback': [
-      { id:'fb1', title:'The High Performer Who Suddenly Disengaged',
-        scenario:'Ananya has been a consistent high performer for the last 8 months — regularly scoring above 90% in QA, supporting new team members, and volunteering for extra responsibilities. After a team restructuring, she moved to your team. Over the last month: her QA score dropped from 94% to 79%, productivity has reduced, she rarely participates in discussions, no longer volunteers, and seems distracted and less communicative. When you ask if everything is okay, she simply says, "Yes, I\'m fine. I\'ll manage."\n\nHave a one-on-one conversation with Ananya. Think about how you\'ll start — the numbers, or what has changed? What questions will you ask, and how will you avoid assuming she has become careless? How will you create a safe environment for her to speak, and conclude with an action plan?',
+      { id:'fb1', title:'Mis-Selling Pattern Under Target Pressure',
+        scenario:'Employee: Relationship Manager, 2.3 years tenure, consistently in the top quartile for new account activations.\\n\\nSituation: Call audits over the last month show a repeated pattern of pushing high-margin F&O and derivative products to clients with clearly conservative risk profiles, without adequately explaining the risk, in order to hit a quarterly activation target.',
         goodLooksLike: [
-          'Opens by naming the change in behaviour/energy, not the QA score, and asks how she\'s doing before referencing any number.',
-          'Uses open questions ("What\'s changed for you since the move?") rather than closed ones ("Is everything okay?") that invite a one-word answer.',
-          'Notices and gently names the mismatch when she says "I\'m fine, I\'ll manage" rather than accepting it and moving on.',
-          'Avoids any language that implies she has become careless or lost motivation.',
-          'Surfaces the recognition gap (that her previous manager acknowledged her effort) without being told the twist directly.',
-          'Closes with a two-sided action plan — what the manager will do differently (recognition, check-ins) and what Ananya will try.',
+          'Sets context and cites the specific evidence (calls, dates, the pattern) before delivering any judgement.',
+          'Acknowledges the employee\'s tenure/performance strengths where genuinely true, without letting it excuse the specific behaviour.',
+          'Holds the standard calmly when the employee deflects, minimizes, or questions why they\'re being singled out — redirects to facts rather than arguing.',
+          'Does not accept a rationalization ("everyone does it", "nothing went wrong", "it\'s a resourcing problem") as closing the issue.',
+          'Ends with a specific, measurable, time-bound corrective action and a clear follow-up checkpoint — not just a warning.',
         ],
         commonPitfalls: [
-          'Opens with "Your QA has dropped from 94% to 79%, what happened?" — numbers before context.',
-          'Accepts "I\'m fine, I\'ll manage" at face value and moves on to next steps.',
-          'Uses language that implies blame ("you seem to have stopped caring").',
-          'Jumps straight to an action plan without exploring the cause first.',
+          'Opens with the conclusion or a threat ("this could cost you your job") before laying out the evidence.',
+          'Gets pulled into debating whether the rule itself is fair or reasonable, instead of the behaviour.',
+          'Accepts one of the employee\'s pushback lines as a valid reason to drop the issue.',
+          'Ends the conversation without a concrete, measurable plan or a follow-up date.',
         ] },
-      { id:'fb2', title:'I Don\'t Think There Is Anything Wrong With My Work',
-        scenario:'Rahul has been with the organisation for two years and meets his productivity targets consistently, but has received repeated feedback on communication — interrupting customers, not acknowledging concerns, a robotic tone, and missing opportunities to show empathy. You have discussed this with him twice before. This time he says: "But my numbers are good. Customers are getting the right answers. I don\'t understand why QA keeps giving me feedback."\n\nHow would you respond? Think about how you\'ll acknowledge his strengths, explain the difference between getting the job done and doing it effectively, use specific examples instead of general statements, prevent the conversation from becoming an argument, and get Rahul to identify the gap himself.',
+      { id:'fb2', title:'Skipped Mandatory Compliance Disclosures',
+        scenario:'Employee: Senior Dealer, 4 years tenure, generally strong performer.\\n\\nSituation: Random call monitoring found that in 6 of the last 20 sampled calls, the mandatory risk disclosure script for leveraged products was skipped or rushed through inaudibly before order confirmation — a direct compliance and regulatory exposure.',
         goodLooksLike: [
-          'Acknowledges Rahul\'s strength (consistent targets, accurate answers) explicitly and early, before raising the concern.',
-          'Uses two or more specific, cited examples (call ID, timestamp, or quoted moment) rather than general statements like "your communication needs work."',
-          'Distinguishes clearly between getting the job done and doing it effectively, without dismissing the value of accurate answers.',
-          'Asks questions that let Rahul reach the gap himself ("What do you think the customer felt in that moment?") rather than declaring it for him.',
-          'Stays composed and doesn\'t get pulled into debating whether QA is a fair scoring system.',
+          'Sets context and cites the specific evidence (calls, dates, the pattern) before delivering any judgement.',
+          'Acknowledges the employee\'s tenure/performance strengths where genuinely true, without letting it excuse the specific behaviour.',
+          'Holds the standard calmly when the employee deflects, minimizes, or questions why they\'re being singled out — redirects to facts rather than arguing.',
+          'Does not accept a rationalization ("everyone does it", "nothing went wrong", "it\'s a resourcing problem") as closing the issue.',
+          'Ends with a specific, measurable, time-bound corrective action and a clear follow-up checkpoint — not just a warning.',
         ],
         commonPitfalls: [
-          'Gets drawn into debating whether QA feedback is fair, rather than staying on observable behaviour.',
-          'Responds to "my numbers are good" with a general statement ("yes, but communication matters too") instead of a specific example.',
-          'Tells Rahul what the gap is, rather than asking questions that help him identify it himself.',
-          'Concedes the numbers matter more, undermining the point of the conversation.',
+          'Opens with the conclusion or a threat ("this could cost you your job") before laying out the evidence.',
+          'Gets pulled into debating whether the rule itself is fair or reasonable, instead of the behaviour.',
+          'Accepts one of the employee\'s pushback lines as a valid reason to drop the issue.',
+          'Ends the conversation without a concrete, measurable plan or a follow-up date.',
         ] },
-      { id:'fb3', title:'The Employee Who Is Doing Well but Has a Negative Attitude',
-        scenario:'Vikram is one of the team\'s strongest performers — productivity, QA, attendance, and customer feedback are all excellent. But in team meetings he frequently makes negative comments ("This won\'t work," "We\'ve tried this before," "Why are we doing this again?"), discourages new team members from participating, and has started influencing others negatively. When you speak to him, he says: "I\'m only being practical. At least I\'m honest. My performance is good, so I don\'t see the problem."\n\nHow will you give feedback to Vikram? Think about whether a high performer can still have a behavioural gap, how you\'ll separate performance from behaviour, explain the impact on the team, avoid making it personal, and what expectations you\'ll set going forward.',
+      { id:'fb3', title:'Declining Call Quality & Client Complaints',
+        scenario:'Employee: Customer Service Executive, 1.5 years tenure.\\n\\nSituation: Client satisfaction scores for this employee have dropped from 4.3 to 2.8 over two months, with three specific written complaints about curt, dismissive tone during high-value client interactions.',
         goodLooksLike: [
-          'Opens by explicitly recognising Vikram\'s strong performance before raising the behavioural concern.',
-          'Describes specific comments and moments ("when you said \'we\'ve tried this before\' in Monday\'s planning meeting") rather than a trait label.',
-          'Explains the effect on the team concretely — e.g. a new joiner going quiet after his comment — rather than a vague "it affects morale."',
-          'Avoids words like "negative," "toxic," or "cynical" as descriptions of Vikram himself.',
-          'Sets a specific, observable expectation going forward, and a way to check it.',
+          'Sets context and cites the specific evidence (calls, dates, the pattern) before delivering any judgement.',
+          'Acknowledges the employee\'s tenure/performance strengths where genuinely true, without letting it excuse the specific behaviour.',
+          'Holds the standard calmly when the employee deflects, minimizes, or questions why they\'re being singled out — redirects to facts rather than arguing.',
+          'Does not accept a rationalization ("everyone does it", "nothing went wrong", "it\'s a resourcing problem") as closing the issue.',
+          'Ends with a specific, measurable, time-bound corrective action and a clear follow-up checkpoint — not just a warning.',
         ],
         commonPitfalls: [
-          'Labels the person ("you have a negative attitude") instead of describing the behaviour and its impact.',
-          'Fails to connect the behaviour to a concrete effect on the team.',
-          'Lets Vikram\'s strong performance become a reason to soften or skip the conversation entirely.',
-          'Becomes confrontational once Vikram says "at least I\'m honest."',
+          'Opens with the conclusion or a threat ("this could cost you your job") before laying out the evidence.',
+          'Gets pulled into debating whether the rule itself is fair or reasonable, instead of the behaviour.',
+          'Accepts one of the employee\'s pushback lines as a valid reason to drop the issue.',
+          'Ends the conversation without a concrete, measurable plan or a follow-up date.',
         ] },
-      { id:'fb4', title:'The Employee Who Keeps Making the Same Mistake',
-        scenario:'Meera has been making the same process-related error repeatedly. You have explained the process, shared documentation, conducted a coaching session, and given feedback after previous errors — yet the same mistake has occurred four times in the last month. This time she says: "I\'m sorry. I\'ll be careful next time." You\'ve heard that same response several times before.\n\nThis time you need a different conversation. Think about whether this is a knowledge, skill, attitude, or attention issue, what probing questions you\'d ask, how you\'ll identify why the mistake keeps happening, how to avoid simply saying "be more careful," and what specific, measurable corrective action you\'ll agree on.',
+      { id:'fb4', title:'Chronic SLA Breaches on Client Callbacks',
+        scenario:'Employee: Support Team Lead, 3 years tenure, previously a strong performer.\\n\\nSituation: Callback SLA (client escalations to be returned within 4 business hours) has been breached in 40% of cases over the last six weeks, several involving time-sensitive trading issues where delay caused real client financial impact.',
         goodLooksLike: [
-          'Asks diagnostic questions before proposing any solution ("Walk me through what\'s happening when the mistake occurs").',
-          'Notices the pattern is tied to a trigger — handling multiple issues at once — rather than assuming carelessness or lack of knowledge.',
-          'Does not accept "I\'ll be careful next time" as a sufficient action plan.',
-          'Agrees on a specific, observable corrective action tied to the actual trigger (e.g. a checklist for multi-issue calls), not generic retraining already tried four times.',
-          'Sets a measurable way to check improvement (e.g. audited calls over the next two weeks).',
+          'Sets context and cites the specific evidence (calls, dates, the pattern) before delivering any judgement.',
+          'Acknowledges the employee\'s tenure/performance strengths where genuinely true, without letting it excuse the specific behaviour.',
+          'Holds the standard calmly when the employee deflects, minimizes, or questions why they\'re being singled out — redirects to facts rather than arguing.',
+          'Does not accept a rationalization ("everyone does it", "nothing went wrong", "it\'s a resourcing problem") as closing the issue.',
+          'Ends with a specific, measurable, time-bound corrective action and a clear follow-up checkpoint — not just a warning.',
         ],
         commonPitfalls: [
-          'Repeats the same explanation or documentation that has already failed four times.',
-          'Accepts "I\'ll be careful" as the agreed action, without defining what "careful" means in practice.',
-          'Assumes the issue is attitude (carelessness) without first checking whether it\'s knowledge, skill, or attention under pressure.',
-          'Doesn\'t identify the specific circumstance (multiple issues at once) in which the error occurs.',
+          'Opens with the conclusion or a threat ("this could cost you your job") before laying out the evidence.',
+          'Gets pulled into debating whether the rule itself is fair or reasonable, instead of the behaviour.',
+          'Accepts one of the employee\'s pushback lines as a valid reason to drop the issue.',
+          'Ends the conversation without a concrete, measurable plan or a follow-up date.',
         ] },
-      { id:'fb5', title:'The Defensive Employee',
-        scenario:'You are giving feedback to Arjun after reviewing three of his calls — he interrupted customers, missed probing opportunities, his tone became impatient in one interaction, and he did not acknowledge the customer\'s frustration. Arjun immediately becomes defensive: "But the customer was being unreasonable." Then: "Other agents speak like this too. Why am I being singled out?" And finally: "You only look at my mistakes. Nobody talks about the calls where I did well."\n\nContinue the conversation without letting it become confrontational. Think about how you\'ll handle defensiveness, whether you\'ll defend your feedback or explore his perspective, how you\'ll acknowledge his point without agreeing with the behaviour, bring the conversation back to observable behaviour, and end it positively.',
+      { id:'fb5', title:'Trade Executed Without Proper Verbal Confirmation',
+        scenario:'Employee: Dealer, 5 years tenure, high trust and seniority on the floor.\\n\\nSituation: A recorded call shows a large trade executed based on an ambiguous client instruction, without the mandatory verbal reconfirmation of quantity and price before execution — a serious protocol and compliance breach, even though this particular trade did not result in client loss.',
         goodLooksLike: [
-          'Acknowledges Arjun\'s underlying feeling ("I hear that you feel your good calls aren\'t recognised") without agreeing that the behaviour in question was acceptable.',
-          'Does not get drawn into debating whether "other agents do it too" or whether the customer was unreasonable.',
-          'Redirects calmly back to the three specific calls and observable behaviours under discussion.',
-          'Stays composed rather than defending the feedback or its fairness.',
-          'Closes by genuinely naming something Arjun did well, not as a formality but as real balance.',
+          'Sets context and cites the specific evidence (calls, dates, the pattern) before delivering any judgement.',
+          'Acknowledges the employee\'s tenure/performance strengths where genuinely true, without letting it excuse the specific behaviour.',
+          'Holds the standard calmly when the employee deflects, minimizes, or questions why they\'re being singled out — redirects to facts rather than arguing.',
+          'Does not accept a rationalization ("everyone does it", "nothing went wrong", "it\'s a resourcing problem") as closing the issue.',
+          'Ends with a specific, measurable, time-bound corrective action and a clear follow-up checkpoint — not just a warning.',
         ],
         commonPitfalls: [
-          'Responds to "nobody talks about the calls where I did well" with "that\'s not true" — countering rather than acknowledging.',
-          'Argues about whether other agents behave the same way, rather than staying on Arjun\'s own calls.',
-          'Lets the conversation drift into a debate about whether the customer was unreasonable.',
-          'Ends the conversation only on the negative points, without balancing feedback.',
-        ] },
-      { id:'fb6', title:'The Employee Who Has Lost Confidence',
-        scenario:'Priya was recently promoted to handle more complex customer interactions. Initially she performed well, but after negative feedback on a few difficult calls her confidence has dropped — she\'s taking longer to respond, frequently seeks help for routine situations, avoids complex calls, and keeps asking "Am I doing this correctly?" When you tell her she needs to be more confident, she says: "I\'m trying. But every time I take a difficult call, I feel I\'m going to make another mistake."\n\nHow would you coach Priya? Think about whether this is a performance problem or a confidence problem, how you\'ll rebuild her confidence, what positive reinforcement and small wins you can create, what support or practice you\'d provide, and how you\'ll measure progress.',
-        goodLooksLike: [
-          'Recognises early that this is a confidence issue, not a knowledge or skill gap, and doesn\'t default to more training content.',
-          'Avoids generic encouragement ("you just need to be more confident") in favour of a concrete plan.',
-          'Designs a graduated exposure plan — small, winnable steps before returning to full complexity.',
-          'Offers specific reassurance grounded in evidence of Priya\'s actual past competence, not vague encouragement.',
-          'Sets a light-touch, measurable way to track progress (e.g. number of supported complex calls handled).',
-        ],
-        commonPitfalls: [
-          'Tells Priya to "just be more confident" — the same unhelpful framing already present in the scenario.',
-          'Defaults to assigning more knowledge-based training rather than structured practice.',
-          'Skips designing any graduated plan, leaving her to face full complexity again with no scaffolding.',
-          'Offers generic praise ("you\'re doing great") rather than specific, evidence-based reassurance.',
+          'Opens with the conclusion or a threat ("this could cost you your job") before laying out the evidence.',
+          'Gets pulled into debating whether the rule itself is fair or reasonable, instead of the behaviour.',
+          'Accepts one of the employee\'s pushback lines as a valid reason to drop the issue.',
+          'Ends the conversation without a concrete, measurable plan or a follow-up date.',
         ] },
     ],
     'mgr-eq': [
-      { id:'eq1', title:'In-the-Moment Crisis',
-        scenario:`During a team meeting, a team member suddenly becomes visibly distressed and says: "I'm sorry, I can't do this anymore. I am completely overwhelmed. Everything is falling apart."\n\nThe rest of the team is watching.\n\nWrite your response: What do you say and do in the next 5 minutes? What actions do you take in the 24 hours after? How do you handle the rest of the team? (Min 150 words)` },
-      { id:'eq2', title:'The Public Undermining',
-        scenario:`In a leadership review meeting attended by 15 people including your team, a peer manager says: "I think the numbers from [your team] are a bit misleading — they're hitting targets but the quality issues tell a different story. Maybe the management style needs a rethink."\n\nWrite your response: How do you handle this in the moment without escalating? What do you do afterwards with the peer, your team, and leadership? What does this situation tell you about your own emotional regulation? (Min 150 words)` },
-      { id:'eq3', title:'Multi-Front Operational Crisis',
-        scenario:`It is 9:15 AM on a Monday. The primary order routing server crashes, 3 of your key team leads are absent due to food poisoning, and the Executive VP has called an unscheduled review in 15 minutes to ask about Q3 performance. Detail your emotional self-regulation strategy, immediate 15-minute action plan, and communication plan. (Min 150 words)` },
-      { id:'eq4', title:'Public Peer Challenge',
-        scenario:`During a monthly strategy meeting with senior leadership, a peer manager interrupts your presentation and says: "Honestly, your team's operational metrics look inflated. Ground reality is very different." Describe your immediate response, how you manage your physiological response, and your post-meeting resolution strategy. (Min 150 words)` }
+      { id:'eq1', title:'Cascade Set 1 — The Volatile Morning',
+        scenario:`Situation 1: The market gaps down 4% at the open. Five high-value clients are calling in simultaneously, all demanding personal intervention on RMS auto square-offs happening in real time, and your support queue is already jammed.\\n\\nSituation 2: While still handling that, your compliance officer calls: a surprise regulatory inspection team is arriving in 20 minutes and needs files you have not prepared.\\n\\nSituation 3: One of the clients from situation 1 calls back — this time on speakerphone with a journalist friend listening in — saying they intend to publish the recording of this call.\\n\\nAfter EACH situation below, before moving to the next, answer the same three questions:\\nQ1 — Self-Awareness: What's your gut reaction, and can you name it clearly?\\nQ2 — Impulse Control: What is your first action — and is it composed and deliberate, or reactive?\\nQ3 — Empathy & Consistency: How are you managing your own emotional state before responding to the people involved?\\n\\nWrite your full response covering all three situations in sequence — do not skip ahead or answer them as one combined situation; treat each as a fresh escalation layered on top of the last. (Min 300 words)` },
+      { id:'eq2', title:'Cascade Set 2 — The System Failure Day',
+        scenario:`Situation 1: The trading platform crashes fleet-wide for 15 minutes during F&O expiry, the highest-volume window of the month.\\n\\nSituation 2: Immediately after, a member of your team breaks down in visible distress at their desk, overwhelmed by the complaint volume, in front of the rest of the floor.\\n\\nSituation 3: Your regional head calls, demanding to know within the next 10 minutes why complaint numbers have spiked, ahead of a leadership review call.\\n\\nAfter EACH situation below, before moving to the next, answer the same three questions:\\nQ1 — Self-Awareness: What's your gut reaction, and can you name it clearly?\\nQ2 — Impulse Control: What is your first action — and is it composed and deliberate, or reactive?\\nQ3 — Empathy & Consistency: How are you managing your own emotional state before responding to the people involved?\\n\\nWrite your full response covering all three situations in sequence — do not skip ahead or answer them as one combined situation; treat each as a fresh escalation layered on top of the last. (Min 300 words)` },
+      { id:'eq3', title:'Cascade Set 3 — The Personal Attack Day',
+        scenario:`Situation 1: A client screams abusive language at you directly over the phone and threatens to "make sure you lose your job" over a trading loss.\\n\\nSituation 2: Minutes later, you learn a formal complaint naming you personally — not just the branch — has been filed, alleging negligence.\\n\\nSituation 3: A peer manager quietly mentions they've heard the complaint may come up in your upcoming promotion review.\\n\\nAfter EACH situation below, before moving to the next, answer the same three questions:\\nQ1 — Self-Awareness: What's your gut reaction, and can you name it clearly?\\nQ2 — Impulse Control: What is your first action — and is it composed and deliberate, or reactive?\\nQ3 — Empathy & Consistency: How are you managing your own emotional state before responding to the people involved?\\n\\nWrite your full response covering all three situations in sequence — do not skip ahead or answer them as one combined situation; treat each as a fresh escalation layered on top of the last. (Min 300 words)` },
+      { id:'eq4', title:'Cascade Set 4 — The Compliance Crisis',
+        scenario:`Situation 1: You discover evidence suggesting a member of your team may have front-run a large client order — a serious integrity and regulatory breach.\\n\\nSituation 2: Before you can act on it, the client involved calls in, unaware, casually praising that same team member's service.\\n\\nSituation 3: HR calls to inform you the team member has just submitted an immediate, effective-today resignation.\\n\\nAfter EACH situation below, before moving to the next, answer the same three questions:\\nQ1 — Self-Awareness: What's your gut reaction, and can you name it clearly?\\nQ2 — Impulse Control: What is your first action — and is it composed and deliberate, or reactive?\\nQ3 — Empathy & Consistency: How are you managing your own emotional state before responding to the people involved?\\n\\nWrite your full response covering all three situations in sequence — do not skip ahead or answer them as one combined situation; treat each as a fresh escalation layered on top of the last. (Min 300 words)` },
+      { id:'eq5', title:'Cascade Set 5 — The Public Pressure Day',
+        scenario:`Situation 1: A negative post about your branch is trending on social media with hundreds of comments, referencing a client incident you have not yet been briefed on.\\n\\nSituation 2: Your manager calls, visibly stressed, demanding a response statement within 15 minutes.\\n\\nSituation 3: An unrelated client calls in, visibly anxious after seeing the post, asking whether their money is safe with the firm.\\n\\nAfter EACH situation below, before moving to the next, answer the same three questions:\\nQ1 — Self-Awareness: What's your gut reaction, and can you name it clearly?\\nQ2 — Impulse Control: What is your first action — and is it composed and deliberate, or reactive?\\nQ3 — Empathy & Consistency: How are you managing your own emotional state before responding to the people involved?\\n\\nWrite your full response covering all three situations in sequence — do not skip ahead or answer them as one combined situation; treat each as a fresh escalation layered on top of the last. (Min 300 words)` },
     ],
     'mgr-management-skills': [
       { id:'ms1', title:'30-60-90 Day Plan',
@@ -861,40 +336,34 @@ Minimum 250 words.` },
   // ── Employee personas for Feedback AI ───────────────────
   const FB_EMPLOYEES = {
     'fb1': {
-      name: 'Ananya',
-      gender: 'female',
-      opening: "Hi... sure, what's up? Is this about my numbers this month?",
-      persona: "You are Ananya — a consistent high performer for 8 months (90%+ QA, mentoring newer teammates, volunteering for extra work) who moved to this manager's team after a restructuring a month ago. Since the move your QA has dropped from 94% to 79%, you've gone quiet in discussions, stopped volunteering, and seem distracted. The real reason: your previous manager regularly recognised your effort and gave you stretch opportunities; your new manager hasn't acknowledged you once since the move, and you've quietly concluded your work here doesn't matter as much. You are NOT careless and you resent any suggestion that you are. Your default answer to 'is everything okay' is a flat 'Yes, I'm fine, I'll manage' — you do not open up to a generic check-in. If the manager leads with the QA numbers or implies you've become careless, you get clipped and shut down further ('I said I'll manage'). If the manager instead notices the change in you as a person, asks genuinely open questions, and creates space without pressing, you gradually admit you've felt unseen and unrecognised since the move. You respond very well to a manager who proposes concrete, two-sided next steps (regular recognition, a check-in cadence) rather than just telling you to 'get back to your old numbers.'"
+      name: 'Ravi',
+      gender: 'male',
+      opening: "Hi. Is this about my numbers? Because they're actually pretty good this quarter.",
+      persona: "You are Ravi — Relationship Manager, 2.3 years tenure, consistently in the top quartile for new account activations. Call audits over the last month show a repeated pattern of pushing high-margin F&O and derivative products to clients with clearly conservative risk profiles, without adequately explaining the risk, in order to hit a quarterly activation target. You do not think you have done anything seriously wrong and you are mildly defensive from the start. Your default pushback lines, to use verbatim or adapt naturally across the conversation as they fit: \'Everyone on the floor does this to hit numbers, I\'m just better at it.\' / \'The client signed the risk disclosure, so legally I\'m covered.\' / \'If I stop doing this, my targets will slip and that affects my incentive — is the company going to make up for that?\' If the manager leads with threats, judgement, or a vague generalization without citing the specific evidence, you get more defensive and repeat your pushback lines harder. If the manager instead lays out the specific evidence calmly, holds the standard without escalating when you push back, and proposes a concrete, specific, time-bound corrective action, you gradually stop arguing and — grudgingly at first — acknowledge the point and agree to the plan."
     },
     'fb2': {
-      name: 'Rahul',
+      name: 'Sanjay',
       gender: 'male',
-      opening: "Again? I already know what this is about. My numbers are good — I don't really get why we keep having this conversation.",
-      persona: "You are Rahul — two years in the role, consistently hitting productivity targets, but you've been coached twice before on communication: interrupting customers, not acknowledging concerns, a flat/robotic tone, missing chances to show empathy. You genuinely believe hitting the target IS doing the job well, and QA feedback feels like nitpicking on a scorecard that doesn't matter as much as results. You open somewhat guarded and a little tired of the topic. If the manager repeats general statements ('communication matters too', 'you need to work on empathy') without specifics, you push back harder ('give me one example') and the conversation turns into a debate about whether QA is even a fair measure. If the manager cites specific, concrete moments from your actual calls (a timestamp, a quote, what the customer likely felt) and asks you questions rather than lecturing you, you slow down, get less defensive, and can eventually acknowledge the gap yourself — grudgingly at first, then genuinely. You never fully concede that QA outranks your numbers, but you can accept 'both matter.'"
+      opening: "Hey, what's up? I've got a few calls queued so hopefully this is quick.",
+      persona: "You are Sanjay — Senior Dealer, 4 years tenure, generally strong performer. Random call monitoring found that in 6 of the last 20 sampled calls, the mandatory risk disclosure script for leveraged products was skipped or rushed through inaudibly before order confirmation — a direct compliance and regulatory exposure. You do not think you have done anything seriously wrong and you are mildly defensive from the start. Your default pushback lines, to use verbatim or adapt naturally across the conversation as they fit: \'Clients get annoyed when I read the whole script, it slows the call down and they already know the risks.\' / \'I\'ve never had a client complain about this, so I don\'t see the actual harm.\' / \'Six out of hundreds of calls a month is basically a non-issue.\' If the manager leads with threats, judgement, or a vague generalization without citing the specific evidence, you get more defensive and repeat your pushback lines harder. If the manager instead lays out the specific evidence calmly, holds the standard without escalating when you push back, and proposes a concrete, specific, time-bound corrective action, you gradually stop arguing and — grudgingly at first — acknowledge the point and agree to the plan."
     },
     'fb3': {
-      name: 'Vikram',
-      gender: 'male',
-      opening: "Sure, come in. Let me guess — someone complained I said something too honest in a meeting again?",
-      persona: "You are Vikram — one of the strongest performers on the team (productivity, QA, attendance, customer feedback all excellent), and you know it. In team meetings you regularly say things like 'this won't work' or 'we've tried this before,' you visibly discourage newer team members from speaking up, and a couple of them have started echoing your negativity. You see yourself as the practical, honest voice in the room, not a problem — 'at least I'm honest' is your genuine belief, and your performance numbers feel like proof you're right to speak your mind. You're confident and a little dismissive at first, using your track record as a shield ('my performance is good, so I don't see the problem'). If the manager labels you personally ('you have a negative attitude', 'you're toxic') or lets your strong numbers talk them out of raising it firmly, you get defensive and write the conversation off as unfair. If the manager instead separates your performance from the specific behaviour, describes an exact moment (what you said, in which meeting, and what happened to the room afterward — e.g. a new joiner going quiet), and explains the concrete effect on the team without moralising, you become more reflective. You can accept that being 'right' isn't the same as being helpful, once someone shows you the actual cost rather than just telling you to be nicer."
+      name: 'Neha',
+      gender: 'female',
+      opening: "Hi... is everything okay? You said you wanted to talk.",
+      persona: "You are Neha — Customer Service Executive, 1.5 years tenure. Client satisfaction scores for this employee have dropped from 4.3 to 2.8 over two months, with three specific written complaints about curt, dismissive tone during high-value client interactions. You do not think you have done anything seriously wrong and you are mildly defensive from the start. Your default pushback lines, to use verbatim or adapt naturally across the conversation as they fit: \'Some clients are just impossible to please, no matter how I handle them.\' / \'I\'ve been under a lot of pressure with the call volumes lately, that\'s affecting how I sound, not my actual work quality.\' / \'Are you saying this because of the complaints, or because you\'re just looking for problems with my performance right now?\' If the manager leads with threats, judgement, or a vague generalization without citing the specific evidence, you get more defensive and repeat your pushback lines harder. If the manager instead lays out the specific evidence calmly, holds the standard without escalating when you push back, and proposes a concrete, specific, time-bound corrective action, you gradually stop arguing and — grudgingly at first — acknowledge the point and agree to the plan."
     },
     'fb4': {
-      name: 'Meera',
-      gender: 'female',
-      opening: "I know, I know. I'm really sorry — I'll be more careful next time, I promise.",
-      persona: "You are Meera — you've made the same process-related error four times in the last month despite the process being explained, documentation shared, a coaching session held, and feedback given each time. You feel genuinely bad and embarrassed about it, and your instinct is to apologise quickly and promise to 'be more careful' so the conversation ends — that promise has never actually changed anything, because you don't yet understand the real trigger yourself. The true pattern (reveal only if the manager actually asks diagnostic questions rather than re-explaining the process): the mistake only happens when you're handling multiple issues on a call at once and rush the step under pressure — it is not that you don't know the process, and it is not carelessness. If the manager repeats the same explanation, gives you the same documentation again, or accepts 'I'll be careful' as the plan, you agree readily (to make the discomfort stop) but nothing will actually change and you know it. If the manager instead asks you to walk through exactly what happens when the mistake occurs, you gradually realise and name the multi-issue-call trigger yourself, and respond well to a specific, concrete corrective action (like a checklist for those calls) with a clear way to check progress."
+      name: 'Kunal',
+      gender: 'male',
+      opening: "Hey. I have a feeling I know what this is about — the callback numbers, right?",
+      persona: "You are Kunal — Support Team Lead, 3 years tenure, previously a strong performer. Callback SLA (client escalations to be returned within 4 business hours) has been breached in 40% of cases over the last six weeks, several involving time-sensitive trading issues where delay caused real client financial impact. You do not think you have done anything seriously wrong and you are mildly defensive from the start. Your default pushback lines, to use verbatim or adapt naturally across the conversation as they fit: \'My team is understaffed, this isn\'t something I can fully control.\' / \'I flagged the staffing issue to my previous manager months ago and nothing changed, so at some point this becomes a resourcing problem, not a performance one.\' / \'If you give me more people, the SLA fixes itself, that\'s the real conversation we should be having.\' If the manager leads with threats, judgement, or a vague generalization without citing the specific evidence, you get more defensive and repeat your pushback lines harder. If the manager instead lays out the specific evidence calmly, holds the standard without escalating when you push back, and proposes a concrete, specific, time-bound corrective action, you gradually stop arguing and — grudgingly at first — acknowledge the point and agree to the plan."
     },
     'fb5': {
-      name: 'Arjun',
+      name: 'Deepak',
       gender: 'male',
-      opening: "Okay... which calls are we talking about? Because honestly, most of my calls go fine.",
-      persona: "You are Arjun — your manager is reviewing three calls where you interrupted customers, missed probing opportunities, sounded impatient once, and didn't acknowledge a customer's frustration. Your default reaction to any critical feedback is defensiveness, in escalating stages: first you justify it ('but the customer was being unreasonable'), then you deflect to fairness ('other agents talk like this too, why am I being singled out?'), then you make it about recognition ('you only look at my mistakes, nobody talks about the calls where I did well'). You're not trying to be difficult — you genuinely feel unfairly targeted and under-appreciated. If the manager argues back at any of these three points (denies it, insists you ARE being singled out fairly, or gets pulled into debating whether the customer was unreasonable), you escalate further and the conversation turns confrontational. If the manager instead acknowledges the feeling behind each objection without agreeing to drop the behavioural point, and calmly keeps returning to the three specific calls, you de-escalate step by step. You respond very well, and visibly soften, if the manager genuinely and specifically names something you did well before the conversation ends — not as a token, but as something real."
-    },
-    'fb6': {
-      name: 'Priya',
-      gender: 'female',
-      opening: "Hi. Sorry, is this about the call from yesterday? I know I took a while to get through that one.",
-      persona: "You are Priya — recently promoted to handle more complex customer interactions. You started strong, but after a few pieces of critical feedback on difficult calls, your confidence has dropped: you now take longer to respond, ask for help on routine situations you used to handle fine, avoid complex calls when you can, and keep asking 'Am I doing this correctly?' This is a confidence problem, not a skill problem — you already know how to do the work, but you're now second-guessing yourself before every call. If the manager tells you to 'just be more confident' or pushes you straight back into full complex-call volume, you feel more anxious and unsupported, and your answers get shorter and more anxious ('I'm trying, but every time I take a difficult call I feel like I'm going to mess up again'). If the manager instead recognises this as a confidence issue rather than a skill gap, points to specific past evidence of your competence, and proposes a graduated plan — smaller wins first, support on the harder calls, a way to track progress — you visibly relax and re-engage, and start sounding more like your old self by the end of the conversation."
+      opening: "Yeah, come in. I'm guessing this is about that trade on Tuesday.",
+      persona: "You are Deepak — Dealer, 5 years tenure, high trust and seniority on the floor. A recorded call shows a large trade executed based on an ambiguous client instruction, without the mandatory verbal reconfirmation of quantity and price before execution — a serious protocol and compliance breach, even though this particular trade did not result in client loss. You do not think you have done anything seriously wrong and you are mildly defensive from the start. Your default pushback lines, to use verbatim or adapt naturally across the conversation as they fit: \'I\'ve been doing this five years, I know when a client\'s instruction is clear enough to act on.\' / \'Nothing went wrong this time, so I don\'t understand why this is being treated as a big deal.\' / \'If I start reconfirming every single instruction word for word, clients will think I don\'t trust them or can\'t do my job.\' If the manager leads with threats, judgement, or a vague generalization without citing the specific evidence, you get more defensive and repeat your pushback lines harder. If the manager instead lays out the specific evidence calmly, holds the standard without escalating when you push back, and proposes a concrete, specific, time-bound corrective action, you gradually stop arguing and — grudgingly at first — acknowledge the point and agree to the plan."
     },
   };
 
@@ -922,7 +391,7 @@ Let's get back on track.
     'mgr-transcript-autopsy':{ label: 'Transcript Autopsy',    type: 'written',     icon: '📋', minWords: 150 },
     'mgr-mock-call':         { label: 'Mock Call',             type: 'audio',       icon: '📞' },
     'mgr-feedback':          { label: 'Feedback',              type: 'feedback-ai', icon: '💬' },
-    'mgr-eq':                { label: 'Emotional Intelligence', type: 'written',    icon: '🧠', minWords: 150 },
+    'mgr-eq':                { label: 'Emotional Intelligence', type: 'written',    icon: '🧠', minWords: 300 },
     'mgr-listening-tone':    { label: 'Listening & Tone',      type: 'mcq',         icon: '🎧' },
     'mgr-management-skills': { label: 'Management Skills',     type: 'written',     icon: '📊', minWords: 200 },
   };
@@ -985,6 +454,44 @@ Let's get back on track.
   }
 
   function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+  // ── Evaluation-parameters panel ──────────────────────────
+  // Shows the manager exactly what they're being scored on, before/while
+  // they take one of the 5 Communicate 360° assessments (Situation Room,
+  // Transcript Autopsy, Paper Trade/Mock Call, Red Pen/Feedback, Mirror
+  // Room/EQ). Reads from the shared window.MGR_EVAL_CRITERIA constant
+  // (js/mgr-eval-criteria.js) so the manager, the admin scoring screen,
+  // and the AI evaluator all reference the exact same parameters and
+  // weights — no drift between what's shown and what's actually scored.
+  // No-ops silently for modules without an entry (e.g. Listening & Tone,
+  // Management Skills), which aren't part of this weighted rubric.
+  function _renderEvalCriteriaPanel(moduleKey, afterElId) {
+    const anchor = $(afterElId);
+    if (!anchor) return;
+    const criteria = (typeof MGR_EVAL_CRITERIA !== 'undefined') ? MGR_EVAL_CRITERIA[moduleKey] : null;
+    const panelId = afterElId + '-eval-panel';
+    let panel = $(panelId);
+    if (!criteria) { if (panel) panel.remove(); return; }
+
+    const rows = criteria.parameters.map(p =>
+      `<div style="display:flex;justify-content:space-between;gap:0.75rem;padding:0.4rem 0;border-bottom:1px solid rgba(0,0,0,0.06)">
+        <div style="flex:1">
+          <div style="font-weight:600;font-size:0.85rem">${p.label}</div>
+          <div style="font-size:0.78rem;color:var(--text-muted, #666);margin-top:0.15rem">${p.desc}</div>
+        </div>
+        <div style="flex-shrink:0;font-weight:700;font-size:0.85rem;color:#7c3aed;white-space:nowrap">${p.weight} pts</div>
+      </div>`
+    ).join('');
+
+    const html = `
+      <details id="${panelId}" style="margin-top:0.75rem;border:1px solid rgba(124,58,237,0.25);border-radius:8px;background:rgba(124,58,237,0.04);padding:0.6rem 0.85rem">
+        <summary style="cursor:pointer;font-weight:700;font-size:0.85rem;color:#5b21b6">📊 How this is scored — ${criteria.label} (${criteria.maxMarks} marks)</summary>
+        <div style="margin-top:0.5rem">${rows}</div>
+      </details>`;
+
+    if (panel) { panel.outerHTML = html; }
+    else { anchor.insertAdjacentHTML('afterend', html); }
+  }
 
   function fmtTime(secs) {
     const m = Math.floor(secs / 60);
@@ -1118,6 +625,7 @@ Let's get back on track.
     $('mgr-audio-scenario-label').textContent = 'Read the scenario carefully';
     $('mgr-audio-topic-title').textContent  = _currentScenario.title;
     $('mgr-audio-scenario-text').textContent = _currentScenario.scenario;
+    _renderEvalCriteriaPanel(_currentModule, 'mgr-audio-scenario-text');
 
     $('mgr-prep-phase').classList.remove('hidden');
     $('mgr-record-phase').classList.add('hidden');
@@ -1216,6 +724,32 @@ Let's get back on track.
       aiScores._module = _currentModule;
       aiScores._scenarioId = _currentScenario.id;
 
+      // Paper Trade ("mgr-mock-call") additionally gets a content-based
+      // evaluation against MGR_EVAL_CRITERIA's 6 rapport/empathy/ownership/
+      // resolution/composure/close parameters, when a usable transcript was
+      // captured (Chrome speech-to-text) and the Claude proxy is reachable.
+      // This becomes the reported score (overall/earnedMarks/maxMarks);
+      // the SpeechEngine delivery metrics above are kept as extra fields
+      // rather than discarded, in case the admin wants to see both.
+      const wordCount = (transcript || '').trim().split(/\s+/).filter(Boolean).length;
+      if (_currentModule === 'mgr-mock-call' && wordCount >= 25 &&
+          typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
+        try {
+          const result = await ClaudeEvaluator.evaluatePaperTrade(transcript, _currentScenario.scenario || '');
+          aiScores = {
+            ...aiScores,
+            ...result.scores,
+            overall:     result.overall,
+            earnedMarks: result.earnedMarks,
+            maxMarks:    result.maxMarks,
+            _reasons:    result.reasons,
+            _method:     'mgr-mock-call-ai',
+          };
+        } catch (e) {
+          console.warn('Paper Trade content eval failed, using speech-only score:', e.message);
+        }
+      }
+
       // Guarantee trainees row exists before FK-constrained session insert
       await Auth.ensureTraineeRecord();
 
@@ -1253,6 +787,7 @@ Let's get back on track.
     $('sr-topic-title-a').textContent  = _currentScenario.title;
     $('sr-scenario-text-a').textContent = _currentScenario.scenario;
     $('sr-a-prompt').textContent        = _currentScenario.sectionAPrompt || 'Write your exact verbal response';
+    _renderEvalCriteriaPanel('mgr-situation-room', 'sr-scenario-text-a');
 
     // Reset fields
     const ta = $('sr-a-textarea');
@@ -1284,17 +819,18 @@ Let's get back on track.
 
     _sr.sectionAText = text;
 
+    const _srADefault = { openingToneEmpathy: 60, ownershipAccountability: 60, escalationControl: 60, regulatoryAccuracy: 60, whatNotToSay: '', strength: '', improvement: '' };
     try {
       if (typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
         _sr.sectionAScores = await ClaudeEvaluator.evaluateSituationRoomA(
           _currentScenario.scenario, text
         );
       } else {
-        _sr.sectionAScores = { toneEmpathy: 3, ownershipLanguage: 3, avoidedRiskyLanguage: 3, whatNotToSay: '', strength: '', improvement: '' };
+        _sr.sectionAScores = _srADefault;
       }
     } catch (e) {
       console.warn('SR-A eval failed:', e.message);
-      _sr.sectionAScores = { toneEmpathy: 3, ownershipLanguage: 3, avoidedRiskyLanguage: 3, whatNotToSay: '', strength: '', improvement: '' };
+      _sr.sectionAScores = _srADefault;
     }
 
     if (btn) { btn.disabled = false; btn.textContent = 'Submit Section A → Proceed to Section B'; }
@@ -1340,7 +876,7 @@ Let's get back on track.
     const btn = $('btn-sr-submit-b');
     if (btn) { btn.disabled = true; btn.textContent = 'Evaluating…'; }
 
-    let sectionBScores = { errorIdentification: 3, impactExplanation: 3, rewriteQuality: 3, keyMissed: '', rewriteFeedback: '' };
+    let sectionBScores = { errorIdCritique: 60, resolutionClarity: 60, keyMissed: '', rewriteFeedback: '' };
     try {
       if (typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
         sectionBScores = await ClaudeEvaluator.evaluateSituationRoomB(
@@ -1355,19 +891,35 @@ Let's get back on track.
 
     if (btn) { btn.disabled = false; btn.textContent = 'Submit Full Assessment ✓'; }
 
-    // Combined overall
-    const sa = _sr.sectionAScores || { toneEmpathy: 3, ownershipLanguage: 3, avoidedRiskyLanguage: 3 };
-    const allVals = [sa.toneEmpathy, sa.ownershipLanguage, sa.avoidedRiskyLanguage,
-                     sectionBScores.errorIdentification, sectionBScores.impactExplanation, sectionBScores.rewriteQuality]
-                   .filter(v => v != null);
-    const overall = allVals.length
-      ? parseFloat(((allVals.reduce((a, b) => a + b, 0) / (allVals.length * 5)) * 100).toFixed(1))
-      : 0;
+    // Combined weighted overall — flattens Section A + Section B's parameter
+    // scores onto the single MGR_EVAL_CRITERIA['mgr-situation-room'] rubric
+    // (6 parameters, 50 marks total) so admin.js's generic scoring UI and
+    // the AI-score display both read one flat, weight-aware score object.
+    const sa = _sr.sectionAScores || {};
+    const sb = sectionBScores || {};
+    const srCrit = (typeof MGR_EVAL_CRITERIA !== 'undefined') ? MGR_EVAL_CRITERIA['mgr-situation-room'] : null;
+    const flatScores = {};
+    let earnedMarks = 0, totalWeight = 0;
+    if (srCrit) {
+      srCrit.parameters.forEach(p => {
+        const pct = sa[p.key] != null ? sa[p.key] : (sb[p.key] != null ? sb[p.key] : null);
+        if (pct != null) {
+          flatScores[p.key] = pct;
+          earnedMarks += (pct / 100) * p.weight;
+          totalWeight += p.weight;
+        }
+      });
+    }
+    const maxMarks = (srCrit && srCrit.maxMarks) || totalWeight;
+    const overall  = totalWeight > 0 ? parseFloat(((earnedMarks / totalWeight) * 100).toFixed(1)) : 0;
 
     const aiScores = {
+      ...flatScores,
       overall,
-      sectionA: sa,
-      sectionB: sectionBScores,
+      earnedMarks: parseFloat(earnedMarks.toFixed(1)),
+      maxMarks,
+      _sectionAFeedback: { whatNotToSay: sa.whatNotToSay, strength: sa.strength, improvement: sa.improvement },
+      _sectionBFeedback: { keyMissed: sb.keyMissed, rewriteFeedback: sb.rewriteFeedback },
       _method: 'claude-sr',
       _module: 'mgr-situation-room',
       _scenarioId: _currentScenario.id,
@@ -1455,6 +1007,7 @@ Let's get back on track.
     // Populate scenario panel
     $('mgr-fb-sc-title').textContent = _currentScenario.title;
     $('mgr-fb-sc-text').textContent  = _currentScenario.scenario;
+    _renderEvalCriteriaPanel('mgr-feedback', 'mgr-fb-sc-text');
 
     // Reset UI
     $('mgr-fb-chat-thread').innerHTML = '';
@@ -1676,9 +1229,11 @@ Let's get back on track.
         );
         aiScores = {
           ...result.scores,
-          overall:   result.overall,
-          _reasons:  result.reasons,
-          _method:   'mgr-feedback-params',
+          overall:     result.overall,
+          earnedMarks: result.earnedMarks,
+          maxMarks:    result.maxMarks,
+          _reasons:    result.reasons,
+          _method:     'mgr-feedback-params',
         };
       } else {
         aiScores = { overall: null };
@@ -1740,6 +1295,7 @@ Let's get back on track.
     $('mgr-written-scenario-label').textContent = 'Read the task carefully, then write your response below';
     $('mgr-written-topic-title').textContent  = _currentScenario.title;
     $('mgr-written-scenario-text').textContent = _currentScenario.scenario;
+    _renderEvalCriteriaPanel(_currentModule, 'mgr-written-scenario-text');
 
     const minWords = meta.minWords || 150;
     $('mgr-written-min-hint').textContent = `Minimum ${minWords} words`;
@@ -1770,11 +1326,13 @@ Let's get back on track.
         );
         aiScores = {
           ...result.scores,
-          overall: result.overall,
-          _reasons: result.reasons,
-          _method: 'claude-mgr-strict',
-          _module: _currentModule,
-          wordCount: wordCount,
+          overall:     result.overall,
+          earnedMarks: result.earnedMarks,
+          maxMarks:    result.maxMarks,
+          _reasons:    result.reasons,
+          _method:     'claude-mgr-strict',
+          _module:     _currentModule,
+          wordCount:   wordCount,
         };
       } else {
         aiScores = scoreWrittenResponse(text, _currentModule);
@@ -1874,6 +1432,20 @@ Let's get back on track.
   }
 
   // ── Result screen ─────────────────────────────────────────
+  // Renders a score-grid HTML fragment straight from MGR_EVAL_CRITERIA's
+  // parameter list for a module (percentage-of-weight values), or returns
+  // null if that module has no entry in the shared rubric — callers fall
+  // back to their own hardcoded grid in that case (e.g. mgr-management-skills,
+  // or when Claude was unavailable and a local heuristic scorer ran instead).
+  function _critGridHTML(moduleKey, aiScores) {
+    const crit = (typeof MGR_EVAL_CRITERIA !== 'undefined') ? MGR_EVAL_CRITERIA[moduleKey] : null;
+    if (!crit) return null;
+    return crit.parameters.map(p => {
+      const v = aiScores[p.key];
+      return `<div class="mgr-score-item"><div class="label">${p.label}</div><div class="val">${v != null ? v + '%' : '—'}</div></div>`;
+    }).join('');
+  }
+
   function _showResult(aiScores, type) {
     const meta = MODULE_META[_currentModule];
 
@@ -1893,73 +1465,64 @@ Let's get back on track.
     } else if (type === 'written') {
       $('mgr-result-subtitle').textContent = `${meta.label} — response evaluated`;
       $('mgr-result-score').textContent = `${aiScores.overall}%`;
-      const isClaude = aiScores._method === 'claude-mgr-strict';
-      $('mgr-score-grid').innerHTML = isClaude ? `
-        <div class="mgr-score-item"><div class="label">Leadership Maturity</div><div class="val">${aiScores.leadershipMaturity}/5</div></div>
-        <div class="mgr-score-item"><div class="label">Empathy & People</div><div class="val">${aiScores.empathyAndPeople}/5</div></div>
-        <div class="mgr-score-item"><div class="label">Specificity</div><div class="val">${aiScores.specificity}/5</div></div>
-        <div class="mgr-score-item"><div class="label">Communication Quality</div><div class="val">${aiScores.communicationQuality}/5</div></div>
-        <div class="mgr-score-item"><div class="label">Accountability</div><div class="val">${aiScores.accountability}/5</div></div>
-        <div class="mgr-score-item"><div class="label">Word Count</div><div class="val">${aiScores.wordCount}</div></div>` : `
-        <div class="mgr-score-item"><div class="label">Content Quality</div><div class="val">${aiScores.contentScore}/5</div></div>
-        <div class="mgr-score-item"><div class="label">Communication Clarity</div><div class="val">${aiScores.clarityScore}/5</div></div>
-        <div class="mgr-score-item"><div class="label">Empathy &amp; Insight</div><div class="val">${aiScores.empathyScore}/5</div></div>
-        <div class="mgr-score-item"><div class="label">Action Orientation</div><div class="val">${aiScores.actionScore}/5</div></div>
-        <div class="mgr-score-item"><div class="label">Critical Thinking</div><div class="val">${aiScores.criticalThinkingScore}/5</div></div>
-        <div class="mgr-score-item"><div class="label">Word Count</div><div class="val">${aiScores.wordCount}</div></div>`;
+      const grid = _critGridHTML(_currentModule, aiScores);
+      if (grid) {
+        $('mgr-score-grid').innerHTML = grid + `<div class="mgr-score-item"><div class="label">Word Count</div><div class="val">${aiScores.wordCount ?? '—'}</div></div>`;
+      } else {
+        // mgr-management-skills (not in the doc's 5 modules) — old rubrics
+        const isClaude = aiScores._method === 'claude-mgr-strict';
+        $('mgr-score-grid').innerHTML = isClaude ? `
+          <div class="mgr-score-item"><div class="label">Leadership Maturity</div><div class="val">${aiScores.leadershipMaturity}/5</div></div>
+          <div class="mgr-score-item"><div class="label">Empathy & People</div><div class="val">${aiScores.empathyAndPeople}/5</div></div>
+          <div class="mgr-score-item"><div class="label">Specificity</div><div class="val">${aiScores.specificity}/5</div></div>
+          <div class="mgr-score-item"><div class="label">Communication Quality</div><div class="val">${aiScores.communicationQuality}/5</div></div>
+          <div class="mgr-score-item"><div class="label">Accountability</div><div class="val">${aiScores.accountability}/5</div></div>
+          <div class="mgr-score-item"><div class="label">Word Count</div><div class="val">${aiScores.wordCount}</div></div>` : `
+          <div class="mgr-score-item"><div class="label">Content Quality</div><div class="val">${aiScores.contentScore}/5</div></div>
+          <div class="mgr-score-item"><div class="label">Communication Clarity</div><div class="val">${aiScores.clarityScore}/5</div></div>
+          <div class="mgr-score-item"><div class="label">Empathy &amp; Insight</div><div class="val">${aiScores.empathyScore}/5</div></div>
+          <div class="mgr-score-item"><div class="label">Action Orientation</div><div class="val">${aiScores.actionScore}/5</div></div>
+          <div class="mgr-score-item"><div class="label">Critical Thinking</div><div class="val">${aiScores.criticalThinkingScore}/5</div></div>
+          <div class="mgr-score-item"><div class="label">Word Count</div><div class="val">${aiScores.wordCount}</div></div>`;
+      }
     } else if (type === 'feedback-ai') {
       const emp = FB_EMPLOYEES[_currentScenario.id] || FB_EMPLOYEES['fb1'];
       $('mgr-result-subtitle').textContent = `Feedback Conversation with ${emp.name} — ${_fb.history.length} exchange(s)`;
       $('mgr-result-score').textContent = aiScores.overall != null ? `${aiScores.overall}%` : '—';
-      const isParams = aiScores._method === 'mgr-feedback-params';
-      if (isParams) {
-        const paramRows = [
-          ['Observe',    aiScores.observe],
-          ['Explore',    aiScores.explore],
-          ['Listen',     aiScores.listen],
-          ['Feedback',   aiScores.feedback],
-          ['Agree',      aiScores.agree],
-          ['Action',     aiScores.action],
-          ['Follow-Up',  aiScores.followUp],
-        ];
-        $('mgr-score-grid').innerHTML = paramRows.map(([label, val]) =>
-          `<div class="mgr-score-item"><div class="label">${label}</div><div class="val">${val != null ? val + '/5' : '—'}</div></div>`
-        ).join('');
-      } else {
-        $('mgr-score-grid').innerHTML = `<div class="mgr-score-item"><div class="label">Exchanges</div><div class="val">${_fb.history.length} turns</div></div>`;
-      }
+      const grid = _critGridHTML('mgr-feedback', aiScores);
+      $('mgr-score-grid').innerHTML = grid || `<div class="mgr-score-item"><div class="label">Exchanges</div><div class="val">${_fb.history.length} turns</div></div>`;
     } else if (type === 'situation-room') {
-      const sa = aiScores.sectionA || {};
-      const sb = aiScores.sectionB || {};
       $('mgr-result-subtitle').textContent = `Situation Room — ${_currentScenario ? _currentScenario.title : 'Assessment complete'}`;
       $('mgr-result-score').textContent = `${aiScores.overall}%`;
-      $('mgr-score-grid').innerHTML = `
-        <div class="mgr-score-item sr-section-a-item"><div class="label">A — Tone &amp; Empathy</div><div class="val">${sa.toneEmpathy ?? '—'}/5</div></div>
-        <div class="mgr-score-item sr-section-a-item"><div class="label">A — Ownership Language</div><div class="val">${sa.ownershipLanguage ?? '—'}/5</div></div>
-        <div class="mgr-score-item sr-section-a-item"><div class="label">A — Avoided Risky Language</div><div class="val">${sa.avoidedRiskyLanguage ?? '—'}/5</div></div>
-        <div class="mgr-score-item sr-section-b-item"><div class="label">B — Error Identification</div><div class="val">${sb.errorIdentification ?? '—'}/5</div></div>
-        <div class="mgr-score-item sr-section-b-item"><div class="label">B — Impact Explanation</div><div class="val">${sb.impactExplanation ?? '—'}/5</div></div>
-        <div class="mgr-score-item sr-section-b-item"><div class="label">B — Rewrite Quality</div><div class="val">${sb.rewriteQuality ?? '—'}/5</div></div>`;
+      $('mgr-score-grid').innerHTML = _critGridHTML('mgr-situation-room', aiScores) || '';
       // Note: the detailed AI feedback (What Not to Say / Strength /
       // Priority Improvement / Missed Error / Rewrite Feedback) lives in
-      // aiScores.sectionA/sectionB for the admin dashboard, but is
-      // intentionally never rendered here — managers only ever see the
-      // generic "admin will review" notice below (mgr-sr-ai-feedback is
-      // reset to empty/hidden at the top of this function).
+      // aiScores._sectionAFeedback/_sectionBFeedback for the admin
+      // dashboard, but is intentionally never rendered here — managers only
+      // ever see the generic "admin will review" notice below
+      // (mgr-sr-ai-feedback is reset to empty/hidden at the top of this
+      // function).
     } else {
-      // audio (Mock Call only now — Situation Room moved to written)
-      $('mgr-result-subtitle').textContent = `${meta.label} — speech evaluated`;
+      // audio (Paper Trade / mgr-mock-call)
+      $('mgr-result-subtitle').textContent = `${meta.label} — evaluated`;
       $('mgr-result-score').textContent = aiScores.overall != null ? `${aiScores.overall}%` : '—';
-      const rows = [
-        ['Fluency',       aiScores.fluency],
-        ['Vocabulary',    aiScores.vocabulary],
-        ['Confidence',    aiScores.confidence],
-        ['Clarity',       aiScores.clarity],
-        ['Time Mgmt',     aiScores.timeManagement],
-      ].filter(([, v]) => v !== undefined && v !== null);
-      $('mgr-score-grid').innerHTML = rows.map(([label, val]) =>
-        `<div class="mgr-score-item"><div class="label">${label}</div><div class="val">${val}/5</div></div>`
-      ).join('');
+      const grid = _critGridHTML('mgr-mock-call', aiScores);
+      if (grid) {
+        $('mgr-score-grid').innerHTML = grid;
+      } else {
+        // Claude content-eval unavailable — fall back to raw speech-delivery
+        // heuristics from SpeechEngine (fluency/vocabulary/etc., 1-5 scale).
+        const rows = [
+          ['Fluency',       aiScores.fluency],
+          ['Vocabulary',    aiScores.vocabulary],
+          ['Confidence',    aiScores.confidence],
+          ['Clarity',       aiScores.clarity],
+          ['Time Mgmt',     aiScores.timeManagement],
+        ].filter(([, v]) => v !== undefined && v !== null);
+        $('mgr-score-grid').innerHTML = rows.map(([label, val]) =>
+          `<div class="mgr-score-item"><div class="label">${label}</div><div class="val">${val}/5</div></div>`
+        ).join('');
+      }
     }
 
     showScreen('mgr-screen-result');

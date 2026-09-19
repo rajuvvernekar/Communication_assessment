@@ -2679,24 +2679,43 @@ window.Admin = (() => {
         (session.transcript || '(no transcript)').replace(/</g,'&lt;') + '</div>';
     }
 
+    // Shared evaluation criteria (js/mgr-eval-criteria.js) for the 5 doc
+    // modules — same parameter keys/weights the AI evaluator and the
+    // manager-facing "how this is scored" panel use. Falls back to the old
+    // generic 1-5 labels for any module the doc doesn't cover (currently
+    // just mgr-management-skills).
+    const evalCriteria = (typeof MGR_EVAL_CRITERIA !== 'undefined') ? MGR_EVAL_CRITERIA[session.module] : null;
+
     // AI scores display
     const aiBox = modal.querySelector('#mgr-modal-ai-scores');
     if (session.aiScores && session.aiScores.overall != null) {
-      if (isSR) {
-        const sa = session.aiScores.sectionA || {};
-        const sb = session.aiScores.sectionB || {};
+      if (evalCriteria) {
+        const ai = session.aiScores;
         aiBox.innerHTML =
-          '<strong>AI Score: ' + session.aiScores.overall + '%</strong>' +
+          '<strong>AI Score: ' + ai.overall + '%' + (ai.earnedMarks != null ? ' (' + ai.earnedMarks + '/' + (ai.maxMarks || evalCriteria.maxMarks) + ')' : '') + '</strong>' +
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.3rem;margin-top:0.5rem;font-size:0.8rem">' +
-            '<span style="color:#7c3aed">A — Tone &amp; Empathy: <strong>' + (sa.toneEmpathy ?? '—') + '/5</strong></span>' +
-            '<span style="color:#7c3aed">A — Ownership: <strong>' + (sa.ownershipLanguage ?? '—') + '/5</strong></span>' +
-            '<span style="color:#7c3aed">A — Avoided Risky Lang: <strong>' + (sa.avoidedRiskyLanguage ?? '—') + '/5</strong></span>' +
-            '<span style="color:#dc2626">B — Error ID: <strong>' + (sb.errorIdentification ?? '—') + '/5</strong></span>' +
-            '<span style="color:#dc2626">B — Impact Explanation: <strong>' + (sb.impactExplanation ?? '—') + '/5</strong></span>' +
-            '<span style="color:#dc2626">B — Rewrite Quality: <strong>' + (sb.rewriteQuality ?? '—') + '/5</strong></span>' +
+            evalCriteria.parameters.map(p => {
+              const v = ai[p.key];
+              return '<span>' + p.label + ': <strong>' + (v != null ? v + '%' : '—') + '</strong></span>';
+            }).join('') +
           '</div>' +
-          (sa.whatNotToSay && !/clean/i.test(sa.whatNotToSay) ? '<div style="margin-top:0.4rem;font-size:0.78rem;color:#92400e;background:#fef9c3;padding:0.4rem 0.6rem;border-radius:4px">⚠ <strong>Risky language (A):</strong> ' + sa.whatNotToSay + '</div>' : '') +
-          (sb.keyMissed && !/all key/i.test(sb.keyMissed) ? '<div style="margin-top:0.3rem;font-size:0.78rem;color:#92400e;background:#fef9c3;padding:0.4rem 0.6rem;border-radius:4px">📝 <strong>Missed error (B):</strong> ' + sb.keyMissed + '</div>' : '');
+          (ai.flag ? '<div style="margin-top:0.4rem;font-size:0.78rem;color:#92400e;background:#fef9c3;padding:0.4rem 0.6rem;border-radius:4px">⚠ ' + ai.flag + '</div>' : '') +
+          // Situation Room's two-phase eval attaches narrative feedback
+          // separately from the flat parameter scores above.
+          (ai._sectionAFeedback && ai._sectionAFeedback.whatNotToSay && !/clean/i.test(ai._sectionAFeedback.whatNotToSay)
+            ? '<div style="margin-top:0.4rem;font-size:0.78rem;color:#92400e;background:#fef9c3;padding:0.4rem 0.6rem;border-radius:4px">⚠ <strong>Risky language (A):</strong> ' + ai._sectionAFeedback.whatNotToSay + '</div>' : '') +
+          (ai._sectionBFeedback && ai._sectionBFeedback.keyMissed && !/all key/i.test(ai._sectionBFeedback.keyMissed)
+            ? '<div style="margin-top:0.3rem;font-size:0.78rem;color:#92400e;background:#fef9c3;padding:0.4rem 0.6rem;border-radius:4px">📝 <strong>Missed error (B):</strong> ' + ai._sectionBFeedback.keyMissed + '</div>' : '') +
+          // Per-parameter reasons from the AI evaluator, where present.
+          (ai._reasons && Object.keys(ai._reasons).length
+            ? '<details style="margin-top:0.5rem"><summary style="cursor:pointer;font-size:0.78rem;color:var(--text-muted)">AI reasoning per parameter</summary>' +
+                '<ul style="font-size:0.76rem;color:var(--text-muted);margin:0.4rem 0 0 1.1rem;padding:0">' +
+                  Object.keys(ai._reasons).map(k => {
+                    const param = evalCriteria.parameters.find(pp => pp.key === k);
+                    return '<li style="margin-bottom:0.25rem"><strong>' + (param ? param.label : k) + ':</strong> ' + ai._reasons[k] + '</li>';
+                  }).join('') +
+                '</ul></details>'
+            : '');
       } else {
         aiBox.innerHTML = '<strong>AI Score: ' + session.aiScores.overall + '%</strong>';
       }
@@ -2706,21 +2725,42 @@ window.Admin = (() => {
 
     // Scoring criteria inputs
     const criteriaEl = modal.querySelector('#mgr-scoring-criteria');
-    const audioLabels   = ['Leadership Presence','Decision Quality','Communication Clarity','Empathy & EQ','Professionalism'];
-    const writtenLabels = ['Content Quality','Critical Thinking','Communication Clarity','Empathy & Insight','Action Orientation'];
-    const srLabels      = ['A — Tone & Empathy','A — Ownership Language','A — Avoided Risky Language','B — Error Identification','B — Impact Explanation','B — Rewrite Quality'];
-    const labels = isSR ? srLabels : (isWritten ? writtenLabels : audioLabels);
     const existing = session.adminScores || {};
 
     if (isMcq) {
       criteriaEl.innerHTML = '<p style="color:var(--text-muted);font-size:0.9rem">This is an auto-scored MCQ assessment. You may add a comment below.</p>';
+    } else if (evalCriteria) {
+      const maxMarks = evalCriteria.maxMarks || 50;
+      criteriaEl.innerHTML =
+        '<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:0.6rem">Score each parameter 0–100% of its weight. Total: <strong>' + maxMarks + ' marks</strong>.</div>' +
+        evalCriteria.parameters.map(p => {
+          const val = existing[p.key] != null ? existing[p.key] : '';
+          return '<div style="margin-bottom:0.65rem;padding-bottom:0.5rem;border-bottom:1px solid var(--border)">' +
+              '<div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;margin-bottom:0.2rem">' +
+                '<label style="font-size:0.85rem;font-weight:600">' + p.label + ' <span style="font-weight:400;color:var(--text-muted)">(weight ' + p.weight + ')</span></label>' +
+                '<div style="display:flex;align-items:center;gap:0.4rem">' +
+                  '<input type="number" min="0" max="100" step="1" value="' + val + '" class="mgr-criteria-input" data-key="' + p.key + '" data-weight="' + p.weight + '" style="width:70px;border:1px solid var(--border);border-radius:6px;padding:0.35rem 0.5rem;font-size:0.9rem" />' +
+                  '<span style="font-size:0.8rem;color:var(--text-muted)">% of weight</span>' +
+                '</div>' +
+              '</div>' +
+              '<div style="font-size:0.76rem;color:var(--text-muted)">' + p.desc + '</div>' +
+            '</div>';
+        }).join('') +
+        (Array.isArray(MGR_EVAL_SCORING_NOTES) && MGR_EVAL_SCORING_NOTES.length
+          ? '<details style="margin-top:0.5rem"><summary style="cursor:pointer;font-size:0.8rem;color:var(--text-muted)">Scoring guidance</summary>' +
+              '<ul style="font-size:0.78rem;color:var(--text-muted);margin:0.4rem 0 0 1.1rem;padding:0">' +
+                MGR_EVAL_SCORING_NOTES.map(n => '<li style="margin-bottom:0.3rem">' + n + '</li>').join('') +
+              '</ul></details>'
+          : '');
     } else {
+      const audioLabels   = ['Leadership Presence','Decision Quality','Communication Clarity','Empathy & EQ','Professionalism'];
+      const writtenLabels = ['Content Quality','Critical Thinking','Communication Clarity','Empathy & Insight','Action Orientation'];
+      const labels = isWritten ? writtenLabels : audioLabels;
       criteriaEl.innerHTML = labels.map((label, i) => {
         const key = label.toLowerCase().replace(/[^a-z]/g, '');
         const val = existing[key] != null ? existing[key] : (existing['score' + (i+1)] != null ? existing['score' + (i+1)] : '');
-        const color = isSR ? (i < 3 ? 'color:#5b21b6' : 'color:#991b1b') : '';
         return '<div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem">' +
-          '<label style="min-width:220px;font-size:0.85rem;' + color + '">' + label + '</label>' +
+          '<label style="min-width:220px;font-size:0.85rem">' + label + '</label>' +
           '<input type="number" min="1" max="5" step="0.5" value="' + val + '" class="mgr-criteria-input" data-key="' + key + '" style="width:70px;border:1px solid var(--border);border-radius:6px;padding:0.35rem 0.5rem;font-size:0.9rem" />' +
           '<span style="font-size:0.8rem;color:var(--text-muted)">(1–5)</span>' +
           '</div>';
@@ -2740,9 +2780,27 @@ window.Admin = (() => {
     if (!session) return;
 
     const isMcq = session.module === 'mgr-listening-tone';
+    const evalCriteria = (typeof MGR_EVAL_CRITERIA !== 'undefined') ? MGR_EVAL_CRITERIA[session.module] : null;
     let adminScores = {};
 
-    if (!isMcq) {
+    if (isMcq) {
+      adminScores = Object.assign({}, session.aiScores); // MCQ: admin score = AI score
+    } else if (evalCriteria) {
+      const inputs = modal.querySelectorAll('.mgr-criteria-input');
+      let earnedMarks = 0, totalWeight = 0;
+      inputs.forEach(inp => {
+        const pct = parseFloat(inp.value);
+        const weight = parseFloat(inp.dataset.weight) || 0;
+        totalWeight += weight;
+        if (!isNaN(pct)) {
+          adminScores[inp.dataset.key] = pct;
+          earnedMarks += (pct / 100) * weight;
+        }
+      });
+      adminScores.earnedMarks = parseFloat(earnedMarks.toFixed(1));
+      adminScores.maxMarks = evalCriteria.maxMarks || totalWeight;
+      adminScores.overall = totalWeight > 0 ? parseFloat(((earnedMarks / totalWeight) * 100).toFixed(1)) : null;
+    } else {
       const inputs = modal.querySelectorAll('.mgr-criteria-input');
       let sum = 0, count = 0;
       inputs.forEach(inp => {
@@ -2750,8 +2808,6 @@ window.Admin = (() => {
         if (!isNaN(val)) { adminScores[inp.dataset.key] = val; sum += val; count++; }
       });
       adminScores.overall = count > 0 ? parseFloat(((sum / (count * 5)) * 100).toFixed(1)) : null;
-    } else {
-      adminScores = Object.assign({}, session.aiScores); // MCQ: admin score = AI score
     }
 
     const comment = modal.querySelector('#mgr-admin-comment').value.trim();

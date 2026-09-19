@@ -682,9 +682,82 @@ Return ONLY the employee's spoken dialogue.`;
   // ---- Strict Manager Assessment Evaluation ----
   // Evaluates written manager responses (EQ, Mgmt Skills, Transcript Autopsy)
   // with strict leadership-level criteria. Returns {scores, overall, reasons}.
+  // Scores a written manager response against the shared, doc-derived
+  // weighted rubric in js/mgr-eval-criteria.js (0-100% of each parameter's
+  // weight) when the module is one of the 5 the doc covers. Falls back to
+  // the original flat 1-5 five-parameter rubric for any module the doc
+  // doesn't define (currently just mgr-management-skills), so that module
+  // keeps working exactly as before.
   async function evaluateManagerAssessment(moduleKey, responseText, scenarioContext) {
     if (!isAvailable()) throw new Error('Claude proxy not configured');
 
+    const criteria = (typeof MGR_EVAL_CRITERIA !== 'undefined') ? MGR_EVAL_CRITERIA[moduleKey] : null;
+
+    if (criteria) {
+      const paramLines = criteria.parameters.map((p, i) =>
+        `${i + 1}. ${p.key}: ${p.label} (weight ${p.weight}) — ${p.desc}`
+      ).join('\n');
+      const paramKeysJson  = criteria.parameters.map(p => `"${p.key}":<0-100>`).join(',');
+      const reasonKeysJson = criteria.parameters.map(p => `"${p.key}":"<sentence>"`).join(',');
+
+      const systemPrompt = `You are a senior leadership assessor evaluating a manager's written response to a "${criteria.label}" exercise, against the organisation's exact scoring rubric below.
+
+SCENARIO: ${scenarioContext}
+
+SCORING STANDARDS (this is the most important part):
+- You are evaluating at MANAGEMENT level, not trainee level.
+- Score each parameter as a PERCENTAGE from 0-100 of how fully the response meets that parameter's standard. 100 = flawless/exceptional (rare, would impress a VP or C-suite leader); 60-70 = average/adequate; below 40 = a real gap.
+- NEVER inflate scores. Be honest, be strict, be developmental.
+
+PARAMETERS TO SCORE (0-100 each):
+${paramLines}
+
+Return ONLY a JSON object: {${paramKeysJson},"reasons":{${reasonKeysJson}}}`;
+
+      const resp = await fetch(getProxyUrl(), {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          model:      MODEL,
+          max_tokens: 550,
+          system:     systemPrompt,
+          messages:   [{ role: 'user', content: `MANAGER'S RESPONSE:\n\n${responseText}` }],
+        }),
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error?.message || `API error ${resp.status}`);
+      }
+
+      const data  = await resp.json();
+      const text  = data.content[0].text.trim();
+      const match = text.match(/\{[\s\S]*\}/);
+      if (!match) throw new Error('No JSON in response');
+      const parsed = JSON.parse(match[0]);
+
+      const scores = {};
+      let earnedMarks = 0, totalWeight = 0;
+      criteria.parameters.forEach(p => {
+        const pct = Math.min(100, Math.max(0, Number(parsed[p.key]) || 0));
+        scores[p.key] = pct;
+        totalWeight += p.weight;
+        earnedMarks += (pct / 100) * p.weight;
+      });
+      const maxMarks = criteria.maxMarks || totalWeight;
+      const overall  = totalWeight > 0 ? parseFloat(((earnedMarks / totalWeight) * 100).toFixed(1)) : null;
+
+      return {
+        scores,
+        overall,
+        earnedMarks: parseFloat(earnedMarks.toFixed(1)),
+        maxMarks,
+        reasons: parsed.reasons || {},
+      };
+    }
+
+    // ---- Fallback: original generic 5-parameter rubric, for modules the
+    // doc doesn't define a weighted rubric for (e.g. mgr-management-skills) ----
     const MODULE_LABELS = {
       'mgr-eq':                 'Emotional Intelligence',
       'mgr-management-skills':  'Management Skills',
@@ -750,19 +823,22 @@ Evaluate the response on each criterion. Return ONLY a JSON object:
   }
 
   // ---- Evaluate Situation Room Section A ----
-  // Evaluates the manager's verbal response for tone/empathy, ownership, and risky language.
+  // Scores the manager's Part-A response against the 4 opening/ownership/
+  // escalation/regulatory parameters from MGR_EVAL_CRITERIA['mgr-situation-room']
+  // (0-100% of each parameter's weight). Section B's 2 parameters are scored
+  // separately below, once the manager has also submitted their analysis.
   async function evaluateSituationRoomA(scenarioText, responseText) {
     if (!isAvailable()) return null;
 
-    const systemPrompt = `You are a senior leadership development expert at an executive coaching firm. Evaluate manager verbal responses with strict, expert-level standards.
+    const crit = (typeof MGR_EVAL_CRITERIA !== 'undefined') ? MGR_EVAL_CRITERIA['mgr-situation-room'] : null;
+    const aKeys = ['openingToneEmpathy', 'ownershipAccountability', 'escalationControl', 'regulatoryAccuracy'];
+    const params = crit ? crit.parameters.filter(p => aKeys.includes(p.key)) : [];
 
-SCORING STANDARDS:
-- Score 3 = average — what most managers instinctively say
-- Score 4 = genuinely above average — requires real empathy/ownership, not just absence of mistakes
-- Score 5 = exceptional — rare, only for masterful leadership communication
-- Score 2 = below standard — real problems present
-- Score 1 = critical failure
-Be strict. Do NOT inflate scores.`;
+    const systemPrompt = `You are a senior leadership development expert at an executive coaching firm. Evaluate manager responses with strict, expert-level standards against the organisation's exact rubric below.
+Score each parameter as a PERCENTAGE from 0-100 of how fully the response meets that parameter's standard. 100 = masterful/exceptional (rare); 60-70 = average, what most managers instinctively say; below 40 = a real problem. Be strict. Do NOT inflate scores.`;
+
+    const paramLines = params.map((p, i) => `${i + 1}. ${p.key}: ${p.label} — ${p.desc}`).join('\n');
+    const paramKeysJson = params.map(p => `"${p.key}":<0-100>`).join(',');
 
     const userPrompt = `SCENARIO:
 ${scenarioText}
@@ -770,36 +846,16 @@ ${scenarioText}
 MANAGER'S RESPONSE:
 "${responseText}"
 
-Evaluate on 3 criteria (1-5 each):
-
-1. toneEmpathy: Does the response lead with genuine human empathy BEFORE business concerns? Does the manager acknowledge the PERSON first?
-   - 1: Leads with business impact, blame, or demands
-   - 2: Acknowledges situation but stays transactional
-   - 3: Shows some empathy but still self-focused or hedged
-   - 4: Clear empathetic opening, person feels heard first
-   - 5: Masterfully human — person is at centre, deeply genuine
-
-2. ownershipLanguage: Does the manager use clear accountability language vs. deflection, hedging, or blame?
-   - 1: Full deflection — blames others, timing, systems, market
-   - 2: Attempts ownership but heavily qualified
-   - 3: Neutral — some ownership but inconsistent
-   - 4: Clear ownership throughout, minimal hedging
-   - 5: Exemplary — full responsibility, clean action language
-
-3. avoidedRiskyLanguage: Did they AVOID language that escalates or damages trust — guilt-tripping, immediate demands, catastrophizing, making it about the manager?
-   - 1: Multiple phrases that would make the situation significantly worse
-   - 2: One or two phrases with real damage potential
-   - 3: Mostly clean but one minor risky element
-   - 4: Clean throughout — nothing that escalates
-   - 5: Perfectly clean — every phrase de-escalates and builds trust
+Evaluate on these parameters (0-100 each):
+${paramLines}
 
 Also provide:
-- "whatNotToSay": If they used risky language, quote the exact phrase and explain why (max 35 words). If clean, say "Response language is clean."
+- "whatNotToSay": If they used risky/escalating language, quote the exact phrase and explain why (max 35 words). If clean, say "Response language is clean."
 - "strength": Quote one specific strong phrase from their response (under 20 words)
 - "improvement": Single highest-priority improvement (max 25 words)
 
 Return ONLY valid JSON — no markdown, no extra text:
-{"toneEmpathy":<1-5>,"ownershipLanguage":<1-5>,"avoidedRiskyLanguage":<1-5>,"whatNotToSay":"<text>","strength":"<text>","improvement":"<text>"}`;
+{${paramKeysJson},"whatNotToSay":"<text>","strength":"<text>","improvement":"<text>"}`;
 
     const resp = await fetch(getProxyUrl(), {
       method: 'POST',
@@ -812,28 +868,30 @@ Return ONLY valid JSON — no markdown, no extra text:
     const match = text.match(/\{[\s\S]*\}/);
     if (!match) throw new Error('No JSON in SR-A response');
     const p = JSON.parse(match[0]);
-    return {
-      toneEmpathy:          Math.min(5, Math.max(1, Number(p.toneEmpathy)          || 3)),
-      ownershipLanguage:    Math.min(5, Math.max(1, Number(p.ownershipLanguage)    || 3)),
-      avoidedRiskyLanguage: Math.min(5, Math.max(1, Number(p.avoidedRiskyLanguage) || 3)),
-      whatNotToSay: p.whatNotToSay || '',
-      strength:     p.strength     || '',
-      improvement:  p.improvement  || '',
-    };
+    const out = {};
+    params.forEach(param => { out[param.key] = Math.min(100, Math.max(0, Number(p[param.key]) || 0)); });
+    out.whatNotToSay = p.whatNotToSay || '';
+    out.strength     = p.strength     || '';
+    out.improvement  = p.improvement  || '';
+    return out;
   }
 
   // ---- Evaluate Situation Room Section B ----
-  // Evaluates the manager's analysis of a flawed response.
+  // Scores the manager's analysis of a flawed response against the 2
+  // error-identification/resolution parameters from
+  // MGR_EVAL_CRITERIA['mgr-situation-room'].
   async function evaluateSituationRoomB(scenarioText, wrongResponseText, errorsText, impactText, rewriteText) {
     if (!isAvailable()) return null;
 
-    const systemPrompt = `You are a senior leadership development expert evaluating a manager's analysis of a flawed leadership response. Be strict — most responses should score 2-3.
+    const crit = (typeof MGR_EVAL_CRITERIA !== 'undefined') ? MGR_EVAL_CRITERIA['mgr-situation-room'] : null;
+    const bKeys = ['errorIdCritique', 'resolutionClarity'];
+    const params = crit ? crit.parameters.filter(p => bKeys.includes(p.key)) : [];
 
-SCORING STANDARDS:
-- Score 3 = average — identifies obvious issues
-- Score 4 = sharp analysis — goes beyond surface, shows real insight
-- Score 5 = exceptional — analysis itself demonstrates advanced leadership thinking (rare)
-- Score 2 = below average, Score 1 = critical failure`;
+    const systemPrompt = `You are a senior leadership development expert evaluating a manager's analysis of a flawed leadership response, against the organisation's exact rubric below. Be strict — most responses should score 55-70%.
+Score each parameter as a PERCENTAGE from 0-100 of how fully the analysis meets that parameter's standard. 100 = exceptional, demonstrates advanced leadership thinking (rare); 60-70 = average, identifies the obvious issues; below 40 = a real gap.`;
+
+    const paramLines = params.map((p, i) => `${i + 1}. ${p.key}: ${p.label} — ${p.desc}`).join('\n');
+    const paramKeysJson = params.map(p => `"${p.key}":<0-100>`).join(',');
 
     const userPrompt = `SCENARIO (brief):
 ${scenarioText.substring(0, 500)}
@@ -852,35 +910,15 @@ WHY EACH ERROR MADE IT WORSE:
 THEIR REWRITE:
 "${rewriteText}"
 
-Evaluate on 3 criteria (1-5 each):
-
-1. errorIdentification: Did they accurately find the real, most-damaging errors?
-   - 1: Only surface/cosmetic issues found, missed core errors
-   - 2: Found 1-2 real errors but missed the most important ones
-   - 3: Found most obvious errors
-   - 4: Identified key errors with accuracy, including subtle ones
-   - 5: Comprehensive — nothing important missed, including tone/subtext errors
-
-2. impactExplanation: Did they explain HOW each error damaged the situation? Real psychological/relational impact?
-   - 1: Superficial ("this was bad") — no real explanation
-   - 2: Restates the error rather than explaining its impact
-   - 3: Some genuine insight but inconsistent depth
-   - 4: Clear causal reasoning — shows what the error does to trust/relationship
-   - 5: Deep insight — psychology, trust, and long-term consequences
-
-3. rewriteQuality: Is their rewrite genuinely better? Does it fix all errors and model best-practice leadership?
-   - 1: Rewrite has the same or new errors, barely different
-   - 2: Somewhat better but still misses core issues
-   - 3: Fixes obvious errors but lacks empathy/ownership depth
-   - 4: Clearly better — fixes errors, empathetic, professional
-   - 5: Exceptional — something a senior leader or coach would actually say
+Evaluate on these parameters (0-100 each):
+${paramLines}
 
 Also provide:
 - "keyMissed": One important error they didn't fully address, or "All key errors were identified" if thorough
 - "rewriteFeedback": One specific improvement to their rewrite, or "Rewrite is strong" if excellent
 
 Return ONLY valid JSON:
-{"errorIdentification":<1-5>,"impactExplanation":<1-5>,"rewriteQuality":<1-5>,"keyMissed":"<text>","rewriteFeedback":"<text>"}`;
+{${paramKeysJson},"keyMissed":"<text>","rewriteFeedback":"<text>"}`;
 
     const resp = await fetch(getProxyUrl(), {
       method: 'POST',
@@ -893,47 +931,115 @@ Return ONLY valid JSON:
     const match = text.match(/\{[\s\S]*\}/);
     if (!match) throw new Error('No JSON in SR-B response');
     const p = JSON.parse(match[0]);
+    const out = {};
+    params.forEach(param => { out[param.key] = Math.min(100, Math.max(0, Number(p[param.key]) || 0)); });
+    out.keyMissed       = p.keyMissed       || '';
+    out.rewriteFeedback = p.rewriteFeedback || '';
+    return out;
+  }
+
+  // ---- Evaluate Paper Trade (mgr-mock-call) verbal conversation ----
+  // Scores the manager's live call transcript against the 6 rapport/empathy/
+  // ownership/resolution/composure/close parameters from
+  // MGR_EVAL_CRITERIA['mgr-mock-call']. Used alongside (not instead of) the
+  // existing SpeechEngine delivery-quality heuristics (fluency, pace, etc.)
+  // when a usable transcript was captured — see manager-app.js _submitAudio.
+  async function evaluatePaperTrade(transcript, scenarioContext) {
+    if (!isAvailable()) throw new Error('Claude proxy not configured');
+
+    const crit = (typeof MGR_EVAL_CRITERIA !== 'undefined') ? MGR_EVAL_CRITERIA['mgr-mock-call'] : null;
+    const params = crit ? crit.parameters : [];
+
+    const paramLines = params.map((p, i) => `${i + 1}. ${p.key}: ${p.label} (weight ${p.weight}) — ${p.desc}`).join('\n');
+    const paramKeysJson  = params.map(p => `"${p.key}":<0-100>`).join(',');
+    const reasonKeysJson = params.map(p => `"${p.key}":"<sentence>"`).join(',');
+
+    const systemPrompt = `You are a senior leadership assessor evaluating a manager's live customer call ("The Paper Trade" verbal assessment), against the organisation's exact scoring rubric below.
+
+SCENARIO: ${scenarioContext}
+
+SCORING STANDARDS:
+- Score each parameter as a PERCENTAGE from 0-100 of how fully the call meets that parameter's standard. 100 = exceptional (rare); 60-70 = average/adequate; below 40 = a real gap.
+- Judge the MANAGER's turns only; the customer's lines are simulated pressure, not something to score.
+- NEVER inflate scores. Be honest, be strict, be developmental.
+
+PARAMETERS TO SCORE (0-100 each):
+${paramLines}
+
+Return ONLY a JSON object: {${paramKeysJson},"reasons":{${reasonKeysJson}}}`;
+
+    const resp = await fetch(getProxyUrl(), {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        model:      MODEL,
+        max_tokens: 550,
+        system:     systemPrompt,
+        messages:   [{ role: 'user', content: `CALL TRANSCRIPT:\n\n${transcript}` }],
+      }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error?.message || `API error ${resp.status}`);
+    }
+
+    const data  = await resp.json();
+    const text  = data.content[0].text.trim();
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('No JSON in response');
+    const parsed = JSON.parse(match[0]);
+
+    const scores = {};
+    let earnedMarks = 0, totalWeight = 0;
+    params.forEach(p => {
+      const pct = Math.min(100, Math.max(0, Number(parsed[p.key]) || 0));
+      scores[p.key] = pct;
+      totalWeight += p.weight;
+      earnedMarks += (pct / 100) * p.weight;
+    });
+    const maxMarks = (crit && crit.maxMarks) || totalWeight;
+    const overall  = totalWeight > 0 ? parseFloat(((earnedMarks / totalWeight) * 100).toFixed(1)) : null;
+
     return {
-      errorIdentification: Math.min(5, Math.max(1, Number(p.errorIdentification) || 3)),
-      impactExplanation:   Math.min(5, Math.max(1, Number(p.impactExplanation)   || 3)),
-      rewriteQuality:      Math.min(5, Math.max(1, Number(p.rewriteQuality)      || 3)),
-      keyMissed:        p.keyMissed        || '',
-      rewriteFeedback:  p.rewriteFeedback  || '',
+      scores,
+      overall,
+      earnedMarks: parseFloat(earnedMarks.toFixed(1)),
+      maxMarks,
+      reasons: parsed.reasons || {},
     };
   }
 
-  // ---- Manager Feedback Evaluation (OBSERVE -> EXPLORE -> LISTEN -> FEEDBACK -> AGREE -> ACTION -> FOLLOW-UP) ----
+  // ---- Manager Feedback Evaluation ("The Red Pen") ----
+  // Scores the manager's feedback conversation against the 5 structure/
+  // empathy/resilience/specificity/forward-plan parameters from
+  // MGR_EVAL_CRITERIA['mgr-feedback'] (0-100% of each parameter's weight).
   async function evaluateManagerFeedback(transcript, scenarioContext, goodLooksLike = [], commonPitfalls = []) {
     if (!isAvailable()) throw new Error('Claude proxy not configured');
 
+    const crit = (typeof MGR_EVAL_CRITERIA !== 'undefined') ? MGR_EVAL_CRITERIA['mgr-feedback'] : null;
+    const params = crit ? crit.parameters : [];
+
     const glItems = (goodLooksLike || []).map((s, i) => `${i + 1}. ${s}`).join('\n');
     const cpItems = (commonPitfalls || []).map((s, i) => `${i + 1}. ${s}`).join('\n');
+    const paramLines = params.map((p, i) => `${i + 1}. ${p.key}: ${p.label} (weight ${p.weight}) — ${p.desc}`).join('\n');
+    const paramKeysJson  = params.map(p => `"${p.key}":<0-100>`).join(',');
+    const reasonKeysJson = params.map(p => `"${p.key}":"<sentence>"`).join(',');
 
-    const systemPrompt = `You are a senior leadership development expert evaluating a manager's feedback conversation with an employee, using the OBSERVE -> EXPLORE -> LISTEN -> FEEDBACK -> AGREE -> ACTION -> FOLLOW-UP framework.
+    const systemPrompt = `You are a senior leadership development expert evaluating a manager's feedback conversation with an employee, against the organisation's exact scoring rubric below.
 
 SCENARIO: ${scenarioContext}
 ${glItems ? `\nWHAT GOOD LOOKS LIKE IN THIS SPECIFIC SCENARIO:\n${glItems}` : ''}
-${cpItems ? `\nCOMMON MANAGER PITFALLS IN THIS SPECIFIC SCENARIO (a manager who does one of these should generally score no higher than 2 on the related dimension):\n${cpItems}` : ''}
+${cpItems ? `\nCOMMON MANAGER PITFALLS IN THIS SPECIFIC SCENARIO (a manager who does one of these should generally score below 40% on the related parameter):\n${cpItems}` : ''}
 
 SCORING STANDARDS:
-- Score 3 = average — what most managers instinctively do
-- Score 4 = genuinely above average — real empathy, coaching instinct, not just absence of mistakes
-- Score 5 = exceptional — rare, only for masterful leadership communication
-- Score 2 = below standard — matches one of the common pitfalls listed above for this scenario
-- Score 1 = critical failure in this area
-Be strict. Do NOT inflate scores. Ground every score in what the manager actually said in the transcript, weighed against the scenario-specific "what good looks like" and "common pitfalls" above where provided.
+- Score each parameter as a PERCENTAGE from 0-100 of how fully the conversation meets that parameter's standard. 100 = masterful leadership communication (rare); 60-70 = average, what most managers instinctively do; below 40 = matches one of the common pitfalls above or a critical failure in this area.
+- Be strict. Do NOT inflate scores. Ground every score in what the manager actually said in the transcript, weighed against the scenario-specific "what good looks like" and "common pitfalls" above where provided.
 
-Evaluate the manager's responses on these 7 parameters (1-5 each), each tied to one stage of the framework:
-1. observe: Did the manager notice and name the real, specific change or issue (behaviour, pattern, or moment) rather than opening with a number, a label, or an assumption?
-2. explore: Did the manager ask open, curious questions to understand the underlying cause before drawing conclusions, rather than assuming they already knew the answer?
-3. listen: Did the manager give the employee real space to speak, notice when an answer was too quick or guarded (e.g. "I'm fine, I'll manage"), and avoid interrupting, dominating, or steamrolling the conversation?
-4. feedback: Was the feedback itself specific, behavioural, and non-judgmental — citing concrete moments/examples rather than vague statements or personal labels?
-5. agree: Did the manager work WITH the employee to reach shared understanding and a mutually agreed direction, rather than dictating a conclusion or unilaterally deciding what's true?
-6. action: Was the resulting action plan specific, realistic, and tied to the actual root cause discussed — not a generic instruction (like "be more careful" or "be more confident") that had already failed before?
-7. followUp: Did the manager set up a clear, concrete way to check in on progress (a cadence, a metric, a next conversation) rather than leaving the outcome open-ended?
+PARAMETERS TO SCORE (0-100 each):
+${paramLines}
 
-Return ONLY a JSON object:
-{"observe":<1-5>,"explore":<1-5>,"listen":<1-5>,"feedback":<1-5>,"agree":<1-5>,"action":<1-5>,"followUp":<1-5>,"reasons":{"observe":"<sentence>","explore":"<sentence>","listen":"<sentence>","feedback":"<sentence>","agree":"<sentence>","action":"<sentence>","followUp":"<sentence>"}}`;
+Return ONLY a JSON object: {${paramKeysJson},"reasons":{${reasonKeysJson}}}`;
 
     const resp = await fetch(getProxyUrl(), {
       method:  'POST',
@@ -957,21 +1063,22 @@ Return ONLY a JSON object:
     if (!match) throw new Error('No JSON in response');
 
     const parsed = JSON.parse(match[0]);
-    const keys   = ['observe','explore','listen','feedback','agree','action','followUp'];
-    const sum    = keys.reduce((s, k) => s + (parsed[k] || 0), 0);
-    const overall = parseFloat(((sum / (keys.length * 5)) * 100).toFixed(1));
+    const scores = {};
+    let earnedMarks = 0, totalWeight = 0;
+    params.forEach(p => {
+      const pct = Math.min(100, Math.max(0, Number(parsed[p.key]) || 0));
+      scores[p.key] = pct;
+      totalWeight += p.weight;
+      earnedMarks += (pct / 100) * p.weight;
+    });
+    const maxMarks = (crit && crit.maxMarks) || totalWeight;
+    const overall  = totalWeight > 0 ? parseFloat(((earnedMarks / totalWeight) * 100).toFixed(1)) : null;
 
     return {
-      scores: {
-        observe:  parsed.observe,
-        explore:  parsed.explore,
-        listen:   parsed.listen,
-        feedback: parsed.feedback,
-        agree:    parsed.agree,
-        action:   parsed.action,
-        followUp: parsed.followUp,
-      },
+      scores,
       overall,
+      earnedMarks: parseFloat(earnedMarks.toFixed(1)),
+      maxMarks,
       reasons: parsed.reasons || {},
     };
   }
@@ -1134,5 +1241,5 @@ Return ONLY a JSON object:
     };
   }
 
-  return { isAvailable, evaluate, evaluateBalanced, evaluateRewrite, callAiCustomer, callAiWrittenCustomer, callOpsAdaptiveConceptualCustomer, callAiEmployee, evaluateManagerAssessment, evaluateManagerFeedback, evaluateSituationRoomA, evaluateSituationRoomB, evaluateOpsCall, evaluateOpsWriting, getCriteria, scoreTimeManagement, MOCK_CALL_CRITERIA };
+  return { isAvailable, evaluate, evaluateBalanced, evaluateRewrite, callAiCustomer, callAiWrittenCustomer, callOpsAdaptiveConceptualCustomer, callAiEmployee, evaluateManagerAssessment, evaluateManagerFeedback, evaluateSituationRoomA, evaluateSituationRoomB, evaluatePaperTrade, evaluateOpsCall, evaluateOpsWriting, getCriteria, scoreTimeManagement, MOCK_CALL_CRITERIA };
 })();
