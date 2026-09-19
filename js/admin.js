@@ -3759,6 +3759,123 @@ window.Admin = (() => {
     }
   }
 
+  // ============================================================
+  // Assessments tab — Export Excel / Download recordings
+  // ------------------------------------------------------------
+  // These three were called from admin.html (per-row "⬇ Recording",
+  // "⬇ Export Excel", "⬇ Download All Recordings") but had no implementation
+  // anywhere in this file — removed as dead exports back on 2026-09-12
+  // (commit f5a3d64) because referencing them crashed admin.js on load, with
+  // a note to "rebuild separately if wanted". Implemented now.
+  // ============================================================
+
+  // Per-row recording download. Supabase Storage's public bucket URLs allow
+  // direct <audio> playback (already used above), but a plain <a href>
+  // click on a cross-origin URL usually opens/streams it in the browser
+  // instead of downloading — fetching it as a blob first and downloading
+  // that forces an actual file save with the right filename. Falls back to
+  // opening the URL in a new tab if the fetch is blocked for any reason
+  // (e.g. a bucket CORS policy that allows media playback but not fetch).
+  async function downloadRecording(url, filename) {
+    if (!url) { toast('No recording available for this session.', 'error'); return; }
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const blob = await resp.blob();
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objUrl;
+      a.download = filename || 'recording';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(objUrl), 4000);
+    } catch (e) {
+      console.warn('downloadRecording: fetch failed, opening directly instead:', e.message);
+      window.open(url, '_blank');
+      toast('Could not auto-download that recording — opened it in a new tab instead; use your browser\'s save option there.', '');
+    }
+  }
+
+  // Bulk download: zips every recording in the currently-filtered/rendered
+  // Assessments table view (respects whatever module/date/archive filters
+  // are active, since it reads _currentFilteredSessions rather than all
+  // sessions ever recorded).
+  async function downloadAllRecordings() {
+    const sessions = (_currentFilteredSessions || []).filter(s => s.recordingUrl);
+    if (!sessions.length) { toast('No recordings in the current view to download.', 'error'); return; }
+    if (typeof JSZip === 'undefined') { toast('ZIP library not loaded — try refreshing the page.', 'error'); return; }
+
+    toast(`Zipping ${sessions.length} recording(s)... this may take a moment.`, '');
+    const zip = new JSZip();
+    let ok = 0, failed = 0;
+    for (const s of sessions) {
+      try {
+        const resp = await fetch(s.recordingUrl);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const blob = await resp.blob();
+        const ext = s.recordingUrl.includes('.mp4') ? 'mp4' : s.recordingUrl.includes('.ogg') ? 'ogg' : 'webm';
+        const safeName = (s.traineeName || 'unknown').replace(/[^\w\- ]/g, '').trim().replace(/\s+/g, '_') || 'unknown';
+        const dateStr = (s.submittedAt || '').slice(0, 10);
+        let filename = `${safeName}-${s.module || 'session'}-${dateStr}.${ext}`;
+        // Guard against two sessions producing the same filename (same
+        // trainee/module/date) — JSZip would silently let the second
+        // overwrite the first otherwise.
+        if (zip.file(filename)) filename = `${safeName}-${s.module || 'session'}-${dateStr}-${s.id.slice(0, 6)}.${ext}`;
+        zip.file(filename, blob);
+        ok++;
+      } catch (e) {
+        console.warn('Recording download failed for session', s.id, e.message);
+        failed++;
+      }
+    }
+    if (ok === 0) { toast('Could not download any recordings — check your connection and try again.', 'error'); return; }
+
+    const content = await zip.generateAsync({ type: 'blob' });
+    const objUrl = URL.createObjectURL(content);
+    const a = document.createElement('a');
+    a.href = objUrl;
+    a.download = `recordings_${new Date().toISOString().slice(0, 10)}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(objUrl), 4000);
+    toast(`Downloaded ${ok} recording(s)${failed ? ` (${failed} could not be fetched)` : ''} as a ZIP.`, failed ? '' : 'success');
+  }
+
+  // Top-of-tab "Export Excel" — exports whatever's currently in the
+  // Assessments table (respects the active module/date/archive filters,
+  // same _currentFilteredSessions source as Download All Recordings above).
+  function exportAssessmentsExcel() {
+    const sessions = _currentFilteredSessions || [];
+    if (!sessions.length) { toast('No assessments in the current view to export.', 'error'); return; }
+    if (typeof XLSX === 'undefined') { toast('Excel library not loaded — try refreshing the page.', 'error'); return; }
+
+    const rows = sessions.map(s => {
+      const aiScore    = s.aiScores    ? normalizeOverall(s.aiScores.overall) : null;
+      const adminScore = s.adminScores ? calcAdminAvg(s.adminScores)          : null;
+      return {
+        'Trainee':       s.traineeName || '',
+        'Module':        s.module || '',
+        'Topic':         s.topicTitle || '',
+        'Date':          formatDate(s.submittedAt).split(' ')[0],
+        'Status':        s.adminScores ? 'Scored' : (s.status || ''),
+        'AI Score':      aiScore    != null ? aiScore    : '',
+        'Admin Score':   adminScore != null ? adminScore : '',
+        'Admin Comment': s.adminComment || '',
+        'Has Recording': s.recordingUrl ? 'Yes' : 'No',
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{ wch: 20 }, { wch: 18 }, { wch: 30 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 40 }, { wch: 12 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Assessments');
+    const filename = `assessments_${_viewArchive ? 'archive_' : ''}${new Date().toISOString().slice(0, 10)}.xlsx`;
+    XLSX.writeFile(wb, filename);
+    toast(`Exported ${rows.length} assessment(s) to ${filename}`, 'success');
+  }
+
   function renderAssessmentsTable(sessions, topicMap) {
     const tbody = $('assessments-tbody');
     const sorted = [...sessions].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
@@ -4332,6 +4449,10 @@ window.Admin = (() => {
     openMgrScoreModal,
     saveMgrScore,
     seedStockMarketMcq,
+    // Assessments tab — Export Excel / Download recordings
+    downloadRecording,
+    downloadAllRecordings,
+    exportAssessmentsExcel,
   };
 })();
 
