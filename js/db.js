@@ -20,6 +20,20 @@ const DB = (() => {
     return url;
   }
 
+  // ---- Base URL actually used for fetch() calls ----
+  // The Frappe Cloud site's CORS config only allows requests from its own
+  // origin, so the GitHub Pages frontend (a different origin) gets a
+  // "Failed to fetch" on every direct call. When CONFIG.FRAPPE_PROXY_URL is
+  // set (the Cloudflare Worker's /frappe route), route calls through it
+  // instead — the Worker talks to Frappe server-to-server (no CORS there)
+  // and attaches its own permissive CORS headers on the way back to the
+  // browser. Falls back to a direct call if no proxy URL is configured.
+  function _fetchBase() {
+    const proxy = (CONFIG.FRAPPE_PROXY_URL || '').replace(/\/+$/, '');
+    if (proxy) return proxy;
+    return _base();
+  }
+
   function _headers(withAuth) {
     const h = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
     // Only attach the API key/secret for calls that need elevated (non-guest)
@@ -32,7 +46,7 @@ const DB = (() => {
   }
 
   async function _call(method, params = {}, withAuth = false) {
-    const res = await fetch(`${_base()}/api/method/comm_assess.frappe_db.${method}`, {
+    const res = await fetch(`${_fetchBase()}/api/method/comm_assess.frappe_db.${method}`, {
       method: 'POST',
       headers: _headers(withAuth),
       body: JSON.stringify(params),
@@ -50,7 +64,7 @@ const DB = (() => {
     const fd = new FormData();
     fd.append('file', blob, filename || 'recording.webm');
     if (folder) fd.append('folder', folder);
-    const res = await fetch(`${_base()}/api/method/comm_assess.frappe_db.db_upload`, {
+    const res = await fetch(`${_fetchBase()}/api/method/comm_assess.frappe_db.db_upload`, {
       method: 'POST',
       body: fd,
     });

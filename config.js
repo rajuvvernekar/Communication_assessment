@@ -21,4 +21,12 @@ const CONFIG = {
   // 3. Cloudflare Worker — URL of your deployed worker (AI scoring proxy)
   //    Leave empty string '' to disable AI scoring (JS phrase analysis fallback is used)
   CLAUDE_PROXY_URL: 'https://commassess-claude.rajuvvernekar.workers.dev',
+
+  // 4. Cloudflare Worker's Frappe CORS-proxy route (added 2026-09-19).
+  //    training360.nvi.frappe.cloud only allows its own origin in CORS, so
+  //    calls made directly from GitHub Pages (a different origin) fail with
+  //    "Failed to fetch". Routing through the Worker's /frappe route fixes
+  //    this, since the Worker calls Frappe server-to-server. Leave empty
+  //    string '' to fall back to calling FRAPPE_SITE_URL directly.
+  FRAPPE_PROXY_URL: 'https://commassess-claude.rajuvvernekar.workers.dev/frappe',
 };
