@@ -454,6 +454,7 @@
     .sr-section-a-item .label::before { content: 'A  '; font-size: 0.65rem; font-weight: 800; color: #7c3aed; }
     .sr-section-b-item .label::before { content: 'B  '; font-size: 0.65rem; font-weight: 800; color: #dc2626; }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
 <body>
 
