@@ -41,6 +41,25 @@ const GeminiLive = (() => {
   const INPUT_SAMPLE_RATE = 16000;   // required by the Live API for mic input
   const OUTPUT_SAMPLE_RATE = 24000;  // fixed rate the Live API sends audio back at
 
+  // Google recycles the underlying WebSocket connection roughly every 10
+  // minutes and expects a "session resumption" reconnect to carry on past
+  // that point (see https://ai.google.dev/gemini-api/docs/live-session).
+  // This module doesn't implement resumption, so instead of risking an
+  // ungraceful mid-sentence drop right around the 10-minute mark, every call
+  // is proactively wrapped up a little earlier, at 9 minutes.
+  const MAX_CALL_MS = 9 * 60 * 1000;
+
+  // Candidate MediaRecorder mime types for the local call recording, best
+  // first. Not every browser supports every type (notably Safari doesn't do
+  // webm), so we probe with MediaRecorder.isTypeSupported and fall back down
+  // the list, then to the browser's own default if none report as supported.
+  const RECORDING_MIME_CANDIDATES = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/mp4',
+    'audio/ogg;codecs=opus',
+  ];
+
   function _log(...args) { console.log('[GeminiLive]', ...args); }
   function _warn(...args) { console.warn('[GeminiLive]', ...args); }
 
@@ -141,9 +160,26 @@ const GeminiLive = (() => {
     let processorNode = null;
     let silentGain = null;
     let playbackCtx = null;
+    let playbackRecordDest = null;
     let nextPlayTime = 0;
     let stopped = false;
     let setupDone = false;
+    let durationTimer = null;
+
+    // ---- Local call recording (mic + AI voice, mixed) -----------------------
+    // Purely client-side: mixes the trainee's mic stream with the audio
+    // actually being played back for the AI customer into one MediaStream via
+    // a small dedicated AudioContext, then records that with MediaRecorder.
+    // None of this touches the Gemini WebSocket or makes any extra API call,
+    // so it has no effect on Live API rate limits/quota — it's just capturing
+    // audio that's already flowing through the browser.
+    let recMixCtx = null;
+    let recMediaRecorder = null;
+    let recChunks = [];
+    let recMimeType = '';
+    let recStarted = false;
+    let recordingDonePromise = null;
+    let recordingResolve = null;
 
     let curBotText = '';
     let curTraineeText = '';
@@ -158,6 +194,10 @@ const GeminiLive = (() => {
       if (!playbackCtx) {
         playbackCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: OUTPUT_SAMPLE_RATE });
         nextPlayTime = playbackCtx.currentTime;
+        // A second, silent tap of everything played back — feeds the call
+        // recording without altering what actually comes out of the speaker.
+        playbackRecordDest = playbackCtx.createMediaStreamDestination();
+        _startRecordingIfReady();
       }
       const int16 = _base64ToInt16(base64Data);
       const float32 = new Float32Array(int16.length);
@@ -168,9 +208,57 @@ const GeminiLive = (() => {
       const src = playbackCtx.createBufferSource();
       src.buffer = buffer;
       src.connect(playbackCtx.destination);
+      if (playbackRecordDest) src.connect(playbackRecordDest);
       const startAt = Math.max(playbackCtx.currentTime, nextPlayTime);
       src.start(startAt);
       nextPlayTime = startAt + buffer.duration;
+    }
+
+    // Starts the mixed call recording once both audio sources — the trainee's
+    // mic and the AI's spoken output — are available. Safe to call multiple
+    // times; only actually starts once. Never throws: a recording failure
+    // (unsupported browser, permissions quirk, etc.) should never break the
+    // call itself, so any error here is logged and swallowed.
+    function _startRecordingIfReady() {
+      if (recStarted || stopped) return;
+      if (!micStream || !playbackRecordDest) return;
+      if (typeof MediaRecorder === 'undefined') {
+        _warn('MediaRecorder not supported in this browser — call will not be recorded');
+        recStarted = true; // don't keep retrying
+        return;
+      }
+      try {
+        recMixCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const micSrc = recMixCtx.createMediaStreamSource(micStream);
+        const botSrc = recMixCtx.createMediaStreamSource(playbackRecordDest.stream);
+        const mixDest = recMixCtx.createMediaStreamDestination();
+        micSrc.connect(mixDest);
+        botSrc.connect(mixDest);
+
+        recMimeType = RECORDING_MIME_CANDIDATES.find(t => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) || '';
+        recMediaRecorder = recMimeType ? new MediaRecorder(mixDest.stream, { mimeType: recMimeType }) : new MediaRecorder(mixDest.stream);
+        recChunks = [];
+        recMediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size) recChunks.push(e.data); };
+        recordingDonePromise = new Promise((resolve) => { recordingResolve = resolve; });
+        recMediaRecorder.onstop = () => {
+          try { if (recMixCtx) recMixCtx.close(); } catch (_) {}
+          const blob = recChunks.length ? new Blob(recChunks, { type: recMimeType || 'audio/webm' }) : null;
+          if (recordingResolve) recordingResolve(blob);
+        };
+        recMediaRecorder.start(1000); // 1s timeslices so we always have flushed data if the tab is killed abruptly
+        recStarted = true;
+        _log('call recording started (mic + AI voice, mixed) —', recMimeType || 'browser default format');
+      } catch (e) {
+        _warn('could not start call recording — continuing without one', e);
+        recStarted = true;
+      }
+    }
+
+    // Resolves to the recorded call audio (Blob) once recording has been
+    // stopped and flushed, or null if no recording was ever started.
+    function getRecording() {
+      if (!recordingDonePromise) return Promise.resolve(null);
+      return recordingDonePromise;
     }
 
     function handleServerMessage(msg) {
@@ -258,6 +346,16 @@ const GeminiLive = (() => {
     }
 
     async function connect() {
+      // Start the 9-minute safety cap from the moment the call is initiated
+      // (not from when the socket finishes connecting), so the trainee-facing
+      // call duration is predictable regardless of connection latency.
+      durationTimer = setTimeout(() => {
+        if (stopped) return;
+        _log('reached the 9-minute call cap — wrapping up before Google\'s ~10-minute connection recycle');
+        if (onStateChange) onStateChange('time-limit'); // fire before stop() flips `stopped`, so this isn't swallowed by setState's guard
+        stop();
+      }, MAX_CALL_MS);
+
       try {
         setState('connecting');
         const token = await _getEphemeralToken();
@@ -315,6 +413,7 @@ const GeminiLive = (() => {
         };
 
         await startMicCapture();
+        _startRecordingIfReady();
       } catch (e) {
         _warn('connect() failed', e);
         setState('error');
@@ -325,6 +424,11 @@ const GeminiLive = (() => {
     function stop() {
       if (stopped) return;
       stopped = true;
+      if (durationTimer) { clearTimeout(durationTimer); durationTimer = null; }
+      // Stop the recorder first so it flushes whatever's been captured so
+      // far, before the audio sources it depends on (mic track, playback
+      // context) get torn down below.
+      try { if (recMediaRecorder && recMediaRecorder.state !== 'inactive') recMediaRecorder.stop(); } catch (_) {}
       try { if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) ws.close(); } catch (_) {}
       try { if (processorNode) { processorNode.onaudioprocess = null; processorNode.disconnect(); } } catch (_) {}
       try { if (sourceNode) sourceNode.disconnect(); } catch (_) {}
@@ -335,7 +439,7 @@ const GeminiLive = (() => {
     }
 
     connect();
-    return { stop };
+    return { stop, getRecording };
   }
 
   return { isAvailable, startCall };

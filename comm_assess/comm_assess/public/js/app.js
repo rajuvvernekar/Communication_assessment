@@ -149,9 +149,10 @@ const App = (() => {
   let _mcAiMaxTurns       = MC_AI_MAX_TURNS; // per-call override (e.g. ops-call-assessment uses its own question count)
 
   // ── Gemini Live "Voice AI (Beta)" mode (2026-09-18) — see gemini-live.js
-  let _liveCallController = null; // { stop() } returned by GeminiLive.startCall()
+  let _liveCallController = null; // { stop(), getRecording() } returned by GeminiLive.startCall()
   let _liveTurns          = [];   // [{ role: 'bot'|'trainee', text }, ...]
   let _liveStartTime      = 0;
+  let _liveFinishing      = false; // guards against a double-submit if the 9-min auto-cutoff and a manual "End Call" click land at the same moment
 
   // ── Ops Escalation Call — ADAPTIVE test mode (2026-09-18) ──────────────
   // Every other ops-call-assessment topic still uses the fixed, verbatim
@@ -1308,6 +1309,7 @@ const App = (() => {
   function startLiveVoiceCall() {
     showStep('mock-call', 'mc-step-live-voice');
     _liveTurns = [];
+    _liveFinishing = false;
     $('mc-live-transcript-thread').innerHTML = '';
     $('mc-live-sc-title').textContent = _currentTopic.title || '';
     $('mc-live-sc-desc').textContent = _currentTopic.description || '';
@@ -1326,11 +1328,12 @@ const App = (() => {
 
     const stateEl = $('mc-live-voice-state');
     const STATE_LABELS = {
-      connecting: '🔌 Connecting…',
-      listening:  '🎙️ Listening — go ahead and speak',
-      speaking:   '🔊 Customer is speaking…',
-      error:      '⚠️ Connection problem — try Cancel and use the normal recording flow',
-      ended:      '📴 Call ended',
+      connecting:   '🔌 Connecting…',
+      listening:    '🎙️ Listening — go ahead and speak',
+      speaking:     '🔊 Customer is speaking…',
+      error:        '⚠️ Connection problem — try Cancel and use the normal recording flow',
+      ended:        '📴 Call ended',
+      'time-limit': '⏱️ 9-minute limit reached — wrapping up and submitting…',
     };
 
     _liveStartTime = Date.now();
@@ -1362,6 +1365,10 @@ HOW TO RUN THIS CALL:
       systemInstruction,
       onStateChange: (state) => {
         if (stateEl) stateEl.textContent = STATE_LABELS[state] || state;
+        if (state === 'time-limit') {
+          toast('⏱️ Reached the 9-minute call limit — submitting what was covered so far.', '');
+          finishLiveVoiceCall();
+        }
       },
       onTurn: ({ role, text }) => {
         _liveTurns.push({ role, text });
@@ -1379,9 +1386,17 @@ HOW TO RUN THIS CALL:
   }
 
   async function finishLiveVoiceCall() {
+    if (_liveFinishing) return; // already wrapping up (e.g. auto-cutoff and a manual click landed together)
     if (!_liveCallController && _liveTurns.length === 0) return; // nothing to submit
+    _liveFinishing = true;
     $('btn-mc-live-end').disabled = true;
-    if (_liveCallController) { _liveCallController.stop(); _liveCallController = null; }
+    const controller = _liveCallController;
+    _liveCallController = null;
+    let recordingBlob = null;
+    if (controller) {
+      controller.stop();
+      try { recordingBlob = await controller.getRecording(); } catch (e) { console.warn('Call recording could not be finalized:', e.message || e); }
+    }
     const elapsed = Math.max(1, Math.floor((Date.now() - _liveStartTime) / 1000));
 
     const fullTranscript = _liveTurns.map(t => `${t.role === 'bot' ? 'Customer' : 'You'}: ${t.text}`).join('\n\n');
@@ -1416,7 +1431,7 @@ HOW TO RUN THIS CALL:
       module:        _currentModule || 'mock-call',
       topicId:       _currentTopic.id,
       topicTitle:    _currentTopic.title,
-      recordingBlob: null, // Gemini Live plays audio directly; no local recording is captured in this beta
+      recordingBlob, // local mic+AI-voice mix recorded client-side via MediaRecorder — see GeminiLive.getRecording(); null if unsupported in this browser
       transcript:    fullTranscript,
       aiScores,
       adminScores:   null,
