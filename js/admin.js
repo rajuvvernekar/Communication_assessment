@@ -3118,20 +3118,32 @@ window.Admin = (() => {
     if (isMcq) {
       criteriaEl.innerHTML = '<p style="color:var(--text-muted);font-size:0.9rem">This is an auto-scored MCQ assessment. You may add a comment below.</p>';
     } else if (evalCriteria) {
+      // Changed 2026-09-20 from a "type a 0-100% number" input to a 1-5
+      // slider per parameter -- the same quick, easy-to-use control the
+      // trainee Assessments tab already uses for Mock Call scoring (see
+      // _renderScoringCriteria() / .criterion-slider above). The 1-5 value
+      // is converted to this parameter's 0-100%-of-weight internally on
+      // save (see saveMgrScore()), so earnedMarks/maxMarks/overall and
+      // every dashboard/export reading adminScores keep working exactly as
+      // before -- only the admin's input control changed, not what gets
+      // stored. Pre-fills from a previous admin score if one exists,
+      // otherwise from the AI's suggestion (also converted to 1-5), same
+      // precedence the trainee modal uses.
       const maxMarks = evalCriteria.maxMarks || 50;
+      const toFive = (pct) => Math.min(5, Math.max(1, Math.round((pct / 20) * 2) / 2));
       criteriaEl.innerHTML =
-        '<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:0.6rem">Score each parameter 0–100% of its weight. Total: <strong>' + maxMarks + ' marks</strong>.</div>' +
+        '<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:0.6rem">Score each parameter 1–5, just like Mock Call scoring. Total: <strong>' + maxMarks + ' marks</strong>.</div>' +
         evalCriteria.parameters.map(p => {
-          const val = existing[p.key] != null ? existing[p.key] : '';
-          return '<div style="margin-bottom:0.65rem;padding-bottom:0.5rem;border-bottom:1px solid var(--border)">' +
-              '<div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;margin-bottom:0.2rem">' +
-                '<label style="font-size:0.85rem;font-weight:600">' + p.label + ' <span style="font-weight:400;color:var(--text-muted)">(weight ' + p.weight + ')</span></label>' +
-                '<div style="display:flex;align-items:center;gap:0.4rem">' +
-                  '<input type="number" min="0" max="100" step="1" value="' + val + '" class="mgr-criteria-input" data-key="' + p.key + '" data-weight="' + p.weight + '" style="width:70px;border:1px solid var(--border);border-radius:6px;padding:0.35rem 0.5rem;font-size:0.9rem" />' +
-                  '<span style="font-size:0.8rem;color:var(--text-muted)">% of weight</span>' +
-                '</div>' +
-              '</div>' +
-              '<div style="font-size:0.76rem;color:var(--text-muted)">' + p.desc + '</div>' +
+          const existingPct = existing[p.key];
+          const aiPct       = ai[p.key];
+          const val = existingPct != null ? toFive(existingPct)
+                    : aiPct       != null ? toFive(aiPct)
+                    : 3;
+          return '<div class="criterion-row" data-key="' + p.key + '">' +
+              '<div class="criterion-label"><span>' + p.label + ' <span style="font-weight:400;color:var(--text-muted)">(weight ' + p.weight + ')</span></span>' +
+                '<span class="criterion-val" data-val-for="' + p.key + '">' + val + '</span></div>' +
+              '<div class="criterion-desc">' + p.desc + '</div>' +
+              '<input type="range" min="1" max="5" step="0.5" value="' + val + '" class="criterion-slider mgr-criteria-slider" data-key="' + p.key + '" data-weight="' + p.weight + '" />' +
             '</div>';
         }).join('') +
         (Array.isArray(MGR_EVAL_SCORING_NOTES) && MGR_EVAL_SCORING_NOTES.length
@@ -3140,6 +3152,12 @@ window.Admin = (() => {
                 MGR_EVAL_SCORING_NOTES.map(n => '<li style="margin-bottom:0.3rem">' + n + '</li>').join('') +
               '</ul></details>'
           : '');
+      criteriaEl.querySelectorAll('.mgr-criteria-slider').forEach(sl => {
+        sl.addEventListener('input', () => {
+          const out = criteriaEl.querySelector('[data-val-for="' + sl.dataset.key + '"]');
+          if (out) out.textContent = sl.value;
+        });
+      });
     } else {
       const audioLabels   = ['Leadership Presence','Decision Quality','Communication Clarity','Empathy & EQ','Professionalism'];
       const writtenLabels = ['Content Quality','Critical Thinking','Communication Clarity','Empathy & Insight','Action Orientation'];
@@ -3174,14 +3192,19 @@ window.Admin = (() => {
     if (isMcq) {
       adminScores = Object.assign({}, session.aiScores); // MCQ: admin score = AI score
     } else if (evalCriteria) {
-      const inputs = modal.querySelectorAll('.mgr-criteria-input');
+      // Sliders are 1-5 (see openMgrScoreModal above); convert each to this
+      // parameter's 0-100%-of-weight before storing, so adminScores keeps
+      // the exact same shape/meaning every other module, dashboard and
+      // export already expects.
+      const sliders = modal.querySelectorAll('.mgr-criteria-slider');
       let earnedMarks = 0, totalWeight = 0;
-      inputs.forEach(inp => {
-        const pct = parseFloat(inp.value);
-        const weight = parseFloat(inp.dataset.weight) || 0;
+      sliders.forEach(sl => {
+        const raw = parseFloat(sl.value); // 1-5
+        const weight = parseFloat(sl.dataset.weight) || 0;
         totalWeight += weight;
-        if (!isNaN(pct)) {
-          adminScores[inp.dataset.key] = pct;
+        if (!isNaN(raw)) {
+          const pct = Math.min(100, Math.max(0, (raw / 5) * 100));
+          adminScores[sl.dataset.key] = parseFloat(pct.toFixed(1));
           earnedMarks += (pct / 100) * weight;
         }
       });
