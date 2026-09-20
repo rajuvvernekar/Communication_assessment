@@ -607,5 +607,73 @@ ABSOLUTE RULES:
     return text.trim();
   }
 
-  return { isAvailable, startCall, isTextAvailable, callEmployeeTurn };
+  // ---- Paper Trade's per-turn AI customer (fixed question list, reactive) ---
+  // Added 2026-09-20. Mirrors callEmployeeTurn above exactly (same
+  // /gemini-generate route, same thinking-disabled/maxOutputTokens-350
+  // server config, same multi-part text extraction) but for Paper Trade's
+  // "normal" (non-Live-duplex) recorded flow: the manager-supplied question
+  // list is fixed and must be asked in order, but the customer should react
+  // to what the manager actually said on the previous turn before asking
+  // the next required question, instead of always prepending one of a
+  // handful of canned transition phrases regardless of the answer. This is
+  // a separate function from callEmployeeTurn (Red Pen) on purpose, so Red
+  // Pen's prompt/behaviour is completely untouched by this addition.
+  //   background   — the scenario's background context (string)
+  //   nextQuestion — the exact next question from the manager's fixed list
+  //   messages     — [{role:'assistant'|'user', content}] turn history so far
+  //   turnNumber, maxTurns — 1-based current turn / total questions
+  async function callCustomerTurn(background, nextQuestion, messages, turnNumber, maxTurns) {
+    const url = _generateUrl();
+    if (!url) throw new Error('Gemini text-generation proxy not configured');
+
+    const isLast = turnNumber >= maxTurns;
+    const system = `You are roleplaying as a customer calling Zerodha's support line, working through a fixed set of questions with the support manager you're speaking to.
+
+BACKGROUND (for your own understanding only — never say this aloud): ${background}
+
+YOU MUST ASK THIS EXACT QUESTION NEXT (question ${turnNumber} of ${maxTurns}) — adapt it only lightly into natural spoken language, keeping its exact specific point/complaint intact; do not skip it, do not merge it with another question, do not invent a different question: "${nextQuestion}"
+
+HOW TO RESPOND:
+- First, react specifically to what the manager just said in their last reply — a short, natural spoken acknowledgment (a few words to one short sentence) that shows you actually listened (for example: "I hear what you're saying, but..." / "Okay, fair enough — let me ask you this..." / "Right, well here's the thing..." — vary the phrasing each time, never repeat the same one twice).
+- Then ask the required question above, keeping its specific point intact.${isLast ? `\n- This is your FINAL question (${turnNumber} of ${maxTurns}). After asking it, do not add anything else.` : ''}
+
+RULES:
+- You are the CUSTOMER — stay in character at all times, never break the fourth wall, never mention that you are an AI, a script, grading, evaluation criteria, or a training exercise.
+- Speak ONLY in English.
+- Reply in 2-4 sentences MAXIMUM — short, real, conversational.
+- Do NOT narrate or add stage directions.
+- Return ONLY the customer's spoken dialogue, nothing else.`;
+
+    const contents = messages.map(m => ({
+      role:  m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    }));
+
+    const resp = await fetch(url, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        model:           TEXT_MODEL,
+        system,
+        contents,
+        temperature:     0.5,
+        maxOutputTokens: 350,
+      }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error?.message || `Gemini API error ${resp.status}`);
+    }
+    const data = await resp.json();
+    const parts = data && data.candidates && data.candidates[0] && data.candidates[0].content
+      && data.candidates[0].content.parts;
+    const text = Array.isArray(parts)
+      ? parts.filter(p => p && p.text && !p.thought).map(p => p.text).join(' ').trim()
+      : '';
+    if (!text) throw new Error('Gemini returned no text');
+    return text.trim();
+  }
+
+  return { isAvailable, startCall, isTextAvailable, callEmployeeTurn, callCustomerTurn };
 })();

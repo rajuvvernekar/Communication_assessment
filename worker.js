@@ -182,9 +182,12 @@ export default {
     // ---- Gemini text-generation route (/gemini-generate) ----
     // A single-shot generateContent call -- NOT the Live/bidi WebSocket API
     // above. Added 2026-09-20 for Red Pen's per-turn employee replies (see
-    // js/gemini-live.js's callEmployeeTurn): each call is one short, tightly
-    // scoped completion grounded by the persona + conversation so far, kept
-    // server-side so GEMINI_API_KEY never reaches the browser.
+    // js/gemini-live.js's callEmployeeTurn); reused as-is (unchanged here)
+    // from 2026-09-20 onward by Paper Trade's per-turn AI customer too (see
+    // js/gemini-live.js's callCustomerTurn) -- each call is one short,
+    // tightly scoped completion grounded by the persona/scenario +
+    // conversation so far, kept server-side so GEMINI_API_KEY never reaches
+    // the browser.
     if (url.pathname.endsWith('/gemini-generate')) {
       if (!env.GEMINI_API_KEY) {
         return new Response(

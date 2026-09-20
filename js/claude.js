@@ -673,6 +673,48 @@ Return ONLY the employee's spoken dialogue.`;
     return data.content[0].text.trim();
   }
 
+  // ---- Paper Trade's per-turn AI customer (fixed question list, reactive) ---
+  // Added 2026-09-20 as the Claude fallback for GeminiLive.callCustomerTurn
+  // (js/gemini-live.js), used only when Gemini's per-turn call fails or its
+  // proxy isn't configured. Mirrors callAiEmployee's structure above, but
+  // for Paper Trade's fixed manager-supplied question list: react to what
+  // the manager actually said last, then ask the required next question.
+  async function callAiPtCustomerTurn(background, nextQuestion, messages, turnNumber, maxTurns) {
+    if (!isAvailable()) throw new Error('Claude proxy not configured');
+
+    const isLast = turnNumber >= maxTurns;
+    const system = `You are roleplaying as a customer calling Zerodha's support line, working through a fixed set of questions with the support manager you're speaking to.
+
+BACKGROUND (for your own understanding only — never say this aloud): ${background}
+
+YOU MUST ASK THIS EXACT QUESTION NEXT (question ${turnNumber} of ${maxTurns}) — adapt it only lightly into natural spoken language, keeping its exact specific point/complaint intact; do not skip it, do not merge it with another question, do not invent a different question: "${nextQuestion}"
+
+HOW TO RESPOND:
+- First, react specifically to what the manager just said in their last reply — a short, natural spoken acknowledgment (a few words to one short sentence) that shows you actually listened, varying the phrasing each time.
+- Then ask the required question above, keeping its specific point intact.${isLast ? `\n- This is your FINAL question (${turnNumber} of ${maxTurns}). After asking it, do not add anything else.` : ''}
+
+RULES:
+- You are the CUSTOMER — stay in character at all times, never break the fourth wall, never mention that you are an AI, a script, grading, evaluation criteria, or a training exercise.
+- Speak ONLY in English.
+- Reply in 2-4 sentences MAXIMUM — short, real, conversational.
+- Do NOT narrate or add stage directions.
+
+Return ONLY the customer\'s spoken dialogue.`;
+
+    const resp = await fetch(getProxyUrl(), {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ model: MODEL, max_tokens: 160, system, messages }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error?.message || `API error ${resp.status}`);
+    }
+    const data = await resp.json();
+    return data.content[0].text.trim();
+  }
+
   // ---- Get criteria for a module (for display purposes) ----
   function getCriteria(module) {
     if (module === 'mock-call') return MOCK_CALL_CRITERIA;
@@ -1241,5 +1283,5 @@ Return ONLY a JSON object:
     };
   }
 
-  return { isAvailable, evaluate, evaluateBalanced, evaluateRewrite, callAiCustomer, callAiWrittenCustomer, callOpsAdaptiveConceptualCustomer, callAiEmployee, evaluateManagerAssessment, evaluateManagerFeedback, evaluateSituationRoomA, evaluateSituationRoomB, evaluatePaperTrade, evaluateOpsCall, evaluateOpsWriting, getCriteria, scoreTimeManagement, MOCK_CALL_CRITERIA };
+  return { isAvailable, evaluate, evaluateBalanced, evaluateRewrite, callAiCustomer, callAiWrittenCustomer, callOpsAdaptiveConceptualCustomer, callAiEmployee, callAiPtCustomerTurn, evaluateManagerAssessment, evaluateManagerFeedback, evaluateSituationRoomA, evaluateSituationRoomB, evaluatePaperTrade, evaluateOpsCall, evaluateOpsWriting, getCriteria, scoreTimeManagement, MOCK_CALL_CRITERIA };
 })();

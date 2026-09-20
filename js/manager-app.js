@@ -1146,18 +1146,52 @@ Let's get back on track.
     });
   }
 
-  function _runPtCustomerTurn(idx) {
+  async function _runPtCustomerTurn(idx) {
     _pt.turnIndex = idx;
     const isLast = idx === _pt.maxTurns - 1;
-    // Turn 1 opens cold with the exact scripted line (no lead-in needed --
-    // it's the opening complaint). Every question after that gets one of
-    // the fixed transition phrases prepended, rotating through the list, so
-    // it sounds like the customer is continuing the same call rather than
-    // reciting question after question with no connective tissue.
     const rawLine = _pt.questions[idx];
-    const transition = idx > 0 ? PT_CALL_TRANSITIONS[(idx - 1) % PT_CALL_TRANSITIONS.length] : '';
-    const line = transition ? `${transition} ${rawLine}` : rawLine;
     const mood = _ptMoodParams(idx, _pt.maxTurns);
+    const stateEl = $('mgr-audio-live-state');
+
+    let line;
+    if (idx === 0) {
+      // Turn 1 opens cold with the exact scripted line -- it's the opening
+      // complaint, and there's no prior manager reply yet to react to.
+      line = rawLine;
+    } else {
+      // Added 2026-09-20: react to what the manager actually said on the
+      // previous turn -- the same idea already used in the Gemini Live
+      // (Beta) duplex call further below (react, then ask the required
+      // next question) -- instead of always prepending one of a handful of
+      // canned rotating transition phrases regardless of the manager's
+      // actual answer. Gemini is tried first (the same /gemini-generate
+      // route Red Pen's normal flow uses, already fixed to not burn its
+      // token budget on invisible "thinking"), then Claude, then the
+      // original canned-transition wording as the final fallback -- so
+      // this is never less reliable than the previous behaviour, only more
+      // reactive when the AI call succeeds.
+      const messages = [{ role: 'user', content: 'The call has connected and the customer has started speaking.' }];
+      for (const ex of _pt.history) {
+        messages.push({ role: 'assistant', content: ex.customer });
+        if (ex.manager) messages.push({ role: 'user', content: ex.manager });
+      }
+      if (stateEl) stateEl.textContent = '🤔 Customer is thinking of a response…';
+      try {
+        if (typeof GeminiLive === 'undefined' || !GeminiLive.isTextAvailable()) {
+          throw new Error('Gemini text generation not configured');
+        }
+        line = await GeminiLive.callCustomerTurn(_pt.background, rawLine, messages, idx + 1, _pt.maxTurns);
+      } catch (geminiErr) {
+        console.warn('Gemini PT customer call failed, falling back to Claude:', geminiErr.message);
+        try {
+          line = await ClaudeEvaluator.callAiPtCustomerTurn(_pt.background, rawLine, messages, idx + 1, _pt.maxTurns);
+        } catch (e) {
+          console.warn('AI PT customer call failed, using canned transition:', e.message);
+          const transition = PT_CALL_TRANSITIONS[(idx - 1) % PT_CALL_TRANSITIONS.length];
+          line = transition ? `${transition} ${rawLine}` : rawLine;
+        }
+      }
+    }
 
     $('mgr-audio-live-turn-bar').style.display = '';
     const moodEl = $('mgr-audio-live-mood');
@@ -1175,7 +1209,6 @@ Let's get back on track.
     $('mgr-audio-live-thread').scrollTop = $('mgr-audio-live-thread').scrollHeight;
 
     $('mgr-audio-live-rec-area').style.display = 'none';
-    const stateEl = $('mgr-audio-live-state');
     if (stateEl) stateEl.textContent = isLast
       ? `🔊 Customer is speaking… (Question ${idx + 1} of ${_pt.maxTurns} — Final)`
       : `🔊 Customer is speaking… (Question ${idx + 1} of ${_pt.maxTurns})`;
