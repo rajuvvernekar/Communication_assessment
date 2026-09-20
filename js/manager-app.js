@@ -560,6 +560,61 @@ Let's get back on track.
     return { contentScore, clarityScore, empathyScore, actionScore, criticalThinkingScore, overall, wordCount: words, _method: 'mgr-written', _module: moduleKey };
   }
 
+  // ── Local fallback scorer for Red Pen (added 2026-09-20) ──
+  // Every other manager assessment already has a non-AI fallback (Paper
+  // Trade keeps its SpeechEngine score, Situation Room defaults to flat
+  // 60%s, the generic written modules use scoreWrittenResponse() above) so
+  // they keep producing SOME score when the Claude proxy is unreachable
+  // (e.g. the Anthropic account is out of API credits). Red Pen was the one
+  // exception -- it just set aiScores.overall = null on failure, which is
+  // why it specifically looked "stuck"/blank while other manager modules
+  // kept updating. This mirrors scoreWrittenResponse()'s approach: cheap
+  // regex/heuristic signals on the manager's own lines, mapped onto the
+  // same 5 MGR_EVAL_CRITERIA['mgr-feedback'] parameter keys Claude would
+  // return, so the admin's score grid renders identically either way.
+  // NOTE: this is a rough structural estimate, not a real judgment of
+  // whether the manager actually handled the persona's specific situation
+  // well -- that nuance genuinely needs an LLM. Real Claude-based scoring
+  // resumes automatically (no code change needed) the moment the Worker's
+  // Claude call succeeds again -- this fallback only fires when it fails.
+  function scoreFeedbackConversationLocal(fullTranscript, turnCount) {
+    const mgrLines = (fullTranscript || '').split('\n').filter(l => l.startsWith('You: '))
+      .map(l => l.slice(5).trim()).filter(Boolean);
+    const mgrText = mgrLines.join(' ');
+    const words   = mgrText.split(/\s+/).filter(Boolean).length;
+    const turns   = turnCount || mgrLines.length || 1;
+
+    const hasContext    = /(let'?s talk about|wanted to (check in|talk)|i noticed|regarding|about your|following up)/i.test(mgrText);
+    const hasPlanClose  = /(going forward|next step|our plan|by (monday|friday|next week|end of)|follow[- ]?up|action item|check in (next|in))/i.test(mgrText);
+    const hasEmpathy    = /(understand|appreciate|acknowledge|hear you|i know this|i get that|thank you for|your effort|i realize)/i.test(mgrText);
+    const hasBlame      = /(you always|you never|that'?s wrong|unacceptable|your fault|disappointed in you)/i.test(mgrText);
+    const hasCalmRedirect = /(i hear you,? but|i understand,? however|let'?s focus on|coming back to|regardless|that said)/i.test(mgrText);
+    const hasSpecifics  = /(\d|last (week|month|call)|specific example|the data|call (id|number)|on record)/i.test(mgrText);
+    const hasSmart      = /(by (monday|friday|next week|end of)|measurable|specific goal|follow[- ]?up|check[- ]?in|track(ing)?)/i.test(mgrText);
+
+    const structure                = Math.min(100, 40 + (hasContext ? 25 : 0) + (hasPlanClose ? 25 : 0) + (turns >= 3 ? 10 : 0));
+    const empathyRelationship      = Math.min(100, Math.max(10, (hasEmpathy ? 70 : 40) - (hasBlame ? 30 : 0)));
+    const resilienceUnderPushback  = Math.min(100, Math.max(10, 40 + (turns >= 3 ? 20 : 0) + (hasCalmRedirect ? 20 : 0) - (hasBlame ? 20 : 0)));
+    const specificityEvidence      = Math.min(100, 30 + (hasSpecifics ? 40 : 0) + (words >= 100 ? 20 : words >= 50 ? 10 : 0));
+    const forwardPlanSmart         = Math.min(100, 30 + (hasPlanClose ? 30 : 0) + (hasSmart ? 30 : 0));
+
+    const scores = { structure, empathyRelationship, resilienceUnderPushback, specificityEvidence, forwardPlanSmart };
+    const weight = 10;
+    let earnedMarks = 0, totalWeight = 0;
+    Object.values(scores).forEach(pct => { earnedMarks += (pct / 100) * weight; totalWeight += weight; });
+    const overall = totalWeight > 0 ? parseFloat(((earnedMarks / totalWeight) * 100).toFixed(1)) : null;
+
+    const note = 'Estimated locally -- Claude AI scoring was unavailable for this session.';
+    return {
+      ...scores,
+      overall,
+      earnedMarks: parseFloat(earnedMarks.toFixed(1)),
+      maxMarks: totalWeight,
+      _reasons: { structure: note, empathyRelationship: note, resilienceUnderPushback: note, specificityEvidence: note, forwardPlanSmart: note },
+      _method: 'mgr-feedback-local',
+    };
+  }
+
   // ── Auth ─────────────────────────────────────────────────
   async function login() {
     const name  = $('mgr-auth-name').value.trim();
@@ -1887,7 +1942,9 @@ HOW TO RUN THIS CONVERSATION:
 
     const fullTranscript = _mgrLive.turns.map(t => `${t.role === 'bot' ? emp.name : 'You'}: ${t.text}`).join('\n\n');
 
-    let aiScores = { overall: null, _method: 'mgr-feedback-live-js', _module: 'mgr-feedback' };
+    let aiScores = fullTranscript
+      ? scoreFeedbackConversationLocal(fullTranscript, _mgrLive.turns.length)
+      : { overall: null, _method: 'mgr-feedback-live-js', _module: 'mgr-feedback' };
     if (fullTranscript && typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
       try {
         const result = await ClaudeEvaluator.evaluateManagerFeedback(
@@ -1903,7 +1960,8 @@ HOW TO RUN THIS CONVERSATION:
           _method:     'mgr-feedback-params',
         };
       } catch (e) {
-        console.warn('Red Pen live-call eval failed:', e.message);
+        console.warn('Red Pen live-call eval failed, using local estimate:', e.message);
+        // aiScores keeps the local estimate computed above
       }
     }
     aiScores._module     = 'mgr-feedback';
@@ -2160,11 +2218,11 @@ HOW TO RUN THIS CONVERSATION:
           _method:     'mgr-feedback-params',
         };
       } else {
-        aiScores = { overall: null };
+        aiScores = scoreFeedbackConversationLocal(fullTranscript, _fb.history.length);
       }
     } catch(e) {
-      console.warn('Claude feedback eval failed:', e.message);
-      aiScores = { overall: null };
+      console.warn('Claude feedback eval failed, using local estimate:', e.message);
+      aiScores = scoreFeedbackConversationLocal(fullTranscript, _fb.history.length);
     }
     aiScores._method    = aiScores._method  || 'mgr-feedback-ai';
     aiScores._module    = 'mgr-feedback';
