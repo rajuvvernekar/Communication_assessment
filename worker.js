@@ -31,7 +31,7 @@
  */
 
 const ANTHROPIC_API        = 'https://api.anthropic.com/v1/messages';
-const ELEVENLABS_VOICE     = 'ErXwobaYiN019PkySvjV'; // Antoni — warm, natural male
+const ELEVENLABS_VOICE     = '21m00Tcm4TlvDq8ikWAM'; // Rachel — natural, warm female
 const GEMINI_TOKEN_API     = 'https://generativelanguage.googleapis.com/v1beta/auth_tokens';
 const GEMINI_LIVE_MODEL    = 'models/gemini-3.8-live';
 
