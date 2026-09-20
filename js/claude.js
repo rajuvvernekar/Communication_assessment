@@ -715,6 +715,132 @@ Return ONLY the customer\'s spoken dialogue.`;
     return data.content[0].text.trim();
   }
 
+  // ---- The Mirror Room's per-turn AI counterpart (EQ roleplay) ---
+  // Added 2026-09-20 as the Claude fallback for GeminiLive.callEqTurn (see
+  // js/gemini-live.js), used only when Gemini's per-turn call fails or its
+  // proxy isn't configured. Mirrors callAiEmployee's structure, kept as its
+  // own function (not touching callAiEmployee) so Red Pen is unaffected.
+  async function callAiEqTurn(scenario, cpName, cpPersona, messages, turnNumber, maxTurns) {
+    if (!isAvailable()) throw new Error('Claude proxy not configured');
+
+    const isLast = turnNumber >= maxTurns;
+    const system = `You are roleplaying as ${cpName}, a counterpart of the manager's in a real-time workplace situation.
+
+SITUATION: ${scenario}
+
+YOUR CHARACTER: ${cpPersona}
+
+HOW TO BEHAVE:
+- React authentically and specifically to what the manager just said or did, exactly as your character description above directs.
+- Show realistic emotional progression -- don't change stance too suddenly.
+- Don't repeat yourself.${isLast ? `\n- This is the FINAL turn (${turnNumber} of ${maxTurns}). Give a realistic closing line that reflects how the manager handled the situation overall.` : ''}
+
+RULES:
+- Stay in character as ${cpName} -- never break the fourth wall.
+- Reply in 2-4 sentences MAXIMUM -- short, real, conversational.
+- Do NOT narrate or add stage directions.
+- Do NOT start with your own name.
+
+Return ONLY the counterpart's spoken dialogue.`;
+
+    const resp = await fetch(getProxyUrl(), {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ model: MODEL, max_tokens: 160, system, messages }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error?.message || `API error ${resp.status}`);
+    }
+    const data = await resp.json();
+    return data.content[0].text.trim();
+  }
+
+  // ---- The Mirror Room (EQ) -- strict evaluation against the 5 Goleman
+  // competencies in MGR_EVAL_CRITERIA['mgr-eq'] ----
+  // Added 2026-09-20, mirroring evaluateManagerFeedback's structure exactly
+  // (own function, 'mgr-eq' hardcoded, not touching evaluateManagerFeedback
+  // itself) but grounded in the 1-5 scoring scale from the manager's
+  // uploaded "Emotional Intelligence Assessment" doc -- the same scale is
+  // asked for here as a 0-100 percentage-of-that-scale, so it stays
+  // consistent with how every other manager module is scored/weighted.
+  async function evaluateMirrorRoom(transcript, scenarioContext, goodLooksLike = [], commonPitfalls = []) {
+    if (!isAvailable()) throw new Error('Claude proxy not configured');
+
+    const crit = (typeof MGR_EVAL_CRITERIA !== 'undefined') ? MGR_EVAL_CRITERIA['mgr-eq'] : null;
+    const params = crit ? crit.parameters : [];
+
+    const glItems = (goodLooksLike || []).map((s, i) => `${i + 1}. ${s}`).join('\n');
+    const cpItems = (commonPitfalls || []).map((s, i) => `${i + 1}. ${s}`).join('\n');
+    const paramLines = params.map((p, i) => `${i + 1}. ${p.key}: ${p.label} (weight ${p.weight}) — ${p.desc}`).join('\n');
+    const paramKeysJson  = params.map(p => `"${p.key}":<0-100>`).join(',');
+    const reasonKeysJson = params.map(p => `"${p.key}":"<sentence>"`).join(',');
+
+    const systemPrompt = `You are a senior leadership development expert evaluating a manager's real-time response to an emotionally-loaded workplace situation, against the organisation's exact scoring rubric below.
+
+SITUATION: ${scenarioContext}
+${glItems ? `\nWHAT A HIGH-EI RESPONSE LOOKS LIKE IN THIS SPECIFIC SITUATION:\n${glItems}` : ''}
+${cpItems ? `\nRED-FLAG / LOW-EI RESPONSES IN THIS SPECIFIC SITUATION (a manager who does one of these should generally score below 40% on the related parameter):\n${cpItems}` : ''}
+
+REFERENCE SCALE (the organisation's underlying 1-5 EI scale -- translate your 0-100 score onto this, e.g. a solid "4 = Deliberate & steady" performance is roughly 70-85):
+1 = Reactive & unaware -- responds purely from emotion (own or the situation's) with no sign of noticing it; blames, avoids, or escalates.
+2 = Aware but unregulated -- notices something is off but still lets it drive behaviour; reacts first, reflects later if at all.
+3 = Managing, not leading -- keeps composure and avoids obvious damage, but the response is passive or generic; doesn't actively steady others.
+4 = Deliberate & steady -- notices own/others' emotional state, pauses, chooses a considered response that protects the person and the outcome.
+5 = Models EI for the team -- everything in level 4, plus proactively turns the moment into trust or growth for the individual or the wider team.
+
+SCORING STANDARDS:
+- Score each parameter as a PERCENTAGE from 0-100 of how fully the manager's actual words and choices in the conversation meet that parameter's standard. Judge the response, not just the words -- tone, pacing, and what the manager notices about their own state matter as much as what they say they'd do.
+- Be strict. Do NOT inflate scores. Ground every score in what the manager actually said in the transcript, weighed against the situation-specific high-EI/red-flag examples above where provided.
+
+PARAMETERS TO SCORE (0-100 each):
+${paramLines}
+
+Return ONLY a JSON object: {${paramKeysJson},"reasons":{${reasonKeysJson}}}`;
+
+    const resp = await fetch(getProxyUrl(), {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        model:      MODEL,
+        max_tokens: 600,
+        system:     systemPrompt,
+        messages:   [{ role: 'user', content: `MANAGER'S CONVERSATION TRANSCRIPT:\n\n${transcript}` }],
+      }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error?.message || `API error ${resp.status}`);
+    }
+
+    const data  = await resp.json();
+    const text  = data.content[0].text.trim();
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('No JSON in response');
+
+    const parsed = JSON.parse(match[0]);
+    const scores = {};
+    let earnedMarks = 0, totalWeight = 0;
+    params.forEach(p => {
+      const pct = Math.min(100, Math.max(0, Number(parsed[p.key]) || 0));
+      scores[p.key] = pct;
+      totalWeight += p.weight;
+      earnedMarks += (pct / 100) * p.weight;
+    });
+    const maxMarks = (crit && crit.maxMarks) || totalWeight;
+    const overall  = totalWeight > 0 ? parseFloat(((earnedMarks / totalWeight) * 100).toFixed(1)) : null;
+
+    return {
+      scores,
+      overall,
+      earnedMarks: parseFloat(earnedMarks.toFixed(1)),
+      maxMarks,
+      reasons: parsed.reasons || {},
+    };
+  }
+
   // ---- Get criteria for a module (for display purposes) ----
   function getCriteria(module) {
     if (module === 'mock-call') return MOCK_CALL_CRITERIA;
@@ -1283,5 +1409,5 @@ Return ONLY a JSON object:
     };
   }
 
-  return { isAvailable, evaluate, evaluateBalanced, evaluateRewrite, callAiCustomer, callAiWrittenCustomer, callOpsAdaptiveConceptualCustomer, callAiEmployee, callAiPtCustomerTurn, evaluateManagerAssessment, evaluateManagerFeedback, evaluateSituationRoomA, evaluateSituationRoomB, evaluatePaperTrade, evaluateOpsCall, evaluateOpsWriting, getCriteria, scoreTimeManagement, MOCK_CALL_CRITERIA };
+  return { isAvailable, evaluate, evaluateBalanced, evaluateRewrite, callAiCustomer, callAiWrittenCustomer, callOpsAdaptiveConceptualCustomer, callAiEmployee, callAiPtCustomerTurn, callAiEqTurn, evaluateManagerAssessment, evaluateManagerFeedback, evaluateMirrorRoom, evaluateSituationRoomA, evaluateSituationRoomB, evaluatePaperTrade, evaluateOpsCall, evaluateOpsWriting, getCriteria, scoreTimeManagement, MOCK_CALL_CRITERIA };
 })();

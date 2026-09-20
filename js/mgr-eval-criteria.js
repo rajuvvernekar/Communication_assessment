@@ -91,13 +91,27 @@ const MGR_EVAL_CRITERIA = {
     label: 'The Mirror Room',
     format: 'Verbal',
     maxMarks: 50,
+    // Replaced 2026-09-20: this module moved from a written 3-question
+    // cascade (Self-Awareness / Impulse Control / Empathy & Consistency,
+    // scored 17/17/16) to a verbal, conversational-AI roleplay built from
+    // the manager's uploaded "Emotional Intelligence Assessment" doc, which
+    // scores every scenario on the same 1-5 EI scale and maps each one to
+    // one or more of Goleman's five EI competencies. These five parameters
+    // (10 each) replace the old three so every scenario -- whichever one is
+    // randomly assigned -- is scored consistently across all five, the same
+    // way Red Pen's fixed 5-parameter rubric applies regardless of which
+    // employee persona comes up.
     parameters: [
-      { key: 'selfAwareness', label: 'Self-Awareness', weight: 17,
-        desc: 'Names the specific emotional trigger honestly (frustration, defensiveness, panic) without deflecting, minimizing, or claiming to feel nothing' },
-      { key: 'impulseControl', label: 'Impulse Control', weight: 17,
-        desc: 'First stated action reflects a pause and deliberate reasoning, not an immediate reactive move driven by urgency or emotional pressure' },
-      { key: 'empathyConsistency', label: 'Empathy & Consistency Across All Three', weight: 16,
-        desc: 'Considers the human impact on everyone involved in each situation, and the quality of reasoning holds steady from the first situation to the third rather than degrading under cumulative pressure' },
+      { key: 'selfAwareness', label: 'Self-Awareness', weight: 10,
+        desc: 'Notices and names their own emotional trigger honestly, without deflecting, minimizing, or claiming to feel nothing' },
+      { key: 'selfRegulation', label: 'Self-Regulation', weight: 10,
+        desc: 'Stays composed under acute, time-pressured stress -- pauses and chooses a deliberate response rather than reacting from emotion' },
+      { key: 'motivation', label: 'Motivation', weight: 10,
+        desc: 'Keeps themselves and others driven through a setback with grounded, specific optimism rather than forced positivity or visible anxiety' },
+      { key: 'empathy', label: 'Empathy', weight: 10,
+        desc: "Registers the other person's emotional state in real time and responds to the person, not just the business problem" },
+      { key: 'socialSkill', label: 'Social Skill', weight: 10,
+        desc: "Manages interpersonal conflict or a hard conversation skilfully, balancing individual relationships against the wider team" },
     ],
   },
 };

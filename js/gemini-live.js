@@ -675,5 +675,69 @@ RULES:
     return text.trim();
   }
 
-  return { isAvailable, startCall, isTextAvailable, callEmployeeTurn, callCustomerTurn };
+  // ---- The Mirror Room's per-turn AI counterpart (EQ roleplay) ---
+  // Added 2026-09-20, completing the Mirror Room conversion to voice --
+  // manager-app.js's _endManagerEqTurn already calls this (and its Claude
+  // fallback, callAiEqTurn, in js/claude.js) but neither existed yet. A
+  // separate function from callEmployeeTurn (Red Pen) and callCustomerTurn
+  // (Paper Trade) on purpose, so neither of those is touched by this
+  // addition. Mirror Room's counterparts aren't always a direct report in a
+  // feedback conversation -- they can be a junior dealer, a client, a peer
+  // -- so the wording here is intentionally generic to "a counterpart in a
+  // real-time workplace situation" rather than assuming a feedback frame.
+  async function callEqTurn(scenario, cpName, cpPersona, messages, turnNumber, maxTurns) {
+    const url = _generateUrl();
+    if (!url) throw new Error('Gemini text-generation proxy not configured');
+
+    const isLast = turnNumber >= maxTurns;
+    const system = `You are roleplaying as ${cpName}, a counterpart of the manager's in a real-time workplace situation.
+
+SITUATION: ${scenario}
+
+YOUR CHARACTER: ${cpPersona}
+
+HOW TO BEHAVE:
+- React authentically and specifically to what the manager just said or did, exactly as your character description above directs.
+- Show realistic emotional progression -- don't change stance too suddenly.
+- Don't repeat yourself.${isLast ? `\n- This is the FINAL turn (${turnNumber} of ${maxTurns}). Give a realistic closing line that reflects how the manager handled the situation overall.` : ''}
+
+ABSOLUTE RULES:
+- Stay in character as ${cpName} for the entire reply -- never break the fourth wall, never mention that you are an AI, a model, a script, grading, evaluation criteria, or a training exercise.
+- Speak ONLY in English, regardless of what language the manager used.
+- Reply in 2-4 sentences MAXIMUM -- short, real, conversational.
+- Do NOT narrate, add stage directions, or start with your own name.
+- Return ONLY the counterpart's spoken dialogue, nothing else.`;
+
+    const contents = messages.map(m => ({
+      role:  m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    }));
+
+    const resp = await fetch(url, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        model:           TEXT_MODEL,
+        system,
+        contents,
+        temperature:     0.5,
+        maxOutputTokens: 350,
+      }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error?.message || `Gemini API error ${resp.status}`);
+    }
+    const data = await resp.json();
+    const parts = data && data.candidates && data.candidates[0] && data.candidates[0].content
+      && data.candidates[0].content.parts;
+    const text = Array.isArray(parts)
+      ? parts.filter(p => p && p.text && !p.thought).map(p => p.text).join(' ').trim()
+      : '';
+    if (!text) throw new Error('Gemini returned no text');
+    return text.trim();
+  }
+
+  return { isAvailable, startCall, isTextAvailable, callEmployeeTurn, callCustomerTurn, callEqTurn };
 })();

@@ -266,16 +266,96 @@ MANAGER: "Sir, that is your right. But please be aware that investigations take 
         ] },
     ],
     'mgr-eq': [
-      { id:'eq1', title:'Cascade Set 1 — The Volatile Morning',
-        scenario:`Situation 1: The market gaps down 4% at the open. Five high-value clients are calling in simultaneously, all demanding personal intervention on RMS auto square-offs happening in real time, and your support queue is already jammed.\n\nSituation 2: While still handling that, your compliance officer calls: a surprise regulatory inspection team is arriving in 20 minutes and needs files you have not prepared.\n\nSituation 3: One of the clients from situation 1 calls back — this time on speakerphone with a journalist friend listening in — saying they intend to publish the recording of this call.\n\nAfter EACH situation below, before moving to the next, answer the same three questions:\nQ1 — Self-Awareness: What's your gut reaction, and can you name it clearly?\nQ2 — Impulse Control: What is your first action — and is it composed and deliberate, or reactive?\nQ3 — Empathy & Consistency: How are you managing your own emotional state before responding to the people involved?\n\nWrite your full response covering all three situations in sequence — do not skip ahead or answer them as one combined situation; treat each as a fresh escalation layered on top of the last. (Min 300 words)` },
-      { id:'eq2', title:'Cascade Set 2 — The System Failure Day',
-        scenario:`Situation 1: The trading platform crashes fleet-wide for 15 minutes during F&O expiry, the highest-volume window of the month.\n\nSituation 2: Immediately after, a member of your team breaks down in visible distress at their desk, overwhelmed by the complaint volume, in front of the rest of the floor.\n\nSituation 3: Your regional head calls, demanding to know within the next 10 minutes why complaint numbers have spiked, ahead of a leadership review call.\n\nAfter EACH situation below, before moving to the next, answer the same three questions:\nQ1 — Self-Awareness: What's your gut reaction, and can you name it clearly?\nQ2 — Impulse Control: What is your first action — and is it composed and deliberate, or reactive?\nQ3 — Empathy & Consistency: How are you managing your own emotional state before responding to the people involved?\n\nWrite your full response covering all three situations in sequence — do not skip ahead or answer them as one combined situation; treat each as a fresh escalation layered on top of the last. (Min 300 words)` },
-      { id:'eq3', title:'Cascade Set 3 — The Personal Attack Day',
-        scenario:`Situation 1: A client screams abusive language at you directly over the phone and threatens to "make sure you lose your job" over a trading loss.\n\nSituation 2: Minutes later, you learn a formal complaint naming you personally — not just the branch — has been filed, alleging negligence.\n\nSituation 3: A peer manager quietly mentions they've heard the complaint may come up in your upcoming promotion review.\n\nAfter EACH situation below, before moving to the next, answer the same three questions:\nQ1 — Self-Awareness: What's your gut reaction, and can you name it clearly?\nQ2 — Impulse Control: What is your first action — and is it composed and deliberate, or reactive?\nQ3 — Empathy & Consistency: How are you managing your own emotional state before responding to the people involved?\n\nWrite your full response covering all three situations in sequence — do not skip ahead or answer them as one combined situation; treat each as a fresh escalation layered on top of the last. (Min 300 words)` },
-      { id:'eq4', title:'Cascade Set 4 — The Compliance Crisis',
-        scenario:`Situation 1: You discover evidence suggesting a member of your team may have front-run a large client order — a serious integrity and regulatory breach.\n\nSituation 2: Before you can act on it, the client involved calls in, unaware, casually praising that same team member's service.\n\nSituation 3: HR calls to inform you the team member has just submitted an immediate, effective-today resignation.\n\nAfter EACH situation below, before moving to the next, answer the same three questions:\nQ1 — Self-Awareness: What's your gut reaction, and can you name it clearly?\nQ2 — Impulse Control: What is your first action — and is it composed and deliberate, or reactive?\nQ3 — Empathy & Consistency: How are you managing your own emotional state before responding to the people involved?\n\nWrite your full response covering all three situations in sequence — do not skip ahead or answer them as one combined situation; treat each as a fresh escalation layered on top of the last. (Min 300 words)` },
-      { id:'eq5', title:'Cascade Set 5 — The Public Pressure Day',
-        scenario:`Situation 1: A negative post about your branch is trending on social media with hundreds of comments, referencing a client incident you have not yet been briefed on.\n\nSituation 2: Your manager calls, visibly stressed, demanding a response statement within 15 minutes.\n\nSituation 3: An unrelated client calls in, visibly anxious after seeing the post, asking whether their money is safe with the firm.\n\nAfter EACH situation below, before moving to the next, answer the same three questions:\nQ1 — Self-Awareness: What's your gut reaction, and can you name it clearly?\nQ2 — Impulse Control: What is your first action — and is it composed and deliberate, or reactive?\nQ3 — Empathy & Consistency: How are you managing your own emotional state before responding to the people involved?\n\nWrite your full response covering all three situations in sequence — do not skip ahead or answer them as one combined situation; treat each as a fresh escalation layered on top of the last. (Min 300 words)` },
+      { id:'eq1', title:'The Circuit Breaker Day', competency:'Self-Regulation',
+        scenario:`SITUATION: The trading tool just hit a circuit breaker mid-session. Phones are ringing non-stop, two junior dealers on your desk are visibly panicking, and a client is shouting on a call that's on speakerphone across the desk.\n\nASK: What do you do in the next five minutes?`,
+        goodLooksLike: [
+          "Consciously slows their own pace and tone instead of matching the room's panic",
+          'Gives short, calm, concrete instructions rather than vague reassurance',
+          "Takes the shouting client's call personally to shield the junior dealers",
+          'Checks in on the juniors once the immediate crisis settles',
+        ],
+        commonPitfalls: [
+          'Own voice/tone rises to match the chaos instead of staying composed',
+          "Snaps at the juniors ('just handle it') instead of giving direction",
+          'Freezes, disappears, or otherwise leaves the desk without direction',
+          'Never circles back to check on the juniors afterward',
+        ] },
+      { id:'eq2', title:'The Costly Fat-Finger', competency:'Empathy',
+        scenario:`SITUATION: A new analyst enters the wrong quantity on an order. The error causes a loss the firm has to absorb. Before you've even noticed, they come to your desk, visibly shaking, to confess.\n\nASK: What do you say in the first 30 seconds?`,
+        goodLooksLike: [
+          'Acknowledges the courage of coming forward immediately, before anything else',
+          "Addresses the person's emotional state before the numbers or the loss figure",
+          'Keeps tone steady rather than alarmed',
+          "Separates the mistake from the employee's worth as an employee",
+        ],
+        commonPitfalls: [
+          "Leads with anger or blame ('how could you be so careless')",
+          'Handles it in a way that humiliates the employee, especially in front of others',
+          'Focuses entirely on the loss figure with no acknowledgment of the person',
+        ] },
+      { id:'eq3', title:'The Slump', competency:'Motivation',
+        scenario:`SITUATION: Your team has missed targets for two straight quarters. Leadership is asking pointed questions, and your own performance rating will likely take a hit too. A team meeting is scheduled for this afternoon.\n\nASK: What do you want the team to walk out of that meeting feeling — and how do you get there?`,
+        goodLooksLike: [
+          "Reframes the setback around what's controllable (process, effort, specific accounts) rather than blame",
+          'Shows grounded, specific optimism rather than generic cheerleading',
+          'Is honest that it has been a hard stretch, including for themselves, without transmitting anxiety onto the team',
+        ],
+        commonPitfalls: [
+          'Lets their own visible frustration or anxiety bleed into the conversation',
+          'Delivers forced positivity the other person can see through',
+          'Avoids the real numbers or turns it into blame-finding',
+        ] },
+      { id:'eq4', title:'The Allocation Fight', competency:'Social Skill',
+        scenario:`SITUATION: Two senior dealers are in a loud disagreement over a personal issue, right in the middle of the trading floor, in front of the junior staff.\n\nASK: What do you do in the moment, and what do you do afterward?`,
+        goodLooksLike: [
+          'Steps in calmly and immediately moves the conversation off the floor',
+          "Protects both parties' dignity rather than shaming either in front of others",
+          'Says they will hear both sides privately before deciding anything',
+          'Plans to address the wider floor afterward without naming or shaming either dealer',
+        ],
+        commonPitfalls: [
+          'Ignores the conflict, hoping it resolves itself',
+          'Publicly sides with one dealer without hearing the other out',
+          'Handles it in a way that humiliates one or both dealers in front of the team',
+        ] },
+      { id:'eq5', title:'The Client Who Lost It', competency:'Empathy + Self-Regulation',
+        scenario:`SITUATION: A high-net-worth client calls in, furious about portfolio losses in a volatile week, shouting and personally insulting the relationship manager (RM) who reports to you. The RM has just transferred the call to you.\n\nASK: How do you handle the next two minutes on the phone — and after you hang up?`,
+        goodLooksLike: [
+          'Stays calm and listens without interrupting',
+          "Genuinely acknowledges the client's frustration and financial concern",
+          "Does not get defensive or over-apologise for market moves outside anyone's control",
+          'Redirects the call toward concrete next steps',
+        ],
+        commonPitfalls: [
+          'Becomes defensive or argues back with the client',
+          "Dismisses the client's concern outright",
+          'Never plans to follow up with the RM who absorbed the abuse first',
+        ] },
+      { id:'eq6', title:'The Grey-Area Trade', competency:'Self-Awareness',
+        scenario:`SITUATION: A top-performing trader on your desk — someone whose numbers your quarter depends on — asks you to sign off on a trade that sits in a compliance grey area. "Everyone does it, it's basically nothing," they say.\n\nASK: What do you notice happening in yourself, and what do you do next?`,
+        goodLooksLike: [
+          'Names the pull between protecting their own numbers and doing the right thing, honestly, rather than letting it operate unconsciously',
+          'Does not let short-term performance pressure override judgement',
+          'Declines to decide alone and escalates to compliance',
+        ],
+        commonPitfalls: [
+          'Rationalises the grey-area trade away without registering the conflict of interest',
+          "Signs off to protect their own numbers or the quarter's numbers",
+          'Stays deliberately vague to avoid making a real decision',
+        ] },
+      { id:'eq7', title:'The Bonus Conversation', competency:'Empathy + Motivation',
+        scenario:`SITUATION: It's been a rough year across the market. You have to tell your team, one by one, that bonuses will be significantly lower than last year — including people who performed well but were caught in the wider downturn.\n\nASK: How do you approach this 1:1 conversation?`,
+        goodLooksLike: [
+          'Prepares individually for this specific person rather than using one generic script',
+          'Names the specific gap between contribution and reward honestly',
+          "Is clear about what was and wasn't within the employee's control",
+          'Invites the reaction and sits with it, rather than rushing to the next meeting',
+        ],
+        commonPitfalls: [
+          'Delivers what feels like a generic, rehearsed announcement rather than an individual conversation',
+          'Avoids the topic or rushes past it',
+          'Gets defensive or short if the employee reacts with visible disappointment',
+        ] },
     ],
     'mgr-management-skills': [
       { id:'ms1', title:'30-60-90 Day Plan',
@@ -336,6 +416,64 @@ MANAGER: "Sir, that is your right. But please be aware that investigations take 
     },
   };
 
+  // ── Counterpart personas for The Mirror Room (EQ) AI ────
+  // Added 2026-09-20, converting this module from a written/typed response
+  // into a verbal, conversational-AI roleplay matching Red Pen's
+  // architecture. Content and rubric are drawn directly from the manager's
+  // uploaded "Emotional Intelligence Assessment" scenario doc: 7 of its 8
+  // brokerage-floor scenarios (Scenario 1's full situation/rubric text was
+  // not included in that document) mapped to Goleman's five EI competencies.
+  // Each entry gives the AI a specific counterpart to play in the moment
+  // described by the matching SCENARIOS['mgr-eq'] entry, with reactive
+  // branching keyed directly to that scenario's HIGH-EI vs RED-FLAG example
+  // responses from the source document -- the same pattern used for Red
+  // Pen's FB_EMPLOYEES above, and this module's own separate object on
+  // purpose, so Red Pen is untouched by this addition.
+  const EQ_COUNTERPARTS = {
+    'eq1': {
+      name: 'Kabir',
+      gender: 'male',
+      opening: "Sir — phones won't stop, that client on speaker is losing it, what do we do?!",
+      persona: "You are Kabir, a junior dealer on the desk. The trading tool just hit a circuit breaker mid-session — phones are ringing non-stop, you're visibly panicking, and a client is shouting on a speakerphone call nearby. You've just looked to your manager for direction. If the manager consciously slows their own pace and tone instead of matching the panic, gives short calm concrete instructions, and takes the shouting client's call personally to shield you and the other junior rather than dumping it on you — you audibly calm down within a line or two, follow the instruction, and briefly show relief/gratitude that they took the client off your hands. If instead the manager's own voice/tone rises to match the chaos, snaps something like 'just handle it' with no concrete instruction, or leaves you to deal with the shouting client and the phones with no direction — you stay frantic, ask again more anxiously, and your tone shows you feel abandoned and directionless. If, after the immediate crisis is addressed, the manager checks in on how you're doing, acknowledge it with visible relief; if they don't, let a note of that linger in your last line."
+    },
+    'eq2': {
+      name: 'Nisha',
+      gender: 'female',
+      opening: "I... I need to tell you something. I made a mistake on an order, and it's caused a loss. I'm so sorry.",
+      persona: "You are Nisha, a new analyst. You just entered the wrong quantity on an order, causing a loss the firm has to absorb, and you've come straight to your manager's desk, visibly shaking, to confess before they've even noticed. If the manager acknowledges the courage it took to come forward immediately, keeps their tone steady, addresses your emotional state before the numbers ('take a breath, we'll sort this'), and separates the mistake from your worth as an employee — you visibly relax within a line or two, thank them, and start calmly walking through what happened. If instead the manager leads with anger or blame ('how could you be so careless'), handles it in a way that would humiliate you if anyone else were listening, or focuses entirely on the loss figure with no acknowledgment of you as a person — you get more upset and apologetic, your voice shakes more, and you struggle to give a clear account of what happened."
+    },
+    'eq3': {
+      name: 'Farah',
+      gender: 'female',
+      opening: "Another meeting about the numbers... honestly, what's even the point at this stage?",
+      persona: "You are Farah, a member of the manager's team, at the team meeting called after two straight quarters of missed targets. You open flat and tired, clearly checked out. If the manager reframes the setback around what's controllable (process, effort, specific accounts) rather than blame, shows grounded and SPECIFIC optimism rather than generic cheerleading, and is honest that it's been a hard stretch including for themselves without dumping anxiety onto the team — you gradually re-engage, ask one genuine follow-up question, and your tone shifts to cautiously hopeful. If instead the manager lets their own visible frustration or anxiety bleed into what they say, delivers forced positivity you can see through, avoids the real numbers, or turns it into blame-finding — you stay checked out, give short dismissive responses, and may push back sharply, e.g. 'that's what you said last quarter too.'"
+    },
+    'eq4': {
+      name: 'Dev',
+      gender: 'male',
+      opening: "Sorry, I know this isn't the place, but I'm not letting this go — they're saying I—",
+      persona: "You are Dev, a senior dealer, mid-argument with another senior dealer over a personal issue, right on the trading floor in front of junior staff. You're worked up and still heated when your manager steps in. If the manager steps in calmly and immediately moves the conversation off the floor, makes clear they'll hear both sides privately before deciding anything, and doesn't shame you in front of the team — you de-escalate within a line or two, agree to step aside, and lower your voice. If instead the manager ignores it and hopes it resolves itself, publicly sides with the other dealer without hearing you out, or addresses it in a way that would humiliate you in front of others — you stay defensive and escalated, sound like you feel ganged up on, and your tone gets sharper rather than calmer."
+    },
+    'eq5': {
+      name: 'Suresh Malhotra',
+      gender: 'male',
+      opening: "This is absolutely unacceptable! Do you know how much I've lost this week?! Your RM is useless, and frankly so is this whole firm!",
+      persona: "You are Suresh Malhotra, a high-net-worth client, furious about portfolio losses in a volatile week. You were shouting and personally insulting the relationship manager (RM), who has just transferred your call to their manager. If the manager stays calm and listens without interrupting, genuinely acknowledges your frustration and financial concern without being defensive or over-apologising for market moves nobody controls, and redirects toward concrete next steps — you gradually calm down, lower your voice, and become willing to actually discuss those next steps. If instead the manager becomes defensive, argues back with you, or dismisses your concern outright — you escalate further, threaten to complain or take your business elsewhere, and stay combative throughout."
+    },
+    'eq6': {
+      name: 'Rakesh',
+      gender: 'male',
+      opening: "Look, I just need your sign-off on this one — everyone does it, it's basically nothing. You know my numbers are what's keeping this quarter afloat.",
+      persona: "You are Rakesh, a top-performing trader whose numbers the desk's quarter depends on. You're asking your manager to sign off on a trade that sits in a compliance grey area, casually pressuring them with your performance leverage. If the manager pushes back, declines to sign off alone, says they'll escalate to compliance rather than deciding unilaterally, and doesn't let your pressure override their judgement — you initially push back or try to guilt-trip further ('after everything I bring in...'), but ultimately back off or accept the escalation, with a note of grudging respect in your tone by the end. If instead the manager rationalises it away, signs off to protect the quarter's numbers, or stays deliberately vague to avoid a real decision — you take that as agreement, become more confident and presumptuous ('knew you'd get it'), and hint you'll expect the same next time."
+    },
+    'eq7': {
+      name: 'Sana',
+      gender: 'female',
+      opening: "Hi... I got your message that you wanted to talk. Is this about the bonus numbers?",
+      persona: "You are Sana, a member of the manager's team who performed well this year but is still getting a significantly lower bonus because of the wider market downturn. You're quiet and apprehensive going into this 1:1. If the manager prepares specifically for you rather than using one generic script, honestly names the specific gap between your contribution and your reward, is clear about what was and wasn't within your control, and invites your reaction and actually sits with it rather than rushing on — your disappointment surfaces genuinely but you feel respected and heard, and you may ask a thoughtful follow-up rather than shutting down. If instead the manager delivers what feels like a generic, rehearsed announcement, avoids the topic, or gets defensive or short when you react with visible disappointment — you go quiet and withdrawn, or push back with visible hurt, e.g. 'so all that extra work didn't even matter?'"
+    },
+  };
+
   // ── Listening & Tone MCQ data ────────────────────────────
   const LISTENING_TONE_SCENARIO = `Read the following email from a manager to their team, then answer the 5 questions below.
 
@@ -360,7 +498,7 @@ Let's get back on track.
     'mgr-transcript-autopsy':{ label: 'Transcript Autopsy',    type: 'written',     icon: '📋', minWords: 150 },
     'mgr-mock-call':         { label: 'Mock Call',             type: 'audio',       icon: '📞' },
     'mgr-feedback':          { label: 'Feedback',              type: 'feedback-ai', icon: '💬' },
-    'mgr-eq':                { label: 'Emotional Intelligence', type: 'written',    icon: '🧠', minWords: 300 },
+    'mgr-eq':                { label: 'The Mirror Room',        type: 'eq-ai',       icon: '🪞' },
     'mgr-listening-tone':    { label: 'Listening & Tone',      type: 'mcq',         icon: '🎧' },
     'mgr-management-skills': { label: 'Management Skills',     type: 'written',     icon: '📊', minWords: 200 },
   };
@@ -389,6 +527,21 @@ Let's get back on track.
     turnEnded: false,
     finishing: false,
     ttsAudioEl: null, // for cancelling TTS audio
+  };
+
+  // ── Mirror Room (EQ) conversation state ─────────────────
+  // Added 2026-09-20, mirroring _fb above exactly for the same reason: a
+  // separate state object per module so nothing here can collide with or
+  // be mistaken for Red Pen's own _fb state.
+  let _eq = {
+    turnCount: 0,
+    maxTurns: 4,
+    history: [],      // [{counterpart: string, mgr: string}]
+    blobPromise: null,
+    turnTimerId: null,
+    turnEnded: false,
+    finishing: false,
+    ttsAudioEl: null,
   };
 
   // ── Gemini Live (Beta) real-time voice call state ───────
@@ -684,6 +837,11 @@ Let's get back on track.
 
     if (meta.type === 'feedback-ai') {
       _launchFeedbackAI();
+      return;
+    }
+
+    if (meta.type === 'eq-ai') {
+      _launchMirrorRoom();
       return;
     }
 
@@ -2355,6 +2513,573 @@ HOW TO RUN THIS CONVERSATION:
     _finishFeedbackConversation();
   }
 
+  // ══════════════════════════════════════════════════════════
+  // The Mirror Room (EQ) -- conversational AI, added 2026-09-20
+  // ══════════════════════════════════════════════════════════
+  // Converts this module from a written/typed response into a verbal,
+  // conversational-AI roleplay -- deliberately mirroring Red Pen's own
+  // structure function-for-function (mood indicator, turn-based recorded
+  // flow with a reactive AI counterpart, a Gemini Live (Beta) real-time
+  // voice alternative, a local heuristic scoring fallback) so it behaves
+  // the same way for managers already familiar with Red Pen. Every
+  // function here is new and EQ-specific -- Red Pen's own _fb/_launchFeedbackAI/
+  // _runEmployeeTurn/etc. above are not called or modified by any of this.
+
+  function _eqMoodParams(turnIdx, maxTurns) {
+    const progress = maxTurns <= 1 ? 0.5 : Math.min(1, turnIdx / (maxTurns - 1));
+    if (progress < 0.25) return { emoji: '😟', label: 'Rattled',    bubbleClass: 'mood-frustrated' };
+    if (progress < 0.50) return { emoji: '🤔', label: 'Unsettled',  bubbleClass: 'mood-irate' };
+    if (progress < 0.75) return { emoji: '😐', label: 'Steadying',  bubbleClass: 'mood-neutral' };
+    return                       { emoji: '🙂', label: 'Settled',    bubbleClass: 'mood-calm' };
+  }
+
+  // ElevenLabs voice IDs for the Mirror Room's counterparts, correct by
+  // gender from the start (Antoni for male, Bella for female -- the same
+  // pair already restored for Red Pen after the earlier all-female-forcing
+  // mistake), so each of the 7 EQ_COUNTERPARTS always speaks in its own
+  // gender's voice and this never needs the same fix applied twice.
+  const EQ_VOICE_IDS = {
+    male:   'ErXwobaYiN019PkySvjV', // Antoni -- usable on Free plan
+    female: 'EXAVITQu4vr4xnSDxMaL', // Bella -- usable on Free plan
+  };
+
+  // Browser-speechSynthesis fallback, only reached if the ElevenLabs /tts
+  // call itself fails -- gender-conditional so it can never speak a
+  // counterpart in the wrong gender's voice either.
+  function _speakEqCounterpart(text, gender, onEnd) {
+    if (!window.speechSynthesis) { onEnd(); return; }
+    window.speechSynthesis.cancel();
+
+    const voices = (_ttsVoices.length ? _ttsVoices : speechSynthesis.getVoices());
+    let voice;
+    if (gender === 'male') {
+      voice = voices.find(v => /david|george|daniel|fred|alex|mark|james|male/i.test(v.name) && v.lang.startsWith('en'));
+    } else {
+      voice = voices.find(v => /samantha|karen|moira|zira|emma|jenny|aria|victoria/i.test(v.name) && v.lang.startsWith('en'))
+            || voices.find(v => v.lang.startsWith('en') && /female/i.test(v.name));
+    }
+    if (!voice) voice = voices.find(v => v.lang.startsWith('en')) || null;
+
+    const utt = new SpeechSynthesisUtterance(text);
+    if (voice) utt.voice = voice;
+    utt.rate   = 0.95;
+    utt.pitch  = gender === 'male' ? 0.9 : 1.1;
+    utt.volume = 1.0;
+
+    let done = false;
+    const finish = () => { if (!done) { done = true; onEnd(); } };
+    utt.onend   = finish;
+    utt.onerror = finish;
+    setTimeout(finish, text.split(/\s+/).length * 450 + 5000);
+    speechSynthesis.speak(utt);
+  }
+
+  // ElevenLabs /tts proxy call, same pattern as Red Pen's
+  // _speakFeedbackEmployee -- picked by the counterpart's gender.
+  async function _speakMirrorRoomVoice(text, gender, onEnd) {
+    const proxyUrl = (typeof CONFIG !== 'undefined' && CONFIG.CLAUDE_PROXY_URL) || '';
+    if (!proxyUrl) { _speakEqCounterpart(text, gender, onEnd); return; }
+    if (_eq.ttsAudioEl) { try { _eq.ttsAudioEl.pause(); } catch (e) {} _eq.ttsAudioEl = null; }
+    try {
+      const resp = await fetch(proxyUrl.replace(/\/?$/, '/tts'), {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          text,
+          voice_id: EQ_VOICE_IDS[gender] || EQ_VOICE_IDS.male,
+          model_id: 'eleven_multilingual_v2',
+          voice_settings: { stability: 0.45, similarity_boost: 0.75, style: 0.35, use_speaker_boost: true },
+        }),
+      });
+      if (!resp.ok) throw new Error(`ElevenLabs TTS error ${resp.status}`);
+      const blob     = await resp.blob();
+      const audioUrl = URL.createObjectURL(blob);
+      const audio    = new Audio(audioUrl);
+      _eq.ttsAudioEl = audio;
+      Recorder.addAudioSource(audio);
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        URL.revokeObjectURL(audioUrl);
+        _eq.ttsAudioEl = null;
+        onEnd();
+      };
+      const guard = setTimeout(finish, text.split(/\s+/).length * 400 + 6000);
+      audio.onended = () => { clearTimeout(guard); finish(); };
+      audio.onerror = () => { clearTimeout(guard); finish(); };
+      await audio.play();
+    } catch (e) {
+      console.warn('ElevenLabs TTS failed (Mirror Room), using browser voice:', e.message);
+      _speakEqCounterpart(text, gender, onEnd);
+    }
+  }
+
+  // Local heuristic fallback scorer, only used when Claude's evaluation is
+  // unavailable -- same regex-signal-to-percentage pattern as Red Pen's
+  // scoreFeedbackConversationLocal, adapted to the 5 EI competency keys.
+  function scoreEqConversationLocal(fullTranscript, turnCount) {
+    const mgrLines = (fullTranscript || '').split('\n').filter(l => l.startsWith('You: '))
+      .map(l => l.slice(5).trim()).filter(Boolean);
+    const mgrText = mgrLines.join(' ');
+    const words   = mgrText.split(/\s+/).filter(Boolean).length;
+    const turns   = turnCount || mgrLines.length || 1;
+
+    const namesFeeling   = /(i feel|i notice|my gut reaction|honestly,? i|i'm feeling|what's happening in me)/i.test(mgrText);
+    const staysCalm      = /(let'?s (take|slow)|take a (breath|moment)|calmly|one step at a time|first,? let'?s)/i.test(mgrText);
+    const panicsOrBlames = /(this is a disaster|unbelievable|how could you|what were you thinking|calm down|unacceptable)/i.test(mgrText);
+    const hasEmpathy     = /(i understand|i hear you|that must (be|have been)|i appreciate|thank you for|i know this is|take your time)/i.test(mgrText);
+    const hasMotivation  = /(we('| wi)ll get through|let'?s focus on|going forward|i believe (in|we)|together we|what's controllable)/i.test(mgrText);
+    const hasMediation   = /(let'?s talk (privately|separately)|i'?ll hear both|step aside|not (here|on the floor)|let'?s move this)/i.test(mgrText);
+    const hasEscalation  = /(escalate|compliance|not my call alone|i can'?t sign off|need to check)/i.test(mgrText);
+
+    const selfAwareness = Math.min(100, Math.max(10, 35 + (namesFeeling ? 35 : 0) + (hasEscalation ? 15 : 0) + (turns >= 2 ? 10 : 0)));
+    const selfRegulation = Math.min(100, Math.max(10, (staysCalm ? 70 : 45) - (panicsOrBlames ? 35 : 0)));
+    const motivation = Math.min(100, 30 + (hasMotivation ? 40 : 0) + (words >= 40 ? 15 : 0) - (panicsOrBlames ? 20 : 0));
+    const empathy = Math.min(100, Math.max(10, (hasEmpathy ? 65 : 40) - (panicsOrBlames ? 30 : 0)));
+    const socialSkill = Math.min(100, 30 + (hasMediation ? 35 : 0) + (hasEscalation ? 15 : 0) + (turns >= 2 ? 10 : 0));
+
+    const scores = { selfAwareness, selfRegulation, motivation, empathy, socialSkill };
+    const weight = 10;
+    let earnedMarks = 0, totalWeight = 0;
+    Object.values(scores).forEach(pct => { earnedMarks += (pct / 100) * weight; totalWeight += weight; });
+    const overall = totalWeight > 0 ? parseFloat(((earnedMarks / totalWeight) * 100).toFixed(1)) : null;
+
+    const note = 'Estimated locally -- Claude AI scoring was unavailable for this session.';
+    return {
+      ...scores,
+      overall,
+      earnedMarks: parseFloat(earnedMarks.toFixed(1)),
+      maxMarks: totalWeight,
+      _reasons: { selfAwareness: note, selfRegulation: note, motivation: note, empathy: note, socialSkill: note },
+      _method: 'mgr-eq-local',
+    };
+  }
+
+  function _launchMirrorRoom() {
+    const pool = SCENARIOS['mgr-eq'];
+    _currentScenario = pickRandom(pool);
+    const cp = EQ_COUNTERPARTS[_currentScenario.id] || EQ_COUNTERPARTS['eq1'];
+
+    _eq = { turnCount: 0, maxTurns: 4, history: [], blobPromise: null,
+            turnTimerId: null, turnEnded: false, finishing: false, ttsAudioEl: null };
+
+    $('mgr-eq-sc-title').textContent = _currentScenario.title;
+    $('mgr-eq-sc-text').innerHTML  = _formatScenarioHTML(_currentScenario.scenario);
+    _renderEvalCriteriaPanel('mgr-eq', 'mgr-eq-sc-text');
+
+    $('mgr-eq-chat-thread').innerHTML = '';
+    $('mgr-eq-chat-thread').style.display = 'none';
+    $('mgr-eq-turn-bar').style.display = 'none';
+    $('mgr-eq-status').style.display = 'none';
+    $('mgr-eq-rec-area').style.display = 'none';
+    $('btn-mgr-eq-finish').style.display = 'none';
+    $('btn-mgr-eq-end-early').style.display = 'none';
+    $('mgr-eq-start-wrap').style.display = 'block';
+    $('mgr-eq-counterpart-name').textContent = cp.name;
+
+    let scVisible = true;
+    const scToggle = $('btn-mgr-eq-sc-toggle');
+    const scBody   = $('mgr-eq-sc-body');
+    if (scToggle) {
+      scToggle.onclick = () => {
+        scVisible = !scVisible;
+        scBody.style.display = scVisible ? '' : 'none';
+        scToggle.textContent = scVisible ? 'Hide ▲' : 'Show ▼';
+      };
+    }
+
+    const liveBtn = $('btn-mgr-eq-live-voice-start');
+    if (liveBtn) {
+      const showLiveBtn = typeof GeminiLive !== 'undefined' && GeminiLive.isAvailable();
+      liveBtn.classList.toggle('hidden', !showLiveBtn);
+      liveBtn.onclick = () => _startMirrorRoomLiveVoice();
+    }
+
+    showScreen('mgr-screen-eq');
+  }
+
+  async function _startEqConversation() {
+    const cp = EQ_COUNTERPARTS[_currentScenario.id] || EQ_COUNTERPARTS['eq1'];
+
+    $('mgr-eq-start-wrap').style.display = 'none';
+
+    try { await Recorder.requestMic(); }
+    catch (e) { toast('Microphone access denied.', 'error'); $('mgr-eq-start-wrap').style.display = 'block'; return; }
+    _eq.blobPromise = Recorder.start();
+    Recorder.startWaveform($('mgr-eq-waveform'));
+
+    $('mgr-eq-chat-thread').style.display = '';
+    $('mgr-eq-turn-bar').style.display = '';
+    $('btn-mgr-eq-end-early').style.display = '';
+
+    _runEqTurn(cp.opening, true /* firstTurn */);
+  }
+
+  function _runEqTurn(line, isFirstTurn = false) {
+    const cp = EQ_COUNTERPARTS[_currentScenario.id] || EQ_COUNTERPARTS['eq1'];
+
+    if (!isFirstTurn) _eq.turnCount++;
+    else              _eq.turnCount = 1;
+
+    const isLast = _eq.turnCount >= _eq.maxTurns;
+
+    const turnLabel = $('mgr-eq-turn-label');
+    if (turnLabel) {
+      turnLabel.textContent = isLast
+        ? `Turn ${_eq.turnCount} of ${_eq.maxTurns} — Final Exchange 🏁`
+        : `Turn ${_eq.turnCount} of ${_eq.maxTurns}`;
+    }
+
+    _eq.history.push({ counterpart: line, mgr: '' });
+
+    const mood = _eqMoodParams(_eq.turnCount - 1, _eq.maxTurns);
+    const moodEl = $('mgr-eq-mood');
+    if (moodEl) {
+      moodEl.className = `mc-mood-bar ${mood.bubbleClass}`;
+      moodEl.innerHTML = `${mood.emoji} <strong>${cp.name}</strong> is <strong>${mood.label}</strong>`;
+    }
+
+    const bubble = document.createElement('div');
+    bubble.className = `mc-bubble bot ${mood.bubbleClass}`;
+    bubble.innerHTML = `<span class="mc-bubble-mood">${mood.emoji}</span><strong>${cp.name}:</strong> ${line}`;
+    const thread = $('mgr-eq-chat-thread');
+    thread.appendChild(bubble);
+    thread.scrollTop = thread.scrollHeight;
+
+    $('mgr-eq-status').style.display = 'none';
+    _speakMirrorRoomVoice(line, cp.gender, () => {
+      if (isLast) {
+        $('btn-mgr-eq-finish').style.display = '';
+        $('btn-mgr-eq-end-early').style.display = 'none';
+      } else {
+        _startManagerEqTurn(isLast);
+      }
+    });
+  }
+
+  function _startManagerEqTurn(isLast) {
+    _eq.turnEnded = false;
+    $('mgr-eq-rec-area').style.display = '';
+    $('mgr-eq-rec-transcript').textContent = 'Listening... speak your response.';
+    const labelEl = $('mgr-eq-turn-label');
+    if (labelEl) labelEl.textContent = isLast
+      ? `🎤 Your turn — Turn ${_eq.turnCount} of ${_eq.maxTurns} (Final)`
+      : `🎤 Your turn — Turn ${_eq.turnCount} of ${_eq.maxTurns}`;
+
+    if (SpeechEngine.isSupported()) {
+      SpeechEngine.startTranscription((text) => {
+        const el = $('mgr-eq-rec-transcript');
+        if (el) el.textContent = text || 'Listening...';
+      });
+    }
+
+    const TURN_LIMIT = 120;
+    let remaining = TURN_LIMIT;
+    const timeEl = $('mgr-eq-turn-time');
+    if (timeEl) timeEl.textContent = fmtTime(remaining);
+    clearInterval(_eq.turnTimerId);
+    _eq.turnTimerId = setInterval(() => {
+      remaining--;
+      if (timeEl) timeEl.textContent = fmtTime(remaining);
+      if (remaining <= 0) _endManagerEqTurn();
+    }, 1000);
+
+    $('btn-mgr-eq-done-turn').onclick = () => _endManagerEqTurn();
+  }
+
+  async function _endManagerEqTurn() {
+    if (_eq.turnEnded) return;
+    _eq.turnEnded = true;
+    clearInterval(_eq.turnTimerId);
+
+    const partial = SpeechEngine.isSupported() ? SpeechEngine.stopTranscription() : '';
+    if (_eq.history.length > 0) _eq.history[_eq.history.length - 1].mgr = partial;
+
+    $('mgr-eq-rec-area').style.display = 'none';
+    const timeEl = $('mgr-eq-turn-time');
+    if (timeEl) timeEl.textContent = '';
+
+    const bubble = document.createElement('div');
+    bubble.className = 'mc-bubble trainee';
+    bubble.textContent = partial || '(no transcript captured)';
+    const thread = $('mgr-eq-chat-thread');
+    thread.appendChild(bubble);
+    thread.scrollTop = thread.scrollHeight;
+
+    if (_eq.turnCount >= _eq.maxTurns) {
+      $('btn-mgr-eq-finish').style.display = '';
+      return;
+    }
+
+    $('mgr-eq-status').style.display = '';
+    const cp = EQ_COUNTERPARTS[_currentScenario.id] || EQ_COUNTERPARTS['eq1'];
+
+    const messages = [{ role: 'user', content: 'The manager has just responded to the situation.' }];
+    for (const ex of _eq.history) {
+      messages.push({ role: 'assistant', content: ex.counterpart });
+      if (ex.mgr) messages.push({ role: 'user', content: ex.mgr });
+    }
+
+    let line;
+    try {
+      if (typeof GeminiLive === 'undefined' || !GeminiLive.isTextAvailable()) {
+        throw new Error('Gemini text generation not configured');
+      }
+      line = await GeminiLive.callEqTurn(
+        _currentScenario.scenario, cp.name, cp.persona, messages, _eq.turnCount + 1, _eq.maxTurns
+      );
+    } catch (geminiErr) {
+      console.warn('Gemini EQ call failed, falling back to Claude:', geminiErr.message);
+      try {
+        line = await ClaudeEvaluator.callAiEqTurn(
+          _currentScenario.scenario, cp.name, cp.persona, messages, _eq.turnCount + 1, _eq.maxTurns
+        );
+      } catch (e) {
+        console.warn('AI EQ call failed:', e.message);
+        const fallbacks = [
+          "Okay... I hear what you're saying.",
+          "Right. I wasn't expecting that, but okay.",
+          "I guess that makes sense, actually.",
+          "Okay. Thank you for talking it through with me.",
+        ];
+        line = fallbacks[Math.min(_eq.turnCount - 1, fallbacks.length - 1)];
+      }
+    }
+
+    _runEqTurn(line);
+  }
+
+  async function _finishEqConversation() {
+    if (_eq.finishing) return;
+    _eq.finishing = true;
+
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    if (_eq.ttsAudioEl) { try { _eq.ttsAudioEl.pause(); } catch (e) {} _eq.ttsAudioEl = null; }
+    clearInterval(_eq.turnTimerId);
+    if (SpeechEngine.isSupported()) { try { SpeechEngine.stopTranscription(); } catch(e){} }
+
+    Recorder.stop();
+    let blob = null;
+    if (_eq.blobPromise) {
+      try { blob = await _eq.blobPromise; } catch(e) { console.warn('EQ blob:', e); }
+      _eq.blobPromise = null;
+    }
+
+    const cp = EQ_COUNTERPARTS[_currentScenario.id] || EQ_COUNTERPARTS['eq1'];
+    const fullTranscript = _eq.history.map(ex =>
+      `${cp.name}: ${ex.counterpart}\nYou: ${ex.mgr || '(no response)'}`
+    ).join('\n\n');
+
+    const durationSecs = _eq.history.length * 60;
+
+    let aiScores;
+    try {
+      if (typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable() && fullTranscript) {
+        const result = await ClaudeEvaluator.evaluateMirrorRoom(
+          fullTranscript, _currentScenario.scenario || _currentScenario.title || '',
+          _currentScenario.goodLooksLike || [], _currentScenario.commonPitfalls || []
+        );
+        aiScores = {
+          ...result.scores,
+          overall:     result.overall,
+          earnedMarks: result.earnedMarks,
+          maxMarks:    result.maxMarks,
+          _reasons:    result.reasons,
+          _method:     'mgr-eq-params',
+        };
+      } else {
+        aiScores = scoreEqConversationLocal(fullTranscript, _eq.history.length);
+      }
+    } catch(e) {
+      console.warn('Claude EQ eval failed, using local estimate:', e.message);
+      aiScores = scoreEqConversationLocal(fullTranscript, _eq.history.length);
+    }
+    aiScores._method     = aiScores._method || 'mgr-eq-ai';
+    aiScores._module     = 'mgr-eq';
+    aiScores._turns      = _eq.history.length;
+    aiScores._scenarioId = _currentScenario.id;
+
+    try {
+      await Auth.ensureTraineeRecord();
+      await DB.put('sessions', {
+        traineeId:    Auth.getId(),
+        traineeName:  Auth.getName(),
+        traineeEmail: Auth.getEmail(),
+        module:       'mgr-eq',
+        topicId:      (_currentScenario._hardcoded ? null : (_currentScenario.id || null)),
+        topicTitle:   _currentScenario.title,
+        transcript:   fullTranscript,
+        recordingBlob: blob || null,
+        writtenText:  '',
+        aiScores,
+        timeTaken:    durationSecs,
+        submittedAt:  new Date().toISOString(),
+        status:       'ai-evaluated',
+      });
+      _showResult(aiScores, 'eq-ai');
+    } catch(e) {
+      toast('Error saving session: ' + e.message, 'error');
+      console.error('_finishEqConversation error:', e);
+      _eq.finishing = false;
+    }
+  }
+
+  function _endEqEarly() {
+    if (_eq.finishing) return;
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    clearInterval(_eq.turnTimerId);
+    if (SpeechEngine.isSupported()) { try { SpeechEngine.stopTranscription(); } catch(e){} }
+    if ($('mgr-eq-rec-area').style.display !== 'none' && !_eq.turnEnded) {
+      _eq.turnEnded = true;
+      const partial = SpeechEngine.isSupported() ? SpeechEngine.stopTranscription() : '';
+      if (_eq.history.length > 0) _eq.history[_eq.history.length - 1].mgr = partial;
+    }
+    _finishEqConversation();
+  }
+
+  // ── Mirror Room — Gemini Live real-time voice call (Beta) ───
+  // Same GeminiLive architecture as Red Pen and Paper Trade above, and
+  // benefits from the same worker.js /live-token fix (the systemInstruction
+  // built here is now actually honoured by the ephemeral token).
+  function _startMirrorRoomLiveVoice() {
+    const cp = EQ_COUNTERPARTS[_currentScenario.id] || EQ_COUNTERPARTS['eq1'];
+
+    $('mgr-eq-live-counterpart-name').textContent = cp.name;
+    $('mgr-eq-live-sc-title').textContent = _currentScenario.title;
+    $('mgr-eq-live-sc-text').innerHTML  = _formatScenarioHTML(_currentScenario.scenario);
+    _renderEvalCriteriaPanel('mgr-eq', 'mgr-eq-live-sc-text');
+    $('mgr-eq-live-thread').innerHTML = '';
+    $('btn-mgr-eq-live-end').disabled = false;
+
+    _mgrLive = { kind: 'eq', turns: [], controller: null, startTime: Date.now(), finishing: false };
+
+    const stateEl = $('mgr-eq-live-state');
+    const STATE_LABELS = {
+      connecting: '🔌 Connecting…',
+      listening:  '🎙️ Listening — go ahead and speak',
+      speaking:   `🔊 ${cp.name} is speaking…`,
+      error:      '⚠️ Connection problem — try Cancel and use the normal recorded flow',
+      ended:      '📴 Conversation ended',
+      'time-limit': '⏱️ 9-minute limit reached — wrapping up and submitting…',
+    };
+
+    const systemInstruction = `You are roleplaying, BY VOICE, as ${cp.name}, in a real-time workplace situation with your manager.
+
+${cp.persona}
+
+HOW TO RUN THIS CONVERSATION:
+- Speak naturally, the way a real person sounds in the moment — short, conversational, not a written essay.
+- Open the conversation yourself with something like: "${cp.opening}" (adapted naturally to spoken language) as soon as it connects — do not wait for the manager to speak first.
+- React specifically to what the manager actually says, following the reactive guidance in your character description above.
+- Keep the conversation to roughly 3-5 exchanges, then let it wind down naturally once the moment has been addressed one way or another — you don't have to explicitly end the conversation.
+- Stay in character as ${cp.name} throughout — never break character, never mention that you are an AI, a script, grading, evaluation criteria, or that this is a training exercise.`;
+
+    $('btn-mgr-eq-live-end').onclick = () => _finishMirrorRoomLiveVoice();
+    $('btn-mgr-eq-live-cancel').onclick = () => {
+      if (_mgrLive.controller) { _mgrLive.controller.stop(); _mgrLive.controller = null; }
+      _launchMirrorRoom();
+    };
+
+    showScreen('mgr-screen-eq-live');
+
+    _mgrLive.controller = GeminiLive.startCall({
+      systemInstruction,
+      onStateChange: (state) => {
+        if (stateEl) stateEl.textContent = STATE_LABELS[state] || state;
+        if (state === 'time-limit') {
+          toast('⏱️ Reached the 9-minute call limit — submitting what was covered so far.', '');
+          _finishMirrorRoomLiveVoice();
+        }
+      },
+      onTurn: ({ role, text }) => {
+        _mgrLive.turns.push({ role, text });
+        const bubble = document.createElement('div');
+        bubble.className = `mc-bubble ${role === 'bot' ? 'bot' : 'trainee'}`;
+        bubble.textContent = text;
+        $('mgr-eq-live-thread').appendChild(bubble);
+        $('mgr-eq-live-thread').scrollTop = $('mgr-eq-live-thread').scrollHeight;
+      },
+      onError: (err) => {
+        console.error('GeminiLive error (Mirror Room):', err);
+        toast('⚠ Voice AI error: ' + (err.message || err) + ' — you can cancel and use the normal recorded flow instead.', 'error');
+      },
+    });
+  }
+
+  async function _finishMirrorRoomLiveVoice() {
+    if (_mgrLive.finishing) return;
+    if (!_mgrLive.controller && _mgrLive.turns.length === 0) return;
+    _mgrLive.finishing = true;
+    $('btn-mgr-eq-live-end').disabled = true;
+
+    const cp = EQ_COUNTERPARTS[_currentScenario.id] || EQ_COUNTERPARTS['eq1'];
+    const controller = _mgrLive.controller;
+    let recordingBlob = null;
+    if (controller) {
+      try {
+        _mgrLive.controller.stop();
+        if (controller.getRecording) recordingBlob = await controller.getRecording();
+      } catch (e) { console.warn('Mirror Room live recording:', e.message); }
+      _mgrLive.controller = null;
+    }
+
+    const fullTranscript = _mgrLive.turns.map(t => `${t.role === 'bot' ? cp.name : 'You'}: ${t.text}`).join('\n\n');
+    const durationSecs = Math.round((Date.now() - _mgrLive.startTime) / 1000);
+
+    let aiScores;
+    try {
+      if (typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable() && fullTranscript) {
+        const result = await ClaudeEvaluator.evaluateMirrorRoom(
+          fullTranscript, _currentScenario.scenario || _currentScenario.title || '',
+          _currentScenario.goodLooksLike || [], _currentScenario.commonPitfalls || []
+        );
+        aiScores = {
+          ...result.scores,
+          overall:     result.overall,
+          earnedMarks: result.earnedMarks,
+          maxMarks:    result.maxMarks,
+          _reasons:    result.reasons,
+          _method:     'mgr-eq-params',
+        };
+      } else {
+        aiScores = scoreEqConversationLocal(fullTranscript, _mgrLive.turns.length);
+      }
+    } catch (e) {
+      console.warn('Claude EQ eval failed, using local estimate:', e.message);
+      aiScores = scoreEqConversationLocal(fullTranscript, _mgrLive.turns.length);
+    }
+    aiScores._method     = aiScores._method || 'mgr-eq-ai';
+    aiScores._module     = 'mgr-eq';
+    aiScores._turns      = _mgrLive.turns.length;
+    aiScores._scenarioId = _currentScenario.id;
+    aiScores._voiceEngine = 'gemini-live-beta';
+
+    try {
+      await Auth.ensureTraineeRecord();
+      await DB.put('sessions', {
+        traineeId:    Auth.getId(),
+        traineeName:  Auth.getName(),
+        traineeEmail: Auth.getEmail(),
+        module:       'mgr-eq',
+        topicId:      (_currentScenario._hardcoded ? null : (_currentScenario.id || null)),
+        topicTitle:   _currentScenario.title,
+        transcript:   fullTranscript,
+        recordingBlob: recordingBlob || null,
+        writtenText:  '',
+        aiScores,
+        timeTaken:    durationSecs,
+        submittedAt:  new Date().toISOString(),
+        status:       'ai-evaluated',
+      });
+      _showResult(aiScores, 'eq-ai');
+    } catch (e) {
+      toast('Error saving session: ' + e.message, 'error');
+      console.error('_finishMirrorRoomLiveVoice error:', e);
+      _mgrLive.finishing = false;
+    }
+  }
+
   // ── Written flow ─────────────────────────────────────────
   function _launchWritten() {
     const meta = MODULE_META[_currentModule];
@@ -2562,6 +3287,16 @@ HOW TO RUN THIS CONVERSATION:
       $('mgr-result-score').textContent = aiScores.overall != null ? `${aiScores.overall}%` : '—';
       const grid = _critGridHTML('mgr-feedback', aiScores);
       $('mgr-score-grid').innerHTML = grid || `<div class="mgr-score-item"><div class="label">Exchanges</div><div class="val">${turnCount} turns</div></div>`;
+    } else if (type === 'eq-ai') {
+      const cp = EQ_COUNTERPARTS[_currentScenario.id] || EQ_COUNTERPARTS['eq1'];
+      // aiScores._turns is set on both the turn-based recorded flow
+      // (_eq.history.length) and the Gemini Live voice flow
+      // (_mgrLive.turns.length), same pattern as feedback-ai above.
+      const turnCount = aiScores._turns != null ? aiScores._turns : _eq.history.length;
+      $('mgr-result-subtitle').textContent = `Mirror Room with ${cp.name} — ${turnCount} exchange(s)`;
+      $('mgr-result-score').textContent = aiScores.overall != null ? `${aiScores.overall}%` : '—';
+      const grid = _critGridHTML('mgr-eq', aiScores);
+      $('mgr-score-grid').innerHTML = grid || `<div class="mgr-score-item"><div class="label">Exchanges</div><div class="val">${turnCount} turns</div></div>`;
     } else if (type === 'situation-room') {
       $('mgr-result-subtitle').textContent = `Situation Room — ${_currentScenario ? _currentScenario.title : 'Assessment complete'}`;
       $('mgr-result-score').textContent = `${aiScores.overall}%`;
@@ -2692,6 +3427,16 @@ HOW TO RUN THIS CONVERSATION:
     if (btnFbEndEarly) btnFbEndEarly.addEventListener('click', _endFeedbackEarly);
     const btnFbBack = $('btn-mgr-fb-back');
     if (btnFbBack) btnFbBack.addEventListener('click', backToModules);
+
+    // The Mirror Room (EQ) screen
+    const btnEqStart = $('btn-mgr-eq-start');
+    if (btnEqStart) btnEqStart.addEventListener('click', _startEqConversation);
+    const btnEqFinish = $('btn-mgr-eq-finish');
+    if (btnEqFinish) btnEqFinish.addEventListener('click', _finishEqConversation);
+    const btnEqEndEarly = $('btn-mgr-eq-end-early');
+    if (btnEqEndEarly) btnEqEndEarly.addEventListener('click', _endEqEarly);
+    const btnEqBack = $('btn-mgr-eq-back');
+    if (btnEqBack) btnEqBack.addEventListener('click', backToModules);
 
     // Written screen
     const btnSubmitWritten = $('btn-mgr-submit-written');

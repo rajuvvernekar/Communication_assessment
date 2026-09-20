@@ -2994,19 +2994,28 @@ window.Admin = (() => {
 
     const isMcq     = session.module === 'mgr-listening-tone';
     const isSR      = session.module === 'mgr-situation-room';
-    const isWritten = ['mgr-transcript-autopsy','mgr-eq','mgr-management-skills'].includes(session.module);
+    // 'mgr-eq' (The Mirror Room) removed from this list 2026-09-20: it
+    // moved from a typed response (writtenText) to a conversational-AI
+    // transcript (session.transcript), same shape as Feedback/Red Pen --
+    // it used to render as "(no text)" here since writtenText is now
+    // always saved empty for this module. It now falls through to the
+    // generic transcript branch at the bottom of this if/else, same as
+    // Feedback.
+    const isWritten = ['mgr-transcript-autopsy','mgr-management-skills'].includes(session.module);
     const isFeedback = session.module === 'mgr-feedback';
+    const isEq       = session.module === 'mgr-eq';
     const isAudio    = session.module === 'mgr-mock-call';
 
-    // Recording playback — Mock Call and Feedback (Red Pen) both capture a
-    // voice recording (see manager-app.js _submitAudio / _finishFeedbackConversation),
-    // but this modal previously only ever rendered the text transcript, so
-    // admins had no way to actually listen to the call. Show the player
-    // whenever a recording URL made it through (DB.put uploads recordingBlob
-    // to Supabase Storage and maps it back as session.recordingUrl).
+    // Recording playback — Mock Call, Feedback (Red Pen), and now Mirror
+    // Room all capture a voice recording (see manager-app.js _submitAudio /
+    // _finishFeedbackConversation / _finishEqConversation), but this modal
+    // previously only ever rendered the text transcript, so admins had no
+    // way to actually listen to the call. Show the player whenever a
+    // recording URL made it through (DB.put uploads recordingBlob to
+    // Supabase Storage and maps it back as session.recordingUrl).
     const audioSection = modal.querySelector('#mgr-modal-audio-section');
     const audioEl       = modal.querySelector('#mgr-modal-audio');
-    const hasRecording  = (isAudio || isFeedback) && !!session.recordingUrl;
+    const hasRecording  = (isAudio || isFeedback || isEq) && !!session.recordingUrl;
     if (audioSection) audioSection.classList.toggle('hidden', !hasRecording);
     if (audioEl) {
       if (hasRecording) audioEl.src = session.recordingUrl;
