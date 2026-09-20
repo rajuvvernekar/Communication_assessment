@@ -2856,6 +2856,7 @@ window.Admin = (() => {
         ? new Date(s.submittedAt).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })
         : '—';
       const topicDisplay = (s.topicTitle || '—').replace(/'/g, '&#39;');
+      const nameForDelete = (s.traineeName || 'this manager').replace(/'/g, "\\'");
       return `<tr>
         <td><strong>${s.traineeName || '—'}</strong></td>
         <td>${MGR_MODULE_LABELS[s.module] || s.module}</td>
@@ -2864,10 +2865,35 @@ window.Admin = (() => {
         <td>${status}</td>
         <td>${aiScore}</td>
         <td>${adminScore}</td>
-        <td><button class="btn-ghost" style="font-size:0.8rem;padding:0.35rem 0.75rem"
-          onclick="Admin.openMgrScoreModal('${s.id}')">Score</button></td>
+        <td style="white-space:nowrap">
+          <button class="btn-ghost" style="font-size:0.8rem;padding:0.35rem 0.75rem"
+            onclick="Admin.openMgrScoreModal('${s.id}')">Score</button>
+          <button onclick="Admin.deleteSingleMgrSession('${s.id}', '${nameForDelete}')" title="Delete"
+            style="background:none;border:none;cursor:pointer;font-size:1rem;padding:0.2rem;margin-left:0.3rem">🗑</button>
+        </td>
       </tr>`;
     }).join('');
+  }
+
+  // Manager Assessments tab had no way to remove a submitted assessment --
+  // every other assessment-like section (Trainees, AI Audit Score) already
+  // has a delete option, this one just never got one. Deletes the
+  // underlying `sessions` row directly via DB.del, same as
+  // deleteSelectedTrainees() does for the `trainees` store -- no cascading
+  // cleanup of the recording in Supabase Storage, matching that pattern.
+  async function deleteSingleMgrSession(id, name) {
+    if (!confirm(`Delete this manager assessment for "${name}"?\n\nThis action cannot be undone.`)) return;
+    try {
+      await DB.del('sessions', id);
+      _mgrSessions = _mgrSessions.filter(s => s.id !== id);
+      renderMgrAssessments();
+      const pending = _mgrSessions.filter(s => !s.adminScores).length;
+      const badge = document.getElementById('mgr-pending-badge');
+      if (badge) badge.textContent = pending > 0 ? pending : '0';
+      toast(`Deleted assessment for ${name}.`, 'success');
+    } catch (e) {
+      toast('Delete failed: ' + e.message, 'error');
+    }
   }
 
   async function openMgrScoreModal(sessionId) {
@@ -4770,6 +4796,7 @@ window.Admin = (() => {
     renderMgrAssessments,
     openMgrScoreModal,
     saveMgrScore,
+    deleteSingleMgrSession,
     seedStockMarketMcq,
     // Assessments tab — Export Excel / Download recordings / Delete All
     downloadRecording,
