@@ -47,7 +47,7 @@ const ELEVENLABS_VOICE     = 'EXAVITQu4vr4xnSDxMaL'; // Bella — natural, warm 
 const GEMINI_TOKEN_API     = 'https://generativelanguage.googleapis.com/v1beta/auth_tokens';
 const GEMINI_LIVE_MODEL    = 'models/gemini-3.8-live';
 const GEMINI_GENERATE_API  = 'https://generativelanguage.googleapis.com/v1beta';
-const GEMINI_TEXT_MODEL    = 'models/gemini-2.5-flash'; // plain text generateContent -- NOT a Live model id
+const GEMINI_TEXT_MODEL    = 'models/gemini-3.6-flash'; // plain text generateContent -- NOT a Live model id. Was gemini-2.5-flash, which Google retired for new usage (2026-09-20: /gemini-generate started 404ing with 'no longer available to new users, use models/gemini-3.6-flash')
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin':  '*',
