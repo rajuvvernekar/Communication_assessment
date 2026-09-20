@@ -43,7 +43,7 @@
  */
 
 const ANTHROPIC_API        = 'https://api.anthropic.com/v1/messages';
-const ELEVENLABS_VOICE     = '21m00Tcm4TlvDq8ikWAM'; // Rachel — natural, warm female
+const ELEVENLABS_VOICE     = 'EXAVITQu4vr4xnSDxMaL'; // Bella — natural, warm female (usable on Free plan; Rachel is API-gated to paid plans)
 const GEMINI_TOKEN_API     = 'https://generativelanguage.googleapis.com/v1beta/auth_tokens';
 const GEMINI_LIVE_MODEL    = 'models/gemini-3.8-live';
 const GEMINI_GENERATE_API  = 'https://generativelanguage.googleapis.com/v1beta';

@@ -1696,7 +1696,7 @@ HOW TO RUN THIS CALL:
   // this correct even if the Worker's own default changes again later.
   const FB_VOICE_IDS = {
     male:   'ErXwobaYiN019PkySvjV', // Antoni
-    female: '21m00Tcm4TlvDq8ikWAM', // Rachel
+    female: 'EXAVITQu4vr4xnSDxMaL', // Bella -- usable on Free plan; Rachel is API-gated to paid plans
   };
 
   // Same ElevenLabs /tts proxy call as Paper Trade's _speakPtCustomer
