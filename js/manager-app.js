@@ -869,6 +869,28 @@ Let's get back on track.
     }
     return result;
   }
+  // Fixed, hand-written transition phrases — no AI call, nothing that can
+  // ever go off-script. Same technique already proven elsewhere in this
+  // codebase (see OPS_CALL_TRANSITIONS in js/app.js, used for the trainee's
+  // verbatim-script ops-call mock call, which is what "sounds like
+  // conversational AI" without any live model generating dialogue): rotate
+  // through a small set of natural-sounding connector lines and prepend one
+  // before every question after the first, so the call sounds like the
+  // customer is actually moving the conversation forward turn to turn
+  // instead of just reciting a numbered list, while staying 100% reliable.
+  const PT_CALL_TRANSITIONS = [
+    "Okay, but that's not the only issue here —",
+    'Right, and here\'s the thing —',
+    "Fine. Let me put it this way —",
+    "That still doesn't really answer my concern —",
+    "Alright, moving on to something else —",
+    "And there's another thing —",
+    "Look, I hear you, but —",
+    "Okay. Now here's what really bothers me —",
+    "Let me be clear about something else too —",
+    "And one more point —",
+  ];
+
   function _ptMoodParams(turnIdx, maxTurns) {
     const progress = maxTurns <= 1 ? 0.5 : turnIdx / (maxTurns - 1);
     if (progress < 0.25) return { emoji: '😤', label: 'Frustrated', bubbleClass: 'mood-frustrated' };
@@ -1021,7 +1043,14 @@ Let's get back on track.
   function _runPtCustomerTurn(idx) {
     _pt.turnIndex = idx;
     const isLast = idx === _pt.maxTurns - 1;
-    const line = _pt.questions[idx];
+    // Turn 1 opens cold with the exact scripted line (no lead-in needed --
+    // it's the opening complaint). Every question after that gets one of
+    // the fixed transition phrases prepended, rotating through the list, so
+    // it sounds like the customer is continuing the same call rather than
+    // reciting question after question with no connective tissue.
+    const rawLine = _pt.questions[idx];
+    const transition = idx > 0 ? PT_CALL_TRANSITIONS[(idx - 1) % PT_CALL_TRANSITIONS.length] : '';
+    const line = transition ? `${transition} ${rawLine}` : rawLine;
     const mood = _ptMoodParams(idx, _pt.maxTurns);
 
     $('mgr-audio-live-turn-bar').style.display = '';
