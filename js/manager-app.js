@@ -379,6 +379,7 @@ Let's get back on track.
     turnEnded: false,
     finishing: false,
   };
+  let _ptAudioEl = null; // in-flight ElevenLabs <audio> element, for cancelling mid-play
 
   // ── TTS voice cache ──────────────────────────────────────
   let _ttsVoices = [];
@@ -649,7 +650,11 @@ Let's get back on track.
     _prepTimer = setInterval(() => {
       remaining--;
       $('mgr-prep-count').textContent = remaining;
-      if (remaining <= 0) { _clearPrepTimer(); startRecording(); }
+      // Paper Trade is now AI-call-only (the "Skip Prep & Start Now" button
+      // into the old manual monologue recording was removed) -- so running
+      // out the prep countdown auto-starts the same turn-based AI voice
+      // call the button starts, instead of the old manual recording flow.
+      if (remaining <= 0) { _clearPrepTimer(); _startAudioLiveVoice(); }
     }, 1000);
   }
 
@@ -851,10 +856,68 @@ Let's get back on track.
     return                      { emoji: '😡', label: 'Furious',    bubbleClass: 'mood-frustrated' };
   }
 
-  // Plain browser TTS for the customer's voice -- reuses the same voice
-  // picker/rate/pitch approach as _speakEmployee (Red Pen) further below,
-  // just without a gender toggle (Paper Trade scenarios don't specify one).
-  function _speakPtCustomer(text, onEnd) {
+  // ── ElevenLabs TTS for the customer's voice (human-sounding) ──
+  // Same /tts proxy route + request shape as the trainee side's
+  // speakAiCustomer() in js/app.js (proven working there already) -- sends
+  // text to the Cloudflare Worker, gets audio/mpeg back, plays it via an
+  // <audio> element. Falls back to the plain browser voice below if the
+  // proxy isn't configured or the request fails, so a call never breaks
+  // entirely over a TTS hiccup.
+  async function _speakPtCustomer(text, onEnd) {
+    const proxyUrl = (typeof CONFIG !== 'undefined' && CONFIG.CLAUDE_PROXY_URL) || '';
+    if (!proxyUrl) { _speakPtCustomerBrowser(text, onEnd); return; }
+
+    if (_ptAudioEl) { try { _ptAudioEl.pause(); } catch (e) {} _ptAudioEl = null; }
+
+    try {
+      const resp = await fetch(proxyUrl.replace(/\/?$/, '/tts'), {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          text,
+          model_id: 'eleven_multilingual_v2', // higher quality, natural pacing
+          voice_settings: {
+            stability:         0.45,  // a little looser than a calm narrator -- these customers are frustrated/escalating
+            similarity_boost:  0.75,
+            style:             0.35,  // more expressive/emotional range for an escalating complaint call
+            use_speaker_boost: true,
+          },
+        }),
+      });
+
+      if (!resp.ok) throw new Error(`ElevenLabs TTS error ${resp.status}`);
+
+      const blob     = await resp.blob();
+      const audioUrl = URL.createObjectURL(blob);
+      const audio    = new Audio(audioUrl);
+      _ptAudioEl     = audio;
+
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        URL.revokeObjectURL(audioUrl);
+        _ptAudioEl = null;
+        onEnd();
+      };
+
+      // Safety timeout: ~400 ms per word + 6 s buffer, in case onended never fires
+      const guard = setTimeout(finish, text.split(/\s+/).length * 400 + 6000);
+      audio.onended = () => { clearTimeout(guard); finish(); };
+      audio.onerror = () => { clearTimeout(guard); finish(); };
+
+      await audio.play();
+    } catch (e) {
+      console.warn('ElevenLabs TTS failed, using browser voice:', e.message);
+      _speakPtCustomerBrowser(text, onEnd);
+    }
+  }
+
+  // Plain browser TTS fallback for the customer's voice -- reuses the same
+  // voice picker/rate/pitch approach as _speakEmployee (Red Pen) further
+  // below, just without a gender toggle (Paper Trade scenarios don't
+  // specify one). Only used if ElevenLabs is unavailable or fails.
+  function _speakPtCustomerBrowser(text, onEnd) {
     if (!window.speechSynthesis) { onEnd(); return; }
     window.speechSynthesis.cancel();
 
@@ -915,6 +978,7 @@ Let's get back on track.
     $('btn-mgr-audio-live-end-early').onclick = () => _finishAudioLiveVoice(true);
     $('btn-mgr-audio-live-cancel').onclick = () => {
       if (window.speechSynthesis) window.speechSynthesis.cancel();
+      if (_ptAudioEl) { try { _ptAudioEl.pause(); } catch (e) {} _ptAudioEl = null; }
       clearInterval(_pt.turnTimerId);
       if (SpeechEngine.isSupported()) { try { SpeechEngine.stopTranscription(); } catch (e) {} }
       try { Recorder.stop(); } catch (e) {}
@@ -1033,6 +1097,7 @@ Let's get back on track.
     $('btn-mgr-audio-live-end-early').disabled = true;
 
     if (window.speechSynthesis) window.speechSynthesis.cancel();
+    if (_ptAudioEl) { try { _ptAudioEl.pause(); } catch (e) {} _ptAudioEl = null; }
     clearInterval(_pt.turnTimerId);
 
     // If a manager turn was in progress when they hit "End Call Early",
@@ -2088,8 +2153,13 @@ HOW TO RUN THIS CONVERSATION:
       });
 
     // Audio screen (non-feedback)
-    const btnSkipPrep = $('btn-mgr-skip-prep');
-    if (btnSkipPrep) btnSkipPrep.addEventListener('click', startRecording);
+    // Paper Trade's "Skip Prep & Start Now" button (into the old manual
+    // monologue recording flow) was removed -- the AI voice call button and
+    // the prep countdown's own auto-start (see _startPrepTimer) are now the
+    // only two ways into Paper Trade's assessment. mgr-record-phase /
+    // startRecording() / stopRecording() are kept in place below in case a
+    // future module needs a plain recording flow again, but nothing wires
+    // into them for Paper Trade anymore.
     const btnStop = $('btn-mgr-stop-record');
     if (btnStop) btnStop.addEventListener('click', stopRecording);
     const btnAudioBack = $('btn-mgr-audio-back');
