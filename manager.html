@@ -722,6 +722,9 @@
       <button id="btn-mgr-audio-live-voice-start" class="btn-secondary" style="margin-top:0.75rem;width:100%">
         🎙️ Start Voice AI Customer Call — one question at a time, click Done to continue
       </button>
+      <button id="btn-mgr-audio-gemini-live-voice-start" class="btn-secondary hidden" style="margin-top:0.5rem;width:100%">
+        🧪 Try Gemini Voice AI (Beta) — real-time spoken conversation, alternate option
+      </button>
     </div>
 
     <!-- Recording phase (hidden until prep done) -->
@@ -806,7 +809,46 @@
         ⏹ End Call Early &amp; Submit
       </button>
       <button id="btn-mgr-audio-live-cancel" class="btn-ghost" style="margin-top:0.5rem;width:100%;font-size:0.82rem;color:#64748b">
-        ← Cancel and use the normal recording flow
+        ← Cancel and go back
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================
+     SCREEN: Paper Trade — Gemini Live real-time voice call (Beta, alternate)
+     ================================================================ -->
+<section id="mgr-screen-audio-gemini-live" class="screen">
+  <header class="mgr-screen-header">
+    <h2 id="mgr-audio-gemini-live-module-title">Assessment — Gemini Voice AI (Beta)</h2>
+  </header>
+
+  <div class="mgr-assess-screen">
+    <div class="step-card" style="margin-bottom:1.5rem">
+      <div class="step-label">Scenario</div>
+      <div class="mgr-scenario-box">
+        <h3 id="mgr-audio-gemini-live-topic-title">Loading...</h3>
+        <div id="mgr-audio-gemini-live-scenario-text"></div>
+      </div>
+    </div>
+
+    <div class="step-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem">
+        <div class="step-label" style="margin-bottom:0">🧪 Beta — Gemini Voice AI</div>
+        <div class="mc-call-rec-badge"><span class="rec-dot-pulse"></span> Live</div>
+      </div>
+      <div id="mgr-audio-gemini-live-state" class="mc-mood-bar" style="background:#f5f3ff;color:#5b21b6;border-radius:8px;padding:0.6rem 1rem;margin-bottom:0.75rem">
+        🎙️ Connecting…
+      </div>
+      <div id="mgr-audio-gemini-live-thread" class="mc-chat-thread" style="min-height:200px;max-height:380px;overflow-y:auto;padding:1rem;background:#f8fafc;border-radius:10px;border:1px solid var(--border)"></div>
+    </div>
+
+    <div style="margin-top:1.25rem">
+      <button id="btn-mgr-audio-gemini-live-end" class="btn-primary" style="background:#7c3aed;width:100%">
+        ⏹ End Call &amp; Submit
+      </button>
+      <button id="btn-mgr-audio-gemini-live-cancel" class="btn-ghost" style="margin-top:0.5rem;width:100%;font-size:0.82rem;color:#64748b">
+        ← Cancel and go back
       </button>
     </div>
   </div>
@@ -1186,6 +1228,6 @@
 <script src="js/mgr-eval-criteria.js?v=2026091901"></script>
 <script src="js/gemini-live.js?v=2026091901"></script>
 <script src="js/claude.js?v=2026091902"></script>
-<script src="js/manager-app.js?v=2026092002"></script>
+<script src="js/manager-app.js?v=2026092003"></script>
 </body>
 </html>

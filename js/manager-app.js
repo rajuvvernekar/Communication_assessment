@@ -347,10 +347,18 @@ Let's get back on track.
   };
 
   // ── Gemini Live (Beta) real-time voice call state ───────
-  // Used by Red Pen / mgr-feedback only. Paper Trade used to share this
-  // (see _pt below for why it moved to its own turn-based flow instead).
+  // Shared across both call-shaped modules that offer it as an alternate
+  // option: Red Pen / mgr-feedback, and Paper Trade / mgr-mock-call's
+  // "Try Gemini Voice AI (Beta)" button (the turn-based ElevenLabs flow --
+  // see _pt below -- is Paper Trade's default/primary call option; Gemini
+  // Live is kept alongside it for comparison, not as the auto-start path).
+  // `kind` tracks which one is active so the shared finish handler knows
+  // which scoring path and screen to use. `_startAudioGeminiLiveVoice` /
+  // `_finishAudioGeminiLiveVoice` further below are Paper Trade's handlers
+  // for this shared state; `_startFeedbackLiveVoice` / `_finishFeedbackLiveVoice`
+  // are Red Pen's.
   let _mgrLive = {
-    kind: null,           // 'feedback'
+    kind: null,           // 'mock-call' | 'feedback'
     turns: [],            // [{ role: 'bot'|'trainee', text }]
     controller: null,     // { stop(), getRecording() } from GeminiLive.startCall()
     startTime: 0,
@@ -637,6 +645,19 @@ Let's get back on track.
       const showLiveBtn = _currentModule === 'mgr-mock-call' && !!window.speechSynthesis;
       liveBtn.classList.toggle('hidden', !showLiveBtn);
       liveBtn.onclick = () => _startAudioLiveVoice();
+    }
+
+    // Gemini Voice AI (Beta) — kept as an alternate option alongside the
+    // turn-based ElevenLabs call above, for comparison now that Gemini has
+    // the same fixed-script systemInstruction fix (asks the exact scenario
+    // questions in order rather than improvising). Not the default/auto-start
+    // path -- the prep countdown still falls through to the ElevenLabs call.
+    const geminiLiveBtn = $('btn-mgr-audio-gemini-live-voice-start');
+    if (geminiLiveBtn) {
+      const showGeminiLiveBtn = _currentModule === 'mgr-mock-call'
+        && typeof GeminiLive !== 'undefined' && GeminiLive.isAvailable();
+      geminiLiveBtn.classList.toggle('hidden', !showGeminiLiveBtn);
+      geminiLiveBtn.onclick = () => _startAudioGeminiLiveVoice();
     }
 
     showScreen('mgr-screen-audio');
@@ -1168,6 +1189,176 @@ Let's get back on track.
       toast('Error saving session: ' + e.message, 'error');
       console.error('_finishAudioLiveVoice error:', e);
       _pt.finishing = false;
+    }
+  }
+
+  // ── Paper Trade — Gemini Live real-time voice call (Beta, alternate) ─
+  // Kept alongside the turn-based ElevenLabs flow above as an alternate
+  // option to try again, now that Gemini's systemInstruction (below) gives
+  // it the same fixed, exact question list instead of an open brief to
+  // improvise from. Uses its own screen (mgr-screen-audio-gemini-live) and
+  // its own element ids throughout so it never collides with the
+  // ElevenLabs turn-based screen's ids.
+  function _startAudioGeminiLiveVoice() {
+    _clearPrepTimer();
+    const meta = MODULE_META[_currentModule];
+
+    $('mgr-audio-gemini-live-module-title').textContent = `${meta.icon} ${meta.label} — Gemini Voice AI (Beta)`;
+    $('mgr-audio-gemini-live-topic-title').textContent  = _currentScenario.title;
+
+    // The AI keeps the customer's exact opening line and escalation quotes
+    // for itself (see systemInstruction below) -- the manager should hear
+    // them live from the AI, not read them in advance. Show only the
+    // general background/situation on screen.
+    const _ptParsed = _parsePaperTradeQuestions(_currentScenario.scenario);
+    const _ptQuestions = _ptParsed.questions;
+    $('mgr-audio-gemini-live-scenario-text').innerHTML = _formatScenarioHTML(
+      _ptQuestions.length ? _ptParsed.background : _currentScenario.scenario
+    );
+    _renderEvalCriteriaPanel(_currentModule, 'mgr-audio-gemini-live-scenario-text');
+    $('mgr-audio-gemini-live-thread').innerHTML = '';
+    $('btn-mgr-audio-gemini-live-end').disabled = false;
+
+    _mgrLive = { kind: 'mock-call', turns: [], controller: null, startTime: Date.now(), finishing: false };
+
+    const stateEl = $('mgr-audio-gemini-live-state');
+    const STATE_LABELS = {
+      connecting: '🔌 Connecting…',
+      listening:  '🎙️ Listening — go ahead and speak',
+      speaking:   '🔊 Customer is speaking…',
+      error:      '⚠️ Connection problem — try Cancel and use the other call option',
+      ended:      '📴 Call ended',
+      'time-limit': '⏱️ 9-minute limit reached — wrapping up and submitting…',
+    };
+
+    // With a clean parsed list, give the AI a FIXED script -- the exact
+    // number of questions this scenario was authored with, asked in
+    // order -- instead of an open brief to improvise new questions from.
+    // Falls back to the old freeform behavior only if parsing found
+    // nothing (e.g. a future scenario that doesn't match the expected
+    // format), so a live call never breaks entirely.
+    const systemInstruction = _ptQuestions.length ? `You are roleplaying, BY VOICE, as a customer of the brokerage on a call with a customer support manager. You are the CUSTOMER, not an agent and not the manager.
+
+BACKGROUND (for your own understanding only — never read this out loud, it is not something you say to the manager): ${_ptParsed.background}
+
+YOUR QUESTIONS, IN ORDER — ask these ${_ptQuestions.length} questions one at a time, in exactly this order. This is a fixed list, not a starting point to improvise from: do not skip any, do not reorder them, do not merge two together, and do not invent extra questions beyond this list.
+${_ptQuestions.map((q, i) => `${i + 1}. "${q}"`).join('\n')}
+
+HOW TO RUN THIS CALL:
+- The moment the call connects, speak QUESTION 1 immediately as your opening line — no greeting, no small talk, go straight into it. You may reword it slightly into natural spoken language, but it must keep the exact same specific complaint or point.
+- After the manager answers, don't jump straight to reading the next question. First react to what they actually just said — a short, natural, spoken acknowledgment of a few words to one short sentence (for example: "I hear what you're saying, but..." / "Okay, fair enough — let me ask you this..." / "Right, well here's the thing..." / "Alright, so what about this..." / "I understand, but I still want to know..." — vary the phrasing each time, never repeat the same one twice) that shows you actually listened to their answer, THEN ask the next question from the list. You may lightly reword the question itself into natural spoken language, but keep its specific point intact.
+- Repeat that pattern for every remaining question: brief natural acknowledgment of their last answer, then the next question in order.
+- Ask all ${_ptQuestions.length} questions above, in order, one at a time, before the call ends. Do not stop early, and do not ask anything that isn't on this list.
+- Speak naturally, the way a real person sounds on a phone call — short, conversational sentences, not a written essay or a script read verbatim.
+- Once the manager has answered your final question, wrap up the call naturally within a line or two — you don't have to explicitly announce the call is ending.
+- Never mention that you are an AI, a script, grading, evaluation criteria, or that this is a training exercise.` : `You are roleplaying, BY VOICE, as a customer of the brokerage on a call with a customer support manager. You are the CUSTOMER, not an agent and not the manager — you are the one asking questions, and the manager is the one answering them.
+
+TOPIC / SITUATION CONTEXT (use this as the subject matter for your questions): ${_currentScenario.scenario}
+
+HOW TO RUN THIS CALL:
+- You are a genuinely curious, slightly concerned customer trying to understand this topic properly — you are not filing a complaint or demanding compensation, you are asking the manager to explain things to you.
+- Ask ONE conceptual question at a time, then stop and actually listen to the manager's full answer before asking anything else.
+- Every question you ask must be a complete, natural spoken question of at least 10-15 words — never a bare one- or two-word follow-up like "why?" or "how so?". Phrase it the way a real customer would voice a genuine concern, in full sentences.
+- Your very FIRST line, the moment the call connects, must go straight at the specific issue described in the topic/situation context above — name the actual problem (what happened, what you noticed, what went wrong) in your own spoken words as your opening question, exactly like a customer who called in specifically because of that issue. Do NOT open with small talk, a generic greeting, or a vague "I have some questions" — start directly on the first issue itself.
+- For every question after the first, build it directly from what the manager just said: pick up on a specific term, number, or claim in their answer and ask them to go deeper on it, clarify it, or explain what it means for you specifically — never ask a generic or scripted question that ignores their actual answer.
+- Speak naturally, the way a real person sounds on a phone call — short, conversational sentences, not a written essay or a script read verbatim.
+- Open the call yourself with your first question as soon as the call connects — do not wait for the manager to speak first.
+- Keep the call to roughly 5-6 minutes of back-and-forth questions and answers, then let it wind down naturally once you feel your questions have genuinely been answered — you don't have to explicitly announce the call is ending.
+- Never mention that you are an AI, a script, grading, evaluation criteria, or that this is a training exercise.`;
+
+    $('btn-mgr-audio-gemini-live-end').onclick = () => _finishAudioGeminiLiveVoice();
+    $('btn-mgr-audio-gemini-live-cancel').onclick = () => {
+      if (_mgrLive.controller) { _mgrLive.controller.stop(); _mgrLive.controller = null; }
+      _launchAudio();
+    };
+
+    showScreen('mgr-screen-audio-gemini-live');
+
+    _mgrLive.controller = GeminiLive.startCall({
+      systemInstruction,
+      onStateChange: (state) => {
+        if (stateEl) stateEl.textContent = STATE_LABELS[state] || state;
+        if (state === 'time-limit') {
+          toast('⏱️ Reached the 9-minute call limit — submitting what was covered so far.', '');
+          _finishAudioGeminiLiveVoice();
+        }
+      },
+      onTurn: ({ role, text }) => {
+        _mgrLive.turns.push({ role, text });
+        const bubble = document.createElement('div');
+        bubble.className = `mc-bubble ${role === 'bot' ? 'bot' : 'trainee'}`;
+        bubble.textContent = text;
+        $('mgr-audio-gemini-live-thread').appendChild(bubble);
+        $('mgr-audio-gemini-live-thread').scrollTop = $('mgr-audio-gemini-live-thread').scrollHeight;
+      },
+      onError: (err) => {
+        console.error('GeminiLive error (Paper Trade):', err);
+        toast('⚠ Voice AI error: ' + (err.message || err) + ' — you can cancel and try the other call option instead.', 'error');
+      },
+    });
+  }
+
+  async function _finishAudioGeminiLiveVoice() {
+    if (_mgrLive.finishing) return;
+    if (!_mgrLive.controller && _mgrLive.turns.length === 0) return;
+    _mgrLive.finishing = true;
+    $('btn-mgr-audio-gemini-live-end').disabled = true;
+
+    const controller = _mgrLive.controller;
+    _mgrLive.controller = null;
+    let recordingBlob = null;
+    if (controller) {
+      controller.stop();
+      try { recordingBlob = await controller.getRecording(); } catch (e) { console.warn('Call recording could not be finalized:', e.message || e); }
+    }
+    const durationSecs = Math.max(1, Math.floor((Date.now() - _mgrLive.startTime) / 1000));
+
+    const fullTranscript = _mgrLive.turns.map(t => `${t.role === 'bot' ? 'Customer' : 'You'}: ${t.text}`).join('\n\n');
+    const managerOnly    = _mgrLive.turns.filter(t => t.role === 'trainee').map(t => t.text).join(' ').trim();
+    const wordCount = managerOnly.split(/\s+/).filter(Boolean).length;
+
+    let aiScores = { overall: null, _method: 'mgr-live-js', _module: _currentModule, _scenarioId: _currentScenario.id };
+    if (wordCount >= 25 && typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
+      try {
+        const result = await ClaudeEvaluator.evaluatePaperTrade(fullTranscript, _currentScenario.scenario || '');
+        aiScores = {
+          ...result.scores,
+          overall:     result.overall,
+          earnedMarks: result.earnedMarks,
+          maxMarks:    result.maxMarks,
+          _reasons:    result.reasons,
+          _method:     'mgr-mock-call-ai',
+          _module:     _currentModule,
+          _scenarioId: _currentScenario.id,
+        };
+      } catch (e) {
+        console.warn('Paper Trade Gemini live-call content eval failed:', e.message);
+      }
+    }
+    aiScores._voiceEngine = 'gemini-live-beta';
+
+    try {
+      await Auth.ensureTraineeRecord();
+      await DB.put('sessions', {
+        traineeId:    Auth.getId(),
+        traineeName:  Auth.getName(),
+        traineeEmail: Auth.getEmail(),
+        module:       _currentModule,
+        topicId:      (_currentScenario._hardcoded ? null : (_currentScenario.id || null)),
+        topicTitle:   _currentScenario.title,
+        transcript:   fullTranscript,
+        recordingBlob: recordingBlob || null,
+        writtenText:  '',
+        aiScores,
+        timeTaken:    durationSecs,
+        submittedAt:  new Date().toISOString(),
+        status:       'ai-evaluated',
+      });
+      _showResult(aiScores, 'audio');
+    } catch (e) {
+      toast('Error saving session: ' + e.message, 'error');
+      console.error('_finishAudioGeminiLiveVoice error:', e);
+      _mgrLive.finishing = false;
     }
   }
 
