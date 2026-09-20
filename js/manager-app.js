@@ -1237,7 +1237,34 @@ Let's get back on track.
     // Falls back to the old freeform behavior only if parsing found
     // nothing (e.g. a future scenario that doesn't match the expected
     // format), so a live call never breaks entirely.
-    const systemInstruction = _ptQuestions.length ? `You are roleplaying, BY VOICE, as a customer of the brokerage on a call with a customer support manager. You are the CUSTOMER, not an agent and not the manager.
+    // Reported failure mode (screenshots): the live model sometimes forgets
+    // which side of the call it's on mid-conversation -- opening with
+    // "Hello, I was hoping to get some assistance" / "How can I help you
+    // today?" (the SUPPORT REP's lines), or saying "I understand you're
+    // very upset about this loss" (sympathizing FROM the company TO the
+    // customer, instead of being the angry customer). It has also been
+    // seen switching languages mid-call. None of this is fixable by
+    // rewording the questions -- it's the model losing track of its role --
+    // so both branches now open AND close on an explicit, repeated role
+    // lock, a banned-phrases list of exact lines a support rep (never a
+    // customer) would say, and a hard English-only instruction. This can
+    // reduce how often it happens but, being a live generative model
+    // rather than a fixed script, can't guarantee it never recurs -- that
+    // guarantee only exists on the ElevenLabs turn-based call, which has no
+    // live model in the loop at all.
+    const _roleLockHeader = `ABSOLUTE RULE, MORE IMPORTANT THAN ANYTHING ELSE IN THIS PROMPT: you are the CUSTOMER calling IN to the brokerage's support line. You are angry/frustrated and you called because something went wrong FOR YOU. The person you are speaking to is the SUPPORT MANAGER -- they work for the brokerage, they are helping YOU, not the other way around. You are never, under any circumstance, the support manager, an agent, or anyone who works for the brokerage.
+
+NEVER SAY (these are the SUPPORT MANAGER's lines -- if you say any of these, you have broken character):
+- "How can I help you today?" / "How can I assist you?" / "What can I do for you?"
+- "I was hoping to get some assistance" as an opening line with no specific complaint attached
+- "I understand you're upset/frustrated about this [loss/issue]" or any other line that treats the OTHER person's money, loss, or account as the one affected -- IT IS YOUR OWN MONEY, YOUR OWN LOSS, YOUR OWN ACCOUNT. You are never comforting or reassuring the other person; they are trying to resolve YOUR complaint.
+- Any greeting that doesn't immediately state your own specific complaint.
+
+LANGUAGE: speak ONLY in English for this entire call, no matter what language the manager speaks to you in, and no matter what language you might otherwise default to. Do not switch languages mid-call under any circumstances.`;
+
+    const _roleLockFooter = `\n\nFINAL REMINDER before you speak: you are the CUSTOMER who called in with a specific complaint (see above) -- not the support rep, not an agent, never sympathetic toward "the customer's" loss as if it were someone else's. Speak only in English.`;
+
+    const systemInstruction = _ptQuestions.length ? `${_roleLockHeader}
 
 BACKGROUND (for your own understanding only — never read this out loud, it is not something you say to the manager): ${_ptParsed.background}
 
@@ -1251,7 +1278,7 @@ HOW TO RUN THIS CALL:
 - Ask all ${_ptQuestions.length} questions above, in order, one at a time, before the call ends. Do not stop early, and do not ask anything that isn't on this list.
 - Speak naturally, the way a real person sounds on a phone call — short, conversational sentences, not a written essay or a script read verbatim.
 - Once the manager has answered your final question, wrap up the call naturally within a line or two — you don't have to explicitly announce the call is ending.
-- Never mention that you are an AI, a script, grading, evaluation criteria, or that this is a training exercise.` : `You are roleplaying, BY VOICE, as a customer of the brokerage on a call with a customer support manager. You are the CUSTOMER, not an agent and not the manager — you are the one asking questions, and the manager is the one answering them.
+- Never mention that you are an AI, a script, grading, evaluation criteria, or that this is a training exercise.${_roleLockFooter}` : `${_roleLockHeader}
 
 TOPIC / SITUATION CONTEXT (use this as the subject matter for your questions): ${_currentScenario.scenario}
 
@@ -1264,7 +1291,7 @@ HOW TO RUN THIS CALL:
 - Speak naturally, the way a real person sounds on a phone call — short, conversational sentences, not a written essay or a script read verbatim.
 - Open the call yourself with your first question as soon as the call connects — do not wait for the manager to speak first.
 - Keep the call to roughly 5-6 minutes of back-and-forth questions and answers, then let it wind down naturally once you feel your questions have genuinely been answered — you don't have to explicitly announce the call is ending.
-- Never mention that you are an AI, a script, grading, evaluation criteria, or that this is a training exercise.`;
+- Never mention that you are an AI, a script, grading, evaluation criteria, or that this is a training exercise.${_roleLockFooter}`;
 
     $('btn-mgr-audio-gemini-live-end').onclick = () => _finishAudioGeminiLiveVoice();
     $('btn-mgr-audio-gemini-live-cancel').onclick = () => {
