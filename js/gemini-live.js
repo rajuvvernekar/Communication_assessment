@@ -493,5 +493,96 @@ const GeminiLive = (() => {
     return { stop, getRecording };
   }
 
-  return { isAvailable, startCall };
+  // ==========================================================================
+  //  Gemini text-generation employee turn — added 2026-09-20 for Red Pen.
+  //
+  //  This is a deliberately DIFFERENT, much simpler code path from startCall()
+  //  above: one scoped request/response text completion per conversational
+  //  turn, not a continuous audio WebSocket. Red Pen needs the employee to
+  //  react authentically to whatever the manager actually said, so a fully
+  //  fixed script (the fix used for Paper Trade) doesn't fit here — but a
+  //  single short generateContent call, grounded on every turn by the same
+  //  strict persona + situation + conversation-so-far, is far easier to keep
+  //  on-script than the continuous Live/duplex model, which is what actually
+  //  drifted (role reversal, script abandonment, language switching) in
+  //  testing for Paper Trade and Red Pen's own Gemini Live (Beta) option
+  //  above. The manager's spoken response is still captured and transcribed
+  //  the normal way (Recorder + SpeechEngine, in manager-app.js) — only the
+  //  employee's reply text is generated here; it's then spoken with
+  //  ElevenLabs TTS via the Worker's existing /tts route, exactly like Paper
+  //  Trade's _speakPtCustomer.
+  //
+  //  Routed through the Worker's /gemini-generate route (see worker.js) so
+  //  GEMINI_API_KEY never reaches the browser — same reasoning as the
+  //  /live-token route used by startCall() above.
+  // ==========================================================================
+  const TEXT_MODEL = 'models/gemini-2.5-flash';
+
+  function _generateUrl() {
+    const base = (typeof CONFIG !== 'undefined' && CONFIG.CLAUDE_PROXY_URL) || '';
+    if (!base) return '';
+    return base.replace(/\/+$/, '') + '/gemini-generate';
+  }
+
+  function isTextAvailable() {
+    const url = _generateUrl();
+    return !!url && !url.includes('YOUR_WORKER');
+  }
+
+  // Mirrors ClaudeEvaluator.callAiEmployee's signature exactly (see
+  // js/claude.js) so the two are interchangeable at the call site in
+  // manager-app.js's _endManagerFbTurn().
+  async function callEmployeeTurn(scenario, empName, empPersona, messages, turnNumber, maxTurns) {
+    const url = _generateUrl();
+    if (!url) throw new Error('Gemini text-generation proxy not configured');
+
+    const isLast = turnNumber >= maxTurns;
+    const system = `You are roleplaying as ${empName}, an employee in a one-on-one feedback conversation with your manager.
+
+SITUATION: ${scenario}
+
+YOUR CHARACTER: ${empPersona}
+
+HOW TO BEHAVE:
+- React authentically based on HOW the manager delivers feedback, exactly as your character description above directs.
+- Show realistic emotional progression — don't change stance too suddenly.
+- React specifically to what the manager just said — don't repeat yourself.${isLast ? `\n- This is the FINAL turn (${turnNumber} of ${maxTurns}). Give a realistic closing line — partially accepting, resistant-but-polite, or genuinely receptive, depending on how the conversation went.` : ''}
+
+ABSOLUTE RULES:
+- Stay in character as ${empName} for the entire reply — never break the fourth wall, never mention that you are an AI, a model, a script, grading, evaluation criteria, or a training exercise.
+- Speak ONLY in English, regardless of what language the manager used.
+- Reply in 2-4 sentences MAXIMUM — short, real, conversational.
+- Do NOT narrate, add stage directions, or start with your own name.
+- Return ONLY the employee's spoken dialogue, nothing else.`;
+
+    const contents = messages.map(m => ({
+      role:  m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    }));
+
+    const resp = await fetch(url, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        model:           TEXT_MODEL,
+        system,
+        contents,
+        temperature:     0.5,
+        maxOutputTokens: 200,
+      }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error?.message || `Gemini API error ${resp.status}`);
+    }
+    const data = await resp.json();
+    const text = data && data.candidates && data.candidates[0] && data.candidates[0].content
+      && data.candidates[0].content.parts && data.candidates[0].content.parts[0]
+      && data.candidates[0].content.parts[0].text;
+    if (!text) throw new Error('Gemini returned no text');
+    return text.trim();
+  }
+
+  return { isAvailable, startCall, isTextAvailable, callEmployeeTurn };
 })();

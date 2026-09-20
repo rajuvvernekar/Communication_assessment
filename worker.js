@@ -17,11 +17,23 @@
  *
  * Routes:
  *   POST /             → Anthropic Claude API (existing)
- *   POST /tts          → ElevenLabs TTS (returns audio/mpeg)
+ *   POST /tts          → ElevenLabs TTS (returns audio/mpeg). Accepts an
+ *                        optional "voice_id" field in the JSON body to
+ *                        override the default voice per request (added
+ *                        2026-09-20 for Red Pen's male/female employee
+ *                        personas — see js/manager-app.js's
+ *                        _speakFeedbackEmployee); omit it to get the
+ *                        Worker-wide default voice below, unchanged for
+ *                        every existing caller.
  *   POST /live-token   → mints a short-lived Gemini Live API token so the
  *                        browser can open its own WebSocket straight to
  *                        Google without ever seeing GEMINI_API_KEY itself.
  *                        See https://ai.google.dev/gemini-api/docs/live-api/ephemeral-tokens
+ *   POST /gemini-generate → single-shot Gemini text generation (NOT the
+ *                        Live/duplex API above) — added 2026-09-20 for Red
+ *                        Pen's per-turn employee replies (see
+ *                        js/gemini-live.js's callEmployeeTurn). Keeps
+ *                        GEMINI_API_KEY server-side exactly like /live-token.
  *
  * NOTE ON GEMINI_API_KEY: never paste a real key into this file or into any
  * chat/file that ends up in git — it belongs ONLY in this Worker's own
@@ -34,6 +46,8 @@ const ANTHROPIC_API        = 'https://api.anthropic.com/v1/messages';
 const ELEVENLABS_VOICE     = '21m00Tcm4TlvDq8ikWAM'; // Rachel — natural, warm female
 const GEMINI_TOKEN_API     = 'https://generativelanguage.googleapis.com/v1beta/auth_tokens';
 const GEMINI_LIVE_MODEL    = 'models/gemini-3.8-live';
+const GEMINI_GENERATE_API  = 'https://generativelanguage.googleapis.com/v1beta';
+const GEMINI_TEXT_MODEL    = 'models/gemini-2.5-flash'; // plain text generateContent -- NOT a Live model id
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin':  '*',
@@ -63,11 +77,17 @@ export default {
         );
       }
 
-      let body;
-      try { body = await request.text(); } catch { return new Response('Bad Request', { status: 400 }); }
+      let payload;
+      try { payload = await request.json(); } catch { return new Response('Bad Request', { status: 400 }); }
+
+      // Optional per-request voice override (added 2026-09-20 for Red Pen --
+      // see the route comment at the top of this file). Not forwarded to
+      // ElevenLabs itself since it's not one of their request fields.
+      const voiceId = payload.voice_id || ELEVENLABS_VOICE;
+      delete payload.voice_id;
 
       const upstream = await fetch(
-        `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE}`,
+        `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
         {
           method: 'POST',
           headers: {
@@ -75,7 +95,7 @@ export default {
             'xi-api-key':   env.ELEVENLABS_API_KEY,
             'Accept':        'audio/mpeg',
           },
-          body,
+          body: JSON.stringify(payload),
         }
       );
 
@@ -136,6 +156,50 @@ export default {
           },
         }),
       });
+
+      const text = await upstream.text();
+      return new Response(text, {
+        status: upstream.status,
+        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+      });
+    }
+
+    // ---- Gemini text-generation route (/gemini-generate) ----
+    // A single-shot generateContent call -- NOT the Live/bidi WebSocket API
+    // above. Added 2026-09-20 for Red Pen's per-turn employee replies (see
+    // js/gemini-live.js's callEmployeeTurn): each call is one short, tightly
+    // scoped completion grounded by the persona + conversation so far, kept
+    // server-side so GEMINI_API_KEY never reaches the browser.
+    if (url.pathname.endsWith('/gemini-generate')) {
+      if (!env.GEMINI_API_KEY) {
+        return new Response(
+          JSON.stringify({ error: { message: 'GEMINI_API_KEY secret not set on the Worker.' } }),
+          { status: 500, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
+        );
+      }
+
+      let payload;
+      try { payload = await request.json(); } catch { return new Response('Bad Request', { status: 400 }); }
+
+      const model = payload.model || GEMINI_TEXT_MODEL;
+      const upstream = await fetch(
+        `${GEMINI_GENERATE_API}/${model}:generateContent`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': env.GEMINI_API_KEY,
+          },
+          body: JSON.stringify({
+            contents: payload.contents,
+            systemInstruction: payload.system ? { parts: [{ text: payload.system }] } : undefined,
+            generationConfig: {
+              temperature:     payload.temperature != null ? payload.temperature : 0.5,
+              maxOutputTokens: payload.maxOutputTokens || 200,
+            },
+          }),
+        }
+      );
 
       const text = await upstream.text();
       return new Response(text, {

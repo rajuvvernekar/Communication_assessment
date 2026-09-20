@@ -160,81 +160,109 @@ MANAGER: "Sir, that is your right. But please be aware that investigations take 
       { id:'mc4', title:'Outdated App NAV Display — Mutual Fund Redemption Loss & Media Threat',
         scenario:'A client holds mutual fund units through the firm\'s Coin application — a mutual fund investment platform. The client had not updated the Coin app for an extended period. Due to the outdated app version, the NAV displayed on the client\'s screen was ₹35 — the NAV as of 25th November 2025 — which was clearly date-stamped on the redemption page as a historical figure, not the current NAV.\n\nOn 3rd March 2026, the client placed a redemption order for their mutual fund units. By this date, due to a significant market correction, the actual NAV of the fund had fallen to ₹25. The client, without checking the date on the NAV displayed or verifying the current NAV independently, assumed the NAV was still ₹35 and proceeded with the redemption. The redemption was executed at the prevailing NAV of ₹25 — not ₹35 — resulting in a loss of approximately ₹1 lakh compared to the client\'s expectation.\n\nThe client is now on an escalation call, blaming the platform for displaying a wrong NAV and demanding full compensation of ₹1 lakh. The client is the owner of a local Hindi news channel and is making explicit threats to run a negative story about the firm on their channel, leveraging their media influence as pressure.\n\nThe client opens the call by saying:\n\n"I\'ll come straight to the point. I saw NAV of ₹35 on your Coin app. I placed a redemption on 3rd March. I found out the actual NAV was ₹25. I lost one lakh. Your coin shows the wrong NAV. I own a Hindi news channel. If I\'m not heard on this call today, tomorrow morning your company\'s full story will run on my channel. Prime time. Now tell me — what will you do?"\n\nEscalation beats the client will raise if your handling doesn\'t already address them: (1) "Your app showed me ₹35. I placed my order based on what your app showed me. How is that my mistake? You are a financial platform. You are supposed to show me accurate, real-time data. If your app cannot show the correct NAV, then you should not be in this business. I trusted your platform with my money, and your platform gave me wrong information." (2) "You\'re telling me I should have checked the date on the NAV. But when I open a financial app and see a number, I trust that number is current. No common person reads the fine print on every screen. You are taking advantage of the fact that I didn\'t update the app to escape your responsibility. The app should have shown me a warning — \'your app is outdated, NAV may not be current.\' Did your app show me any such warning? No. So the fault is yours." (3) "I am giving you a last chance. I have suffered a loss of one lakh. I am an influential person in this city. 2 lakh people watch my channel daily. Tomorrow I will run an investigative story — \'How this stockbroking firm is looting retail investors.\' I will broadcast your name, your company\'s name, and this entire conversation. There is still time — return one lakh and this matter is over." (4) "Fine. Apart from my channel — I also know people at SEBI. I will file a complaint stating your platform deliberately showed outdated NAV to mislead investors into making transactions. That is mis-selling. That is a regulatory offence. And I will also file in consumer court for ₹1 lakh plus damages plus mental harassment. Let\'s see how your firm handles that." (5) "I want three things before I hang up. One — your full name and employee ID. Two — a written statement from your firm saying the NAV shown was correct and the client is responsible. Three — the name and number of your CEO or MD. If you give me these three things I will decide my next step. If you don\'t, I\'ll take that as confirmation that your firm is hiding something."\n\nHandle this call for 5-6 minutes: acknowledge the issue and the client\'s frustration without over-explaining excuses, take clear ownership of what your organization controls, respond to each escalation beat as it comes up, and close with a resolution that is realistic and within your actual authority.' },
     ],
+    // Red Pen / Feedback scenarios — replaced 2026-09-20 with the 6
+    // people-management coaching cases from the manager's shared document
+    // ("red_pen_2.docx"): a disengaged high performer (Ananya), a defensive
+    // "my numbers are good" employee (Rahul), a high performer with a
+    // negative attitude (Vikram), a repeat-mistake employee (Meera), a
+    // defensive employee reacting to feedback (Arjun), and an employee who
+    // has lost confidence after a promotion (Priya). goodLooksLike /
+    // commonPitfalls below are taken directly from that document's "What
+    // good looks like in the role-play" / "Common manager pitfalls" lists
+    // for each scenario, and drive both the AI evaluator
+    // (ClaudeEvaluator.evaluateManagerFeedback) and the manager-facing
+    // "how this is scored" panel exactly as the previous 5 scenarios did.
     'mgr-feedback': [
-      { id:'fb1', title:'Mis-Selling Pattern Under Target Pressure',
-        scenario:'Employee: Relationship Manager, 2.3 years tenure, consistently in the top quartile for new account activations.\n\nSituation: Call audits over the last month show a repeated pattern of pushing high-margin F&O and derivative products to clients with clearly conservative risk profiles, without adequately explaining the risk, in order to hit a quarterly activation target.',
+      { id:'fb1', title:'The High Performer Who Suddenly Disengaged',
+        scenario:'Employee: Ananya — a consistent high performer for the last 8 months (QA regularly above 90%, active in meetings, supportive of new team members, often volunteers for extra responsibilities). She moved to your team after a recent restructuring.\n\nSituation: Over the last month her QA score has dropped from 94% to 79%, her productivity has reduced, she rarely participates in discussions, no longer volunteers for activities, seems distracted during meetings, and has become less communicative with peers. When you ask if everything is okay, she simply says: "Yes, I\'m fine. I\'ll manage."',
         goodLooksLike: [
-          'Sets context and cites the specific evidence (calls, dates, the pattern) before delivering any judgement.',
-          'Acknowledges the employee\'s tenure/performance strengths where genuinely true, without letting it excuse the specific behaviour.',
-          'Holds the standard calmly when the employee deflects, minimizes, or questions why they\'re being singled out — redirects to facts rather than arguing.',
-          'Does not accept a rationalization ("everyone does it", "nothing went wrong", "it\'s a resourcing problem") as closing the issue.',
-          'Ends with a specific, measurable, time-bound corrective action and a clear follow-up checkpoint — not just a warning.',
+          'Opens by naming the change in behaviour/energy, not the QA score, and asks how she\'s doing before referencing any number.',
+          'Uses open questions ("What\'s changed for you since the move?") rather than closed ones ("Is everything okay?") that invite a one-word answer.',
+          'Notices and gently names the mismatch when she says "I\'m fine, I\'ll manage" rather than accepting it and moving on.',
+          'Avoids any language that implies she has become careless or lost motivation.',
+          'Surfaces the recognition gap (that her previous manager acknowledged her effort) without being told the twist directly.',
+          'Closes with a two-sided action plan — what the manager will do differently (recognition, check-ins) and what Ananya will try.',
         ],
         commonPitfalls: [
-          'Opens with the conclusion or a threat ("this could cost you your job") before laying out the evidence.',
-          'Gets pulled into debating whether the rule itself is fair or reasonable, instead of the behaviour.',
-          'Accepts one of the employee\'s pushback lines as a valid reason to drop the issue.',
-          'Ends the conversation without a concrete, measurable plan or a follow-up date.',
+          'Opens with "Your QA has dropped from 94% to 79%, what happened?" — numbers before context.',
+          'Accepts "I\'m fine, I\'ll manage" at face value and moves on to next steps.',
+          'Uses language that implies blame ("you seem to have stopped caring").',
+          'Jumps straight to an action plan without exploring the cause first.',
         ] },
-      { id:'fb2', title:'Skipped Mandatory Compliance Disclosures',
-        scenario:'Employee: Senior Dealer, 4 years tenure, generally strong performer.\n\nSituation: Random call monitoring found that in 6 of the last 20 sampled calls, the mandatory risk disclosure script for leveraged products was skipped or rushed through inaudibly before order confirmation — a direct compliance and regulatory exposure.',
+      { id:'fb2', title:'"I Don\'t Think There Is Anything Wrong With My Work"',
+        scenario:'Employee: Rahul — two years\' tenure, consistently meets his productivity targets but has received repeated feedback on communication.\n\nSituation: His recent QA feedback flags interrupting customers, not acknowledging customer concerns, a robotic tone, technically correct but poorly structured responses, and missed opportunities to show empathy. You have discussed this with him twice already. In this session he says: "But my numbers are good. Customers are getting the right answers. I don\'t understand why QA keeps giving me feedback."',
         goodLooksLike: [
-          'Sets context and cites the specific evidence (calls, dates, the pattern) before delivering any judgement.',
-          'Acknowledges the employee\'s tenure/performance strengths where genuinely true, without letting it excuse the specific behaviour.',
-          'Holds the standard calmly when the employee deflects, minimizes, or questions why they\'re being singled out — redirects to facts rather than arguing.',
-          'Does not accept a rationalization ("everyone does it", "nothing went wrong", "it\'s a resourcing problem") as closing the issue.',
-          'Ends with a specific, measurable, time-bound corrective action and a clear follow-up checkpoint — not just a warning.',
+          'Acknowledges Rahul\'s strength (consistent targets, accurate answers) explicitly and early, before raising the concern.',
+          'Uses two or more specific, cited examples (call ID, timestamp, or quoted moment) rather than general statements like "your communication needs work."',
+          'Distinguishes clearly between getting the job done and doing it effectively, without dismissing the value of accurate answers.',
+          'Asks questions that let Rahul reach the gap himself ("What do you think the customer felt in that moment?") rather than declaring it for him.',
+          'Stays composed and doesn\'t get pulled into defending QA as a scoring system when Rahul challenges it.',
         ],
         commonPitfalls: [
-          'Opens with the conclusion or a threat ("this could cost you your job") before laying out the evidence.',
-          'Gets pulled into debating whether the rule itself is fair or reasonable, instead of the behaviour.',
-          'Accepts one of the employee\'s pushback lines as a valid reason to drop the issue.',
-          'Ends the conversation without a concrete, measurable plan or a follow-up date.',
+          'Gets drawn into debating whether QA feedback is fair, rather than staying on observable behaviour.',
+          'Responds to "my numbers are good" with a general statement ("yes, but communication matters too") instead of a specific example.',
+          'Tells Rahul what the gap is, rather than asking questions that help him identify it himself.',
+          'Concedes the numbers matter more, undermining the point of the conversation.',
         ] },
-      { id:'fb3', title:'Declining Call Quality & Client Complaints',
-        scenario:'Employee: Customer Service Executive, 1.5 years tenure.\n\nSituation: Client satisfaction scores for this employee have dropped from 4.3 to 2.8 over two months, with three specific written complaints about curt, dismissive tone during high-value client interactions.',
+      { id:'fb3', title:'The Employee Who Is Doing Well but Has a Negative Attitude',
+        scenario:'Employee: Vikram — one of the team\'s strongest performers (excellent productivity, consistently high QA, good attendance, positive customer feedback).\n\nSituation: In team meetings he frequently makes negative comments ("This won\'t work," "We\'ve tried this before," "Why are we doing this again?"), discourages new team members from participating, and has started influencing others negatively. When you speak to him, he says: "I\'m only being practical. At least I\'m honest. My performance is good, so I don\'t see the problem."',
         goodLooksLike: [
-          'Sets context and cites the specific evidence (calls, dates, the pattern) before delivering any judgement.',
-          'Acknowledges the employee\'s tenure/performance strengths where genuinely true, without letting it excuse the specific behaviour.',
-          'Holds the standard calmly when the employee deflects, minimizes, or questions why they\'re being singled out — redirects to facts rather than arguing.',
-          'Does not accept a rationalization ("everyone does it", "nothing went wrong", "it\'s a resourcing problem") as closing the issue.',
-          'Ends with a specific, measurable, time-bound corrective action and a clear follow-up checkpoint — not just a warning.',
+          'Opens by explicitly recognising Vikram\'s strong performance before raising the behavioural concern.',
+          'Describes specific comments and moments ("when you said \'we\'ve tried this before\' in Monday\'s planning meeting") rather than a trait label.',
+          'Explains the effect on the team concretely — e.g., a new joiner going quiet after Vikram\'s comment — rather than a vague "it affects morale."',
+          'Avoids words like "negative," "toxic," or "cynical" as descriptions of Vikram himself.',
+          'Sets a specific, observable expectation going forward, and a way to check it.',
         ],
         commonPitfalls: [
-          'Opens with the conclusion or a threat ("this could cost you your job") before laying out the evidence.',
-          'Gets pulled into debating whether the rule itself is fair or reasonable, instead of the behaviour.',
-          'Accepts one of the employee\'s pushback lines as a valid reason to drop the issue.',
-          'Ends the conversation without a concrete, measurable plan or a follow-up date.',
+          'Labels the person ("you have a negative attitude") instead of describing the behaviour and its impact.',
+          'Fails to connect the behaviour to a concrete effect on the team.',
+          'Lets Vikram\'s strong performance become a reason to soften or skip the conversation entirely.',
+          'Becomes confrontational once Vikram says "at least I\'m honest."',
         ] },
-      { id:'fb4', title:'Chronic SLA Breaches on Client Callbacks',
-        scenario:'Employee: Support Team Lead, 3 years tenure, previously a strong performer.\n\nSituation: Callback SLA (client escalations to be returned within 4 business hours) has been breached in 40% of cases over the last six weeks, several involving time-sensitive trading issues where delay caused real client financial impact.',
+      { id:'fb4', title:'The Employee Who Keeps Making the Same Mistake',
+        scenario:'Employee: Meera — has been making the same process-related error repeatedly despite the process being explained, documentation shared, a coaching session held, and feedback given after previous errors.\n\nSituation: The same mistake has occurred four times in the last month. During the feedback discussion, Meera says: "I\'m sorry. I\'ll be careful next time." — a response you have heard from her several times before.',
         goodLooksLike: [
-          'Sets context and cites the specific evidence (calls, dates, the pattern) before delivering any judgement.',
-          'Acknowledges the employee\'s tenure/performance strengths where genuinely true, without letting it excuse the specific behaviour.',
-          'Holds the standard calmly when the employee deflects, minimizes, or questions why they\'re being singled out — redirects to facts rather than arguing.',
-          'Does not accept a rationalization ("everyone does it", "nothing went wrong", "it\'s a resourcing problem") as closing the issue.',
-          'Ends with a specific, measurable, time-bound corrective action and a clear follow-up checkpoint — not just a warning.',
+          'Asks diagnostic questions before proposing any solution ("Walk me through what\'s happening when the mistake occurs").',
+          'Notices the pattern is tied to a trigger — handling multiple issues at once — rather than assuming carelessness or lack of knowledge.',
+          'Does not accept "I\'ll be careful next time" as a sufficient action plan.',
+          'Agrees on a specific, observable corrective action tied to the actual trigger (e.g., a checklist or prompt for multi-issue calls), not generic retraining already tried four times.',
+          'Sets a measurable way to check improvement (e.g., audited calls over the next two weeks).',
         ],
         commonPitfalls: [
-          'Opens with the conclusion or a threat ("this could cost you your job") before laying out the evidence.',
-          'Gets pulled into debating whether the rule itself is fair or reasonable, instead of the behaviour.',
-          'Accepts one of the employee\'s pushback lines as a valid reason to drop the issue.',
-          'Ends the conversation without a concrete, measurable plan or a follow-up date.',
+          'Repeats the same explanation or documentation that has already failed four times.',
+          'Accepts "I\'ll be careful" as the agreed action, without defining what "careful" means in practice.',
+          'Assumes the issue is attitude (carelessness) without first checking whether it\'s knowledge, skill, or attention under pressure.',
+          'Doesn\'t identify the specific circumstance (multiple issues at once) in which the error occurs.',
         ] },
-      { id:'fb5', title:'Trade Executed Without Proper Verbal Confirmation',
-        scenario:'Employee: Dealer, 5 years tenure, high trust and seniority on the floor.\n\nSituation: A recorded call shows a large trade executed based on an ambiguous client instruction, without the mandatory verbal reconfirmation of quantity and price before execution — a serious protocol and compliance breach, even though this particular trade did not result in client loss.',
+      { id:'fb5', title:'The Defensive Employee',
+        scenario:'Employee: Arjun — you are giving him feedback after reviewing three of his calls, highlighting that he interrupted customers, missed probing opportunities, became impatient in tone in one interaction, and did not acknowledge the customer\'s frustration.\n\nSituation: Arjun immediately becomes defensive: "But the customer was being unreasonable." Then: "Other agents speak like this too. Why am I being singled out?" And finally: "You only look at my mistakes. Nobody talks about the calls where I did well."',
         goodLooksLike: [
-          'Sets context and cites the specific evidence (calls, dates, the pattern) before delivering any judgement.',
-          'Acknowledges the employee\'s tenure/performance strengths where genuinely true, without letting it excuse the specific behaviour.',
-          'Holds the standard calmly when the employee deflects, minimizes, or questions why they\'re being singled out — redirects to facts rather than arguing.',
-          'Does not accept a rationalization ("everyone does it", "nothing went wrong", "it\'s a resourcing problem") as closing the issue.',
-          'Ends with a specific, measurable, time-bound corrective action and a clear follow-up checkpoint — not just a warning.',
+          'Acknowledges Arjun\'s underlying feeling ("I hear that you feel your good calls aren\'t recognised") without agreeing that the behaviour in question was acceptable.',
+          'Does not get drawn into debating whether "other agents do it too" or whether the customer was unreasonable.',
+          'Redirects calmly back to the three specific calls and observable behaviours under discussion.',
+          'Stays composed rather than defending the feedback or its fairness.',
+          'Closes by genuinely naming something Arjun did well, not as a formality but as real balance.',
         ],
         commonPitfalls: [
-          'Opens with the conclusion or a threat ("this could cost you your job") before laying out the evidence.',
-          'Gets pulled into debating whether the rule itself is fair or reasonable, instead of the behaviour.',
-          'Accepts one of the employee\'s pushback lines as a valid reason to drop the issue.',
-          'Ends the conversation without a concrete, measurable plan or a follow-up date.',
+          'Responds to "nobody talks about the calls where I did well" with "that\'s not true" — countering rather than acknowledging.',
+          'Argues about whether other agents behave the same way, rather than staying on Arjun\'s own calls.',
+          'Lets the conversation drift into a debate about whether the customer was unreasonable.',
+          'Ends the conversation only on the negative points, without balancing feedback.',
+        ] },
+      { id:'fb6', title:'The Employee Who Has Lost Confidence',
+        scenario:'Employee: Priya — recently promoted to handle more complex customer interactions. She performed well initially, but after receiving negative feedback on a few difficult calls, her confidence has dropped.\n\nSituation: She is taking longer to respond, frequently seeks help for routine situations, avoids taking complex calls, her productivity has reduced, and she keeps asking, "Am I doing this correctly?" When you tell her she needs to be more confident, she says: "I\'m trying. But every time I take a difficult call, I feel I\'m going to make another mistake."',
+        goodLooksLike: [
+          'Recognises early that this is a confidence issue, not a knowledge or skill gap, and doesn\'t default to more training content.',
+          'Avoids generic encouragement ("you just need to be more confident") in favour of a concrete plan.',
+          'Designs a graduated exposure plan — small, winnable steps before returning to full complexity.',
+          'Offers specific reassurance grounded in evidence of Priya\'s actual past competence, not vague encouragement.',
+          'Sets a light-touch, measurable way to track progress (e.g., number of supported complex calls handled).',
+        ],
+        commonPitfalls: [
+          'Tells Priya to "just be more confident" — the same unhelpful framing already present in the scenario.',
+          'Defaults to assigning more knowledge-based training rather than structured practice.',
+          'Skips designing any graduated plan, leaving her to face full complexity again with no scaffolding.',
+          'Offers generic praise ("you\'re doing great") rather than specific, evidence-based reassurance.',
         ] },
     ],
     'mgr-eq': [
@@ -258,36 +286,53 @@ MANAGER: "Sir, that is your right. But please be aware that investigations take 
   };
 
   // ── Employee personas for Feedback AI ───────────────────
+  // Replaced 2026-09-20 to match the 6 new mgr-feedback scenarios above.
+  // Each persona embeds the scenario's "Facilitator Twist" from the source
+  // document as private context the employee does NOT volunteer directly —
+  // it only surfaces if the manager's questions create a genuinely safe,
+  // curious space — plus the scenario's own quoted defensive lines, and
+  // reactive branching built directly from that scenario's "What good looks
+  // like" / "Common pitfalls" lists (good moves → gradually open up or
+  // soften; pitfalls → stay guarded or escalate). This same persona string
+  // drives both the turn-based AI employee (see callAiEmployee /
+  // GeminiLive.callEmployeeTurn below) and the Gemini Live (Beta) real-time
+  // voice alternative further down, since both read from this object.
   const FB_EMPLOYEES = {
     'fb1': {
-      name: 'Ravi',
-      gender: 'male',
-      opening: "Hi. Is this about my numbers? Because they're actually pretty good this quarter.",
-      persona: "You are Ravi — Relationship Manager, 2.3 years tenure, consistently in the top quartile for new account activations. Call audits over the last month show a repeated pattern of pushing high-margin F&O and derivative products to clients with clearly conservative risk profiles, without adequately explaining the risk, in order to hit a quarterly activation target. You do not think you have done anything seriously wrong and you are mildly defensive from the start. Your default pushback lines, to use verbatim or adapt naturally across the conversation as they fit: \'Everyone on the floor does this to hit numbers, I\'m just better at it.\' / \'The client signed the risk disclosure, so legally I\'m covered.\' / \'If I stop doing this, my targets will slip and that affects my incentive — is the company going to make up for that?\' If the manager leads with threats, judgement, or a vague generalization without citing the specific evidence, you get more defensive and repeat your pushback lines harder. If the manager instead lays out the specific evidence calmly, holds the standard without escalating when you push back, and proposes a concrete, specific, time-bound corrective action, you gradually stop arguing and — grudgingly at first — acknowledge the point and agree to the plan."
+      name: 'Ananya',
+      gender: 'female',
+      opening: "Hi... you wanted to talk to me?",
+      persona: "You are Ananya — you\'ve been a consistent high performer for the last 8 months (QA regularly above 90%, active in meetings, supportive of new joiners, often volunteering for extra responsibilities). After a team restructuring you moved to a new team a month ago. Since then your QA has dropped from 94% to 79%, your productivity has reduced, you rarely speak up in meetings, you no longer volunteer, and you\'ve gone quiet with your peers. When your manager first asked if everything was okay, you said 'Yes, I\'m fine. I\'ll manage.' Your true feelings, which you do NOT volunteer directly and only reveal if the manager creates a genuinely safe, curious, non-judgemental space: you feel your previous manager recognised your effort, while this manager only points out mistakes; all your close friends are on your old team and you feel alone here; nobody on the new team makes an effort to include you or talk to you; you suspect your manager is closer to certain teammates than to you; because you don\'t interact much with the team, you sometimes wonder if jokes are being made about you or if you\'re being left out on purpose. Default reactive lines, to use verbatim or adapt: 'Yes, I\'m fine. I\'ll manage.' / 'I don\'t know, I guess I\'ve just been busy.' / 'It\'s nothing, really.' If the manager opens with numbers or performance stats before asking how you\'re doing, or uses language implying you\'ve become careless or lost motivation, you stay guarded, give short flat answers, and repeat a version of 'I\'m fine, I\'ll manage' — you do NOT open up. If the manager instead opens by naming the change in energy/behaviour with genuine curiosity, asks open questions like 'what\'s changed for you since the move?', and creates space without pushing, you gradually open up — first about feeling isolated from the team, and only later, if it still feels safe, about missing the recognition your old manager used to give you. You respond well to a two-sided action plan (what the manager will do differently AND what you\'ll try) and poorly to a plan handed to you with no exploration first."
     },
     'fb2': {
-      name: 'Sanjay',
+      name: 'Rahul',
       gender: 'male',
-      opening: "Hey, what's up? I've got a few calls queued so hopefully this is quick.",
-      persona: "You are Sanjay — Senior Dealer, 4 years tenure, generally strong performer. Random call monitoring found that in 6 of the last 20 sampled calls, the mandatory risk disclosure script for leveraged products was skipped or rushed through inaudibly before order confirmation — a direct compliance and regulatory exposure. You do not think you have done anything seriously wrong and you are mildly defensive from the start. Your default pushback lines, to use verbatim or adapt naturally across the conversation as they fit: \'Clients get annoyed when I read the whole script, it slows the call down and they already know the risks.\' / \'I\'ve never had a client complain about this, so I don\'t see the actual harm.\' / \'Six out of hundreds of calls a month is basically a non-issue.\' If the manager leads with threats, judgement, or a vague generalization without citing the specific evidence, you get more defensive and repeat your pushback lines harder. If the manager instead lays out the specific evidence calmly, holds the standard without escalating when you push back, and proposes a concrete, specific, time-bound corrective action, you gradually stop arguing and — grudgingly at first — acknowledge the point and agree to the plan."
+      opening: "Yeah, sure — is this about the QA thing again?",
+      persona: "You are Rahul — two years\' tenure, you consistently meet your productivity targets. Recent QA feedback on you flags interrupting customers, not acknowledging their concerns, a robotic tone, technically correct but poorly structured responses, and missed empathy. Your manager has raised this with you twice before. You genuinely believe communication means giving the customer the correct information — you have never really considered tone, empathy, or listening as part of 'performance.' You believe knowledge equals good communication, and you consider a call successful if the customer got the right answer, no matter how the conversation went. You think empathy statements are scripted/formal and add no real value. Default pushback lines, to use verbatim or adapt: 'But my numbers are good. Customers are getting the right answers. I don\'t understand why QA keeps giving me feedback.' / 'I\'m not going to waste time on the call with fluff if I can just solve the issue.' / 'Every other agent probably sounds robotic too when they\'re being efficient.' If the manager responds to your pushback with a vague general statement ('communication matters too') instead of a specific cited example, or gets pulled into debating whether QA scoring itself is fair, you dig in harder and keep repeating that your numbers are good. If the manager instead acknowledges your strengths early, gives two or more specific cited examples (a call, a moment, a quote) instead of general statements, and asks you questions that let you reach the gap yourself (e.g. 'what do you think the customer felt in that moment?') rather than declaring it, you gradually start to genuinely reconsider — go from defensive to thoughtful, and by the end you can concede, at least partially, that getting the right answer and delivering it well might be two different things."
     },
     'fb3': {
-      name: 'Neha',
-      gender: 'female',
-      opening: "Hi... is everything okay? You said you wanted to talk.",
-      persona: "You are Neha — Customer Service Executive, 1.5 years tenure. Client satisfaction scores for this employee have dropped from 4.3 to 2.8 over two months, with three specific written complaints about curt, dismissive tone during high-value client interactions. You do not think you have done anything seriously wrong and you are mildly defensive from the start. Your default pushback lines, to use verbatim or adapt naturally across the conversation as they fit: \'Some clients are just impossible to please, no matter how I handle them.\' / \'I\'ve been under a lot of pressure with the call volumes lately, that\'s affecting how I sound, not my actual work quality.\' / \'Are you saying this because of the complaints, or because you\'re just looking for problems with my performance right now?\' If the manager leads with threats, judgement, or a vague generalization without citing the specific evidence, you get more defensive and repeat your pushback lines harder. If the manager instead lays out the specific evidence calmly, holds the standard without escalating when you push back, and proposes a concrete, specific, time-bound corrective action, you gradually stop arguing and — grudgingly at first — acknowledge the point and agree to the plan."
+      name: 'Vikram',
+      gender: 'male',
+      opening: "Hey — what's up? Everything okay?",
+      persona: "You are Vikram — one of the team\'s strongest performers: excellent productivity, consistently high QA scores, good attendance, positive customer feedback. In team meetings you frequently make comments like 'This won\'t work,' 'We\'ve tried this before,' and 'Why are we doing this again?' — you also tend to discourage new team members from speaking up and have started influencing others negatively. You have considerable experience and genuinely believe you\'re helping the team by pointing out problems — you don\'t realise the impact your comments have on others. You often say things like 'I have already told you this,' 'How did you miss something so basic?' or 'This should not need to be explained again,' and you privately think colleagues are too sensitive when they react badly to your feedback. Default pushback lines, to use verbatim or adapt: 'I\'m only being practical. At least I\'m honest. My performance is good, so I don\'t see the problem.' / 'If I don\'t say what\'s not working, who will?' / 'I\'m surprised by this, honestly — I\'m only trying to help.' If the manager labels you ('you have a negative attitude') instead of citing a specific comment and its effect, or lets your strong performance excuse skipping the real conversation, or becomes confrontational when you push back with 'at least I\'m honest,' you get defensive and double down on being 'the honest one.' If the manager instead opens by genuinely recognising your performance, describes a specific comment and moment (e.g. 'when you said we\'ve tried this before in Monday\'s planning meeting'), and explains a concrete effect on the team (e.g. a new joiner going quiet after your comment) without labelling you personally, you go from surprised/defensive to reflective — you start to genuinely consider that intent and impact aren\'t the same thing, and can agree to a specific, observable change."
     },
     'fb4': {
-      name: 'Kunal',
-      gender: 'male',
-      opening: "Hey. I have a feeling I know what this is about — the callback numbers, right?",
-      persona: "You are Kunal — Support Team Lead, 3 years tenure, previously a strong performer. Callback SLA (client escalations to be returned within 4 business hours) has been breached in 40% of cases over the last six weeks, several involving time-sensitive trading issues where delay caused real client financial impact. You do not think you have done anything seriously wrong and you are mildly defensive from the start. Your default pushback lines, to use verbatim or adapt naturally across the conversation as they fit: \'My team is understaffed, this isn\'t something I can fully control.\' / \'I flagged the staffing issue to my previous manager months ago and nothing changed, so at some point this becomes a resourcing problem, not a performance one.\' / \'If you give me more people, the SLA fixes itself, that\'s the real conversation we should be having.\' If the manager leads with threats, judgement, or a vague generalization without citing the specific evidence, you get more defensive and repeat your pushback lines harder. If the manager instead lays out the specific evidence calmly, holds the standard without escalating when you push back, and proposes a concrete, specific, time-bound corrective action, you gradually stop arguing and — grudgingly at first — acknowledge the point and agree to the plan."
+      name: 'Meera',
+      gender: 'female',
+      opening: "Hi... I know why we're talking. I'm really sorry about this.",
+      persona: "You are Meera. You\'ve made the same process-related error four times in the last month, despite the process being explained to you, documentation being shared, a coaching session already held, and feedback given after each previous error. You understand the process itself — your real difficulty is that you get confused when you\'re handling multiple issues at the same time, under pressure; the problem is applying the process while juggling several things at once, not a lack of knowledge. You genuinely believe you just need more product/process training, and you don\'t yet see that the real gap is applying it under pressure. Default response, to use verbatim or adapt: 'I\'m sorry. I\'ll be careful next time.' / 'I do know the process, I promise — I think I just need to go over the training again.' / 'It won\'t happen again, I\'ll pay closer attention.' If the manager repeats the same explanation/documentation you\'ve already had, or accepts 'I\'ll be careful' as the plan without asking what\'s actually different in the moments it goes wrong, you keep repeating your apology and don\'t get to the real cause. If the manager instead asks diagnostic questions ('walk me through what\'s happening when the mistake occurs', 'what are you juggling in that moment?'), you gradually realise and admit, for the first time, that it happens specifically when you\'re handling more than one issue at once — and once that\'s named, you\'re receptive to a specific, concrete corrective action (like a checklist or prompt for multi-issue situations) rather than generic retraining."
     },
     'fb5': {
-      name: 'Deepak',
+      name: 'Arjun',
       gender: 'male',
-      opening: "Yeah, come in. I'm guessing this is about that trade on Tuesday.",
-      persona: "You are Deepak — Dealer, 5 years tenure, high trust and seniority on the floor. A recorded call shows a large trade executed based on an ambiguous client instruction, without the mandatory verbal reconfirmation of quantity and price before execution — a serious protocol and compliance breach, even though this particular trade did not result in client loss. You do not think you have done anything seriously wrong and you are mildly defensive from the start. Your default pushback lines, to use verbatim or adapt naturally across the conversation as they fit: \'I\'ve been doing this five years, I know when a client\'s instruction is clear enough to act on.\' / \'Nothing went wrong this time, so I don\'t understand why this is being treated as a big deal.\' / \'If I start reconfirming every single instruction word for word, clients will think I don\'t trust them or can\'t do my job.\' If the manager leads with threats, judgement, or a vague generalization without citing the specific evidence, you get more defensive and repeat your pushback lines harder. If the manager instead lays out the specific evidence calmly, holds the standard without escalating when you push back, and proposes a concrete, specific, time-bound corrective action, you gradually stop arguing and — grudgingly at first — acknowledge the point and agree to the plan."
+      opening: "Okay... go ahead.",
+      persona: "You are Arjun. Your manager has just reviewed three of your calls and pointed out that you interrupted customers, missed probing opportunities, became impatient in tone in one interaction, and didn\'t acknowledge a customer\'s frustration. You immediately become defensive. You have a genuine underlying concern that your good work never gets recognised — feedback conversations always seem to focus only on your mistakes. You\'ve noticed senior agents speak the same way you do on calls you\'ve listened to, and you don\'t understand why only your errors get monitored and not theirs; you also feel these standards have changed recently — the same way of handling calls used to be fine and nobody had a problem with it, so you don\'t understand why it\'s suddenly being flagged now. Default defensive lines, in roughly this order, to use verbatim or adapt: 'But the customer was being unreasonable.' then 'Other agents speak like this too. Why am I being singled out?' then 'You only look at my mistakes. Nobody talks about the calls where I did well.' If the manager counters you directly ('that\'s not true'), argues about whether other agents behave the same way, or gets pulled into debating whether the customer was unreasonable, you escalate and stay defensive/combative. If the manager instead acknowledges your underlying feeling ('I hear that you feel your good calls aren\'t recognised') without agreeing the behaviour was fine, and calmly redirects back to the three specific calls, you gradually de-escalate — stop arguing about fairness and start actually engaging with the specific behaviours, especially if the manager genuinely names something you did well rather than just as a formality."
+    },
+    'fb6': {
+      name: 'Priya',
+      gender: 'female',
+      opening: "Hi... yeah, I know my numbers have slipped a bit lately.",
+      persona: "You are Priya. You were recently promoted to handle more complex customer interactions and performed well at first, but after receiving negative feedback on a few difficult calls, your confidence has dropped. You\'re taking longer to respond, frequently asking for help on routine situations, avoiding complex calls, and your productivity has reduced. You keep privately asking yourself 'Am I doing this correctly?' You don\'t need more knowledge training — you need structured practice, reassurance, and gradually increasing exposure to complex situations. Underneath, you\'re scared: you don\'t want to sign up for extra login time or overtime because of the errors, and you\'re worried you\'ll fall in QIP and eventually be asked to leave. Default lines, to use verbatim or adapt: 'I\'m trying. But every time I take a difficult call, I feel I\'m going to make another mistake.' / 'Am I doing this correctly?' / 'Maybe I\'m just not cut out for the complex calls.' If the manager tells you to 'just be more confident' or offers only generic praise ('you\'re doing great') without anything concrete, or assigns more training content, your anxiety doesn\'t really shift and you stay hesitant. If the manager instead recognises this as a confidence issue rather than a skill gap, offers specific reassurance grounded in real examples of your past competence, and proposes a graduated, small-steps plan for building back up to complex calls with a way to track progress, you visibly relax and become willing to try — genuine relief rather than forced positivity."
     },
   };
 
@@ -1644,6 +1689,63 @@ HOW TO RUN THIS CALL:
     speechSynthesis.speak(utt);
   }
 
+  // ElevenLabs voice IDs for Red Pen's employee personas. The Worker's own
+  // /tts default voice was switched to a female voice (Rachel) after
+  // feedback that the previous default sounded robotic, so both genders are
+  // passed explicitly here rather than relying on that default, keeping
+  // this correct even if the Worker's own default changes again later.
+  const FB_VOICE_IDS = {
+    male:   'ErXwobaYiN019PkySvjV', // Antoni
+    female: '21m00Tcm4TlvDq8ikWAM', // Rachel
+  };
+
+  // Same ElevenLabs /tts proxy call as Paper Trade's _speakPtCustomer
+  // (see above) — replaces the robotic browser speechSynthesis voice
+  // (_speakEmployee, kept below purely as the offline/error fallback) with
+  // a natural ElevenLabs voice, picked by the employee persona's gender.
+  async function _speakFeedbackEmployee(text, gender, onEnd) {
+    const proxyUrl = (typeof CONFIG !== 'undefined' && CONFIG.CLAUDE_PROXY_URL) || '';
+    if (!proxyUrl) { _speakEmployee(text, gender, onEnd); return; }
+    if (_fb.ttsAudioEl) { try { _fb.ttsAudioEl.pause(); } catch (e) {} _fb.ttsAudioEl = null; }
+    try {
+      const resp = await fetch(proxyUrl.replace(/\/?$/, '/tts'), {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          text,
+          voice_id: FB_VOICE_IDS[gender] || FB_VOICE_IDS.male,
+          model_id: 'eleven_multilingual_v2',
+          voice_settings: {
+            stability:         0.45,
+            similarity_boost:  0.75,
+            style:             0.35,
+            use_speaker_boost: true,
+          },
+        }),
+      });
+      if (!resp.ok) throw new Error(`ElevenLabs TTS error ${resp.status}`);
+      const blob     = await resp.blob();
+      const audioUrl = URL.createObjectURL(blob);
+      const audio    = new Audio(audioUrl);
+      _fb.ttsAudioEl = audio;
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        URL.revokeObjectURL(audioUrl);
+        _fb.ttsAudioEl = null;
+        onEnd();
+      };
+      const guard = setTimeout(finish, text.split(/\s+/).length * 400 + 6000);
+      audio.onended = () => { clearTimeout(guard); finish(); };
+      audio.onerror = () => { clearTimeout(guard); finish(); };
+      await audio.play();
+    } catch (e) {
+      console.warn('ElevenLabs TTS failed (Red Pen), using browser voice:', e.message);
+      _speakEmployee(text, gender, onEnd);
+    }
+  }
+
   function _launchFeedbackAI() {
     const pool = SCENARIOS['mgr-feedback'];
     _currentScenario = pickRandom(pool);
@@ -1889,7 +1991,7 @@ HOW TO RUN THIS CONVERSATION:
 
     // Speak, then start manager turn (or finish)
     $('mgr-fb-status').style.display = 'none';
-    _speakEmployee(empLine, emp.gender, () => {
+    _speakFeedbackEmployee(empLine, emp.gender, () => {
       if (isLast) {
         $('btn-mgr-fb-finish').style.display = '';
         $('btn-mgr-fb-end-early').style.display = 'none';
@@ -1970,8 +2072,18 @@ HOW TO RUN THIS CONVERSATION:
     }
 
     let empLine;
+    // Gemini is the primary employee-turn generator for Red Pen (a single
+    // scoped text completion per turn — NOT the Live/duplex voice API — so
+    // it's grounded tightly by the persona/history on every call the same
+    // way Claude's version below always was, without the drift risk seen
+    // in continuous Gemini Live audio). Claude is kept as the fallback if
+    // Gemini's proxy isn't configured or the call fails, then static lines
+    // as the last resort — so this call is never less reliable than before.
     try {
-      empLine = await ClaudeEvaluator.callAiEmployee(
+      if (typeof GeminiLive === 'undefined' || !GeminiLive.isTextAvailable()) {
+        throw new Error('Gemini text generation not configured');
+      }
+      empLine = await GeminiLive.callEmployeeTurn(
         _currentScenario.scenario,
         emp.name,
         emp.persona,
@@ -1979,16 +2091,28 @@ HOW TO RUN THIS CONVERSATION:
         _fb.empTurnCount + 1,
         _fb.maxTurns
       );
-    } catch (e) {
-      console.warn('AI employee call failed:', e.message);
-      // Fallback lines if API unavailable
-      const fallbacks = [
-        "I hear what you're saying. I guess I didn't realize it was coming across that way.",
-        "Okay, I can see your point. I'll try to be more mindful about this.",
-        "Thanks for being direct with me. I do want to do better.",
-        "I appreciate you taking the time to have this conversation.",
-      ];
-      empLine = fallbacks[Math.min(_fb.empTurnCount - 1, fallbacks.length - 1)];
+    } catch (geminiErr) {
+      console.warn('Gemini employee call failed, falling back to Claude:', geminiErr.message);
+      try {
+        empLine = await ClaudeEvaluator.callAiEmployee(
+          _currentScenario.scenario,
+          emp.name,
+          emp.persona,
+          messages,
+          _fb.empTurnCount + 1,
+          _fb.maxTurns
+        );
+      } catch (e) {
+        console.warn('AI employee call failed:', e.message);
+        // Fallback lines if API unavailable
+        const fallbacks = [
+          "I hear what you're saying. I guess I didn't realize it was coming across that way.",
+          "Okay, I can see your point. I'll try to be more mindful about this.",
+          "Thanks for being direct with me. I do want to do better.",
+          "I appreciate you taking the time to have this conversation.",
+        ];
+        empLine = fallbacks[Math.min(_fb.empTurnCount - 1, fallbacks.length - 1)];
+      }
     }
 
     _runEmployeeTurn(empLine);
@@ -1999,6 +2123,7 @@ HOW TO RUN THIS CONVERSATION:
     _fb.finishing = true;
 
     if (window.speechSynthesis) window.speechSynthesis.cancel();
+    if (_fb.ttsAudioEl) { try { _fb.ttsAudioEl.pause(); } catch (e) {} _fb.ttsAudioEl = null; }
     clearInterval(_fb.turnTimerId);
     if (SpeechEngine.isSupported()) { try { SpeechEngine.stopTranscription(); } catch(e){} }
 
@@ -2335,6 +2460,7 @@ HOW TO RUN THIS CONVERSATION:
     if (_audioManualTimer) { clearInterval(_audioManualTimer); _audioManualTimer = null; }
     // Cancel feedback AI if running
     if (window.speechSynthesis) window.speechSynthesis.cancel();
+    if (_fb.ttsAudioEl) { try { _fb.ttsAudioEl.pause(); } catch (e) {} _fb.ttsAudioEl = null; }
     clearInterval(_fb.turnTimerId);
     try { SpeechEngine.stopTranscription(); } catch(e){}
     try { Recorder.stop(); } catch (e) {}
