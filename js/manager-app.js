@@ -1058,22 +1058,27 @@ Let's get back on track.
   }
 
   // Plain browser TTS fallback for the customer's voice -- reuses the same
-  // voice picker/rate/pitch approach as _speakEmployee (Red Pen) further
-  // below, just without a gender toggle (Paper Trade scenarios don't
-  // specify one). Only used if ElevenLabs is unavailable or fails.
+  // female voice picker/pitch as _speakEmployee (Red Pen) further below.
+  // Only used if ElevenLabs is unavailable or fails for a given turn.
+  // Fixed 2026-09-20: this used to explicitly pick a MALE-sounding voice
+  // (Alex/Daniel/David/...), which is exactly why a Paper Trade call that
+  // used the female ElevenLabs voice (Bella) for most turns could suddenly
+  // switch to a male voice on a turn where that one /tts call failed --
+  // female voice only, for every assessment, including this fallback.
   function _speakPtCustomerBrowser(text, onEnd) {
     if (!window.speechSynthesis) { onEnd(); return; }
     window.speechSynthesis.cancel();
 
     const voices = (_ttsVoices.length ? _ttsVoices : speechSynthesis.getVoices());
-    const voice = voices.find(v => /alex|daniel|david|ryan|andrew|brian|christopher|eric/i.test(v.name) && v.lang.startsWith('en'))
+    const voice = voices.find(v => /samantha|karen|moira|zira|emma|jenny|aria|victoria/i.test(v.name) && v.lang.startsWith('en'))
+               || voices.find(v => v.lang.startsWith('en') && /female/i.test(v.name))
                || voices.find(v => v.lang.startsWith('en'))
                || null;
 
     const utt = new SpeechSynthesisUtterance(text);
     if (voice) utt.voice = voice;
     utt.rate   = 0.93;
-    utt.pitch  = 0.94;
+    utt.pitch  = 1.15;
     utt.volume = 1.0;
 
     let done = false;
@@ -1276,11 +1281,30 @@ Let's get back on track.
     const managerOnly = _pt.history.map(ex => ex.manager || '').join(' ').trim();
     const wordCount = managerOnly.split(/\s+/).filter(Boolean).length;
 
-    let aiScores = { overall: null, _method: 'mgr-live-js', _module: _currentModule, _scenarioId: _currentScenario.id };
+    // Local SpeechEngine baseline first (added 2026-09-20, same fix as Red
+    // Pen) -- this used to start at aiScores.overall = null with nothing to
+    // fall back to, so any Claude failure (including the Anthropic account
+    // being out of API credits) left the score permanently blank. Now it
+    // always has at least a delivery-based score, and Claude's real content
+    // evaluation overwrites it when available, exactly like _submitAudio()
+    // does for the non-live Paper Trade path above.
+    let aiScores;
+    try {
+      const analysis = SpeechEngine.analyze(managerOnly || '', Math.max(durationSecs, 1));
+      aiScores = SpeechEngine.scoreSpeech(analysis, Math.max(durationSecs, 1));
+    } catch (e) {
+      console.warn('SpeechEngine scoring failed:', e.message);
+      aiScores = { overall: null };
+    }
+    aiScores._method = 'mgr-live-js';
+    aiScores._module = _currentModule;
+    aiScores._scenarioId = _currentScenario.id;
+
     if (wordCount >= 15 && typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
       try {
         const result = await ClaudeEvaluator.evaluatePaperTrade(fullTranscript, _currentScenario.scenario || '');
         aiScores = {
+          ...aiScores,
           ...result.scores,
           overall:     result.overall,
           earnedMarks: result.earnedMarks,
@@ -1291,7 +1315,7 @@ Let's get back on track.
           _scenarioId: _currentScenario.id,
         };
       } catch (e) {
-        console.warn('Paper Trade live-call content eval failed:', e.message);
+        console.warn('Paper Trade live-call content eval failed, using speech-only score:', e.message);
       }
     }
     aiScores._voiceEngine = 'turn-based-tts-beta';
@@ -1474,11 +1498,26 @@ HOW TO RUN THIS CALL:
     const managerOnly    = _mgrLive.turns.filter(t => t.role === 'trainee').map(t => t.text).join(' ').trim();
     const wordCount = managerOnly.split(/\s+/).filter(Boolean).length;
 
-    let aiScores = { overall: null, _method: 'mgr-live-js', _module: _currentModule, _scenarioId: _currentScenario.id };
+    // Local SpeechEngine baseline first (added 2026-09-20, same fix as the
+    // ElevenLabs turn-based path above and Red Pen) -- see that comment for
+    // why: this used to null out with no fallback whenever Claude failed.
+    let aiScores;
+    try {
+      const analysis = SpeechEngine.analyze(managerOnly || '', Math.max(durationSecs, 1));
+      aiScores = SpeechEngine.scoreSpeech(analysis, Math.max(durationSecs, 1));
+    } catch (e) {
+      console.warn('SpeechEngine scoring failed:', e.message);
+      aiScores = { overall: null };
+    }
+    aiScores._method = 'mgr-live-js';
+    aiScores._module = _currentModule;
+    aiScores._scenarioId = _currentScenario.id;
+
     if (wordCount >= 25 && typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
       try {
         const result = await ClaudeEvaluator.evaluatePaperTrade(fullTranscript, _currentScenario.scenario || '');
         aiScores = {
+          ...aiScores,
           ...result.scores,
           overall:     result.overall,
           earnedMarks: result.earnedMarks,
@@ -1489,7 +1528,7 @@ HOW TO RUN THIS CALL:
           _scenarioId: _currentScenario.id,
         };
       } catch (e) {
-        console.warn('Paper Trade Gemini live-call content eval failed:', e.message);
+        console.warn('Paper Trade Gemini live-call content eval failed, using speech-only score:', e.message);
       }
     }
     aiScores._voiceEngine = 'gemini-live-beta';
@@ -1716,24 +1755,23 @@ HOW TO RUN THIS CALL:
     return                       { emoji: '🙂', label: 'Receptive',  bubbleClass: 'mood-calm' };
   }
 
+  // Changed 2026-09-20: always speaks in a female voice regardless of the
+  // `gender` argument -- female voice only, for every assessment (this is
+  // only ever reached as a last-resort fallback when the ElevenLabs /tts
+  // call itself fails; the primary voice is always Bella via FB_VOICE_IDS).
   function _speakEmployee(text, gender, onEnd) {
     if (!window.speechSynthesis) { onEnd(); return; }
     window.speechSynthesis.cancel();
 
     const voices = (_ttsVoices.length ? _ttsVoices : speechSynthesis.getVoices());
-    let voice = null;
-    if (gender === 'female') {
-      voice = voices.find(v => /samantha|karen|moira|zira|emma|jenny|aria|victoria/i.test(v.name) && v.lang.startsWith('en'))
-            || voices.find(v => v.lang.startsWith('en') && /female/i.test(v.name));
-    } else {
-      voice = voices.find(v => /alex|daniel|david|ryan|andrew|brian|christopher|eric/i.test(v.name) && v.lang.startsWith('en'));
-    }
+    let voice = voices.find(v => /samantha|karen|moira|zira|emma|jenny|aria|victoria/i.test(v.name) && v.lang.startsWith('en'))
+              || voices.find(v => v.lang.startsWith('en') && /female/i.test(v.name));
     if (!voice) voice = voices.find(v => v.lang.startsWith('en')) || null;
 
     const utt = new SpeechSynthesisUtterance(text);
     if (voice) utt.voice = voice;
     utt.rate   = 0.93;
-    utt.pitch  = gender === 'female' ? 1.15 : 0.94;
+    utt.pitch  = 1.15;
     utt.volume = 1.0;
 
     let done = false;
@@ -1750,8 +1788,11 @@ HOW TO RUN THIS CALL:
   // feedback that the previous default sounded robotic, so both genders are
   // passed explicitly here rather than relying on that default, keeping
   // this correct even if the Worker's own default changes again later.
+  // Changed 2026-09-20: female voice only, for every assessment -- the male
+  // ElevenLabs voice (Antoni) is no longer used anywhere, so both keys
+  // resolve to the same female voice regardless of the persona's gender.
   const FB_VOICE_IDS = {
-    male:   'ErXwobaYiN019PkySvjV', // Antoni
+    male:   'EXAVITQu4vr4xnSDxMaL', // Bella -- was Antoni; forced to female per 2026-09-20 request
     female: 'EXAVITQu4vr4xnSDxMaL', // Bella -- usable on Free plan; Rachel is API-gated to paid plans
   };
 

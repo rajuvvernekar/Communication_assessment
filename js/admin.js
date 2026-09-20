@@ -3114,6 +3114,7 @@ window.Admin = (() => {
     // Scoring criteria inputs
     const criteriaEl = modal.querySelector('#mgr-scoring-criteria');
     const existing = session.adminScores || {};
+    const ai       = session.aiScores    || {}; // used to pre-fill the 1-5 sliders below (bugfix 2026-09-20: was undefined here, threw and silently aborted the whole modal before it could open)
 
     if (isMcq) {
       criteriaEl.innerHTML = '<p style="color:var(--text-muted);font-size:0.9rem">This is an auto-scored MCQ assessment. You may add a comment below.</p>';

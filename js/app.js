@@ -302,29 +302,25 @@ const App = (() => {
 
   // Ranked list of high-quality voices, best first.
   // Neural / Online voices sound dramatically more natural than built-ins.
+  // Changed 2026-09-20: female voice only, for every assessment -- this
+  // used to rank male voices first ("strongly prefer male"); reordered so
+  // female voices are tried first, and the male-only entries below were
+  // dropped/replaced with female equivalents.
   const TTS_VOICE_PRIORITY = [
     // Edge Neural voices (best quality — very human-sounding)
-    'Microsoft Ryan Online (Natural)',
-    'Microsoft Andrew Online (Natural)',
-    'Microsoft Brian Online (Natural)',
-    'Microsoft Christopher Online (Natural)',
-    'Microsoft Eric Online (Natural)',
     'Microsoft Aria Online (Natural)',
     'Microsoft Emma Online (Natural)',
     'Microsoft Jenny Online (Natural)',
-    'Microsoft Guy Online (Natural)',
+    'Microsoft Ana Online (Natural)',
     // Chrome Neural (good)
     'Google US English',
-    'Google UK English Male',
     'Google UK English Female',
     // macOS / iOS built-in (acceptable)
-    'Alex',
     'Samantha',
     'Karen',
     'Moira',
-    'Daniel',
+    'Victoria',
     // Windows built-in (fallback)
-    'David',
     'Zira',
   ];
 
@@ -1106,21 +1102,23 @@ const App = (() => {
     return merged.length ? merged : [text];
   }
 
-  // ── Pick best TTS voice — strongly prefer male ──
+  // ── Pick best TTS voice — female voice only, for every assessment ──
   function _pickTtsVoice() {
     const voices = _ttsVoices.length ? _ttsVoices : speechSynthesis.getVoices();
-    // Priority list already has male voices at the top
+    // Priority list is female voices only, best first
     for (const name of TTS_VOICE_PRIORITY) {
       const v = voices.find(v => v.name === name);
       if (v) return v;
     }
-    // Try any male-sounding Neural voice before generic fallback
-    const maleNeural = voices.find(v =>
-      /ryan|andrew|brian|christopher|eric|guy|daniel|alex|david|james|mark|thomas/i.test(v.name)
+    // Try any female-sounding Neural voice before generic fallback
+    const femaleNeural = voices.find(v =>
+      /aria|emma|jenny|ana|samantha|karen|moira|victoria|zira|susan|linda|female/i.test(v.name)
       && /natural|neural|online/i.test(v.name)
       && v.lang.startsWith('en')
     );
-    if (maleNeural) return maleNeural;
+    if (femaleNeural) return femaleNeural;
+    const anyFemale = voices.find(v => /female/i.test(v.name) && v.lang.startsWith('en'));
+    if (anyFemale) return anyFemale;
     const anyNeural = voices.find(v => /natural|neural|online/i.test(v.name) && v.lang.startsWith('en'));
     return anyNeural
         || voices.find(v => v.lang === 'en-US')
