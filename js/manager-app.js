@@ -591,7 +591,16 @@ Let's get back on track.
     $('mgr-audio-module-title').textContent = `${meta.icon} ${meta.label}`;
     $('mgr-audio-scenario-label').textContent = 'Read the scenario carefully';
     $('mgr-audio-topic-title').textContent  = _currentScenario.title;
-    $('mgr-audio-scenario-text').innerHTML = _formatScenarioHTML(_currentScenario.scenario);
+    // Don't show the customer's exact opening line / escalation quotes here --
+    // the manager should walk in cold, the same way a real support rep would
+    // pick up a call without a transcript of what the customer is about to
+    // say. Show only the general background/situation; the full script stays
+    // reserved for the AI (live-voice path) or is revealed at the moment the
+    // manager actually starts recording (normal monologue path, further down).
+    const _ptPrep = _parsePaperTradeQuestions(_currentScenario.scenario);
+    $('mgr-audio-scenario-text').innerHTML = _formatScenarioHTML(
+      _ptPrep.questions.length ? _ptPrep.background : _currentScenario.scenario
+    );
     _renderEvalCriteriaPanel(_currentModule, 'mgr-audio-scenario-text');
 
     $('mgr-prep-phase').classList.remove('hidden');
@@ -636,6 +645,17 @@ Let's get back on track.
 
     $('mgr-prep-phase').classList.add('hidden');
     $('mgr-record-phase').classList.remove('hidden');
+
+    // Now that the manager has committed to the normal single-monologue
+    // recording flow (no live interlocutor to reveal escalation points
+    // progressively), reveal the full script -- including the customer's
+    // exact opening line and escalation quotes -- so they have everything
+    // needed to address in one go. Only mgr-mock-call (Paper Trade) uses
+    // this recording flow at all, so this is safely scoped to it.
+    if (_currentModule === 'mgr-mock-call') {
+      $('mgr-audio-scenario-text').innerHTML = _formatScenarioHTML(_currentScenario.scenario);
+      _renderEvalCriteriaPanel(_currentModule, 'mgr-audio-scenario-text');
+    }
 
     Recorder.startWaveform($('mgr-waveform'));
 
@@ -803,7 +823,17 @@ Let's get back on track.
 
     $('mgr-audio-live-module-title').textContent = `${meta.icon} ${meta.label} — Voice AI (Beta)`;
     $('mgr-audio-live-topic-title').textContent  = _currentScenario.title;
-    $('mgr-audio-live-scenario-text').innerHTML = _formatScenarioHTML(_currentScenario.scenario);
+
+    // The AI keeps the customer's exact opening line and escalation quotes
+    // for itself (see systemInstruction below) -- the manager should hear
+    // them live from the AI, not read them in advance. Show only the
+    // general background/situation on screen; parse once here and reuse
+    // the same result below instead of parsing twice.
+    const _ptParsed = _parsePaperTradeQuestions(_currentScenario.scenario);
+    const _ptQuestions = _ptParsed.questions;
+    $('mgr-audio-live-scenario-text').innerHTML = _formatScenarioHTML(
+      _ptQuestions.length ? _ptParsed.background : _currentScenario.scenario
+    );
     _renderEvalCriteriaPanel(_currentModule, 'mgr-audio-live-scenario-text');
     $('mgr-audio-live-thread').innerHTML = '';
     $('btn-mgr-audio-live-end').disabled = false;
@@ -819,9 +849,6 @@ Let's get back on track.
       ended:      '📴 Call ended',
       'time-limit': '⏱️ 9-minute limit reached — wrapping up and submitting…',
     };
-
-    const _ptParsed = _parsePaperTradeQuestions(_currentScenario.scenario);
-    const _ptQuestions = _ptParsed.questions;
 
     // With a clean parsed list, give the AI a FIXED script -- the exact
     // number of questions this scenario was authored with, asked in
