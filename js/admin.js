@@ -2912,7 +2912,20 @@ window.Admin = (() => {
         const secA = srData.sectionA || {};
         const secB = srData.sectionB || {};
         const esc  = t => (t || '').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        // Situation Room scenarios are hardcoded client-side and never
+        // persisted to the DB topics table, so this saved session is the
+        // only place the admin can see which distinct scenario grounds
+        // this Section A / Section B pair -- without it, both sections
+        // look like generic, context-free text boxes regardless of which
+        // scenario the manager was actually given.
+        const situationHTML = srData.scenario
+          ? '<div style="margin-bottom:1rem">' +
+              '<div style="font-size:0.72rem;font-weight:800;letter-spacing:0.06em;color:#334155;margin-bottom:0.4rem">SITUATION</div>' +
+              '<div style="white-space:pre-wrap;font-size:0.85rem;background:#f8fafc;padding:0.75rem;border-radius:6px;border-left:3px solid #64748b">' + esc(srData.scenario) + '</div>' +
+            '</div>'
+          : '';
         transcriptBox.innerHTML =
+          situationHTML +
           '<div style="margin-bottom:1rem">' +
             '<div style="font-size:0.72rem;font-weight:800;letter-spacing:0.06em;color:#7c3aed;margin-bottom:0.4rem">SECTION A — WHAT WOULD YOU SAY?</div>' +
             '<div style="font-size:0.8rem;color:#666;margin-bottom:0.3rem"><em>Prompt: ' + esc(secA.prompt) + '</em></div>' +
@@ -2920,6 +2933,8 @@ window.Admin = (() => {
           '</div>' +
           '<div>' +
             '<div style="font-size:0.72rem;font-weight:800;letter-spacing:0.06em;color:#dc2626;margin-bottom:0.4rem">SECTION B — THE WRONG RESPONSE ANALYSIS</div>' +
+            '<div style="font-size:0.75rem;font-weight:700;color:#666;margin-bottom:0.2rem">The Flawed Response (given to the manager to critique):</div>' +
+            '<div style="white-space:pre-wrap;font-size:0.88rem;background:#f1f5f9;padding:0.75rem;border-radius:6px;border-left:3px solid #94a3b8;margin-bottom:0.5rem">' + esc(secB.wrongResponse || '(not recorded)') + '</div>' +
             '<div style="font-size:0.75rem;font-weight:700;color:#666;margin:0.5rem 0 0.2rem">Errors Identified:</div>' +
             '<div style="white-space:pre-wrap;font-size:0.88rem;background:#fef2f2;padding:0.75rem;border-radius:6px;border-left:3px solid #dc2626;margin-bottom:0.5rem">' + esc(secB.errors || '(none)') + '</div>' +
             '<div style="font-size:0.75rem;font-weight:700;color:#666;margin-bottom:0.2rem">Why Each Error Made It Worse:</div>' +

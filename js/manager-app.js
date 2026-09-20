@@ -53,192 +53,116 @@ const MgrApp = (() => {
       },
     ],
     'mgr-transcript-autopsy': [
-      { id:'ta1', title:'Brokerage & Charges Dispute',
-        scenario:`BACKGROUND: A high-value client disputes ~₹42,000 in brokerage and fees never explained at onboarding, escalating when offered a tariff-sheet PDF instead of an explanation.
+      { id:'ta1', title:'The Panicked SIP Investor',
+        scenario:`BACKGROUND: A client calls saying their monthly SIP of ₹10,000 in a midcap mutual fund was deducted from their bank account 3 days ago but has not reflected in their portfolio. The bank statement clearly shows the debit. This is their first SIP investment, and they are not familiar with the process. They are becoming increasingly anxious that their money is lost.
 
-─── CALL TRANSCRIPT ─────────────────────────────────────────────
+─── CALL TRANSCRIPT ────────────────────────────────────────
 
-CLIENT: "I just reconciled my account statement for the last quarter and I've been charged nearly ₹42,000 more in brokerage and fees than what was quoted to me when I opened this account. This is unacceptable."
+CLIENT: "Hello, I need urgent help. My SIP of ₹10,000 was deducted from my bank account 5 days ago, but it's not showing in my portfolio at all. I'm very worried."
 
-MANAGER: "Sir, brokerage charges are clearly mentioned in the account opening documents you signed. If you didn't read them carefully, that's not really something we can help with now."
+MANAGER: "Ma'am, SIP processing takes time. It will show up eventually. Nothing to worry about."
 
-CLIENT: "I did read them. I was quoted a flat rate, and I'm seeing multiple additional charges I was never told about — STT, exchange fees, stamp duty, and something called 'transaction charges' stacked on top."
+CLIENT: "But it's been 5 days. My bank statement clearly shows the money is gone. How long does it usually take?"
 
-MANAGER: "Those are statutory and exchange-level charges, sir, every broker charges them, it's not specific to us. I don't understand why this is a surprise to you at this point."
+MANAGER: "It depends on the fund house. Sometimes it takes 3 days or more."
 
-CLIENT: "It's a surprise because nobody explained the full cost breakdown to me when I signed up. I feel like I was misled into this account."
+CLIENT: "That doesn't make sense. Can you please check my account and tell me what's happening?"
 
-MANAGER: "We never mislead clients. All charges are disclosed in the tariff sheet on our website. You could have checked it any time in the last eight months."
+MANAGER: "Ma'am, I can see your account, but I don't see any issue from our side. The problem is probably with the fund house or your bank. You should call them and check."
 
-CLIENT: "So you're telling me it's my fault for not double-checking your website after your own team quoted me a number?"
+CLIENT: "I've already called my bank. They confirmed the debit. Why are you asking me to call someone else? You're supposed to help me."
 
-MANAGER: "I'm just saying the information was available, sir. I can send you the tariff sheet again if that helps."
+MANAGER: "Ma'am, we only process the SIP instruction. What happens after that is between your bank and the AMC. I'll raise a ticket, but these things take 7 to 10 working days to resolve. Check your portfolio after that."
 
-CLIENT: "I don't want a PDF, I want someone to explain why what I was told at onboarding doesn't match what I'm being charged, and I want to know what you're going to do about the difference."
+CLIENT: "This is ridiculous. I want to speak to your senior."
 
-MANAGER: "There isn't really a 'difference' to correct, sir — the charges are accurate as per our published rates. I can raise a general feedback ticket about the onboarding conversation if you'd like."
+MANAGER: "Ma'am, there's no need to escalate. I've told you everything I know. Just wait for the ticket to be resolved."` },
+      { id:'ta2', title:'The Wrong Brokerage Charged',
+        scenario:`BACKGROUND: A client on a flat ₹20 per order brokerage plan notices they were charged ₹40 on an intraday Nifty futures trade. This is the second billing discrepancy in three months. They want an immediate refund and a written explanation.
 
-CLIENT: "A feedback ticket? I'm talking about forty-two thousand rupees and eight months of being charged incorrectly by your team's own account, and you're offering a feedback ticket?"
+─── CALL TRANSCRIPT ────────────────────────────────────────
 
-MANAGER: "I understand you're upset, but without a recording of that original onboarding call, there's no way to verify what was actually said to you."
+CLIENT: "I've been charged ₹40 brokerage on a single trade. My plan clearly says ₹20 flat per order. This is the second time this has happened."
 
-CLIENT: "So now you're saying I'm lying about what your representative told me."
+MANAGER: "Sir, brokerage is calculated by the system automatically. The system applies charges based on the trade type. Sometimes, due to insufficient funds, extra brokerage would be charged."
 
-MANAGER: "I'm not saying that, sir, I'm just saying we can't act on it without proof. I can escalate this to my senior if you want, but I don't think the outcome will be different."
+CLIENT: "I don't care what the system does. Your brokerage calculator says ₹20. I want to know why I was charged ₹40, and I want it refunded."
 
-CLIENT: "This is exactly why I'm moving my account elsewhere and posting a review about this exact conversation."` },
-      { id:'ta2', title:'IPO Allotment Display Error',
-        scenario:`BACKGROUND: A client's app briefly showed 400 IPO shares allotted, then zero — the manager insists it's someone else's problem at every turn.
+MANAGER: "Sir, you should have checked the support portal details before trading in F&O. The ₹20 plan may not apply at all times. I'll have to check with our backend team."
 
-─── CALL TRANSCRIPT ─────────────────────────────────────────────
+CLIENT: "I've been trading F&O on this plan for over a year. It has always been ₹20. Are you saying I should have checked? This is your error."
 
-CLIENT: "Your app showed me IPO allotment confirmed on Tuesday morning — 400 shares. Now today it shows zero allotment. What happened?"
+MANAGER: "Sir, I understand your frustration, but I can't confirm it's our error without the billing team reviewing it. I'll raise a ticket. It will take 3-4 working days."
 
-MANAGER: "Sir, that must have been a display glitch on your end. Our backend never confirms allotment before the registrar's official file is processed."
+CLIENT: "3 to 4 days for a refund of money you wrongly took? And this is the second time. What action is being taken on that?"
 
-CLIENT: "It wasn't a glitch, I have a screenshot with a timestamp. It clearly said 'Allotted: 400 shares' with a congratulatory banner."
+MANAGER: "Sir, I don't have information about your previous complaint. That would be a separate ticket. Regarding this one, I've raised the request, and you'll get an update by email."
 
-MANAGER: "Even if the app showed that, it's not something we can act on — allotment is decided by the registrar and the exchange, not us."
+CLIENT: "This is completely unacceptable. I'm going to file a complaint with SEBI."
 
-CLIENT: "I understand the registrar decides allotment, but your platform told me I got it, and I made plans — I told my family, I was counting on the listing gains you people market so heavily."
+MANAGER: "Sir, that is your choice. But SEBI will also ask for the backend team's review before taking any action. So the process will take the same time either way."` },
+      { id:'ta3', title:'The Bonus Share Discrepancy',
+        scenario:`BACKGROUND: A company announced a 1:1 bonus issue. The client holds 200 shares and expected 200 bonus shares. Only 180 have been credited. The client has the official exchange announcement and their demat statement showing 200 shares before the record date. They want the missing 20 shares credited or a written explanation.
 
-MANAGER: "We can't be responsible for plans you made based on an app screen, sir. These things happen sometimes with high demand IPOs."
+─── CALL TRANSCRIPT ────────────────────────────────────────
 
-CLIENT: "So a technical error on your platform is just something I have to absorb with no accountability from your side?"
+CLIENT: "I was supposed to get 200 bonus shares in the 1:1 issue. Only 180 have been credited. I have the exchange announcement and my demat statement as proof."
 
-MANAGER: "I mean, technically the error is on the display layer, not the actual allotment process, so there's no financial loss to compensate for."
+MANAGER: "Sir, bonus shares are credited by the depository. We don't handle that directly. You'll need to contact CDSL or NSDL."
 
-CLIENT: "There's no financial loss because I never got the shares I was told I had — but there's real damage to my trust in this platform, and I want to know how this happened."
+CLIENT: "You're my broker. Why should I contact CDSL? Can't you check this from your end?"
 
-MANAGER: "I can log a technical complaint, but I can't promise you any explanation timeline. These backend sync issues are handled by a different team entirely."
+MANAGER: "Sir, we can see your holdings but the bonus credit is done by the registrar based on their records. Maybe there's a difference in how many shares you held on the record date."
 
-CLIENT: "This is the third time I'm being told 'a different team handles that.' At some point someone in front of me has to actually own this."
+CLIENT: "I have my demat statement right here showing 200 shares before the record date. There's no discrepancy on my end."
 
-MANAGER: "I understand your frustration, sir, but I genuinely don't have visibility into what caused the display error. I can only pass this along."
+MANAGER: "Sir, sometimes shares that are in the settlement pipeline on the record date are not counted. Maybe some of your shares were in T+1 settlement. That could explain the 20 share difference."
 
-CLIENT: "Then pass it along with urgency, because I am seriously considering filing a complaint with the exchange about misleading allotment information."
+CLIENT: "I bought all these shares 3 months ago. They are fully settled. This is not a settlement issue."
 
-MANAGER: "You're welcome to do that, sir, that's entirely your choice. I've noted your complaint on our end as well."
+MANAGER: "Sir, I understand but we cannot confirm or deny on behalf of the registrar. You'll need to raise a dispute with them directly. I can give you their contact details."
 
-CLIENT: "This entire conversation has told me you have no real answers and no real ownership of your own platform's mistakes."` },
-      { id:'ta3', title:'DP/Demat Block Before a Board Announcement',
-        scenario:`BACKGROUND: A client's shares were blocked in demat right before a board announcement that later moved the stock 14%, and the manager cannot explain why or who is responsible.
+CLIENT: "I've been with this Zerodha for 4 years, and this is how you handle it? Just give me a contact number and goodbye?"
 
-─── CALL TRANSCRIPT ─────────────────────────────────────────────
+MANAGER: "Sir, I'm sorry but this is really outside our control. The registrar is responsible. If you want, I can raise a ticket on your behalf, but I can't guarantee anything."` },
+      { id:'ta4', title:'The Unauthorised Transaction Allegation',
+        scenario:`BACKGROUND: A client calls in a highly agitated state. They have found a sell transaction of 50 shares of HDFC Bank worth ₹85,000 on their statement that they say they did not place. The transaction was 3 days ago. They are alleging account compromise or internal fraud, demanding a reversal and written explanation. They mention police and SEBI if not resolved today.
 
-CLIENT: "I tried to sell my entire holding in [Company] yesterday morning before the board meeting outcome, and the sell order failed because my shares showed as 'blocked' in demat. Why?"
+─── CALL TRANSCRIPT ────────────────────────────────────────
 
-MANAGER: "Sometimes shares get blocked if there's a pending pledge or a previous instruction not yet processed, sir. It's a system-level thing."
+CLIENT: "There is a sell transaction on my account for 50 shares of HDFC Bank worth ₹85,000 that I never placed. I want to know who did this and I want it reversed immediately."
 
-CLIENT: "I never pledged these shares. I've held them for two years, untouched. Can you tell me exactly why they were blocked at that specific moment?"
+MANAGER: "Sir, all transactions require your login credentials. An unauthorised transaction is not possible on our platform. Our security systems are very strong."
 
-MANAGER: "I'd have to check the DP logs for that, but honestly this kind of thing is common and usually resolves itself within a day or two."
+CLIENT: "I don't care about your security systems. I am looking at a transaction I did not place. Are you calling me a liar?"
 
-CLIENT: "A day or two was too late — the board announcement came out and the stock dropped 14% right after. I lost the entire window because of your block."
+MANAGER: "Sir, I'm not calling you a liar. Maybe you placed the order and forgot. These things happen. Please check your email for the trade confirmation that was sent to you."
 
-MANAGER: "I understand that's frustrating, but demat blocks aren't something the trading desk controls, it's a depository-level issue, completely separate from us."
+CLIENT: "I have checked my email. There is a confirmation there, but I did not place this order. Someone else placed it. I want my account frozen right now."
 
-CLIENT: "You're the broker I trusted with this account. I don't care how many departments are involved internally — I need someone to explain what actually happened."
+MANAGER: "Sir, we cannot freeze accounts based on a verbal request. You'll need to submit a written complaint first. I can give you our grievance email address."
 
-MANAGER: "I hear you, sir, but I genuinely can't speak to depository-side processing, that's outside what I can access from here."
+CLIENT: "You want me to send an email while someone might be trading in my account right now? This is unbelievable."
 
-CLIENT: "So who can? Because right now I've lost a significant amount of money and all I'm getting is 'not my department.'"
+MANAGER: "Sir, please calm down. I understand you're upset, but we have procedures we need to follow. I'll raise a ticket and our security team will look into it. It will take 48 hours."
 
-MANAGER: "I can raise a ticket to our demat operations team, but resolution and root cause usually takes several working days to come back."
+CLIENT: "48 hours? Someone has stolen ₹85,000 from me, and you want me to wait a day? I'm calling the police and SEBI right now."
 
-CLIENT: "Several working days for an explanation of something that cost me money in a matter of hours. Do you understand how that sounds?"
-
-MANAGER: "I do understand, sir, and I'm sorry you're going through this, but I can't speed up an internal investigation just because it's urgent for you."
-
-CLIENT: "This isn't just urgent for me, it should be urgent for you — your operational failure potentially cost me lakhs."
-
-MANAGER: "I've logged your concern, sir. Once operations reverts with the root cause, we'll let you know what corrective steps, if any, are appropriate."
-
-CLIENT: "'If any' is exactly the problem. I want a commitment that this gets investigated properly, not passed around until I give up."` },
-      { id:'ta4', title:'Algo/API Order Duplication Fault',
-        scenario:`BACKGROUND: A client's automated trading script fired the same order 11 times after a delayed API acknowledgment — with logs proving the delay originated server-side.
-
-─── CALL TRANSCRIPT ─────────────────────────────────────────────
-
-CLIENT: "Your API fired the same buy order eleven times in ninety seconds this morning. I ended up with eleven times the position I intended, and I had to unwind it all at a loss."
-
-MANAGER: "API issues are usually on the client's script side, sir — did you check your own order logic for a retry loop?"
-
-CLIENT: "I've run this exact script for six months with no issues. This morning your API acknowledgment response was delayed, which is what triggered my system's retry logic to fire again."
-
-MANAGER: "If it's a delayed acknowledgment issue, that's still technically a network-level thing, could be your internet, could be ours, hard to say without a deep investigation."
-
-CLIENT: "I have the request and response logs with timestamps showing the delay originated on your servers, not mine. I'm not asking you to guess — I'm asking you to look at the actual data."
-
-MANAGER: "Sir, we get a lot of these claims and in most cases it turns out to be client-side. I'm not saying that's definitely the case here, but statistically that's usually how it goes."
-
-CLIENT: "I'm not most cases. I'm telling you I have logs. This cost me close to nine lakh rupees in an unintended position I had to exit at a loss."
-
-MANAGER: "I can forward the logs to our tech team for review, but I want to set expectations — even if it is confirmed as a server-side delay, compensation isn't guaranteed."
-
-CLIENT: "I'm not even asking about compensation yet. I'm asking for someone to actually investigate before jumping to 'compensation isn't guaranteed.'"
-
-MANAGER: "Understood, sir, I just wanted to be upfront so there's no misunderstanding later. I'll forward what you have."
-
-CLIENT: "It would help if the first thing I heard from you was 'let's look into this properly' instead of managing my expectations downward before you've even seen the evidence."
-
-MANAGER: "Fair point, sir. Send over the logs and I'll get the technical review started today."
-
-CLIENT: "I sent them to your support email an hour before I called you. Nobody has acknowledged them yet."
-
-MANAGER: "Let me check on that and make sure it's been picked up. I'll call you back by end of day with a status, not a resolution, just a status."
-
-CLIENT: "That's the first useful thing I've heard in this entire call."` },
-      { id:'ta5', title:'Senior Citizen Product-Suitability Complaint',
-        scenario:`BACKGROUND: A 72-year-old pensioner was activated for leveraged F&O trading and lost ₹6 lakh — his son calls, and every answer deflects to 'a different team' or 'he signed a form.'
-
-─── CALL TRANSCRIPT ─────────────────────────────────────────────
-
-CALLER: "My father is 72 years old, retired, living on a fixed pension, and somehow your team sold him futures and options trading with leverage. He's lost almost ₹6 lakh of his retirement savings. How did this happen?"
-
-MANAGER: "Sir, every client signs a risk disclosure document before F&O activation, so legally he consented to the risk involved."
-
-CALLER: "He barely understands what F&O even stands for. Did anyone actually assess whether this was suitable for a 72-year-old pensioner before activating it?"
-
-MANAGER: "There's a standard suitability questionnaire, but ultimately it's self-declared by the client, we can't force someone to answer honestly."
-
-CALLER: "So you're saying it's his fault for not filling out a form correctly, when he didn't understand what the form was even asking?"
-
-MANAGER: "I'm not blaming him, sir, I'm just explaining the process. If he had concerns he could have asked before trading."
-
-CALLER: "He trusted whoever called him and told him this could 'boost his returns.' That's what he told me. Was he cold-called about this product?"
-
-MANAGER: "I don't have visibility into individual sales calls, sir, that would be a different team's outreach."
-
-CALLER: "This is my father's life savings we're discussing, and every answer I get is 'different team' or 'he signed a form.' I need someone to actually take this seriously."
-
-MANAGER: "I do take it seriously, sir, but without evidence of specific misrepresentation, there isn't much action we can take beyond noting your concern."
-
-CALLER: "The evidence is that a 72-year-old pensioner with zero trading history suddenly has an active F&O account and a six lakh rupee loss within two months. That pattern should be evidence enough."
-
-MANAGER: "I understand it looks concerning, but I'm not in a position to make a suitability judgment call over the phone. I can log this as a complaint."
-
-CALLER: "Log it as more than a complaint. I want to know if this is a broader pattern with elderly clients, because if it is, I am taking this to SEBI directly."
-
-MANAGER: "You're free to do that, sir. I'll make sure the complaint is recorded accurately on our end."
-
-CALLER: "'Recorded accurately' isn't what I came here for. I came here for someone to say this was wrong and commit to actually looking into it."` },
+MANAGER: "Sir, that is your right. But please be aware that investigations take time even with SEBI. The process will be the same. Please wait for our security team to review."` },
     ],
     'mgr-mock-call': [
-      { id:'mc1', title:'Failed Stop-Loss During a Gap-Down',
-        scenario:'The customer\'s stop-loss order on a large equity position failed to trigger during a sharp gap-down opening due to a liquidity gap at that price level, resulting in a much larger loss than the stop-loss was meant to protect against. The customer wants immediate compensation for the difference.\\n\\nThe customer opens the call by saying:\\n\\n"My stop-loss was supposed to protect me from exactly this. It didn\'t trigger, and now I\'m down four times what I should have lost. I want the difference compensated, today."\\n\\nEscalation beats the customer will raise if your handling doesn\'t already address them: (1) "A stop-loss is a promise, isn\'t it? Otherwise what\'s the point of offering it?" (2) "I don\'t care about liquidity gaps, that\'s your platform\'s problem to solve, not mine." (3) "If you can\'t compensate me, tell me exactly who can, right now."\\n\\nHandle this call for 5-6 minutes: acknowledge the issue and the customer\'s frustration without over-explaining excuses, take clear ownership of what your organization controls, respond to each escalation beat as it comes up, and close with a resolution that is realistic and within your actual authority.' },
-      { id:'mc2', title:'Suspected Account Access Breach',
-        scenario:'The customer noticed a login from an unrecognized device and location in their account activity log, alongside two small unfamiliar orders that were later reversed by risk monitoring before settlement. The customer is alarmed about a possible security breach and is considering going to the media.\\n\\nThe customer opens the call by saying:\\n\\n"Someone accessed my trading account from a device and city I\'ve never used. There were unauthorized orders. I want to know right now how secure my money actually is with you, or I\'m going to the press about this."\\n\\nEscalation beats the customer will raise if your handling doesn\'t already address them: (1) "How do I know this hasn\'t happened before without me noticing?" (2) "I want my account frozen and a full security audit, not a generic \'we take security seriously\' line." (3) "If this becomes public and your stock or reputation takes a hit, that\'s on you, not me."\\n\\nHandle this call for 5-6 minutes: acknowledge the issue and the customer\'s frustration without over-explaining excuses, take clear ownership of what your organization controls, respond to each escalation beat as it comes up, and close with a resolution that is realistic and within your actual authority.' },
-      { id:'mc3', title:'Forced Liquidation of Pledged Shares',
-        scenario:'The customer had pledged shares against a loan facility; a sudden fall in the pledged stock\'s value triggered a margin call that the customer missed (traveling internationally), leading to forced liquidation of the pledged shares at a steep loss. The customer says they never received adequate notice.\\n\\nThe customer opens the call by saying:\\n\\n"You sold my pledged shares while I was on a flight with no signal. I got one SMS and that was it. That\'s not a fair warning process for something this serious."\\n\\nEscalation beats the customer will raise if your handling doesn\'t already address them: (1) "One SMS is not \'reasonable notice\' for liquidating my holdings." (2) "Why wasn\'t there an email, a call, anything with more than one attempt?" (3) "I\'m not asking you to reverse it, I\'m asking why your notice process is this thin for something irreversible."\\n\\nHandle this call for 5-6 minutes: acknowledge the issue and the customer\'s frustration without over-explaining excuses, take clear ownership of what your organization controls, respond to each escalation beat as it comes up, and close with a resolution that is realistic and within your actual authority.' },
-      { id:'mc4', title:'Wrong Brokerage Plan Applied',
-        scenario:'The customer was onboarded onto a higher-cost brokerage plan due to an internal error, despite having requested and been verbally confirmed for a discount plan at account opening. This has been ongoing for five months, and the customer wants both a correction going forward and retroactive reimbursement.\\n\\nThe customer opens the call by saying:\\n\\n"I specifically asked for the discount brokerage plan when I opened this account, and I was told yes. Five months later I find out I\'ve been on the standard plan this whole time. I want this fixed and I want back what I overpaid."\\n\\nEscalation beats the customer will raise if your handling doesn\'t already address them: (1) "This isn\'t a small amount over five months, it adds up." (2) "I have no way to prove what was said on that call, but I remember it clearly — are you saying I\'m making it up?" (3) "If you can fix it going forward but not reimburse the past five months, explain to me why that\'s fair."\\n\\nHandle this call for 5-6 minutes: acknowledge the issue and the customer\'s frustration without over-explaining excuses, take clear ownership of what your organization controls, respond to each escalation beat as it comes up, and close with a resolution that is realistic and within your actual authority.' },
-      { id:'mc5', title:'Loss on an Advisory-Recommended Stock',
-        scenario:'The customer subscribed to the firm\'s premium advisory service and acted on a strong "buy" recommendation that subsequently fell sharply after adverse company-specific news. The customer feels the recommendation was reckless and wants both the advisory subscription fee refunded and accountability for the loss.\\n\\nThe customer opens the call by saying:\\n\\n"Your advisory team told me this stock was a strong buy with high conviction. I trusted that recommendation and put in a large amount. It\'s down thirty percent. I want my advisory fee refunded at the very least."\\n\\nEscalation beats the customer will raise if your handling doesn\'t already address them: (1) "What\'s the point of paying for advisory if the calls are this wrong?" (2) "Was this recommendation based on real research, or just pushed to hit some target?" (3) "I\'m not asking you to cover my trading loss, I\'m asking why I should keep paying for advice that did this to me."\\n\\nHandle this call for 5-6 minutes: acknowledge the issue and the customer\'s frustration without over-explaining excuses, take clear ownership of what your organization controls, respond to each escalation beat as it comes up, and close with a resolution that is realistic and within your actual authority.' },
+      { id:'mc1', title:'Unlisted Share Transfer & Regulatory Intimation',
+        scenario:'A partner of a client company executed a transfer of unlisted shares to another individual through the offline DIS (Delivery Instruction Slip) mode via your brokerage firm. Under NSDL regulations, any transfer of unlisted securities must be intimated to the company secretary of the issuing company by the broker. However, your firm operates under CDSL (Central Depository Services Limited) — not NSDL — and CDSL does not mandate any such intimation requirement for unlisted share transfers through the DIS mode. The transfer was therefore processed without notifying the company secretary, which was correct procedure under CDSL rules.\n\nThe company secretary is now calling support desk, agitated and demanding to know why they were not informed of this transfer. They believe a regulatory breach has occurred. They may cite NSDL guidelines, threaten to escalate to SEBI, or demand the transfer be reversed. The manager must handle this call with complete composure, accurate regulatory knowledge, clarity of explanation, and firm but respectful ownership.\n\nThe client opens the call by saying:\n\n"I am the company secretary of Arvind Precision Tools Private Limited. One of our partners has transferred unlisted shares of our company to an external individual through your brokerage firm via an offline DIS, and we were never informed about this. As per regulatory requirements, the broker is obligated to intimate the company secretary of any such transfer. This is a serious compliance lapse and I need an explanation immediately."\n\nEscalation beats the client will raise if your handling doesn\'t already address them: (1) "I have the NSDL circular in front of me. It clearly states that for any transfer of unlisted securities, the depository participant is required to send an intimation to the company. Are you telling me your firm was not aware of this circular? Because if that\'s the case, that\'s an even bigger problem." (2) "Fine, let\'s say what you\'re telling me about CDSL is correct. But your firm still had a moral and professional obligation to inform us as the issuing company. Unlisted shares are sensitive — they affect our cap table, shareholding structure, and future fundraising. The fact that you hid behind a technicality and didn\'t think to inform us is irresponsible. I want a written apology from your compliance team." (3) "I am going to file a complaint with SEBI today citing this as a regulatory breach by your firm. I am also going to instruct our legal counsel to send a notice to your compliance officer. I want the name and direct contact of your compliance officer right now." (4) "Alright. I\'m willing to hear your explanation formally. But I want everything you\'ve just told me in writing — the CDSL operating instructions you\'re citing, the specific clause that exempts your firm from intimation, and a record of the transfer details including date, parties involved, and number of shares. Can your firm provide all of that?" (5) "I want to make something very clear. Our firm has significant assets and several partners who trade through brokers. If this matter is not handled correctly and transparently, we will be reviewing our relationship with your firm and advising our partners to move their accounts. I hope you understand the gravity of what I\'m saying."\n\nHandle this call for 5-6 minutes: acknowledge the issue and the client\'s frustration without over-explaining excuses, take clear ownership of what your organization controls, respond to each escalation beat as it comes up, and close with a resolution that is realistic and within your actual authority.' },
+      { id:'mc2', title:'Minor to Major Account Conversion — Premature Block & Compensation Demand',
+        scenario:'A client holds a minor account for their child who was turning 18 on 23rd June 2026. As part of the Zerodha\'s policy, the minor account was blocked 15 days prior — on 8th June 2026 — to initiate the minor-to-major account upgradation process. The client was contacted on 12th June 2026 and informed about the block. However, since the minor had not yet turned 18, they did not have the required documents for the major account conversion (such as a fresh KYC, PAN update, signature, etc.). As a result, the account remained blocked.\n\nDespite follow-ups, the account was still not unblocked even after a week — now bringing us to approximately 19th–20th June 2026, with the minor\'s 18th birthday still 3–4 days away. The client is now on an escalation call, extremely agitated. They are arguing on two fronts: (1) the block was premature — the minor had not yet turned 18 and the firm had no right to block the account before the actual date of majority, and (2) compensation demand — they have missed trading opportunities during this blocked period and want financial compensation.\n\nThe client opens the call by saying:\n\n"I want to speak to the most senior person available. My child\'s account was blocked on 8th June. She doesn\'t turn 18 until 23rd June. You had absolutely no right to block a functioning account before she is legally a major. On top of that, your team called me on 12th June asking for documents — documents that don\'t even exist yet because she hasn\'t turned 18. It\'s been a week and the account is still blocked. She has missed multiple trading opportunities in this market. I want the account unblocked today and I want compensation for the losses we\'ve suffered."\n\nEscalation beats the client will raise if your handling doesn\'t already address them: (1) "Your own website says the account is valid until the minor turns 18. Nowhere does it say you will block the account 15 days before the birthday. This was done without any proper notice and without any legal basis. My daughter had active holdings and watchlists she was tracking. You disrupted everything. Can you show me anywhere in writing where it says you can block the account 15 days early?" (2) "I don\'t care about your internal policy. The fact is the account is blocked right now and she is still legally a minor for 3 more days. So either you unblock it now and let her trade as a minor until the 23rd, or you explain to me in plain language why a minor account — which is perfectly valid — is being held hostage by your upgrade process. Which is it?" (3) "Between 8th June and today that\'s almost two weeks of blocked trading. My daughter had identified specific exit points in two holdings that she had been tracking for months. She missed both of them. One of them has already dropped 14% since she wanted to exit. That\'s a direct financial loss caused by your firm\'s unilateral decision to block her account without warning. I want compensation for this. If you don\'t agree, I\'ll take this to SEBI and the consumer court." (4) "Fine. Let\'s say you unblock it today. What happens on the 23rd when she actually turns 18? Will the account be blocked again? What documents do you need, how long will the conversion take, and will she be able to trade on her birthday itself or will there be another blackout period? I need a complete answer because I don\'t want to be in this situation again." (5) "I want everything discussed on this call in writing. The reason for the block, the policy you\'re citing, what you\'re doing to unblock it today, the timeline for conversion after the 23rd, and your firm\'s final position on compensation. I also want your name and direct contact. If this is not resolved by end of day today I will be filing complaints everywhere."\n\nHandle this call for 5-6 minutes: acknowledge the issue and the client\'s frustration without over-explaining excuses, take clear ownership of what your organization controls, respond to each escalation beat as it comes up, and close with a resolution that is realistic and within your actual authority.' },
+      { id:'mc3', title:'Kill Switch Malfunction — Technical Breach & Compensation Demand',
+        scenario:'A client activated the Kill Switch on their trading account at 9:30 AM for the NSE F&O segment. The Kill Switch is a feature that, once enabled, immediately blocks all trades in the selected segment. As per standard protocol, once the Kill Switch is activated, no orders should go through for 12 hours, and the segment can only be reactivated after that.\n\nAt 10:00 AM — 30 minutes after activating the Kill Switch — the client placed orders in NSE F&O. The first order was rejected with an error message citing insufficient balance. Critically, the rejection reason shown was insufficient balance — not Kill Switch active — which was itself a system anomaly. The client, rather than calling support to verify why the order was rejected or to confirm the Kill Switch status, placed further orders from 10:05 AM onwards. These subsequent orders went through and were executed — a clear technical malfunction, as the Kill Switch should have prevented all executions.\n\nThe client suffered losses on these executed trades and is now on an escalation call demanding full compensation, arguing that the system allowed trades to go through despite an active Kill Switch and that the firm is therefore liable for the losses.\n\nThe client opens the call by saying:\n\n"I enabled the Kill Switch at 9:30 this morning specifically because I did not want to trade NSE F&O today. That is the entire purpose of the Kill Switch — to block trades. At 10 AM I accidentally placed an order and it was rejected. Fine. But then from 10:05 AM my orders started going through. Your system allowed me to trade in a segment that I had explicitly locked. I made losses on those trades. Your system failed. Zerodha owes me compensation. I want to know what you\'re going to do about this."\n\nEscalation beats the client will raise if your handling doesn\'t already address them: (1) "And before you say anything — I know what you\'re going to tell me. You\'re going to say I should have called when the first order was rejected. But why would I call? The rejection message said insufficient balance. It did not say Kill Switch active. So naturally I assumed the Kill Switch issue was resolved and I had a balance problem. I topped up my balance and placed the next order — which then went through. Your system gave me the wrong rejection message. That is your fault, not mine." (2) "Let me be very direct. I used your Kill switch exactly as intended. Your system confirmed it was active. Your system then failed to enforce it. And your system gave me a false rejection reason that led me to believe the Kill Switch was no longer in effect. Every single failure here is on your side. I did nothing wrong. The losses I made are entirely because of your technical breakdown. How can you possibly argue that I bear any responsibility here?" (3) "I want the following from you right now. First, a written acknowledgement that your Kill Switch system malfunctioned today. Second, the exact timestamp logs showing when my Kill Switch was activated, when the first order was rejected, and when subsequent orders went through. Third, a written explanation of why the rejection message showed insufficient balance instead of Kill Switch active. And fourth, I want this escalated to your technical and compliance teams today — not in 5 to 7 days. I\'m a lawyer and I know exactly what to do with this documentation." (4) "I lost ₹47,000 on those trades. That is a direct, quantifiable loss caused entirely by your system allowing trades that should never have been executed. I\'m not asking for goodwill. I\'m not asking for brokerage credits. I\'m asking you to make me whole for a loss your system caused. If you tell me you can\'t compensate me I want that in writing too — because that response will be exhibit A in my consumer court filing." (5) "I want to know what your firm is going to do about this. Not about my compensation — I\'ve heard your answer on that. I mean what are you doing to make sure this doesn\'t happen to someone else? What is the process for investigating this technical failure? Who is accountable? And will I be informed of the findings? Because if this is a known bug and your firm has been sitting on it, that changes everything."\n\nHandle this call for 5-6 minutes: acknowledge the issue and the client\'s frustration without over-explaining excuses, take clear ownership of what your organization controls, respond to each escalation beat as it comes up, and close with a resolution that is realistic and within your actual authority.' },
+      { id:'mc4', title:'Outdated App NAV Display — Mutual Fund Redemption Loss & Media Threat',
+        scenario:'A client holds mutual fund units through the firm\'s Coin application — a mutual fund investment platform. The client had not updated the Coin app for an extended period. Due to the outdated app version, the NAV displayed on the client\'s screen was ₹35 — the NAV as of 25th November 2025 — which was clearly date-stamped on the redemption page as a historical figure, not the current NAV.\n\nOn 3rd March 2026, the client placed a redemption order for their mutual fund units. By this date, due to a significant market correction, the actual NAV of the fund had fallen to ₹25. The client, without checking the date on the NAV displayed or verifying the current NAV independently, assumed the NAV was still ₹35 and proceeded with the redemption. The redemption was executed at the prevailing NAV of ₹25 — not ₹35 — resulting in a loss of approximately ₹1 lakh compared to the client\'s expectation.\n\nThe client is now on an escalation call, blaming the platform for displaying a wrong NAV and demanding full compensation of ₹1 lakh. The client is the owner of a local Hindi news channel and is making explicit threats to run a negative story about the firm on their channel, leveraging their media influence as pressure.\n\nThe client opens the call by saying:\n\n"I\'ll come straight to the point. I saw NAV of ₹35 on your Coin app. I placed a redemption on 3rd March. I found out the actual NAV was ₹25. I lost one lakh. Your coin shows the wrong NAV. I own a Hindi news channel. If I\'m not heard on this call today, tomorrow morning your company\'s full story will run on my channel. Prime time. Now tell me — what will you do?"\n\nEscalation beats the client will raise if your handling doesn\'t already address them: (1) "Your app showed me ₹35. I placed my order based on what your app showed me. How is that my mistake? You are a financial platform. You are supposed to show me accurate, real-time data. If your app cannot show the correct NAV, then you should not be in this business. I trusted your platform with my money, and your platform gave me wrong information." (2) "You\'re telling me I should have checked the date on the NAV. But when I open a financial app and see a number, I trust that number is current. No common person reads the fine print on every screen. You are taking advantage of the fact that I didn\'t update the app to escape your responsibility. The app should have shown me a warning — \'your app is outdated, NAV may not be current.\' Did your app show me any such warning? No. So the fault is yours." (3) "I am giving you a last chance. I have suffered a loss of one lakh. I am an influential person in this city. 2 lakh people watch my channel daily. Tomorrow I will run an investigative story — \'How this stockbroking firm is looting retail investors.\' I will broadcast your name, your company\'s name, and this entire conversation. There is still time — return one lakh and this matter is over." (4) "Fine. Apart from my channel — I also know people at SEBI. I will file a complaint stating your platform deliberately showed outdated NAV to mislead investors into making transactions. That is mis-selling. That is a regulatory offence. And I will also file in consumer court for ₹1 lakh plus damages plus mental harassment. Let\'s see how your firm handles that." (5) "I want three things before I hang up. One — your full name and employee ID. Two — a written statement from your firm saying the NAV shown was correct and the client is responsible. Three — the name and number of your CEO or MD. If you give me these three things I will decide my next step. If you don\'t, I\'ll take that as confirmation that your firm is hiding something."\n\nHandle this call for 5-6 minutes: acknowledge the issue and the client\'s frustration without over-explaining excuses, take clear ownership of what your organization controls, respond to each escalation beat as it comes up, and close with a resolution that is realistic and within your actual authority.' },
     ],
     'mgr-feedback': [
       { id:'fb1', title:'Mis-Selling Pattern Under Target Pressure',
-        scenario:'Employee: Relationship Manager, 2.3 years tenure, consistently in the top quartile for new account activations.\\n\\nSituation: Call audits over the last month show a repeated pattern of pushing high-margin F&O and derivative products to clients with clearly conservative risk profiles, without adequately explaining the risk, in order to hit a quarterly activation target.',
+        scenario:'Employee: Relationship Manager, 2.3 years tenure, consistently in the top quartile for new account activations.\n\nSituation: Call audits over the last month show a repeated pattern of pushing high-margin F&O and derivative products to clients with clearly conservative risk profiles, without adequately explaining the risk, in order to hit a quarterly activation target.',
         goodLooksLike: [
           'Sets context and cites the specific evidence (calls, dates, the pattern) before delivering any judgement.',
           'Acknowledges the employee\'s tenure/performance strengths where genuinely true, without letting it excuse the specific behaviour.',
@@ -253,7 +177,7 @@ CALLER: "'Recorded accurately' isn't what I came here for. I came here for someo
           'Ends the conversation without a concrete, measurable plan or a follow-up date.',
         ] },
       { id:'fb2', title:'Skipped Mandatory Compliance Disclosures',
-        scenario:'Employee: Senior Dealer, 4 years tenure, generally strong performer.\\n\\nSituation: Random call monitoring found that in 6 of the last 20 sampled calls, the mandatory risk disclosure script for leveraged products was skipped or rushed through inaudibly before order confirmation — a direct compliance and regulatory exposure.',
+        scenario:'Employee: Senior Dealer, 4 years tenure, generally strong performer.\n\nSituation: Random call monitoring found that in 6 of the last 20 sampled calls, the mandatory risk disclosure script for leveraged products was skipped or rushed through inaudibly before order confirmation — a direct compliance and regulatory exposure.',
         goodLooksLike: [
           'Sets context and cites the specific evidence (calls, dates, the pattern) before delivering any judgement.',
           'Acknowledges the employee\'s tenure/performance strengths where genuinely true, without letting it excuse the specific behaviour.',
@@ -268,7 +192,7 @@ CALLER: "'Recorded accurately' isn't what I came here for. I came here for someo
           'Ends the conversation without a concrete, measurable plan or a follow-up date.',
         ] },
       { id:'fb3', title:'Declining Call Quality & Client Complaints',
-        scenario:'Employee: Customer Service Executive, 1.5 years tenure.\\n\\nSituation: Client satisfaction scores for this employee have dropped from 4.3 to 2.8 over two months, with three specific written complaints about curt, dismissive tone during high-value client interactions.',
+        scenario:'Employee: Customer Service Executive, 1.5 years tenure.\n\nSituation: Client satisfaction scores for this employee have dropped from 4.3 to 2.8 over two months, with three specific written complaints about curt, dismissive tone during high-value client interactions.',
         goodLooksLike: [
           'Sets context and cites the specific evidence (calls, dates, the pattern) before delivering any judgement.',
           'Acknowledges the employee\'s tenure/performance strengths where genuinely true, without letting it excuse the specific behaviour.',
@@ -283,7 +207,7 @@ CALLER: "'Recorded accurately' isn't what I came here for. I came here for someo
           'Ends the conversation without a concrete, measurable plan or a follow-up date.',
         ] },
       { id:'fb4', title:'Chronic SLA Breaches on Client Callbacks',
-        scenario:'Employee: Support Team Lead, 3 years tenure, previously a strong performer.\\n\\nSituation: Callback SLA (client escalations to be returned within 4 business hours) has been breached in 40% of cases over the last six weeks, several involving time-sensitive trading issues where delay caused real client financial impact.',
+        scenario:'Employee: Support Team Lead, 3 years tenure, previously a strong performer.\n\nSituation: Callback SLA (client escalations to be returned within 4 business hours) has been breached in 40% of cases over the last six weeks, several involving time-sensitive trading issues where delay caused real client financial impact.',
         goodLooksLike: [
           'Sets context and cites the specific evidence (calls, dates, the pattern) before delivering any judgement.',
           'Acknowledges the employee\'s tenure/performance strengths where genuinely true, without letting it excuse the specific behaviour.',
@@ -298,7 +222,7 @@ CALLER: "'Recorded accurately' isn't what I came here for. I came here for someo
           'Ends the conversation without a concrete, measurable plan or a follow-up date.',
         ] },
       { id:'fb5', title:'Trade Executed Without Proper Verbal Confirmation',
-        scenario:'Employee: Dealer, 5 years tenure, high trust and seniority on the floor.\\n\\nSituation: A recorded call shows a large trade executed based on an ambiguous client instruction, without the mandatory verbal reconfirmation of quantity and price before execution — a serious protocol and compliance breach, even though this particular trade did not result in client loss.',
+        scenario:'Employee: Dealer, 5 years tenure, high trust and seniority on the floor.\n\nSituation: A recorded call shows a large trade executed based on an ambiguous client instruction, without the mandatory verbal reconfirmation of quantity and price before execution — a serious protocol and compliance breach, even though this particular trade did not result in client loss.',
         goodLooksLike: [
           'Sets context and cites the specific evidence (calls, dates, the pattern) before delivering any judgement.',
           'Acknowledges the employee\'s tenure/performance strengths where genuinely true, without letting it excuse the specific behaviour.',
@@ -315,15 +239,15 @@ CALLER: "'Recorded accurately' isn't what I came here for. I came here for someo
     ],
     'mgr-eq': [
       { id:'eq1', title:'Cascade Set 1 — The Volatile Morning',
-        scenario:`Situation 1: The market gaps down 4% at the open. Five high-value clients are calling in simultaneously, all demanding personal intervention on RMS auto square-offs happening in real time, and your support queue is already jammed.\\n\\nSituation 2: While still handling that, your compliance officer calls: a surprise regulatory inspection team is arriving in 20 minutes and needs files you have not prepared.\\n\\nSituation 3: One of the clients from situation 1 calls back — this time on speakerphone with a journalist friend listening in — saying they intend to publish the recording of this call.\\n\\nAfter EACH situation below, before moving to the next, answer the same three questions:\\nQ1 — Self-Awareness: What's your gut reaction, and can you name it clearly?\\nQ2 — Impulse Control: What is your first action — and is it composed and deliberate, or reactive?\\nQ3 — Empathy & Consistency: How are you managing your own emotional state before responding to the people involved?\\n\\nWrite your full response covering all three situations in sequence — do not skip ahead or answer them as one combined situation; treat each as a fresh escalation layered on top of the last. (Min 300 words)` },
+        scenario:`Situation 1: The market gaps down 4% at the open. Five high-value clients are calling in simultaneously, all demanding personal intervention on RMS auto square-offs happening in real time, and your support queue is already jammed.\n\nSituation 2: While still handling that, your compliance officer calls: a surprise regulatory inspection team is arriving in 20 minutes and needs files you have not prepared.\n\nSituation 3: One of the clients from situation 1 calls back — this time on speakerphone with a journalist friend listening in — saying they intend to publish the recording of this call.\n\nAfter EACH situation below, before moving to the next, answer the same three questions:\nQ1 — Self-Awareness: What's your gut reaction, and can you name it clearly?\nQ2 — Impulse Control: What is your first action — and is it composed and deliberate, or reactive?\nQ3 — Empathy & Consistency: How are you managing your own emotional state before responding to the people involved?\n\nWrite your full response covering all three situations in sequence — do not skip ahead or answer them as one combined situation; treat each as a fresh escalation layered on top of the last. (Min 300 words)` },
       { id:'eq2', title:'Cascade Set 2 — The System Failure Day',
-        scenario:`Situation 1: The trading platform crashes fleet-wide for 15 minutes during F&O expiry, the highest-volume window of the month.\\n\\nSituation 2: Immediately after, a member of your team breaks down in visible distress at their desk, overwhelmed by the complaint volume, in front of the rest of the floor.\\n\\nSituation 3: Your regional head calls, demanding to know within the next 10 minutes why complaint numbers have spiked, ahead of a leadership review call.\\n\\nAfter EACH situation below, before moving to the next, answer the same three questions:\\nQ1 — Self-Awareness: What's your gut reaction, and can you name it clearly?\\nQ2 — Impulse Control: What is your first action — and is it composed and deliberate, or reactive?\\nQ3 — Empathy & Consistency: How are you managing your own emotional state before responding to the people involved?\\n\\nWrite your full response covering all three situations in sequence — do not skip ahead or answer them as one combined situation; treat each as a fresh escalation layered on top of the last. (Min 300 words)` },
+        scenario:`Situation 1: The trading platform crashes fleet-wide for 15 minutes during F&O expiry, the highest-volume window of the month.\n\nSituation 2: Immediately after, a member of your team breaks down in visible distress at their desk, overwhelmed by the complaint volume, in front of the rest of the floor.\n\nSituation 3: Your regional head calls, demanding to know within the next 10 minutes why complaint numbers have spiked, ahead of a leadership review call.\n\nAfter EACH situation below, before moving to the next, answer the same three questions:\nQ1 — Self-Awareness: What's your gut reaction, and can you name it clearly?\nQ2 — Impulse Control: What is your first action — and is it composed and deliberate, or reactive?\nQ3 — Empathy & Consistency: How are you managing your own emotional state before responding to the people involved?\n\nWrite your full response covering all three situations in sequence — do not skip ahead or answer them as one combined situation; treat each as a fresh escalation layered on top of the last. (Min 300 words)` },
       { id:'eq3', title:'Cascade Set 3 — The Personal Attack Day',
-        scenario:`Situation 1: A client screams abusive language at you directly over the phone and threatens to "make sure you lose your job" over a trading loss.\\n\\nSituation 2: Minutes later, you learn a formal complaint naming you personally — not just the branch — has been filed, alleging negligence.\\n\\nSituation 3: A peer manager quietly mentions they've heard the complaint may come up in your upcoming promotion review.\\n\\nAfter EACH situation below, before moving to the next, answer the same three questions:\\nQ1 — Self-Awareness: What's your gut reaction, and can you name it clearly?\\nQ2 — Impulse Control: What is your first action — and is it composed and deliberate, or reactive?\\nQ3 — Empathy & Consistency: How are you managing your own emotional state before responding to the people involved?\\n\\nWrite your full response covering all three situations in sequence — do not skip ahead or answer them as one combined situation; treat each as a fresh escalation layered on top of the last. (Min 300 words)` },
+        scenario:`Situation 1: A client screams abusive language at you directly over the phone and threatens to "make sure you lose your job" over a trading loss.\n\nSituation 2: Minutes later, you learn a formal complaint naming you personally — not just the branch — has been filed, alleging negligence.\n\nSituation 3: A peer manager quietly mentions they've heard the complaint may come up in your upcoming promotion review.\n\nAfter EACH situation below, before moving to the next, answer the same three questions:\nQ1 — Self-Awareness: What's your gut reaction, and can you name it clearly?\nQ2 — Impulse Control: What is your first action — and is it composed and deliberate, or reactive?\nQ3 — Empathy & Consistency: How are you managing your own emotional state before responding to the people involved?\n\nWrite your full response covering all three situations in sequence — do not skip ahead or answer them as one combined situation; treat each as a fresh escalation layered on top of the last. (Min 300 words)` },
       { id:'eq4', title:'Cascade Set 4 — The Compliance Crisis',
-        scenario:`Situation 1: You discover evidence suggesting a member of your team may have front-run a large client order — a serious integrity and regulatory breach.\\n\\nSituation 2: Before you can act on it, the client involved calls in, unaware, casually praising that same team member's service.\\n\\nSituation 3: HR calls to inform you the team member has just submitted an immediate, effective-today resignation.\\n\\nAfter EACH situation below, before moving to the next, answer the same three questions:\\nQ1 — Self-Awareness: What's your gut reaction, and can you name it clearly?\\nQ2 — Impulse Control: What is your first action — and is it composed and deliberate, or reactive?\\nQ3 — Empathy & Consistency: How are you managing your own emotional state before responding to the people involved?\\n\\nWrite your full response covering all three situations in sequence — do not skip ahead or answer them as one combined situation; treat each as a fresh escalation layered on top of the last. (Min 300 words)` },
+        scenario:`Situation 1: You discover evidence suggesting a member of your team may have front-run a large client order — a serious integrity and regulatory breach.\n\nSituation 2: Before you can act on it, the client involved calls in, unaware, casually praising that same team member's service.\n\nSituation 3: HR calls to inform you the team member has just submitted an immediate, effective-today resignation.\n\nAfter EACH situation below, before moving to the next, answer the same three questions:\nQ1 — Self-Awareness: What's your gut reaction, and can you name it clearly?\nQ2 — Impulse Control: What is your first action — and is it composed and deliberate, or reactive?\nQ3 — Empathy & Consistency: How are you managing your own emotional state before responding to the people involved?\n\nWrite your full response covering all three situations in sequence — do not skip ahead or answer them as one combined situation; treat each as a fresh escalation layered on top of the last. (Min 300 words)` },
       { id:'eq5', title:'Cascade Set 5 — The Public Pressure Day',
-        scenario:`Situation 1: A negative post about your branch is trending on social media with hundreds of comments, referencing a client incident you have not yet been briefed on.\\n\\nSituation 2: Your manager calls, visibly stressed, demanding a response statement within 15 minutes.\\n\\nSituation 3: An unrelated client calls in, visibly anxious after seeing the post, asking whether their money is safe with the firm.\\n\\nAfter EACH situation below, before moving to the next, answer the same three questions:\\nQ1 — Self-Awareness: What's your gut reaction, and can you name it clearly?\\nQ2 — Impulse Control: What is your first action — and is it composed and deliberate, or reactive?\\nQ3 — Empathy & Consistency: How are you managing your own emotional state before responding to the people involved?\\n\\nWrite your full response covering all three situations in sequence — do not skip ahead or answer them as one combined situation; treat each as a fresh escalation layered on top of the last. (Min 300 words)` },
+        scenario:`Situation 1: A negative post about your branch is trending on social media with hundreds of comments, referencing a client incident you have not yet been briefed on.\n\nSituation 2: Your manager calls, visibly stressed, demanding a response statement within 15 minutes.\n\nSituation 3: An unrelated client calls in, visibly anxious after seeing the post, asking whether their money is safe with the firm.\n\nAfter EACH situation below, before moving to the next, answer the same three questions:\nQ1 — Self-Awareness: What's your gut reaction, and can you name it clearly?\nQ2 — Impulse Control: What is your first action — and is it composed and deliberate, or reactive?\nQ3 — Empathy & Consistency: How are you managing your own emotional state before responding to the people involved?\n\nWrite your full response covering all three situations in sequence — do not skip ahead or answer them as one combined situation; treat each as a fresh escalation layered on top of the last. (Min 300 words)` },
     ],
     'mgr-management-skills': [
       { id:'ms1', title:'30-60-90 Day Plan',
@@ -1121,6 +1045,13 @@ HOW TO RUN THIS CALL:
     };
 
     const writtenText = JSON.stringify({
+      // Situation Room scenarios are hardcoded client-side (never persisted
+      // to the DB topics table), so the admin portal has no independent way
+      // to look up the scenario/wrongResponse text for a saved session --
+      // it must be embedded here so admin.js can render Section A and
+      // Section B as visibly distinct, scenario-grounded content instead of
+      // two generic-looking text boxes.
+      scenario: _currentScenario.scenario,
       sectionA: { prompt: _currentScenario.sectionAPrompt, response: _sr.sectionAText },
       sectionB: { wrongResponse: _currentScenario.wrongResponse, errors: errorsText, impact: impactText, rewrite: rewriteText },
     });
