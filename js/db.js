@@ -975,8 +975,71 @@ const DB = (() => {
   // looks at what's already there for each mgr- module and only inserts
   // whatever titles are missing, using a clean payload that matches the
   // real schema and lets Postgres generate the id.
+  // Guard against concurrent invocation: _seedManagerTopics() runs on
+  // every Topics-tab render (see the comment at its call site), and with
+  // no lock here, two overlapping calls (e.g. the tab's initial render
+  // plus a near-simultaneous filter-tab click) could both query "what's
+  // missing", both see the same row as missing, and both insert it --
+  // producing exact duplicate topic cards. This is exactly what happened
+  // in production: the 4 new Transcript Autopsy / Paper Trade titles each
+  // got inserted twice. All callers while a seed is already in flight
+  // just await that same in-flight run instead of starting a new one.
+  let _seedManagerTopicsInFlight = null;
   async function _seedManagerTopics() {
+    if (_seedManagerTopicsInFlight) return _seedManagerTopicsInFlight;
+    _seedManagerTopicsInFlight = _seedManagerTopicsImpl().finally(() => {
+      _seedManagerTopicsInFlight = null;
+    });
+    return _seedManagerTopicsInFlight;
+  }
+
+  // De-duplicate the topics table: a companion fix to the concurrency
+  // guard above. The guard stops NEW duplicates from being created, but
+  // does nothing about duplicate rows that already exist in an
+  // already-affected database from before this fix. Runs on every seed
+  // pass (cheap -- one query) so any duplicate, from this race or any
+  // other cause, is self-healed the next time the Topics tab loads --
+  // no manual cleanup step needed. Keeps the oldest row per (module,
+  // title) and deletes the rest; safe because sessions reference
+  // topic_id with ON DELETE SET NULL, so no scored history is affected.
+  async function _dedupeTopics() {
     try {
+      const dedupeIds = (rows) => {
+        const seen = new Set();
+        const toDelete = [];
+        [...rows]
+          .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0))
+          .forEach(t => {
+            const key = (t.module || '') + '::' + (t.title || '');
+            if (seen.has(key)) toDelete.push(t.id);
+            else seen.add(key);
+          });
+        return toDelete;
+      };
+
+      if (_useLocalStorage) {
+        const toDelete = dedupeIds(_localGetAll('topics'));
+        toDelete.forEach(id => _localDel('topics', id));
+        if (toDelete.length) console.log(`[DB] Removed ${toDelete.length} duplicate topic row(s) (local).`);
+        return;
+      }
+
+      const { data: allTopics, error } = await _sb.from('topics').select('id, module, title, created_at');
+      if (error) { console.warn('[DB] Dedupe fetch failed:', error.message); return; }
+      const toDelete = dedupeIds(allTopics || []);
+      if (toDelete.length) {
+        const { error: delErr } = await _sb.from('topics').delete().in('id', toDelete);
+        if (delErr) console.warn('[DB] Duplicate topic cleanup failed:', delErr.message);
+        else console.log(`[DB] Removed ${toDelete.length} duplicate topic row(s).`);
+      }
+    } catch (e) {
+      console.warn('[DB] _dedupeTopics failed:', e.message || e);
+    }
+  }
+
+  async function _seedManagerTopicsImpl() {
+    try {
+      await _dedupeTopics();
       const mgrTopics = [
         // ── Situation Room (5 scenarios — Order Execution Failure, Unauthorized Trade
         // Dispute, RMS Auto Square-Off, KYC Freeze, Trading App Outage). Manager UI
