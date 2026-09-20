@@ -761,6 +761,42 @@ Let's get back on track.
   // GeminiLive, offered as an alternative to the record-then-transcribe
   // flow above. The scenario text already contains the customer's opening
   // line and escalation beats, so it doubles directly as the roleplay brief.
+
+  // Pull the customer's opening line and numbered escalation beats out of
+  // the scenario text (see build format in the mgr-mock-call SCENARIOS
+  // entries above: "The client opens the call by saying: \"...\"" then
+  // "Escalation beats ...: (1) \"...\" (2) \"...\" ... \n\nHandle this
+  // call ..."). Previously the ENTIRE scenario blob -- including the
+  // "Handle this call for 5-6 minutes: acknowledge the issue..." line,
+  // which is a note to a human roleplay partner, never meant to be
+  // spoken -- was handed to the AI as "context" with instructions to
+  // freely invent its own follow-up questions. In practice the AI would
+  // often drift off the actual escalation points the content was written
+  // around, sometimes read fragments of the meta-instructions, or ask a
+  // different number of questions than the scenario actually has -- which
+  // is the "not working properly" behavior this fixes. Parsing the exact
+  // question list out lets the AI be given a fixed, explicit script (the
+  // real number of questions the scenario was authored with) instead of
+  // an open-ended brief to improvise from.
+  function _parsePaperTradeQuestions(scenarioText) {
+    const text = scenarioText || '';
+    const result = { background: text.trim(), questions: [] };
+
+    const openMarker = 'The client opens the call by saying:';
+    const openIdx = text.indexOf(openMarker);
+    if (openIdx !== -1) result.background = text.slice(0, openIdx).trim();
+
+    const openingMatch = text.match(/The client opens the call by saying:\s*\n*"([^"]+)"/);
+    if (openingMatch) result.questions.push(openingMatch[1]);
+
+    const beatsBlockMatch = text.match(/Escalation beats[^:]*:\s*([\s\S]*?)\n\nHandle this call/);
+    if (beatsBlockMatch) {
+      const beatRe = /\(\d+\)\s*"([^"]+)"/g;
+      let m;
+      while ((m = beatRe.exec(beatsBlockMatch[1]))) result.questions.push(m[1]);
+    }
+    return result;
+  }
   function _startAudioLiveVoice() {
     _clearPrepTimer();
     const meta = MODULE_META[_currentModule];
@@ -784,7 +820,30 @@ Let's get back on track.
       'time-limit': '⏱️ 9-minute limit reached — wrapping up and submitting…',
     };
 
-    const systemInstruction = `You are roleplaying, BY VOICE, as a customer of the brokerage on a call with a customer support manager. You are the CUSTOMER, not an agent and not the manager — you are the one asking questions, and the manager is the one answering them.
+    const _ptParsed = _parsePaperTradeQuestions(_currentScenario.scenario);
+    const _ptQuestions = _ptParsed.questions;
+
+    // With a clean parsed list, give the AI a FIXED script -- the exact
+    // number of questions this scenario was authored with, asked in
+    // order -- instead of an open brief to improvise new questions from.
+    // Falls back to the old freeform behavior only if parsing found
+    // nothing (e.g. a future scenario that doesn't match the expected
+    // format), so a live call never breaks entirely.
+    const systemInstruction = _ptQuestions.length ? `You are roleplaying, BY VOICE, as a customer of the brokerage on a call with a customer support manager. You are the CUSTOMER, not an agent and not the manager.
+
+BACKGROUND (for your own understanding only — never read this out loud, it is not something you say to the manager): ${_ptParsed.background}
+
+YOUR QUESTIONS, IN ORDER — ask these ${_ptQuestions.length} questions one at a time, in exactly this order. This is a fixed list, not a starting point to improvise from: do not skip any, do not reorder them, do not merge two together, and do not invent extra questions beyond this list.
+${_ptQuestions.map((q, i) => `${i + 1}. "${q}"`).join('\n')}
+
+HOW TO RUN THIS CALL:
+- The moment the call connects, speak QUESTION 1 immediately as your opening line — no greeting, no small talk, go straight into it. You may reword it slightly into natural spoken language, but it must keep the exact same specific complaint or point.
+- After the manager answers, don't jump straight to reading the next question. First react to what they actually just said — a short, natural, spoken acknowledgment of a few words to one short sentence (for example: "I hear what you're saying, but..." / "Okay, fair enough — let me ask you this..." / "Right, well here's the thing..." / "Alright, so what about this..." / "I understand, but I still want to know..." — vary the phrasing each time, never repeat the same one twice) that shows you actually listened to their answer, THEN ask the next question from the list. You may lightly reword the question itself into natural spoken language, but keep its specific point intact.
+- Repeat that pattern for every remaining question: brief natural acknowledgment of their last answer, then the next question in order.
+- Ask all ${_ptQuestions.length} questions above, in order, one at a time, before the call ends. Do not stop early, and do not ask anything that isn't on this list.
+- Speak naturally, the way a real person sounds on a phone call — short, conversational sentences, not a written essay or a script read verbatim.
+- Once the manager has answered your final question, wrap up the call naturally within a line or two — you don't have to explicitly announce the call is ending.
+- Never mention that you are an AI, a script, grading, evaluation criteria, or that this is a training exercise.` : `You are roleplaying, BY VOICE, as a customer of the brokerage on a call with a customer support manager. You are the CUSTOMER, not an agent and not the manager — you are the one asking questions, and the manager is the one answering them.
 
 TOPIC / SITUATION CONTEXT (use this as the subject matter for your questions): ${_currentScenario.scenario}
 
