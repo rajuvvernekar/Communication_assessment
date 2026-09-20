@@ -347,17 +347,36 @@ Let's get back on track.
   };
 
   // ── Gemini Live (Beta) real-time voice call state ───────
-  // Shared across both call-shaped modules that offer it (Paper Trade /
-  // mgr-mock-call and Red Pen / mgr-feedback) since only one such call ever
-  // runs at a time. `kind` tracks which one is active so the shared finish
-  // handler knows which scoring path and screen to use. Mirrors the pattern
-  // already proven out on the trainee side (js/app.js's Voice AI (Beta)
-  // Mock Call flow) — same GeminiLive module, same call shape.
+  // Used by Red Pen / mgr-feedback only. Paper Trade used to share this
+  // (see _pt below for why it moved to its own turn-based flow instead).
   let _mgrLive = {
-    kind: null,           // 'mock-call' | 'feedback'
+    kind: null,           // 'feedback'
     turns: [],            // [{ role: 'bot'|'trainee', text }]
     controller: null,     // { stop(), getRecording() } from GeminiLive.startCall()
     startTime: 0,
+    finishing: false,
+  };
+
+  // ── Paper Trade Voice AI (Beta) — turn-based state ──────
+  // Gemini Live's continuous duplex voice let the model drift off-script
+  // (skipping/paraphrasing the opening line too far, or breaking character
+  // to "answer for" the manager instead of just asking its next question --
+  // reported by users as "not reading the entire first question" and
+  // "acting like the manager"). Since Paper Trade's questions are a FIXED,
+  // pre-authored list (see _parsePaperTradeQuestions), there's no need for
+  // a live model in the loop at all: this plays each question with TTS one
+  // at a time, exactly as authored, then waits for the manager to click
+  // "Done Responding" before moving on -- the same one-question-at-a-time,
+  // manual-advance shape as the trainee's turn-based mock call flow.
+  let _pt = {
+    questions: [],     // ordered list: [opening, beat1..beat5]
+    background: '',
+    turnIndex: 0,
+    maxTurns: 0,
+    history: [],       // [{ customer: string, manager: string }]
+    blobPromise: null,
+    turnTimerId: null,
+    turnEnded: false,
     finishing: false,
   };
 
@@ -607,14 +626,14 @@ Let's get back on track.
     $('mgr-record-phase').classList.add('hidden');
     $('mgr-live-transcript').innerHTML = '<span class="placeholder">Your speech will appear here in real time...</span>';
 
-    // Gemini Voice AI (Beta) — real-time speech-to-speech, offered as an
+    // Voice AI Customer (Beta) — turn-based TTS call, offered as an
     // alternative to the normal recording flow for Paper Trade only (it's
-    // the module built as a live customer call, so it's the natural fit —
-    // see manager.html for the actual call screen this launches).
+    // the module built as a customer call, so it's the natural fit — see
+    // manager.html for the actual call screen this launches). Needs only
+    // browser speech synthesis, not Gemini Live (see _pt state comment).
     const liveBtn = $('btn-mgr-audio-live-voice-start');
     if (liveBtn) {
-      const showLiveBtn = _currentModule === 'mgr-mock-call'
-        && typeof GeminiLive !== 'undefined' && GeminiLive.isAvailable();
+      const showLiveBtn = _currentModule === 'mgr-mock-call' && !!window.speechSynthesis;
       liveBtn.classList.toggle('hidden', !showLiveBtn);
       liveBtn.onclick = () => _startAudioLiveVoice();
     }
@@ -775,12 +794,19 @@ Let's get back on track.
     }
   }
 
-  // ── Paper Trade — Gemini Live real-time voice call (Beta) ─
-  // Same architecture as the trainee side's Voice AI (Beta) Mock Call flow
-  // in js/app.js: one persistent WebSocket for the whole call via
-  // GeminiLive, offered as an alternative to the record-then-transcribe
-  // flow above. The scenario text already contains the customer's opening
-  // line and escalation beats, so it doubles directly as the roleplay brief.
+  // ── Paper Trade — Voice AI Customer, turn-based (Beta) ────
+  // Originally built on Gemini Live's continuous duplex voice (one
+  // persistent WebSocket, same architecture as the trainee side's Voice AI
+  // (Beta) Mock Call flow in js/app.js). In practice the live model would
+  // sometimes clip or paraphrase the opening line too heavily, or break
+  // character mid-call and start answering on the manager's behalf instead
+  // of just asking its next scripted question. Since every Paper Trade
+  // question is a FIXED, pre-authored line (see _parsePaperTradeQuestions
+  // below), there's no need for a live model in the loop: this instead
+  // plays each question with plain browser TTS, one at a time, then waits
+  // for the manager to click "Done Responding" before moving on -- the
+  // same one-question-at-a-time, manual-advance shape as the trainee's
+  // turn-based bot-driven mock call flow in js/app.js.
 
   // Pull the customer's opening line and numbered escalation beats out of
   // the scenario text (see build format in the mgr-mock-call SCENARIOS
@@ -817,6 +843,41 @@ Let's get back on track.
     }
     return result;
   }
+  function _ptMoodParams(turnIdx, maxTurns) {
+    const progress = maxTurns <= 1 ? 0.5 : turnIdx / (maxTurns - 1);
+    if (progress < 0.25) return { emoji: '😤', label: 'Frustrated', bubbleClass: 'mood-frustrated' };
+    if (progress < 0.50) return { emoji: '😠', label: 'Escalating', bubbleClass: 'mood-irate' };
+    if (progress < 0.75) return { emoji: '🔥', label: 'Demanding',  bubbleClass: 'mood-irate' };
+    return                      { emoji: '😡', label: 'Furious',    bubbleClass: 'mood-frustrated' };
+  }
+
+  // Plain browser TTS for the customer's voice -- reuses the same voice
+  // picker/rate/pitch approach as _speakEmployee (Red Pen) further below,
+  // just without a gender toggle (Paper Trade scenarios don't specify one).
+  function _speakPtCustomer(text, onEnd) {
+    if (!window.speechSynthesis) { onEnd(); return; }
+    window.speechSynthesis.cancel();
+
+    const voices = (_ttsVoices.length ? _ttsVoices : speechSynthesis.getVoices());
+    const voice = voices.find(v => /alex|daniel|david|ryan|andrew|brian|christopher|eric/i.test(v.name) && v.lang.startsWith('en'))
+               || voices.find(v => v.lang.startsWith('en'))
+               || null;
+
+    const utt = new SpeechSynthesisUtterance(text);
+    if (voice) utt.voice = voice;
+    utt.rate   = 0.93;
+    utt.pitch  = 0.94;
+    utt.volume = 1.0;
+
+    let done = false;
+    const finish = () => { if (!done) { done = true; onEnd(); } };
+    utt.onend   = finish;
+    utt.onerror = finish;
+    // Safety timeout (~450 ms per word + 5 s buffer) in case onend never fires
+    setTimeout(finish, text.split(/\s+/).length * 450 + 5000);
+    speechSynthesis.speak(utt);
+  }
+
   function _startAudioLiveVoice() {
     _clearPrepTimer();
     const meta = MODULE_META[_currentModule];
@@ -824,120 +885,183 @@ Let's get back on track.
     $('mgr-audio-live-module-title').textContent = `${meta.icon} ${meta.label} — Voice AI (Beta)`;
     $('mgr-audio-live-topic-title').textContent  = _currentScenario.title;
 
-    // The AI keeps the customer's exact opening line and escalation quotes
-    // for itself (see systemInstruction below) -- the manager should hear
-    // them live from the AI, not read them in advance. Show only the
-    // general background/situation on screen; parse once here and reuse
-    // the same result below instead of parsing twice.
+    // The customer's exact opening line and escalation quotes stay reserved
+    // for the AI to speak live -- the manager should hear them turn by
+    // turn, not read them in advance. Show only the general background on
+    // screen. Falls back to treating the whole scenario as a single
+    // question if parsing finds nothing (e.g. a future scenario that
+    // doesn't match the authored format), so this never breaks entirely.
     const _ptParsed = _parsePaperTradeQuestions(_currentScenario.scenario);
-    const _ptQuestions = _ptParsed.questions;
+    const questions = _ptParsed.questions.length ? _ptParsed.questions : [_currentScenario.scenario];
     $('mgr-audio-live-scenario-text').innerHTML = _formatScenarioHTML(
-      _ptQuestions.length ? _ptParsed.background : _currentScenario.scenario
+      _ptParsed.questions.length ? _ptParsed.background : _currentScenario.scenario
     );
     _renderEvalCriteriaPanel(_currentModule, 'mgr-audio-live-scenario-text');
     $('mgr-audio-live-thread').innerHTML = '';
+
+    _pt = { questions, background: _ptParsed.background, turnIndex: 0, maxTurns: questions.length,
+            history: [], blobPromise: null, turnTimerId: null, turnEnded: false, finishing: false };
+
+    $('mgr-audio-live-turn-bar').style.display = 'none';
+    $('mgr-audio-live-rec-area').style.display = 'none';
+    $('btn-mgr-audio-live-end').style.display = 'none';
     $('btn-mgr-audio-live-end').disabled = false;
-
-    _mgrLive = { kind: 'mock-call', turns: [], controller: null, startTime: Date.now(), finishing: false };
-
+    $('btn-mgr-audio-live-end-early').style.display = '';
+    $('btn-mgr-audio-live-end-early').disabled = false;
     const stateEl = $('mgr-audio-live-state');
-    const STATE_LABELS = {
-      connecting: '🔌 Connecting…',
-      listening:  '🎙️ Listening — go ahead and speak',
-      speaking:   '🔊 Customer is speaking…',
-      error:      '⚠️ Connection problem — try Cancel and use the normal recording flow',
-      ended:      '📴 Call ended',
-      'time-limit': '⏱️ 9-minute limit reached — wrapping up and submitting…',
-    };
+    if (stateEl) stateEl.textContent = '🔌 Getting ready…';
 
-    // With a clean parsed list, give the AI a FIXED script -- the exact
-    // number of questions this scenario was authored with, asked in
-    // order -- instead of an open brief to improvise new questions from.
-    // Falls back to the old freeform behavior only if parsing found
-    // nothing (e.g. a future scenario that doesn't match the expected
-    // format), so a live call never breaks entirely.
-    const systemInstruction = _ptQuestions.length ? `You are roleplaying, BY VOICE, as a customer of the brokerage on a call with a customer support manager. You are the CUSTOMER, not an agent and not the manager.
-
-BACKGROUND (for your own understanding only — never read this out loud, it is not something you say to the manager): ${_ptParsed.background}
-
-YOUR QUESTIONS, IN ORDER — ask these ${_ptQuestions.length} questions one at a time, in exactly this order. This is a fixed list, not a starting point to improvise from: do not skip any, do not reorder them, do not merge two together, and do not invent extra questions beyond this list.
-${_ptQuestions.map((q, i) => `${i + 1}. "${q}"`).join('\n')}
-
-HOW TO RUN THIS CALL:
-- The moment the call connects, speak QUESTION 1 immediately as your opening line — no greeting, no small talk, go straight into it. You may reword it slightly into natural spoken language, but it must keep the exact same specific complaint or point.
-- After the manager answers, don't jump straight to reading the next question. First react to what they actually just said — a short, natural, spoken acknowledgment of a few words to one short sentence (for example: "I hear what you're saying, but..." / "Okay, fair enough — let me ask you this..." / "Right, well here's the thing..." / "Alright, so what about this..." / "I understand, but I still want to know..." — vary the phrasing each time, never repeat the same one twice) that shows you actually listened to their answer, THEN ask the next question from the list. You may lightly reword the question itself into natural spoken language, but keep its specific point intact.
-- Repeat that pattern for every remaining question: brief natural acknowledgment of their last answer, then the next question in order.
-- Ask all ${_ptQuestions.length} questions above, in order, one at a time, before the call ends. Do not stop early, and do not ask anything that isn't on this list.
-- Speak naturally, the way a real person sounds on a phone call — short, conversational sentences, not a written essay or a script read verbatim.
-- Once the manager has answered your final question, wrap up the call naturally within a line or two — you don't have to explicitly announce the call is ending.
-- Never mention that you are an AI, a script, grading, evaluation criteria, or that this is a training exercise.` : `You are roleplaying, BY VOICE, as a customer of the brokerage on a call with a customer support manager. You are the CUSTOMER, not an agent and not the manager — you are the one asking questions, and the manager is the one answering them.
-
-TOPIC / SITUATION CONTEXT (use this as the subject matter for your questions): ${_currentScenario.scenario}
-
-HOW TO RUN THIS CALL:
-- You are a genuinely curious, slightly concerned customer trying to understand this topic properly — you are not filing a complaint or demanding compensation, you are asking the manager to explain things to you.
-- Ask ONE conceptual question at a time, then stop and actually listen to the manager's full answer before asking anything else.
-- Every question you ask must be a complete, natural spoken question of at least 10-15 words — never a bare one- or two-word follow-up like "why?" or "how so?". Phrase it the way a real customer would voice a genuine concern, in full sentences.
-- Your very FIRST line, the moment the call connects, must go straight at the specific issue described in the topic/situation context above — name the actual problem (what happened, what you noticed, what went wrong) in your own spoken words as your opening question, exactly like a customer who called in specifically because of that issue. Do NOT open with small talk, a generic greeting, or a vague "I have some questions" — start directly on the first issue itself.
-- For every question after the first, build it directly from what the manager just said: pick up on a specific term, number, or claim in their answer and ask them to go deeper on it, clarify it, or explain what it means for you specifically — never ask a generic or scripted question that ignores their actual answer.
-- Speak naturally, the way a real person sounds on a phone call — short, conversational sentences, not a written essay or a script read verbatim.
-- Open the call yourself with your first question as soon as the call connects — do not wait for the manager to speak first.
-- Keep the call to roughly 5-6 minutes of back-and-forth questions and answers, then let it wind down naturally once you feel your questions have genuinely been answered — you don't have to explicitly announce the call is ending.
-- Never mention that you are an AI, a script, grading, evaluation criteria, or that this is a training exercise.`;
-
-    $('btn-mgr-audio-live-end').onclick = () => _finishAudioLiveVoice();
+    $('btn-mgr-audio-live-end').onclick = () => _finishAudioLiveVoice(false);
+    $('btn-mgr-audio-live-end-early').onclick = () => _finishAudioLiveVoice(true);
     $('btn-mgr-audio-live-cancel').onclick = () => {
-      if (_mgrLive.controller) { _mgrLive.controller.stop(); _mgrLive.controller = null; }
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      clearInterval(_pt.turnTimerId);
+      if (SpeechEngine.isSupported()) { try { SpeechEngine.stopTranscription(); } catch (e) {} }
+      try { Recorder.stop(); } catch (e) {}
       _launchAudio();
     };
 
     showScreen('mgr-screen-audio-live');
 
-    _mgrLive.controller = GeminiLive.startCall({
-      systemInstruction,
-      onStateChange: (state) => {
-        if (stateEl) stateEl.textContent = STATE_LABELS[state] || state;
-        if (state === 'time-limit') {
-          toast('⏱️ Reached the 9-minute call limit — submitting what was covered so far.', '');
-          _finishAudioLiveVoice();
-        }
-      },
-      onTurn: ({ role, text }) => {
-        _mgrLive.turns.push({ role, text });
-        const bubble = document.createElement('div');
-        bubble.className = `mc-bubble ${role === 'bot' ? 'bot' : 'trainee'}`;
-        bubble.textContent = text;
-        $('mgr-audio-live-thread').appendChild(bubble);
-        $('mgr-audio-live-thread').scrollTop = $('mgr-audio-live-thread').scrollHeight;
-      },
-      onError: (err) => {
-        console.error('GeminiLive error (Paper Trade):', err);
-        toast('⚠ Voice AI error: ' + (err.message || err) + ' — you can cancel and use the normal recording flow instead.', 'error');
-      },
+    Recorder.requestMic().then(() => {
+      _pt.blobPromise = Recorder.start();
+      Recorder.startWaveform($('mgr-audio-live-waveform'));
+      _runPtCustomerTurn(0);
+    }).catch((e) => {
+      toast('Microphone access denied. Please allow mic access and try again.', 'error');
+      _launchAudio();
     });
   }
 
-  async function _finishAudioLiveVoice() {
-    if (_mgrLive.finishing) return;
-    if (!_mgrLive.controller && _mgrLive.turns.length === 0) return;
-    _mgrLive.finishing = true;
-    $('btn-mgr-audio-live-end').disabled = true;
+  function _runPtCustomerTurn(idx) {
+    _pt.turnIndex = idx;
+    const isLast = idx === _pt.maxTurns - 1;
+    const line = _pt.questions[idx];
+    const mood = _ptMoodParams(idx, _pt.maxTurns);
 
-    const controller = _mgrLive.controller;
-    _mgrLive.controller = null;
-    let recordingBlob = null;
-    if (controller) {
-      controller.stop();
-      try { recordingBlob = await controller.getRecording(); } catch (e) { console.warn('Call recording could not be finalized:', e.message || e); }
+    $('mgr-audio-live-turn-bar').style.display = '';
+    const moodEl = $('mgr-audio-live-mood');
+    if (moodEl) {
+      moodEl.className = `mc-mood-bar ${mood.bubbleClass}`;
+      moodEl.innerHTML = `<span>${mood.emoji}</span> Customer is <strong>${mood.label}</strong>`;
     }
-    const durationSecs = Math.max(1, Math.floor((Date.now() - _mgrLive.startTime) / 1000));
 
-    const fullTranscript = _mgrLive.turns.map(t => `${t.role === 'bot' ? 'Customer' : 'You'}: ${t.text}`).join('\n\n');
-    const managerOnly    = _mgrLive.turns.filter(t => t.role === 'trainee').map(t => t.text).join(' ').trim();
+    _pt.history.push({ customer: line, manager: '' });
+
+    const bubble = document.createElement('div');
+    bubble.className = `mc-bubble bot ${mood.bubbleClass}`;
+    bubble.innerHTML = `<span class="mc-bubble-mood">${mood.emoji}</span>${line}`;
+    $('mgr-audio-live-thread').appendChild(bubble);
+    $('mgr-audio-live-thread').scrollTop = $('mgr-audio-live-thread').scrollHeight;
+
+    $('mgr-audio-live-rec-area').style.display = 'none';
+    const stateEl = $('mgr-audio-live-state');
+    if (stateEl) stateEl.textContent = isLast
+      ? `🔊 Customer is speaking… (Question ${idx + 1} of ${_pt.maxTurns} — Final)`
+      : `🔊 Customer is speaking… (Question ${idx + 1} of ${_pt.maxTurns})`;
+
+    _speakPtCustomer(line, () => {
+      if (stateEl) stateEl.textContent = '🎙️ Listening — go ahead and respond';
+      _startPtManagerTurn(isLast);
+    });
+  }
+
+  function _startPtManagerTurn(isLast) {
+    _pt.turnEnded = false;
+    $('mgr-audio-live-rec-area').style.display = '';
+    $('mgr-audio-live-live-transcript').textContent = 'Listening... speak your response.';
+    const labelEl = $('mgr-audio-live-turn-label');
+    if (labelEl) labelEl.textContent = isLast
+      ? `🎤 Your turn — Question ${_pt.turnIndex + 1} of ${_pt.maxTurns} (Final)`
+      : `🎤 Your turn — Question ${_pt.turnIndex + 1} of ${_pt.maxTurns}`;
+
+    if (SpeechEngine.isSupported()) {
+      SpeechEngine.startTranscription((text) => {
+        const el = $('mgr-audio-live-live-transcript');
+        if (el) el.textContent = text || 'Listening...';
+      });
+    }
+
+    // 2-minute per-question countdown — same limit as the normal recording flow
+    const TURN_LIMIT = 120;
+    let remaining = TURN_LIMIT;
+    const timeEl = $('mgr-audio-live-turn-time');
+    if (timeEl) timeEl.textContent = fmtTime(remaining);
+    clearInterval(_pt.turnTimerId);
+    _pt.turnTimerId = setInterval(() => {
+      remaining--;
+      if (timeEl) timeEl.textContent = fmtTime(remaining);
+      if (remaining <= 0) _endPtManagerTurn();
+    }, 1000);
+
+    $('btn-mgr-audio-live-done-turn').onclick = () => _endPtManagerTurn();
+  }
+
+  function _endPtManagerTurn() {
+    if (_pt.turnEnded) return;
+    _pt.turnEnded = true;
+    clearInterval(_pt.turnTimerId);
+
+    const partial = SpeechEngine.isSupported() ? SpeechEngine.stopTranscription() : '';
+    if (_pt.history.length > 0) _pt.history[_pt.history.length - 1].manager = partial;
+
+    $('mgr-audio-live-rec-area').style.display = 'none';
+    const timeEl = $('mgr-audio-live-turn-time');
+    if (timeEl) timeEl.textContent = '';
+
+    const bubble = document.createElement('div');
+    bubble.className = 'mc-bubble trainee';
+    bubble.textContent = partial || '(no transcript captured)';
+    $('mgr-audio-live-thread').appendChild(bubble);
+    $('mgr-audio-live-thread').scrollTop = $('mgr-audio-live-thread').scrollHeight;
+
+    if (_pt.turnIndex + 1 < _pt.maxTurns) {
+      _runPtCustomerTurn(_pt.turnIndex + 1);
+    } else {
+      const stateEl = $('mgr-audio-live-state');
+      if (stateEl) stateEl.textContent = '📴 Call ended — ready to submit';
+      $('btn-mgr-audio-live-end').style.display = '';
+      $('btn-mgr-audio-live-end-early').style.display = 'none';
+    }
+  }
+
+  async function _finishAudioLiveVoice(isEarly) {
+    if (_pt.finishing) return;
+    if (_pt.history.length === 0) return;
+    _pt.finishing = true;
+    $('btn-mgr-audio-live-end').disabled = true;
+    $('btn-mgr-audio-live-end-early').disabled = true;
+
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    clearInterval(_pt.turnTimerId);
+
+    // If a manager turn was in progress when they hit "End Call Early",
+    // capture whatever was said so far before stopping.
+    if (isEarly && !_pt.turnEnded) {
+      _pt.turnEnded = true;
+      const partial = SpeechEngine.isSupported() ? SpeechEngine.stopTranscription() : '';
+      if (_pt.history.length > 0) _pt.history[_pt.history.length - 1].manager = partial;
+    } else if (SpeechEngine.isSupported()) {
+      try { SpeechEngine.stopTranscription(); } catch (e) {}
+    }
+
+    Recorder.stop();
+    let recordingBlob = null;
+    if (_pt.blobPromise) {
+      try { recordingBlob = await _pt.blobPromise; } catch (e) { console.warn('Paper Trade call blob:', e); }
+      _pt.blobPromise = null;
+    }
+
+    const durationSecs = _pt.history.length * 60;
+
+    const fullTranscript = _pt.history.map(ex =>
+      `Customer: ${ex.customer}\nYou: ${ex.manager || '(no response)'}`
+    ).join('\n\n');
+    const managerOnly = _pt.history.map(ex => ex.manager || '').join(' ').trim();
     const wordCount = managerOnly.split(/\s+/).filter(Boolean).length;
 
     let aiScores = { overall: null, _method: 'mgr-live-js', _module: _currentModule, _scenarioId: _currentScenario.id };
-    if (wordCount >= 25 && typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
+    if (wordCount >= 15 && typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
       try {
         const result = await ClaudeEvaluator.evaluatePaperTrade(fullTranscript, _currentScenario.scenario || '');
         aiScores = {
@@ -954,7 +1078,8 @@ HOW TO RUN THIS CALL:
         console.warn('Paper Trade live-call content eval failed:', e.message);
       }
     }
-    aiScores._voiceEngine = 'gemini-live-beta';
+    aiScores._voiceEngine = 'turn-based-tts-beta';
+    aiScores._turns = _pt.history.length;
 
     try {
       await Auth.ensureTraineeRecord();
@@ -977,7 +1102,7 @@ HOW TO RUN THIS CALL:
     } catch (e) {
       toast('Error saving session: ' + e.message, 'error');
       console.error('_finishAudioLiveVoice error:', e);
-      _mgrLive.finishing = false;
+      _pt.finishing = false;
     }
   }
 
