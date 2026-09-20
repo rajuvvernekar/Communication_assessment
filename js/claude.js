@@ -797,14 +797,16 @@ SCORING STANDARDS:
 PARAMETERS TO SCORE (0-100 each):
 ${paramLines}
 
-Return ONLY a JSON object: {${paramKeysJson},"reasons":{${reasonKeysJson}}}`;
+Return ONLY a JSON object: {${paramKeysJson},"reasons":{${reasonKeysJson}}}. Keep each reason to ONE short sentence (under 20 words).`;
+
+    const eqMaxTokens = Math.min(1600, 400 + params.length * 220);
 
     const resp = await fetch(getProxyUrl(), {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({
         model:      MODEL,
-        max_tokens: 600,
+        max_tokens: eqMaxTokens,
         system:     systemPrompt,
         messages:   [{ role: 'user', content: `MANAGER'S CONVERSATION TRANSCRIPT:\n\n${transcript}` }],
       }),
@@ -818,9 +820,14 @@ Return ONLY a JSON object: {${paramKeysJson},"reasons":{${reasonKeysJson}}}`;
     const data  = await resp.json();
     const text  = data.content[0].text.trim();
     const match = text.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error('No JSON in response');
+    if (!match) throw new Error(data.stop_reason === 'max_tokens' ? 'Response truncated before JSON completed (max_tokens too low)' : 'No JSON in response');
 
-    const parsed = JSON.parse(match[0]);
+    let parsed;
+    try {
+      parsed = JSON.parse(match[0]);
+    } catch (parseErr) {
+      throw new Error(data.stop_reason === 'max_tokens' ? 'Response truncated before JSON completed (max_tokens too low)' : `Malformed JSON from model: ${parseErr.message}`);
+    }
     const scores = {};
     let earnedMarks = 0, totalWeight = 0;
     params.forEach(p => {
@@ -880,14 +887,16 @@ SCORING STANDARDS (this is the most important part):
 PARAMETERS TO SCORE (0-100 each):
 ${paramLines}
 
-Return ONLY a JSON object: {${paramKeysJson},"reasons":{${reasonKeysJson}}}`;
+Return ONLY a JSON object: {${paramKeysJson},"reasons":{${reasonKeysJson}}}. Keep each reason to ONE short sentence (under 20 words).`;
+
+      const evalMaxTokens = Math.min(1600, 400 + criteria.parameters.length * 220);
 
       const resp = await fetch(getProxyUrl(), {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
           model:      MODEL,
-          max_tokens: 550,
+          max_tokens: evalMaxTokens,
           system:     systemPrompt,
           messages:   [{ role: 'user', content: `MANAGER'S RESPONSE:\n\n${responseText}` }],
         }),
@@ -901,8 +910,13 @@ Return ONLY a JSON object: {${paramKeysJson},"reasons":{${reasonKeysJson}}}`;
       const data  = await resp.json();
       const text  = data.content[0].text.trim();
       const match = text.match(/\{[\s\S]*\}/);
-      if (!match) throw new Error('No JSON in response');
-      const parsed = JSON.parse(match[0]);
+      if (!match) throw new Error(data.stop_reason === 'max_tokens' ? 'Response truncated before JSON completed (max_tokens too low)' : 'No JSON in response');
+      let parsed;
+      try {
+        parsed = JSON.parse(match[0]);
+      } catch (parseErr) {
+        throw new Error(data.stop_reason === 'max_tokens' ? 'Response truncated before JSON completed (max_tokens too low)' : `Malformed JSON from model: ${parseErr.message}`);
+      }
 
       const scores = {};
       let earnedMarks = 0, totalWeight = 0;
@@ -1134,14 +1148,16 @@ SCORING STANDARDS:
 PARAMETERS TO SCORE (0-100 each):
 ${paramLines}
 
-Return ONLY a JSON object: {${paramKeysJson},"reasons":{${reasonKeysJson}}}`;
+Return ONLY a JSON object: {${paramKeysJson},"reasons":{${reasonKeysJson}}}. Keep each reason to ONE short sentence (under 20 words).`;
+
+    const ptMaxTokens = Math.min(1600, 400 + params.length * 220);
 
     const resp = await fetch(getProxyUrl(), {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({
         model:      MODEL,
-        max_tokens: 550,
+        max_tokens: ptMaxTokens,
         system:     systemPrompt,
         messages:   [{ role: 'user', content: `CALL TRANSCRIPT:\n\n${transcript}` }],
       }),
@@ -1155,8 +1171,14 @@ Return ONLY a JSON object: {${paramKeysJson},"reasons":{${reasonKeysJson}}}`;
     const data  = await resp.json();
     const text  = data.content[0].text.trim();
     const match = text.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error('No JSON in response');
-    const parsed = JSON.parse(match[0]);
+    if (!match) throw new Error(data.stop_reason === 'max_tokens' ? 'Response truncated before JSON completed (max_tokens too low)' : 'No JSON in response');
+
+    let parsed;
+    try {
+      parsed = JSON.parse(match[0]);
+    } catch (parseErr) {
+      throw new Error(data.stop_reason === 'max_tokens' ? 'Response truncated before JSON completed (max_tokens too low)' : `Malformed JSON from model: ${parseErr.message}`);
+    }
 
     const scores = {};
     let earnedMarks = 0, totalWeight = 0;
@@ -1207,14 +1229,16 @@ SCORING STANDARDS:
 PARAMETERS TO SCORE (0-100 each):
 ${paramLines}
 
-Return ONLY a JSON object: {${paramKeysJson},"reasons":{${reasonKeysJson}}}`;
+Return ONLY a JSON object: {${paramKeysJson},"reasons":{${reasonKeysJson}}}. Keep each reason to ONE short sentence (under 20 words).`;
+
+    const fbMaxTokens = Math.min(1600, 400 + params.length * 220);
 
     const resp = await fetch(getProxyUrl(), {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({
         model:      MODEL,
-        max_tokens: 600,
+        max_tokens: fbMaxTokens,
         system:     systemPrompt,
         messages:   [{ role: 'user', content: `MANAGER'S CONVERSATION TRANSCRIPT:\n\n${transcript}` }],
       }),
@@ -1228,9 +1252,14 @@ Return ONLY a JSON object: {${paramKeysJson},"reasons":{${reasonKeysJson}}}`;
     const data  = await resp.json();
     const text  = data.content[0].text.trim();
     const match = text.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error('No JSON in response');
+    if (!match) throw new Error(data.stop_reason === 'max_tokens' ? 'Response truncated before JSON completed (max_tokens too low)' : 'No JSON in response');
 
-    const parsed = JSON.parse(match[0]);
+    let parsed;
+    try {
+      parsed = JSON.parse(match[0]);
+    } catch (parseErr) {
+      throw new Error(data.stop_reason === 'max_tokens' ? 'Response truncated before JSON completed (max_tokens too low)' : `Malformed JSON from model: ${parseErr.message}`);
+    }
     const scores = {};
     let earnedMarks = 0, totalWeight = 0;
     params.forEach(p => {
