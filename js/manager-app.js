@@ -480,6 +480,34 @@ Let's get back on track.
   // weights — no drift between what's shown and what's actually scored.
   // No-ops silently for modules without an entry (e.g. Listening & Tone,
   // Management Skills), which aren't part of this weighted rubric.
+  // Scenario text is written as prose with any numbered call-outs (escalation
+  // beats, pushback points, etc.) inline, e.g. "...address them: (1) "..."
+  // (2) "..." (3) "...". Rendered as plain text/pre-line this reads as one
+  // unbroken wall of text. This turns any run of 2+ "(N) ..." markers within
+  // a paragraph into an actual numbered list, and leaves everything else as
+  // normal paragraphs -- no change needed to the scenario content itself.
+  function _formatScenarioHTML(text) {
+    if (!text) return '';
+    const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const paragraphs = text.split(/\n{2,}/);
+    return paragraphs.map(para => {
+      const itemRe = /\((\d+)\)\s*/g;
+      const matches = [...para.matchAll(itemRe)];
+      if (matches.length >= 2) {
+        const intro = para.slice(0, matches[0].index).trim();
+        const items = matches.map((m, i) => {
+          const start = m.index + m[0].length;
+          const end   = (i + 1 < matches.length) ? matches[i + 1].index : para.length;
+          return para.slice(start, end).trim();
+        }).filter(Boolean);
+        const introHtml = intro ? `<p style="margin:0 0 0.5rem">${esc(intro)}</p>` : '';
+        const listHtml  = `<ol style="margin:0 0 0.5rem;padding-left:1.25rem">${items.map(it => `<li style="margin-bottom:0.4rem">${esc(it)}</li>`).join('')}</ol>`;
+        return introHtml + listHtml;
+      }
+      return `<p style="margin:0 0 0.5rem">${esc(para)}</p>`;
+    }).join('');
+  }
+
   function _renderEvalCriteriaPanel(moduleKey, afterElId) {
     const anchor = $(afterElId);
     if (!anchor) return;
@@ -639,7 +667,7 @@ Let's get back on track.
     $('mgr-audio-module-title').textContent = `${meta.icon} ${meta.label}`;
     $('mgr-audio-scenario-label').textContent = 'Read the scenario carefully';
     $('mgr-audio-topic-title').textContent  = _currentScenario.title;
-    $('mgr-audio-scenario-text').textContent = _currentScenario.scenario;
+    $('mgr-audio-scenario-text').innerHTML = _formatScenarioHTML(_currentScenario.scenario);
     _renderEvalCriteriaPanel(_currentModule, 'mgr-audio-scenario-text');
 
     $('mgr-prep-phase').classList.remove('hidden');
@@ -663,7 +691,7 @@ Let's get back on track.
   }
 
   function _startPrepTimer() {
-    let remaining = 60;
+    let remaining = 120; // 2 minutes to prepare (Paper Trade -- the only module using this timer)
     $('mgr-prep-count').textContent = remaining;
     _clearPrepTimer();
     _prepTimer = setInterval(() => {
@@ -815,7 +843,7 @@ Let's get back on track.
 
     $('mgr-audio-live-module-title').textContent = `${meta.icon} ${meta.label} — Voice AI (Beta)`;
     $('mgr-audio-live-topic-title').textContent  = _currentScenario.title;
-    $('mgr-audio-live-scenario-text').textContent = _currentScenario.scenario;
+    $('mgr-audio-live-scenario-text').innerHTML = _formatScenarioHTML(_currentScenario.scenario);
     _renderEvalCriteriaPanel(_currentModule, 'mgr-audio-live-scenario-text');
     $('mgr-audio-live-thread').innerHTML = '';
     $('btn-mgr-audio-live-end').disabled = false;
@@ -840,7 +868,7 @@ HOW TO RUN THIS CALL:
 - You are a genuinely curious, slightly concerned customer trying to understand this topic properly — you are not filing a complaint or demanding compensation, you are asking the manager to explain things to you.
 - Ask ONE conceptual question at a time, then stop and actually listen to the manager's full answer before asking anything else.
 - Every question you ask must be a complete, natural spoken question of at least 10-15 words — never a bare one- or two-word follow-up like "why?" or "how so?". Phrase it the way a real customer would voice a genuine concern, in full sentences.
-- Base your FIRST question directly on the topic/situation context above, adapted into natural spoken language.
+- Your very FIRST line, the moment the call connects, must go straight at the specific issue described in the topic/situation context above — name the actual problem (what happened, what you noticed, what went wrong) in your own spoken words as your opening question, exactly like a customer who called in specifically because of that issue. Do NOT open with small talk, a generic greeting, or a vague "I have some questions" — start directly on the first issue itself.
 - For every question after the first, build it directly from what the manager just said: pick up on a specific term, number, or claim in their answer and ask them to go deeper on it, clarify it, or explain what it means for you specifically — never ask a generic or scripted question that ignores their actual answer.
 - Speak naturally, the way a real person sounds on a phone call — short, conversational sentences, not a written essay or a script read verbatim.
 - Open the call yourself with your first question as soon as the call connects — do not wait for the manager to speak first.
@@ -952,7 +980,7 @@ HOW TO RUN THIS CALL:
 
     // Populate Section A UI
     $('sr-topic-title-a').textContent  = _currentScenario.title;
-    $('sr-scenario-text-a').textContent = _currentScenario.scenario;
+    $('sr-scenario-text-a').innerHTML = _formatScenarioHTML(_currentScenario.scenario);
     $('sr-a-prompt').textContent        = _currentScenario.sectionAPrompt || 'Write your exact verbal response';
     _renderEvalCriteriaPanel('mgr-situation-room', 'sr-scenario-text-a');
 
@@ -1173,7 +1201,7 @@ HOW TO RUN THIS CALL:
 
     // Populate scenario panel
     $('mgr-fb-sc-title').textContent = _currentScenario.title;
-    $('mgr-fb-sc-text').textContent  = _currentScenario.scenario;
+    $('mgr-fb-sc-text').innerHTML  = _formatScenarioHTML(_currentScenario.scenario);
     _renderEvalCriteriaPanel('mgr-feedback', 'mgr-fb-sc-text');
 
     // Reset UI
@@ -1223,7 +1251,7 @@ HOW TO RUN THIS CALL:
 
     $('mgr-fb-live-emp-name').textContent = emp.name;
     $('mgr-fb-live-sc-title').textContent = _currentScenario.title;
-    $('mgr-fb-live-sc-text').textContent  = _currentScenario.scenario;
+    $('mgr-fb-live-sc-text').innerHTML  = _formatScenarioHTML(_currentScenario.scenario);
     _renderEvalCriteriaPanel('mgr-feedback', 'mgr-fb-live-sc-text');
     $('mgr-fb-live-thread').innerHTML = '';
     $('btn-mgr-fb-live-end').disabled = false;
@@ -1609,7 +1637,7 @@ HOW TO RUN THIS CONVERSATION:
     $('mgr-written-module-title').textContent = `${meta.icon} ${meta.label}`;
     $('mgr-written-scenario-label').textContent = 'Read the task carefully, then write your response below';
     $('mgr-written-topic-title').textContent  = _currentScenario.title;
-    $('mgr-written-scenario-text').textContent = _currentScenario.scenario;
+    $('mgr-written-scenario-text').innerHTML = _formatScenarioHTML(_currentScenario.scenario);
     _renderEvalCriteriaPanel(_currentModule, 'mgr-written-scenario-text');
 
     const minWords = meta.minWords || 150;
