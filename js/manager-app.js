@@ -1755,23 +1755,32 @@ HOW TO RUN THIS CALL:
     return                       { emoji: '🙂', label: 'Receptive',  bubbleClass: 'mood-calm' };
   }
 
-  // Changed 2026-09-20: always speaks in a female voice regardless of the
-  // `gender` argument -- female voice only, for every assessment (this is
-  // only ever reached as a last-resort fallback when the ElevenLabs /tts
-  // call itself fails; the primary voice is always Bella via FB_VOICE_IDS).
+  // Reverted 2026-09-20 (Red Pen only -- Paper Trade's and the trainee's own
+  // browser-voice fallbacks are untouched and stay female-only): Red Pen's
+  // personas are fixed, named characters (Ananya/Meera/Priya = female,
+  // Rahul/Vikram/Arjun = male) and must never speak in the wrong gender's
+  // voice, so this picks a voice matching the actual `gender` argument
+  // again instead of forcing female for every persona. This is only ever
+  // reached as a last-resort fallback when the ElevenLabs /tts call itself
+  // fails; the primary voice is always FB_VOICE_IDS[gender] below.
   function _speakEmployee(text, gender, onEnd) {
     if (!window.speechSynthesis) { onEnd(); return; }
     window.speechSynthesis.cancel();
 
     const voices = (_ttsVoices.length ? _ttsVoices : speechSynthesis.getVoices());
-    let voice = voices.find(v => /samantha|karen|moira|zira|emma|jenny|aria|victoria/i.test(v.name) && v.lang.startsWith('en'))
-              || voices.find(v => v.lang.startsWith('en') && /female/i.test(v.name));
+    let voice;
+    if (gender === 'male') {
+      voice = voices.find(v => /david|george|daniel|fred|alex|mark|james|male/i.test(v.name) && v.lang.startsWith('en'));
+    } else {
+      voice = voices.find(v => /samantha|karen|moira|zira|emma|jenny|aria|victoria/i.test(v.name) && v.lang.startsWith('en'))
+            || voices.find(v => v.lang.startsWith('en') && /female/i.test(v.name));
+    }
     if (!voice) voice = voices.find(v => v.lang.startsWith('en')) || null;
 
     const utt = new SpeechSynthesisUtterance(text);
     if (voice) utt.voice = voice;
     utt.rate   = 0.93;
-    utt.pitch  = 1.15;
+    utt.pitch  = gender === 'male' ? 0.9 : 1.15;
     utt.volume = 1.0;
 
     let done = false;
@@ -1788,11 +1797,13 @@ HOW TO RUN THIS CALL:
   // feedback that the previous default sounded robotic, so both genders are
   // passed explicitly here rather than relying on that default, keeping
   // this correct even if the Worker's own default changes again later.
-  // Changed 2026-09-20: female voice only, for every assessment -- the male
-  // ElevenLabs voice (Antoni) is no longer used anywhere, so both keys
-  // resolve to the same female voice regardless of the persona's gender.
+  // Reverted 2026-09-20 (Red Pen only): restored to gender-correct voices.
+  // Rahul/Vikram/Arjun (male personas) must always use the male voice and
+  // Ananya/Meera/Priya (female personas) must always use the female voice --
+  // this pairing must never interchange. Paper Trade's and the trainee's
+  // own female-only voice fixes are untouched.
   const FB_VOICE_IDS = {
-    male:   'EXAVITQu4vr4xnSDxMaL', // Bella -- was Antoni; forced to female per 2026-09-20 request
+    male:   'ErXwobaYiN019PkySvjV', // Antoni -- usable on Free plan
     female: 'EXAVITQu4vr4xnSDxMaL', // Bella -- usable on Free plan; Rachel is API-gated to paid plans
   };
 

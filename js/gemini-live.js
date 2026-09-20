@@ -122,11 +122,20 @@ const GeminiLive = (() => {
 
   // ---- Ephemeral token ------------------------------------------------------
 
-  async function _getEphemeralToken() {
+  async function _getEphemeralToken(systemInstruction) {
     const resp = await fetch(_tokenUrl(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: MODEL }),
+      // `system` added 2026-09-20: the Worker bakes this into the ephemeral
+      // token's own bidiGenerateContentSetup. Previously this call sent only
+      // { model }, so every Live call's token carried NO systemInstruction --
+      // the persona/scenario brief this module's own `connect()` sends later
+      // in the WebSocket `setup` message was silently not honoured, because
+      // the "Constrained" token variant scopes the session to whatever was
+      // present in the token at mint time. That's why Red Pen's Voice AI
+      // (Beta) was falling back to a generic, unscripted conversation
+      // instead of roleplaying the actual employee persona.
+      body: JSON.stringify({ model: MODEL, system: systemInstruction }),
     });
     const raw = await resp.text();
     let data = {};
@@ -397,7 +406,7 @@ const GeminiLive = (() => {
 
       try {
         setState('connecting');
-        const token = await _getEphemeralToken();
+        const token = await _getEphemeralToken(systemInstruction);
         if (stopped) return;
 
         // NOTE (2026-09-19): the plain "BidiGenerateContent" method rejects
@@ -568,7 +577,13 @@ ABSOLUTE RULES:
         system,
         contents,
         temperature:     0.5,
-        maxOutputTokens: 200,
+        // Raised from 200 -- was leaving almost no budget for the actual
+        // reply once the model's internal "thinking" pass ate into it (see
+        // worker.js's /gemini-generate handler, which now also disables
+        // thinking outright via thinkingConfig.thinkingBudget: 0). Keeping
+        // this higher too is just a safety margin in case that budget is
+        // ever re-enabled server-side.
+        maxOutputTokens: 350,
       }),
     });
 
@@ -577,9 +592,17 @@ ABSOLUTE RULES:
       throw new Error(err.error?.message || `Gemini API error ${resp.status}`);
     }
     const data = await resp.json();
-    const text = data && data.candidates && data.candidates[0] && data.candidates[0].content
-      && data.candidates[0].content.parts && data.candidates[0].content.parts[0]
-      && data.candidates[0].content.parts[0].text;
+    // Concatenate every non-"thought" text part rather than trusting
+    // parts[0] alone -- when a model does emit thinking output alongside
+    // its answer, the answer isn't always the first part, and grabbing only
+    // parts[0] is what produced garbled, mid-sentence fragments (e.g.
+    // ", double down on being 'the") that were actually a truncated thought
+    // segment, not the employee's real line.
+    const parts = data && data.candidates && data.candidates[0] && data.candidates[0].content
+      && data.candidates[0].content.parts;
+    const text = Array.isArray(parts)
+      ? parts.filter(p => p && p.text && !p.thought).map(p => p.text).join(' ').trim()
+      : '';
     if (!text) throw new Error('Gemini returned no text');
     return text.trim();
   }

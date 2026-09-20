@@ -126,6 +126,9 @@ export default {
         );
       }
 
+      let body = {};
+      try { body = await request.json(); } catch (_) { /* no body sent -- systemInstruction stays unset */ }
+
       const now = Date.now();
       const expireTime = new Date(now + 30 * 60 * 1000).toISOString();            // token itself valid 30 min
       const newSessionExpireTime = new Date(now + 2 * 60 * 1000).toISOString();   // must open the session within 2 min
@@ -153,6 +156,18 @@ export default {
           bidiGenerateContentSetup: {
             model: GEMINI_LIVE_MODEL,
             generationConfig: { responseModalities: ['AUDIO'] },
+            // Added 2026-09-20: the client (gemini-live.js) now sends the
+            // roleplay persona/scenario brief as `system` in the token
+            // request body so it can be baked into the token itself. This
+            // matters because ephemeral tokens minted via the "Constrained"
+            // BidiGenerateContent variant scope the session to the config
+            // present in the token at mint time -- a systemInstruction the
+            // client only sends later, in its own WebSocket `setup` message,
+            // is not honoured by that variant (confirmed: Red Pen's Voice AI
+            // (Beta) was falling back to a generic, un-scripted persona
+            // because the token carried no systemInstruction at all, even
+            // though the client's ws setup message included one).
+            systemInstruction: body.system ? { parts: [{ text: body.system }] } : undefined,
           },
         }),
       });
@@ -195,7 +210,19 @@ export default {
             systemInstruction: payload.system ? { parts: [{ text: payload.system }] } : undefined,
             generationConfig: {
               temperature:     payload.temperature != null ? payload.temperature : 0.5,
-              maxOutputTokens: payload.maxOutputTokens || 200,
+              maxOutputTokens: payload.maxOutputTokens || 300,
+              // Added 2026-09-20: this route's only caller (Red Pen's
+              // per-turn employee reply, see js/gemini-live.js's
+              // callEmployeeTurn) was coming back with short, garbled,
+              // mid-sentence fragments (e.g. ", double down on being 'the").
+              // Root cause: newer Gemini models spend part of
+              // maxOutputTokens on an internal "thinking" pass before
+              // writing the visible reply, so a small token budget (200)
+              // was being eaten by that invisible reasoning, leaving almost
+              // nothing left for the actual dialogue line. Turning thinking
+              // off entirely is correct here -- this call only ever needs a
+              // short, in-character line, not multi-step reasoning.
+              thinkingConfig:  { thinkingBudget: 0 },
             },
           }),
         }
