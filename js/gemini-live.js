@@ -516,7 +516,7 @@ const GeminiLive = (() => {
   //  GEMINI_API_KEY never reaches the browser — same reasoning as the
   //  /live-token route used by startCall() above.
   // ==========================================================================
-  const TEXT_MODEL = 'models/gemini-2.5-flash';
+  const TEXT_MODEL = 'models/gemini-3.6-flash'; // was gemini-2.5-flash -- Google retired it for new usage (2026-09-20), see worker.js's GEMINI_TEXT_MODEL for the matching server-side default
 
   function _generateUrl() {
     const base = (typeof CONFIG !== 'undefined' && CONFIG.CLAUDE_PROXY_URL) || '';
