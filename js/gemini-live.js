@@ -422,6 +422,18 @@ const GeminiLive = (() => {
               generationConfig: {
                 responseModalities: ['AUDIO'],
                 speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: VOICE_NAME } } },
+                // Lowered from the (implicit ~1.0) default -- reported failure
+                // mode was the model ignoring a caller's fixed, verbatim
+                // script/systemInstruction and inventing its own unrelated
+                // scenario or breaking role entirely. A lower temperature
+                // trades away some of the phrasing variety the prompts ask
+                // for (e.g. varied acknowledgment lines) for closer
+                // adherence to the given script -- the right direction for
+                // every caller of this shared module (Paper Trade, Red Pen,
+                // and the trainee's Voice AI Mock Call all give it a fixed
+                // brief it's meant to follow, not to improvise beyond).
+                // Not a guaranteed fix: a live model can still drift.
+                temperature: 0.4,
               },
               systemInstruction: { parts: [{ text: systemInstruction }] },
               realtimeInputConfig: { automaticActivityDetection: { disabled: false } },
