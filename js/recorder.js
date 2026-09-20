@@ -12,6 +12,21 @@ const Recorder = (() => {
   let _seconds = 0;
   let _countUp = true;
 
+  // ---- Recording mix bus (added 2026-09-20) ----
+  // MediaRecorder was previously created straight off the raw mic stream, so
+  // any AI/customer voice played back through an <audio> element (ElevenLabs
+  // TTS in app.js's speakAiCustomer/playBotAudio and manager-app.js's Paper
+  // Trade / Red Pen speak functions) was audible to the trainee/manager but
+  // never actually captured in the saved recording -- only their own mic
+  // input was. Fix: route the mic through a small Web Audio graph into a
+  // MediaStreamDestination, and let callers mix any <audio> element's output
+  // into that same destination via addAudioSource() right after creating it.
+  // MediaRecorder then records the mixed destination stream instead of the
+  // raw mic stream, so both voices end up in the saved recording.
+  let _mixCtx = null;
+  let _mixDest = null;
+  let _micSourceNode = null;
+
   async function requestMic() {
     try {
       _stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
@@ -19,6 +34,48 @@ const Recorder = (() => {
     } catch (err) {
       console.error('Mic access denied:', err);
       return false;
+    }
+  }
+
+  function _ensureMixGraph() {
+    try {
+      if (!_mixCtx) {
+        _mixCtx  = new (window.AudioContext || window.webkitAudioContext)();
+        _mixDest = _mixCtx.createMediaStreamDestination();
+      }
+      if (_stream && !_micSourceNode) {
+        _micSourceNode = _mixCtx.createMediaStreamSource(_stream);
+        _micSourceNode.connect(_mixDest);
+      }
+    } catch (e) {
+      // If the mix graph can't be built (e.g. unsupported browser), fall
+      // back silently to raw-mic-only recording rather than breaking start().
+      console.warn('Recorder: could not build mix graph, recording mic only:', e.message);
+      _mixCtx = null;
+      _mixDest = null;
+    }
+  }
+
+  // Mixes an <audio> element's playback into the in-progress recording,
+  // while leaving it audible through the speakers as normal. Call this once,
+  // right after creating each new Audio(...)/HTMLAudioElement used to play
+  // an AI/customer voice, so it's captured alongside the mic. Safe to call
+  // even if no recording is active yet -- it just won't have an effect on
+  // this element until the mix graph exists (built lazily here too).
+  function addAudioSource(audioEl) {
+    if (!audioEl || audioEl._commAssessMixed) return;
+    try {
+      _ensureMixGraph();
+      if (!_mixCtx || !_mixDest) return;
+      const node = _mixCtx.createMediaElementSource(audioEl);
+      node.connect(_mixDest);
+      node.connect(_mixCtx.destination); // keep it audible, not just recorded
+      audioEl._commAssessMixed = true;
+    } catch (e) {
+      // createMediaElementSource throws if called twice on the same element,
+      // or if the element's source violates CORS -- either way, recording
+      // just misses this one clip rather than the whole session failing.
+      console.warn('Recorder.addAudioSource failed (this clip will be missing from the recording):', e.message);
     }
   }
 
@@ -30,8 +87,11 @@ const Recorder = (() => {
           if (!ok) { reject(new Error('Microphone access denied')); return; }
         }
 
+        _ensureMixGraph();
+        const recordStream = _mixDest ? _mixDest.stream : _stream;
+
         _chunks = [];
-        _mediaRecorder = new MediaRecorder(_stream, { mimeType: getSupportedMimeType() });
+        _mediaRecorder = new MediaRecorder(recordStream, { mimeType: getSupportedMimeType() });
         _mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) _chunks.push(e.data); };
         _mediaRecorder.onstop = () => {
           const blob = new Blob(_chunks, { type: getSupportedMimeType() });
@@ -168,7 +228,13 @@ const Recorder = (() => {
       _audioCtx.close();
       _audioCtx = null;
     }
+    if (_mixCtx) {
+      try { _mixCtx.close(); } catch (e) {}
+      _mixCtx = null;
+      _mixDest = null;
+      _micSourceNode = null;
+    }
   }
 
-  return { start, stop, startWaveform, stopWaveform, drawIdleWaveform, startTimer, stopTimer, getElapsed, requestMic, releaseStream };
+  return { start, stop, startWaveform, stopWaveform, drawIdleWaveform, startTimer, stopTimer, getElapsed, requestMic, releaseStream, addAudioSource };
 })();

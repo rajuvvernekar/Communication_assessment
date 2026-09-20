@@ -979,6 +979,7 @@ Let's get back on track.
       const audioUrl = URL.createObjectURL(blob);
       const audio    = new Audio(audioUrl);
       _ptAudioEl     = audio;
+      Recorder.addAudioSource(audio); // mix into the recording (2026-09-20)
 
       let done = false;
       const finish = () => {
@@ -1728,6 +1729,7 @@ HOW TO RUN THIS CALL:
       const audioUrl = URL.createObjectURL(blob);
       const audio    = new Audio(audioUrl);
       _fb.ttsAudioEl = audio;
+      Recorder.addAudioSource(audio); // mix into the recording (2026-09-20)
       let done = false;
       const finish = () => {
         if (done) return;

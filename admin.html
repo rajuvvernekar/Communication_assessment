@@ -458,6 +458,8 @@
           <option value="scored">Scored</option>
         </select>
         <button class="btn-ghost" onclick="Admin.loadMgrAssessments()">↻ Refresh</button>
+        <button class="btn-ghost" style="margin-left:auto" onclick="Admin.exportMgrAssessmentsExcel()">⬇ Export Excel</button>
+        <button class="btn-ghost" onclick="Admin.downloadAllMgrRecordings()">⬇ Download All Recordings</button>
       </div>
 
       <div class="card" style="padding:0;overflow:hidden">
@@ -471,11 +473,12 @@
               <th>Status</th>
               <th>AI Score</th>
               <th>Admin Score</th>
+              <th>Recording</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody id="mgr-assessments-tbody">
-            <tr><td colspan="8" class="empty-state">No manager assessments yet.</td></tr>
+            <tr><td colspan="9" class="empty-state">No manager assessments yet.</td></tr>
           </tbody>
         </table>
       </div>
@@ -806,6 +809,6 @@
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <script src="js/mgr-eval-criteria.js?v=2026091901"></script>
 <script src="js/claude.js?v=2026091902"></script>
-<script src="js/admin.js?v=2026092007"></script>
+<script src="js/admin.js?v=2026092008"></script>
 </body>
 </html>

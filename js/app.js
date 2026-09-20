@@ -1136,6 +1136,7 @@ const App = (() => {
       const url    = isBlob ? URL.createObjectURL(audio) : audio;
       const el     = new Audio(url);
       _mcBotAudioEl = el;
+      Recorder.addAudioSource(el); // mix into the recording (2026-09-20)
       const cleanup = () => { _mcBotAudioEl = null; if (isBlob) URL.revokeObjectURL(url); };
       el.onended = () => { cleanup(); onEnd(); };
       el.onerror = () => { cleanup(); onEnd(); };
@@ -1179,6 +1180,7 @@ const App = (() => {
       const audioUrl = URL.createObjectURL(blob);
       const audio    = new Audio(audioUrl);
       _mcBotAudioEl  = audio;
+      Recorder.addAudioSource(audio); // mix into the recording (2026-09-20)
 
       let done = false;
       const finish = () => {

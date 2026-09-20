@@ -2801,6 +2801,9 @@ window.Admin = (() => {
 
   // ── Manager Assessments ──────────────────────────────────────────
   let _mgrSessions = [];
+  let _currentFilteredMgrSessions = []; // tracks the currently-rendered/filtered
+                                        // view, for Export Excel / Download All
+                                        // Recordings below (2026-09-20)
 
   async function loadMgrAssessments() {
     try {
@@ -2829,7 +2832,8 @@ window.Admin = (() => {
     if (!tbody) return;
 
     if (!sessions.length) {
-      tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No manager assessments yet.</td></tr>';
+      _currentFilteredMgrSessions = [];
+      tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No manager assessments yet.</td></tr>';
       return;
     }
 
@@ -2845,6 +2849,7 @@ window.Admin = (() => {
 
     // Sort newest first
     const sorted = [...sessions].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+    _currentFilteredMgrSessions = sorted; // for exportMgrAssessmentsExcel / downloadAllMgrRecordings
 
     tbody.innerHTML = sorted.map(s => {
       const aiScore    = s.aiScores    && s.aiScores.overall    != null ? s.aiScores.overall    + '%' : '—';
@@ -2857,6 +2862,11 @@ window.Admin = (() => {
         : '—';
       const topicDisplay = (s.topicTitle || '—').replace(/'/g, '&#39;');
       const nameForDelete = (s.traineeName || 'this manager').replace(/'/g, "\\'");
+      const mgrExt = (s.recordingUrl || '').includes('.mp4') ? 'mp4' : (s.recordingUrl || '').includes('.ogg') ? 'ogg' : 'webm';
+      const mgrDlFilename = `${(s.traineeName || 'recording').replace(/\s+/g, '_')}-${s.module}-${(s.submittedAt || '').slice(0, 10)}.${mgrExt}`;
+      const mgrDlBtn = s.recordingUrl
+        ? `<button class="btn-small" onclick="Admin.downloadRecording('${s.recordingUrl}', '${mgrDlFilename}')">⬇ Recording</button>`
+        : '<span style="color:var(--text-muted)">—</span>';
       return `<tr>
         <td><strong>${s.traineeName || '—'}</strong></td>
         <td>${MGR_MODULE_LABELS[s.module] || s.module}</td>
@@ -2865,6 +2875,7 @@ window.Admin = (() => {
         <td>${status}</td>
         <td>${aiScore}</td>
         <td>${adminScore}</td>
+        <td>${mgrDlBtn}</td>
         <td style="white-space:nowrap">
           <button class="btn-ghost" style="font-size:0.8rem;padding:0.35rem 0.75rem"
             onclick="Admin.openMgrScoreModal('${s.id}')">Score</button>
@@ -2894,6 +2905,80 @@ window.Admin = (() => {
     } catch (e) {
       toast('Delete failed: ' + e.message, 'error');
     }
+  }
+
+  // Manager Assessments tab had no Export Excel / Download recordings
+  // options -- every other assessment-like section already has them, this
+  // one just never got them. Mirrors exportAssessmentsExcel() /
+  // downloadAllRecordings() above: reads whatever's currently filtered/
+  // rendered in the tab (module + status filters), not every session ever
+  // recorded. (added 2026-09-20)
+  function exportMgrAssessmentsExcel() {
+    const sessions = _currentFilteredMgrSessions || [];
+    if (!sessions.length) { toast('No manager assessments in the current view to export.', 'error'); return; }
+    if (typeof XLSX === 'undefined') { toast('Excel library not loaded — try refreshing the page.', 'error'); return; }
+
+    const rows = sessions.map(s => {
+      const aiScore    = s.aiScores    && s.aiScores.overall    != null ? s.aiScores.overall    : null;
+      const adminScore = s.adminScores && s.adminScores.overall != null ? s.adminScores.overall : null;
+      return {
+        'Manager':       s.traineeName || '',
+        'Module':        s.module || '',
+        'Topic':         s.topicTitle || '',
+        'Date':          formatDate(s.submittedAt).split(' ')[0],
+        'Status':        s.adminScores ? 'Scored' : (s.status || ''),
+        'AI Score':      aiScore    != null ? aiScore    : '',
+        'Admin Score':   adminScore != null ? adminScore : '',
+        'Has Recording': s.recordingUrl ? 'Yes' : 'No',
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{ wch: 20 }, { wch: 22 }, { wch: 30 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 12 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Manager Assessments');
+    const filename = `manager_assessments_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    XLSX.writeFile(wb, filename);
+    toast(`Exported ${rows.length} manager assessment(s) to ${filename}`, 'success');
+  }
+
+  async function downloadAllMgrRecordings() {
+    const sessions = (_currentFilteredMgrSessions || []).filter(s => s.recordingUrl);
+    if (!sessions.length) { toast('No recordings in the current view to download.', 'error'); return; }
+    if (typeof JSZip === 'undefined') { toast('ZIP library not loaded — try refreshing the page.', 'error'); return; }
+
+    toast(`Zipping ${sessions.length} recording(s)... this may take a moment.`, '');
+    const zip = new JSZip();
+    let ok = 0, failed = 0;
+    for (const s of sessions) {
+      try {
+        const resp = await fetch(s.recordingUrl);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const blob = await resp.blob();
+        const ext = s.recordingUrl.includes('.mp4') ? 'mp4' : s.recordingUrl.includes('.ogg') ? 'ogg' : 'webm';
+        const safeName = (s.traineeName || 'unknown').replace(/[^\w\- ]/g, '').trim().replace(/\s+/g, '_') || 'unknown';
+        const dateStr = (s.submittedAt || '').slice(0, 10);
+        let filename = `${safeName}-${s.module || 'session'}-${dateStr}.${ext}`;
+        if (zip.file(filename)) filename = `${safeName}-${s.module || 'session'}-${dateStr}-${s.id.slice(0, 6)}.${ext}`;
+        zip.file(filename, blob);
+        ok++;
+      } catch (e) {
+        console.warn('Manager recording download failed for session', s.id, e.message);
+        failed++;
+      }
+    }
+    if (ok === 0) { toast('Could not download any recordings — check your connection and try again.', 'error'); return; }
+
+    const content = await zip.generateAsync({ type: 'blob' });
+    const objUrl = URL.createObjectURL(content);
+    const a = document.createElement('a');
+    a.href = objUrl;
+    a.download = `manager_recordings_${new Date().toISOString().slice(0, 10)}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(objUrl), 4000);
+    toast(`Downloaded ${ok} recording(s)${failed ? ` (${failed} could not be fetched)` : ''} as a ZIP.`, failed ? '' : 'success');
   }
 
   async function openMgrScoreModal(sessionId) {
@@ -4797,6 +4882,8 @@ window.Admin = (() => {
     openMgrScoreModal,
     saveMgrScore,
     deleteSingleMgrSession,
+    exportMgrAssessmentsExcel,
+    downloadAllMgrRecordings,
     seedStockMarketMcq,
     // Assessments tab — Export Excel / Download recordings / Delete All
     downloadRecording,
