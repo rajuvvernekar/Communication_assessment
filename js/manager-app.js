@@ -2048,7 +2048,7 @@ HOW TO RUN THIS CALL:
 
   function _launchFeedbackAI() {
     const pool = SCENARIOS['mgr-feedback'];
-    _currentScenario = pickRandom(pool);
+    _currentScenario = { ...pickRandom(pool), _hardcoded: true };
     const emp = FB_EMPLOYEES[_currentScenario.id] || FB_EMPLOYEES['fb1'];
 
     // Reset state
@@ -2658,7 +2658,7 @@ HOW TO RUN THIS CONVERSATION:
 
   function _launchMirrorRoom() {
     const pool = SCENARIOS['mgr-eq'];
-    _currentScenario = pickRandom(pool);
+    _currentScenario = { ...pickRandom(pool), _hardcoded: true };
     const cp = EQ_COUNTERPARTS[_currentScenario.id] || EQ_COUNTERPARTS['eq1'];
 
     _eq = { turnCount: 0, maxTurns: 4, history: [], blobPromise: null,
