@@ -1369,6 +1369,23 @@ Let's get back on track.
     }
   }
 
+  // Gemini's native TTS (/gemini-tts on the Worker) -- the PRIMARY voice
+  // for every manager call/conversation module as of 2026-09-24, after the
+  // ElevenLabs account above ran out of credits. Every _speak*Customer/
+  // *Employee/*Voice function below tries this first and only falls
+  // through to _fetchTtsBlob (ElevenLabs) above on failure, then to
+  // browser speechSynthesis if that fails too.
+  const GEMINI_TTS_VOICES = { male: 'Puck', female: 'Kore' };
+  async function _fetchGeminiTtsBlob(proxyUrl, text, voiceName) {
+    const resp = await fetch(proxyUrl.replace(/\/?$/, '/gemini-tts'), {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ text, voice_name: voiceName || GEMINI_TTS_VOICES.female }),
+    });
+    if (!resp.ok) throw new Error(`Gemini TTS error ${resp.status}`);
+    return await resp.blob();
+  }
+
   async function _speakPtCustomer(text, onEnd) {
     const proxyUrl = (typeof CONFIG !== 'undefined' && CONFIG.CLAUDE_PROXY_URL) || '';
     if (!proxyUrl) { _speakPtCustomerBrowser(text, onEnd); return; }
@@ -1376,16 +1393,22 @@ Let's get back on track.
     if (_ptAudioEl) { try { _ptAudioEl.pause(); } catch (e) {} _ptAudioEl = null; }
 
     try {
-      const blob = await _fetchTtsBlob(proxyUrl, {
-        text,
-        model_id: 'eleven_multilingual_v2', // higher quality, natural pacing
-        voice_settings: {
-          stability:         0.45,  // a little looser than a calm narrator -- these customers are frustrated/escalating
-          similarity_boost:  0.75,
-          style:             0.35,  // more expressive/emotional range for an escalating complaint call
-          use_speaker_boost: true,
-        },
-      });
+      let blob;
+      try {
+        blob = await _fetchGeminiTtsBlob(proxyUrl, text);
+      } catch (eGemini) {
+        console.warn('Gemini TTS failed, falling back to ElevenLabs:', eGemini.message);
+        blob = await _fetchTtsBlob(proxyUrl, {
+          text,
+          model_id: 'eleven_multilingual_v2', // higher quality, natural pacing
+          voice_settings: {
+            stability:         0.45,  // a little looser than a calm narrator -- these customers are frustrated/escalating
+            similarity_boost:  0.75,
+            style:             0.35,  // more expressive/emotional range for an escalating complaint call
+            use_speaker_boost: true,
+          },
+        });
+      }
       const audioUrl = URL.createObjectURL(blob);
       const audio    = new Audio(audioUrl);
       _ptAudioEl     = audio;
@@ -1407,7 +1430,7 @@ Let's get back on track.
 
       await audio.play();
     } catch (e) {
-      console.warn('ElevenLabs TTS failed, using browser voice:', e.message);
+      console.warn('Gemini + ElevenLabs TTS both failed, using browser voice:', e.message);
       _speakPtCustomerBrowser(text, onEnd);
     }
   }
@@ -2251,17 +2274,23 @@ HOW TO RUN THIS CALL:
     if (!proxyUrl) { _speakEmployee(text, gender, onEnd); return; }
     if (_fb.ttsAudioEl) { try { _fb.ttsAudioEl.pause(); } catch (e) {} _fb.ttsAudioEl = null; }
     try {
-      const blob = await _fetchTtsBlob(proxyUrl, {
-        text,
-        voice_id: FB_VOICE_IDS[gender] || FB_VOICE_IDS.male,
-        model_id: 'eleven_multilingual_v2',
-        voice_settings: {
-          stability:         0.45,
-          similarity_boost:  0.75,
-          style:             0.35,
-          use_speaker_boost: true,
-        },
-      });
+      let blob;
+      try {
+        blob = await _fetchGeminiTtsBlob(proxyUrl, text, GEMINI_TTS_VOICES[gender] || GEMINI_TTS_VOICES.male);
+      } catch (eGemini) {
+        console.warn('Gemini TTS failed (Red Pen), falling back to ElevenLabs:', eGemini.message);
+        blob = await _fetchTtsBlob(proxyUrl, {
+          text,
+          voice_id: FB_VOICE_IDS[gender] || FB_VOICE_IDS.male,
+          model_id: 'eleven_multilingual_v2',
+          voice_settings: {
+            stability:         0.45,
+            similarity_boost:  0.75,
+            style:             0.35,
+            use_speaker_boost: true,
+          },
+        });
+      }
       const audioUrl = URL.createObjectURL(blob);
       const audio    = new Audio(audioUrl);
       _fb.ttsAudioEl = audio;
@@ -2279,7 +2308,7 @@ HOW TO RUN THIS CALL:
       audio.onerror = () => { clearTimeout(guard); finish(); };
       await audio.play();
     } catch (e) {
-      console.warn('ElevenLabs TTS failed (Red Pen), using browser voice:', e.message);
+      console.warn('Gemini + ElevenLabs TTS both failed (Red Pen), using browser voice:', e.message);
       _speakEmployee(text, gender, onEnd);
     }
   }
@@ -2829,12 +2858,18 @@ HOW TO RUN THIS CONVERSATION:
     if (!proxyUrl) { _speakEqCounterpart(text, gender, onEnd); return; }
     if (_eq.ttsAudioEl) { try { _eq.ttsAudioEl.pause(); } catch (e) {} _eq.ttsAudioEl = null; }
     try {
-      const blob = await _fetchTtsBlob(proxyUrl, {
-        text,
-        voice_id: EQ_VOICE_IDS[gender] || EQ_VOICE_IDS.male,
-        model_id: 'eleven_multilingual_v2',
-        voice_settings: { stability: 0.45, similarity_boost: 0.75, style: 0.35, use_speaker_boost: true },
-      });
+      let blob;
+      try {
+        blob = await _fetchGeminiTtsBlob(proxyUrl, text, GEMINI_TTS_VOICES[gender] || GEMINI_TTS_VOICES.male);
+      } catch (eGemini) {
+        console.warn('Gemini TTS failed (Mirror Room), falling back to ElevenLabs:', eGemini.message);
+        blob = await _fetchTtsBlob(proxyUrl, {
+          text,
+          voice_id: EQ_VOICE_IDS[gender] || EQ_VOICE_IDS.male,
+          model_id: 'eleven_multilingual_v2',
+          voice_settings: { stability: 0.45, similarity_boost: 0.75, style: 0.35, use_speaker_boost: true },
+        });
+      }
       const audioUrl = URL.createObjectURL(blob);
       const audio    = new Audio(audioUrl);
       _eq.ttsAudioEl = audio;
@@ -2852,7 +2887,7 @@ HOW TO RUN THIS CONVERSATION:
       audio.onerror = () => { clearTimeout(guard); finish(); };
       await audio.play();
     } catch (e) {
-      console.warn('ElevenLabs TTS failed (Mirror Room), using browser voice:', e.message);
+      console.warn('Gemini + ElevenLabs TTS both failed (Mirror Room), using browser voice:', e.message);
       _speakEqCounterpart(text, gender, onEnd);
     }
   }

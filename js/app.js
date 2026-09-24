@@ -1145,15 +1145,31 @@ const App = (() => {
     }
   }
 
+  // Gemini's native TTS (/gemini-tts on the Worker) -- the PRIMARY voice as
+  // of 2026-09-24, after the ElevenLabs account ran out of credits. Single
+  // attempt, no retry: speakAiCustomer's caller already falls through to
+  // ElevenLabs on failure, then browser speechSynthesis as a last resort,
+  // so a retry loop here would just slow down every fallback path.
+  const GEMINI_TTS_VOICE = 'Kore';
+  async function _fetchGeminiTtsBlob(proxyUrl, text, voiceName) {
+    const resp = await fetch(proxyUrl.replace(/\/?$/, '/gemini-tts'), {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ text, voice_name: voiceName || GEMINI_TTS_VOICE }),
+    });
+    if (!resp.ok) throw new Error(`Gemini TTS error ${resp.status}`);
+    return await resp.blob();
+  }
+
   // Fetches an ElevenLabs TTS clip, retrying once (after a short delay) on
-  // failure before giving up. speakAiCustomer falls back to the browser's
-  // speechSynthesis (speakBot) when this throws -- and that fallback's
-  // audio has no MediaStream/element to hook Recorder.addAudioSource onto,
-  // so it can never be captured into the saved recording at all (the
-  // trainee still hears it fine; admin ends up with a gap in the recording
-  // instead of just a worse-sounding voice). A retry meaningfully cuts how
-  // often a one-off network/API blip sends a turn down that unrecordable
-  // path; it can't fix a fully exhausted/misconfigured ElevenLabs account.
+  // failure before giving up. Kept as the SECONDARY voice (2026-09-24) --
+  // tried only after Gemini TTS above fails -- since the ElevenLabs
+  // account it talks to may still be out of credits. speakAiCustomer falls
+  // back to the browser's speechSynthesis (speakBot) when both throw -- and
+  // that fallback's audio has no MediaStream/element to hook
+  // Recorder.addAudioSource onto, so it can never be captured into the
+  // saved recording at all (the trainee still hears it fine; admin ends up
+  // with a gap in the recording instead of just a worse-sounding voice).
   async function _fetchTtsBlob(ttsUrl, body) {
     for (let attempt = 0; ; attempt++) {
       try {
@@ -1184,16 +1200,22 @@ const App = (() => {
     const ttsUrl = proxyUrl.replace(/\/?$/, '/tts');
 
     try {
-      const blob = await _fetchTtsBlob(ttsUrl, {
-        text,
-        model_id: 'eleven_multilingual_v2',  // higher quality, natural pacing
-        voice_settings: {
-          stability:         0.50,  // steady, controlled investor tone
-          similarity_boost:  0.75,
-          style:             0.20,  // natural, not theatrical
-          use_speaker_boost: true,
-        },
-      });
+      let blob;
+      try {
+        blob = await _fetchGeminiTtsBlob(proxyUrl, text);
+      } catch (eGemini) {
+        console.warn('Gemini TTS failed, falling back to ElevenLabs:', eGemini.message);
+        blob = await _fetchTtsBlob(ttsUrl, {
+          text,
+          model_id: 'eleven_multilingual_v2',  // higher quality, natural pacing
+          voice_settings: {
+            stability:         0.50,  // steady, controlled investor tone
+            similarity_boost:  0.75,
+            style:             0.20,  // natural, not theatrical
+            use_speaker_boost: true,
+          },
+        });
+      }
       const audioUrl = URL.createObjectURL(blob);
       const audio    = new Audio(audioUrl);
       _mcBotAudioEl  = audio;
@@ -1215,7 +1237,7 @@ const App = (() => {
 
       await audio.play();
     } catch (e) {
-      console.warn('ElevenLabs TTS failed, using browser voice:', e.message);
+      console.warn('Gemini + ElevenLabs TTS both failed, using browser voice:', e.message);
       speakBot(text, onEnd, mood);
     }
   }

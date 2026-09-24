@@ -25,6 +25,15 @@
  *                        _speakFeedbackEmployee); omit it to get the
  *                        Worker-wide default voice below, unchanged for
  *                        every existing caller.
+ *   POST /gemini-tts   → Gemini native TTS (returns audio/wav). Added
+ *                        2026-09-24 as the new PRIMARY voice for every
+ *                        call/conversation module (Red Pen, Mirror Room,
+ *                        Mock Call, Paper Trade) after the ElevenLabs
+ *                        account ran out of credits — see each client call
+ *                        site's fallback chain: Gemini TTS → ElevenLabs →
+ *                        browser speechSynthesis. Accepts an optional
+ *                        "voice_name" field (a Gemini prebuilt voice, e.g.
+ *                        "Kore"/"Puck") and optional "model" override.
  *   POST /live-token   → mints a short-lived Gemini Live API token so the
  *                        browser can open its own WebSocket straight to
  *                        Google without ever seeing GEMINI_API_KEY itself.
@@ -48,6 +57,9 @@ const GEMINI_TOKEN_API     = 'https://generativelanguage.googleapis.com/v1beta/a
 const GEMINI_LIVE_MODEL    = 'models/gemini-3.8-live';
 const GEMINI_GENERATE_API  = 'https://generativelanguage.googleapis.com/v1beta';
 const GEMINI_TEXT_MODEL    = 'models/gemini-3.6-flash'; // plain text generateContent -- NOT a Live model id. Was gemini-2.5-flash, which Google retired for new usage (2026-09-20: /gemini-generate started 404ing with 'no longer available to new users, use models/gemini-3.6-flash')
+const GEMINI_TTS_MODEL     = 'gemini-3.8-flash-tts';    // native single-shot TTS (2026-09-24) -- replaces ElevenLabs as the primary voice once its account ran out of credits
+const GEMINI_TTS_VOICE     = 'Kore';                    // default prebuilt voice when a caller doesn't ask for a specific one
+const GEMINI_TTS_SAMPLE_RATE = 24000;                   // Gemini TTS's fixed PCM output rate when the response's mimeType doesn't spell one out
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin':  '*',
@@ -111,6 +123,86 @@ export default {
       return new Response(audioData, {
         status: 200,
         headers: { 'Content-Type': 'audio/mpeg', ...CORS_HEADERS },
+      });
+    }
+
+    // ---- Gemini native TTS route (/gemini-tts) ----
+    // Single-shot text -> speech via Gemini's own TTS model, kept
+    // server-side so GEMINI_API_KEY never reaches the browser (same
+    // reasoning as /live-token and /gemini-generate below). Added
+    // 2026-09-24 to replace ElevenLabs as the primary voice for every
+    // call/conversation module once that account ran out of credits --
+    // each client call site tries this route first and only falls back to
+    // /tts (ElevenLabs) if this fails.
+    if (url.pathname.endsWith('/gemini-tts')) {
+      if (!env.GEMINI_API_KEY) {
+        return new Response(
+          JSON.stringify({ error: { message: 'GEMINI_API_KEY secret not set on the Worker.' } }),
+          { status: 500, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
+        );
+      }
+
+      let payload;
+      try { payload = await request.json(); } catch { return new Response('Bad Request', { status: 400 }); }
+      if (!payload.text) return new Response('Bad Request: "text" is required', { status: 400 });
+
+      const model     = payload.model || GEMINI_TTS_MODEL;
+      const voiceName = payload.voice_name || GEMINI_TTS_VOICE;
+
+      const upstream = await fetch(
+        `${GEMINI_GENERATE_API}/models/${model}:generateContent`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': env.GEMINI_API_KEY,
+          },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: payload.text }] }],
+            generationConfig: {
+              responseModalities: ['AUDIO'],
+              speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName } } },
+            },
+          }),
+        }
+      );
+
+      if (!upstream.ok) {
+        const err = await upstream.text();
+        return new Response(err, {
+          status: upstream.status,
+          headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+        });
+      }
+
+      let data;
+      try { data = await upstream.json(); }
+      catch {
+        return new Response(
+          JSON.stringify({ error: { message: 'Gemini TTS returned a non-JSON response.' } }),
+          { status: 502, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
+        );
+      }
+
+      const inline = data?.candidates?.[0]?.content?.parts?.[0]?.inlineData;
+      if (!inline || !inline.data) {
+        return new Response(
+          JSON.stringify({ error: { message: 'Gemini TTS response had no audio data.' } }),
+          { status: 502, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
+        );
+      }
+
+      // Gemini's TTS models return raw 16-bit PCM with no container (unlike
+      // ElevenLabs' /tts route above, which already returns a playable MP3
+      // file) -- an <audio> element can't play raw PCM directly, so wrap it
+      // in a minimal WAV header here, once, server-side, rather than
+      // teaching every client call site to do it.
+      const sampleRate = _pcmSampleRateFromMimeType(inline.mimeType) || GEMINI_TTS_SAMPLE_RATE;
+      const wavBytes = _pcmToWav(_base64ToBytes(inline.data), sampleRate);
+
+      return new Response(wavBytes, {
+        status: 200,
+        headers: { 'Content-Type': 'audio/wav', ...CORS_HEADERS },
       });
     }
 
@@ -274,3 +366,51 @@ export default {
     });
   },
 };
+
+// ---- Gemini TTS helpers (/gemini-tts route above) ----
+
+function _base64ToBytes(b64) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+function _pcmSampleRateFromMimeType(mimeType) {
+  if (!mimeType) return null;
+  const m = /rate=(\d+)/.exec(mimeType);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+// Wraps raw 16-bit mono PCM samples in a standard 44-byte WAV header so any
+// <audio> element (and js/recorder.js's Recorder.addAudioSource, which taps
+// an <audio> element's output into the saved recording) can play/capture it
+// exactly like the ElevenLabs MP3s the rest of this Worker returns.
+function _pcmToWav(pcmBytes, sampleRate, numChannels = 1, bitsPerSample = 16) {
+  const blockAlign = numChannels * (bitsPerSample / 8);
+  const byteRate   = sampleRate * blockAlign;
+  const dataSize   = pcmBytes.length;
+  const buffer     = new ArrayBuffer(44 + dataSize);
+  const view       = new DataView(buffer);
+
+  function writeString(offset, str) {
+    for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+  }
+
+  writeString(0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  writeString(8, 'WAVE');
+  writeString(12, 'fmt ');
+  view.setUint32(16, 16, true);   // fmt chunk size
+  view.setUint16(20, 1, true);    // PCM format
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitsPerSample, true);
+  writeString(36, 'data');
+  view.setUint32(40, dataSize, true);
+
+  new Uint8Array(buffer, 44).set(pcmBytes);
+  return buffer;
+}
