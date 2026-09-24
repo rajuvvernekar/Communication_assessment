@@ -565,7 +565,33 @@ window.Admin = (() => {
   let _botScriptRecording  = -1; // index of turn currently being recorded (-1 = none)
   let _botScriptRecPromise = null;
   let _scoringSessionId = null;
-  let _topicsFilter = 'all';
+  let _topicsFilter = null; // specific module key once picked; null = no module chosen yet
+  let _topicsGroup  = null; // 'manager' | 'trainee' | null = group chooser shown
+
+  // Topics page module lists per group (2026-09-24 restructure, at the
+  // manager's request): Listening & Tone and Mgmt Skills dropped from the
+  // Manager list (no live module card links to either any more -- see
+  // manager.html's 5-card module hub), and Role Play / GD / Written /
+  // NRI Stock Market dropped from the Trainee list to declutter it down to
+  // what's actively managed day to day.
+  const TOPICS_GROUP_TABS = {
+    manager: [
+      { module: 'mgr-situation-room',     label: '🎯 Situation Room' },
+      { module: 'mgr-transcript-autopsy', label: '📋 Transcript Autopsy' },
+      { module: 'mgr-mock-call',          label: '📞 Mock Call' },
+      { module: 'mgr-feedback',           label: '💬 Feedback' },
+      { module: 'mgr-eq',                 label: '🧠 EQ' },
+    ],
+    trainee: [
+      { module: 'pick-speak-stock',        label: '📈 P&S Stock' },
+      { module: 'pick-speak-general',      label: '💬 P&S General' },
+      { module: 'mock-call',               label: 'Mock Call' },
+      { module: 'ops-call-assessment',     label: '📞 Ops Escalation Call' },
+      { module: 'ops-writing-assessment',  label: '✍️ Ops Escalation Writing' },
+      { module: 'grammar-assessment',      label: 'Grammar' },
+      { module: 'listening-assessment',    label: 'Listening' },
+    ],
+  };
   let _assessmentsFilter = { module: 'all', status: 'all', team: 'all' };
   let _currentFilteredSessions = [];
   let _teamAssignments = {};   // { traineeId: 'Team Name' }
@@ -580,6 +606,7 @@ window.Admin = (() => {
   // Assessments multi-select + archive
   let _selectedSessionIds    = new Set(); // checked session ids
   let _allRenderedSessions   = [];        // sessions currently in the table
+  let _selectedMgrSessionIds = new Set(); // checked session ids in the Manager Assessments table
   let _viewArchive           = false;     // false = Active tab, true = Archive tab
   let _archivedIds           = new Set(); // session IDs stored as archived (loaded from settings)
   // AI Audit Scores section
@@ -897,6 +924,12 @@ window.Admin = (() => {
         if (section === 'mgr-assessments') {
           try { loadMgrAssessments(); } catch (_) {}
         }
+        // Dashboard: same reasoning -- re-fetch every time it's opened so
+        // the numbers reflect sessions submitted since the last visit,
+        // not just whatever was true at login.
+        if (section === 'dashboard') {
+          try { loadDashboard(); } catch (_) {}
+        }
       };
     });
 
@@ -910,6 +943,7 @@ window.Admin = (() => {
       traineeModal.addEventListener('click', (e) => { if (e.target === traineeModal) closeTraineeSessionsModal(); });
     }
     try { loadTrainees(); } catch (_) {}
+    try { loadDashboard(); } catch (_) {}
     try { if (typeof generateAllAgentsReport === 'function') generateAllAgentsReport(); } catch (_) {}
     try { if (typeof loadAiAuditScores === 'function') loadAiAuditScores(); } catch (_) {}
     try { if (typeof loadComm360Report === 'function') loadComm360Report(); } catch (_) {}
@@ -1855,6 +1889,68 @@ window.Admin = (() => {
   // assessments found," no matter what had actually been submitted — for
   // every module, not just the new Ops Escalation ones. This is what was
   // making a trainee's submitted call invisible in the admin panel.
+  // Dashboard was pure static markup with an id on every stat/list element
+  // but nothing anywhere ever populated them (no loadDashboard-style
+  // function existed at all) -- so it always showed 0/0/0/— and "No
+  // sessions yet" regardless of real activity. Pulls from the same
+  // DB.getAll('sessions')/('trainees') every other section already uses,
+  // across BOTH trainee and manager sessions (unlike _cachedSessions/
+  // _mgrSessions, which are each deliberately scoped to one or the other).
+  async function loadDashboard() {
+    try {
+      const [trainees, sessions] = await Promise.all([DB.getAll('trainees'), DB.getAll('sessions')]);
+
+      const setText = (id, val) => { const el = $(id); if (el) el.textContent = val; };
+      setText('stat-trainees', trainees.length);
+      setText('stat-sessions', sessions.length);
+      setText('stat-pending', sessions.filter(s => !s.adminScores).length);
+
+      const scored = sessions.filter(s => s.adminScores);
+      const avgAdmin = scored.length
+        ? (scored.reduce((acc, s) => acc + (calcAdminAvg(s.adminScores) || 0), 0) / scored.length).toFixed(1)
+        : null;
+      setText('stat-avg-score', avgAdmin != null ? avgAdmin + '%' : '—');
+
+      // Sessions by module -- a simple bar chart, matching the
+      // .module-bar-row/.module-bar-track/.module-bar-fill markup the CSS
+      // already expects but nothing ever rendered.
+      const byModule = {};
+      sessions.forEach(s => { const m = s.module || 'unknown'; byModule[m] = (byModule[m] || 0) + 1; });
+      const entries = Object.entries(byModule).sort((a, b) => b[1] - a[1]);
+      const maxCount = entries.length ? entries[0][1] : 0;
+      const moduleBreakdownEl = $('module-breakdown');
+      if (moduleBreakdownEl) {
+        moduleBreakdownEl.innerHTML = entries.length
+          ? entries.map(([m, c]) => `
+            <div class="module-bar-row">
+              <span class="module-bar-label">${MODULE_LABELS[m] || m}</span>
+              <div class="module-bar-track"><div class="module-bar-fill" style="width:${maxCount ? (c / maxCount * 100) : 0}%;background:${MODULE_COLORS[m] || 'var(--primary)'}"></div></div>
+              <span class="module-bar-count">${c}</span>
+            </div>`).join('')
+          : '<div class="empty-state" style="padding:1rem">No sessions yet.</div>';
+      }
+
+      // Recent activity -- last 10 submissions across everyone
+      const recentEl = $('recent-activity');
+      if (recentEl) {
+        const recent = sessions
+          .filter(s => s.submittedAt)
+          .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt))
+          .slice(0, 10);
+        recentEl.innerHTML = recent.length
+          ? recent.map(s => `
+            <div class="activity-item">
+              <span class="activity-dot" style="background:${MODULE_COLORS[s.module] || 'var(--primary)'}"></span>
+              <span class="activity-text"><strong>${s.traineeName || 'Unknown'}</strong> completed ${MODULE_LABELS[s.module] || s.module}</span>
+              <span class="activity-time">${formatDate(s.submittedAt)}</span>
+            </div>`).join('')
+          : '<div class="empty-state" style="padding:1rem">No recent activity.</div>';
+      }
+    } catch (e) {
+      console.error('loadDashboard error:', e);
+    }
+  }
+
   async function loadAssessments() {
     try {
       await _loadArchivedIds(); // also never wired up before now
@@ -2851,6 +2947,12 @@ window.Admin = (() => {
     const sorted = [...sessions].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
     _currentFilteredMgrSessions = sorted; // for exportMgrAssessmentsExcel / downloadAllMgrRecordings
 
+    // Drop any selected id that's no longer in the filtered view (e.g. the
+    // module/status filter changed), same as the trainee table does.
+    const visibleIds = new Set(sorted.map(s => s.id));
+    [..._selectedMgrSessionIds].forEach(id => { if (!visibleIds.has(id)) _selectedMgrSessionIds.delete(id); });
+    _updateMgrSessionActionBtns();
+
     tbody.innerHTML = sorted.map(s => {
       const aiScore    = s.aiScores    && s.aiScores.overall    != null ? s.aiScores.overall    + '%' : '—';
       const adminScore = s.adminScores && s.adminScores.overall != null ? s.adminScores.overall + '%' : '—';
@@ -2867,7 +2969,12 @@ window.Admin = (() => {
       const mgrDlBtn = s.recordingUrl
         ? `<button class="btn-small" onclick="Admin.downloadRecording('${s.recordingUrl}', '${mgrDlFilename}')">⬇ Recording</button>`
         : '<span style="color:var(--text-muted)">—</span>';
+      const checked = _selectedMgrSessionIds.has(s.id) ? 'checked' : '';
       return `<tr>
+        <td style="text-align:center">
+          <input type="checkbox" class="mgr-session-cb" ${checked}
+            onchange="Admin.toggleMgrSessionCheckbox('${s.id}', this.checked)" />
+        </td>
         <td><strong>${s.traineeName || '—'}</strong></td>
         <td>${MGR_MODULE_LABELS[s.module] || s.module}</td>
         <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${topicDisplay}">${s.topicTitle || '—'}</td>
@@ -2884,6 +2991,55 @@ window.Admin = (() => {
         </td>
       </tr>`;
     }).join('');
+  }
+
+  // Manager Assessments had no bulk-select/delete at all -- every row's
+  // trash icon only ever deleted one session at a time, unlike Trainees
+  // (_selectedTraineeIds/deleteSelectedTrainees) and the trainee Assessments
+  // tab (_selectedSessionIds/archiveSelectedSessions), which both already
+  // have a header checkbox + "select all" + bulk action. Same pattern here.
+  function toggleMgrSessionCheckbox(id, checked) {
+    if (checked) _selectedMgrSessionIds.add(id);
+    else _selectedMgrSessionIds.delete(id);
+    _updateMgrSessionActionBtns();
+    const allCb = $('select-all-mgr-sessions');
+    if (allCb && _currentFilteredMgrSessions.length > 0) {
+      const n = _selectedMgrSessionIds.size;
+      allCb.indeterminate = n > 0 && n < _currentFilteredMgrSessions.length;
+      allCb.checked = n === _currentFilteredMgrSessions.length;
+    }
+  }
+
+  function toggleAllMgrSessions(checked) {
+    if (checked) _currentFilteredMgrSessions.forEach(s => _selectedMgrSessionIds.add(s.id));
+    else _currentFilteredMgrSessions.forEach(s => _selectedMgrSessionIds.delete(s.id));
+    document.querySelectorAll('.mgr-session-cb').forEach(cb => { cb.checked = checked; });
+    _updateMgrSessionActionBtns();
+  }
+
+  function _updateMgrSessionActionBtns() {
+    const btn = $('btn-delete-selected-mgr-sessions');
+    if (!btn) return;
+    const n = _selectedMgrSessionIds.size;
+    btn.disabled = n === 0;
+    btn.textContent = n > 0 ? `🗑 Delete Selected (${n})` : '🗑 Delete Selected';
+  }
+
+  async function deleteSelectedMgrSessions() {
+    const n = _selectedMgrSessionIds.size;
+    if (!n) return;
+    const names = _currentFilteredMgrSessions
+      .filter(s => _selectedMgrSessionIds.has(s.id))
+      .map(s => s.traineeName || 'Unknown')
+      .join(', ');
+    if (!confirm(`Delete ${n} selected manager assessment(s)?\n\n${names}\n\nThis action cannot be undone.`)) return;
+    let failed = 0;
+    for (const id of [..._selectedMgrSessionIds]) {
+      try { await DB.del('sessions', id); } catch (e) { console.error('Delete mgr session failed:', id, e); failed++; }
+    }
+    _selectedMgrSessionIds.clear();
+    toast(failed ? `Deleted ${n - failed} of ${n} assessment(s) — ${failed} failed.` : `Deleted ${n} assessment(s).`, failed ? 'error' : 'success');
+    await loadMgrAssessments();
   }
 
   // Manager Assessments tab had no way to remove a submitted assessment --
@@ -3581,6 +3737,11 @@ window.Admin = (() => {
     const container = $('topics-list');
     if (!container) return;
 
+    if (!_topicsFilter) {
+      container.innerHTML = '<div class="empty-state" style="grid-column:1/-1;padding:2rem;text-align:center;color:var(--text-muted)">Pick Manager or Trainee above, then a module, to see its topics.</div>';
+      return;
+    }
+
     try {
       await DB.init();
       // NOTE: this used to be gated behind "only seed if zero mgr- topics
@@ -3631,17 +3792,45 @@ window.Admin = (() => {
     }
   }
 
-  function initTopics() {
-    document.querySelectorAll('.module-tabs .tab-btn').forEach(btn => {
-      btn.onclick = async (e) => {
-        e.preventDefault();
-        document.querySelectorAll('.module-tabs .tab-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        _topicsFilter = btn.getAttribute('data-module') || 'all';
-        await renderTopicsList();
-      };
-    });
+  // Topics page navigation: group chooser (Manager/Trainee) -> that group's
+  // module pills -> topics for the picked module. Replaces the old single
+  // flat pill strip mixing every trainee AND manager module (plus a global
+  // "All" pill) on one screen.
+  function selectTopicsGroup(group) {
+    _topicsGroup  = group;
+    _topicsFilter = null;
+    const chooser = $('topics-group-chooser');
+    const tabsEl  = $('topics-module-tabs');
+    if (chooser) chooser.style.display = 'none';
+    if (tabsEl) {
+      const tabs = TOPICS_GROUP_TABS[group] || [];
+      tabsEl.style.display = '';
+      tabsEl.innerHTML =
+        `<button class="tab-btn" onclick="Admin.backToTopicsGroups()">← Back</button>` +
+        tabs.map(t => `<button class="tab-btn" data-module="${t.module}" onclick="Admin.selectTopicsModule('${t.module}')">${t.label}</button>`).join('');
+    }
+    renderTopicsList();
+  }
 
+  function backToTopicsGroups() {
+    _topicsGroup  = null;
+    _topicsFilter = null;
+    const chooser = $('topics-group-chooser');
+    const tabsEl  = $('topics-module-tabs');
+    if (chooser) chooser.style.display = '';
+    if (tabsEl) { tabsEl.style.display = 'none'; tabsEl.innerHTML = ''; }
+    renderTopicsList();
+  }
+
+  function selectTopicsModule(module) {
+    _topicsFilter = module;
+    document.querySelectorAll('#topics-module-tabs .tab-btn[data-module]').forEach(b => {
+      b.classList.toggle('active', b.getAttribute('data-module') === module);
+    });
+    renderTopicsList();
+  }
+
+  function initTopics() {
     const newBtn = $('btn-new-topic');
     if (newBtn) {
       newBtn.onclick = () => openTopicModal();
@@ -3793,7 +3982,7 @@ window.Admin = (() => {
       }
     } else {
       if (titleEl) titleEl.textContent = 'New Topic';
-      const initialModule = _topicsFilter !== 'all' ? _topicsFilter : 'pick-speak';
+      const initialModule = _topicsFilter || 'pick-speak';
       if (modSelect) modSelect.value = initialModule;
       if (inputTitle) inputTitle.value = '';
       if (inputDesc) inputDesc.value = '';
@@ -3878,6 +4067,7 @@ window.Admin = (() => {
   }
 
   async function enableAllTopics() {
+    if (!_topicsFilter) { toast('Pick a module first.', 'error'); return; }
     try {
       const allTopics = await DB.getAll('topics');
       const filtered = allTopics.filter(t => matchesModuleFilter(t.module, _topicsFilter));
@@ -3893,6 +4083,7 @@ window.Admin = (() => {
   }
 
   async function disableAllTopics() {
+    if (!_topicsFilter) { toast('Pick a module first.', 'error'); return; }
     try {
       const allTopics = await DB.getAll('topics');
       const filtered = allTopics.filter(t => matchesModuleFilter(t.module, _topicsFilter));
@@ -3978,6 +4169,15 @@ window.Admin = (() => {
     }
 
     _allRenderedSessions = sessions;
+    // Download All Recordings / Export Excel both read _currentFilteredSessions
+    // (see downloadAllRecordings/exportAssessmentsExcel below), which used to
+    // only ever get set by renderAssessmentsTable() after drilling into one
+    // manager -- so from this default manager-summary view (what's shown on
+    // first opening Assessments) it stayed empty/stale and both actions
+    // always reported "nothing in the current view" even with sessions
+    // clearly visible on screen. Keep it in sync with whatever's actually
+    // filtered-in here too.
+    _currentFilteredSessions = sessions;
     _selectedSessionIds.clear();
     _selectedManagerNames.clear();
     _updateManagerActionBtns();
@@ -4873,6 +5073,9 @@ window.Admin = (() => {
     toggleTopicEnabled,
     enableAllTopics,
     disableAllTopics,
+    selectTopicsGroup,
+    backToTopicsGroups,
+    selectTopicsModule,
     deleteSession,
     reScoreWrittenComm,
     resetWrittenScores,
@@ -4923,6 +5126,9 @@ window.Admin = (() => {
     openMgrScoreModal,
     saveMgrScore,
     deleteSingleMgrSession,
+    toggleMgrSessionCheckbox,
+    toggleAllMgrSessions,
+    deleteSelectedMgrSessions,
     exportMgrAssessmentsExcel,
     downloadAllMgrRecordings,
     seedStockMarketMcq,

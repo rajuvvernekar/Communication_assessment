@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CommAssess — Admin Portal</title>
-  <link rel="stylesheet" href="css/style.css?v=2026091601">
+  <link rel="stylesheet" href="css/style.css?v=2026092403">
   <!-- Supabase JS SDK (CDN) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
@@ -192,32 +192,27 @@
         </div>
       </div>
 
-      <div class="module-tabs">
-        <button class="tab-btn active" data-module="all">All</button>
-        <span class="tab-separator">— Trainee —</span>
-        <button class="tab-btn" data-module="pick-speak-stock">📈 P&amp;S Stock</button>
-        <button class="tab-btn" data-module="pick-speak-general">💬 P&amp;S General</button>
-        <button class="tab-btn" data-module="mock-call">Mock Call</button>
-        <button class="tab-btn" data-module="ops-call-assessment">📞 Ops Escalation Call</button>
-        <button class="tab-btn" data-module="role-play">Role Play</button>
-        <button class="tab-btn" data-module="group-discussion">GD</button>
-        <button class="tab-btn" data-module="written-comm">Written</button>
-        <button class="tab-btn" data-module="ops-writing-assessment">✍️ Ops Escalation Writing</button>
-        <button class="tab-btn" data-module="grammar-assessment">Grammar</button>
-        <button class="tab-btn" data-module="listening-assessment">Listening</button>
-        <button class="tab-btn" data-module="stock-market-mcq">📊 NRI Stock Market</button>
-        <span class="tab-separator">— Manager —</span>
-        <button class="tab-btn" data-module="mgr-situation-room">🎯 Situation Room</button>
-        <button class="tab-btn" data-module="mgr-transcript-autopsy">📋 Transcript Autopsy</button>
-        <button class="tab-btn" data-module="mgr-mock-call">📞 Mock Call</button>
-        <button class="tab-btn" data-module="mgr-feedback">💬 Feedback</button>
-        <button class="tab-btn" data-module="mgr-eq">🧠 EQ</button>
-        <button class="tab-btn" data-module="mgr-listening-tone">🎧 Listening &amp; Tone</button>
-        <button class="tab-btn" data-module="mgr-management-skills">📊 Mgmt Skills</button>
+      <!-- Group chooser: Manager vs Trainee, shown first instead of one long
+           pill strip mixing both together. -->
+      <div id="topics-group-chooser" class="topics-group-chooser">
+        <button class="topics-group-card" onclick="Admin.selectTopicsGroup('manager')">
+          <div class="topics-group-icon">👔</div>
+          <div class="topics-group-title">Manager</div>
+          <div class="topics-group-sub">Situation Room, Transcript Autopsy, Mock Call, Feedback, EQ</div>
+        </button>
+        <button class="topics-group-card" onclick="Admin.selectTopicsGroup('trainee')">
+          <div class="topics-group-icon">🎓</div>
+          <div class="topics-group-title">Trainee</div>
+          <div class="topics-group-sub">Pick &amp; Speak, Mock Call, Ops Escalation, Grammar, Listening</div>
+        </button>
       </div>
 
+      <!-- Module pills for whichever group was chosen above -- populated by
+           Admin.selectTopicsGroup(), hidden until a group is picked. -->
+      <div id="topics-module-tabs" class="module-tabs" style="display:none"></div>
+
       <div id="topics-list" class="topics-grid">
-        <div class="empty-state" style="grid-column:1/-1">Loading topics...</div>
+        <div class="empty-state" style="grid-column:1/-1">Pick Manager or Trainee above, then a module, to see its topics.</div>
       </div>
     </section>
 
@@ -458,6 +453,7 @@
           <option value="scored">Scored</option>
         </select>
         <button class="btn-ghost" onclick="Admin.loadMgrAssessments()">↻ Refresh</button>
+        <button class="btn-ghost btn-ghost-danger" id="btn-delete-selected-mgr-sessions" disabled onclick="Admin.deleteSelectedMgrSessions()">🗑 Delete Selected</button>
         <button class="btn-ghost" style="margin-left:auto" onclick="Admin.exportMgrAssessmentsExcel()">⬇ Export Excel</button>
         <button class="btn-ghost" onclick="Admin.downloadAllMgrRecordings()">⬇ Download All Recordings</button>
       </div>
@@ -466,6 +462,9 @@
         <table class="data-table">
           <thead>
             <tr>
+              <th style="width:36px;text-align:center">
+                <input type="checkbox" id="select-all-mgr-sessions" onchange="Admin.toggleAllMgrSessions(this.checked)" />
+              </th>
               <th>Manager Name</th>
               <th>Module</th>
               <th>Topic</th>
@@ -478,7 +477,7 @@
             </tr>
           </thead>
           <tbody id="mgr-assessments-tbody">
-            <tr><td colspan="9" class="empty-state">No manager assessments yet.</td></tr>
+            <tr><td colspan="10" class="empty-state">No manager assessments yet.</td></tr>
           </tbody>
         </table>
       </div>
@@ -809,6 +808,6 @@
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <script src="js/mgr-eval-criteria.js?v=2026092401"></script>
 <script src="js/claude.js?v=2026092401"></script>
-<script src="js/admin.js?v=2026092401"></script>
+<script src="js/admin.js?v=2026092403"></script>
 </body>
 </html>
