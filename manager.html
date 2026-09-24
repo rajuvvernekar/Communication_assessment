@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CommAssess — Manager Portal</title>
   <link rel="stylesheet" href="css/style.css?v=15">
-  <!-- Override primary color to purple for manager portal -->
+  <!-- Manager portal uses the same blue/white theme as the trainee portal -->
   <style>
     :root {
-      --primary: #7c3aed;
-      --mgr-accent: #a855f7;
-      --mgr-bg: linear-gradient(140deg, #1e1433 0%, #2d1d5e 60%, #1a1f2e 100%);
+      --primary: #2490ef;
+      --mgr-accent: #60a5fa;
+      --mgr-bg: linear-gradient(140deg, #1a1f2e 0%, #2d3654 60%, #1e3a5f 100%);
     }
     /* display MUST stay scoped to `#mgr-screen-welcome.active` -- this ID
        selector otherwise beats `.screen { display:none }` /
@@ -29,16 +29,16 @@
       min-height: 100vh;
     }
     #mgr-screen-welcome .auth-logo-block .logo-icon {
-      background: linear-gradient(135deg, #7c3aed, #a855f7);
-      box-shadow: 0 4px 20px rgba(124,58,237,0.4);
+      background: linear-gradient(135deg, #2490ef, #60a5fa);
+      box-shadow: 0 4px 20px rgba(36,144,239,0.4);
     }
-    #mgr-screen-welcome .auth-field input:focus { border-color: #7c3aed; }
+    #mgr-screen-welcome .auth-field input:focus { border-color: #2490ef; }
     .mgr-header {
       position: sticky;
       top: 0;
       height: 56px;
       background: #fff;
-      border-bottom: 2px solid #7c3aed;
+      border-bottom: 2px solid #2490ef;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -49,7 +49,7 @@
     .mgr-header .header-logo {
       font-weight: 800;
       font-size: 1.1rem;
-      color: #7c3aed;
+      color: #2490ef;
       letter-spacing: -0.5px;
     }
     .mgr-header .header-right {
@@ -61,16 +61,16 @@
     }
     .mgr-header .header-right span { font-weight: 600; color: var(--text); }
     .btn-logout {
-      background: #f5f3ff;
-      border: 1px solid #ddd6fe;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
       padding: 0.3rem 0.75rem;
       border-radius: 6px;
       font-size: 0.8rem;
       cursor: pointer;
-      color: #7c3aed;
+      color: #2490ef;
       font-weight: 600;
     }
-    .btn-logout:hover { background: #ede9fe; }
+    .btn-logout:hover { background: #dbeafe; }
 
     /* Module grid */
     #mgr-screen-modules {
@@ -99,14 +99,14 @@
     .mgr-module-card:hover {
       transform: translateY(-4px);
       box-shadow: var(--shadow-lg);
-      border-color: #7c3aed;
+      border-color: #2490ef;
     }
     .mgr-module-card h3 { font-size: 0.95rem; font-weight: 700; margin-bottom: 0.4rem; }
     .mgr-module-card p { font-size: 0.8rem; color: var(--text-muted); line-height: 1.5; }
     .mgr-module-card .module-tag {
       display: inline-block;
-      background: #f5f3ff;
-      color: #7c3aed;
+      background: #eff6ff;
+      color: #2490ef;
       font-size: 0.7rem;
       padding: 0.2rem 0.5rem;
       border-radius: 4px;
@@ -114,7 +114,7 @@
       font-weight: 600;
     }
     .mgr-module-card .module-icon {
-      background: #f5f3ff;
+      background: #eff6ff;
     }
 
     /* Shared assessment screen wrapper */
@@ -129,22 +129,22 @@
       gap: 1rem;
       padding: 0.875rem 1.5rem;
       background: #fff;
-      border-bottom: 1px solid #ddd6fe;
+      border-bottom: 1px solid #bfdbfe;
       position: fixed;
       top: 56px; left: 0; right: 0;
       z-index: 90;
     }
-    .mgr-screen-header h2 { font-size: 1.1rem; font-weight: 700; color: #7c3aed; }
+    .mgr-screen-header h2 { font-size: 1.1rem; font-weight: 700; color: #2490ef; }
 
     /* Scenario box */
     .mgr-scenario-box {
-      background: #f5f3ff;
-      border-left: 4px solid #7c3aed;
+      background: #eff6ff;
+      border-left: 4px solid #2490ef;
       border-radius: 0 8px 8px 0;
       padding: 1.25rem 1.5rem;
       margin-bottom: 1.5rem;
     }
-    .mgr-scenario-box h3 { font-size: 1rem; font-weight: 700; margin-bottom: 0.75rem; color: #5b21b6; }
+    .mgr-scenario-box h3 { font-size: 1rem; font-weight: 700; margin-bottom: 0.75rem; color: #1d4ed8; }
     .mgr-scenario-box p {
       font-size: 0.9rem;
       line-height: 1.75;
@@ -164,7 +164,7 @@
     .mgr-prep-count {
       font-size: 4rem;
       font-weight: 900;
-      color: #7c3aed;
+      color: #2490ef;
       font-variant-numeric: tabular-nums;
       line-height: 1;
     }
@@ -179,7 +179,7 @@
       color: var(--text-muted);
       margin-bottom: 0.5rem;
     }
-    .mgr-word-count-bar strong { color: #7c3aed; }
+    .mgr-word-count-bar strong { color: #2490ef; }
 
     /* Result screen */
     .mgr-result-card {
@@ -195,7 +195,7 @@
     .mgr-result-card h2 { font-size: 1.6rem; font-weight: 800; margin-bottom: 0.4rem; }
     .mgr-result-card p { color: var(--text-muted); margin-bottom: 1.5rem; }
     .mgr-score-display {
-      background: linear-gradient(135deg, #7c3aed, #a855f7);
+      background: linear-gradient(135deg, #2490ef, #60a5fa);
       color: #fff;
       border-radius: 12px;
       padding: 1.5rem;
@@ -211,20 +211,20 @@
       margin-bottom: 1.5rem;
     }
     .mgr-score-item {
-      background: #f5f3ff;
+      background: #eff6ff;
       border-radius: 8px;
       padding: 0.75rem 1rem;
     }
     .mgr-score-item .label { font-size: 0.75rem; color: var(--text-muted); font-weight: 600; margin-bottom: 0.25rem; }
-    .mgr-score-item .val { font-size: 1rem; font-weight: 700; color: #5b21b6; }
+    .mgr-score-item .val { font-size: 1rem; font-weight: 700; color: #1d4ed8; }
 
     /* MCQ screen */
     .mgr-mcq-intro {
-      background: #f5f3ff;
+      background: #eff6ff;
       border-radius: 10px;
       padding: 1.25rem 1.5rem;
       margin-bottom: 1.5rem;
-      border: 1px solid #ddd6fe;
+      border: 1px solid #bfdbfe;
       font-size: 0.9rem;
       line-height: 1.75;
       white-space: pre-line;
@@ -236,13 +236,13 @@
       padding: 1.5rem;
       box-shadow: var(--shadow);
       margin-bottom: 1rem;
-      border-left: 3px solid #7c3aed;
+      border-left: 3px solid #2490ef;
     }
     .mgr-question-card .q-num {
       font-size: 0.7rem;
       font-weight: 700;
       text-transform: uppercase;
-      color: #7c3aed;
+      color: #2490ef;
       letter-spacing: 0.06em;
       margin-bottom: 0.5rem;
     }
@@ -265,9 +265,9 @@
       font-size: 0.88rem;
       line-height: 1.4;
     }
-    .mgr-option:hover { border-color: #7c3aed; background: #faf5ff; }
-    .mgr-option.selected { border-color: #7c3aed; background: #f5f3ff; }
-    .mgr-option input[type="radio"] { flex-shrink: 0; margin-top: 2px; accent-color: #7c3aed; }
+    .mgr-option:hover { border-color: #2490ef; background: #f0f7ff; }
+    .mgr-option.selected { border-color: #2490ef; background: #eff6ff; }
+    .mgr-option input[type="radio"] { flex-shrink: 0; margin-top: 2px; accent-color: #2490ef; }
 
     /* Feedback conversational screen */
     .mgr-fb-wrap {
@@ -292,8 +292,8 @@
 
     /* Live transcript box */
     .mgr-live-transcript {
-      background: #faf5ff;
-      border: 1px solid #ddd6fe;
+      background: #f0f7ff;
+      border: 1px solid #bfdbfe;
       border-radius: 8px;
       padding: 0.875rem 1rem;
       min-height: 60px;
@@ -311,7 +311,7 @@
       width: 100%;
       min-height: 280px;
       padding: 1rem 1.1rem;
-      border: 1.5px solid #ddd6fe;
+      border: 1.5px solid #bfdbfe;
       border-radius: 10px;
       font-size: 0.95rem;
       line-height: 1.8;
@@ -322,7 +322,7 @@
       box-sizing: border-box;
       transition: border-color 0.2s;
     }
-    .mgr-written-area:focus { border-color: #7c3aed; }
+    .mgr-written-area:focus { border-color: #2490ef; }
 
     @media (max-width: 600px) {
       .mgr-modules-grid { grid-template-columns: 1fr 1fr; }
@@ -349,7 +349,7 @@
       white-space: nowrap;
       transition: border-color 0.2s, background 0.2s;
     }
-    .sr-step.active { border-color: #7c3aed; background: #f5f3ff; color: #5b21b6; }
+    .sr-step.active { border-color: #2490ef; background: #eff6ff; color: #1d4ed8; }
     .sr-step.done   { border-color: #10b981; background: #f0fdf4; color: #065f46; }
     .sr-step-num {
       width: 24px; height: 24px; border-radius: 50%;
@@ -357,7 +357,7 @@
       display: flex; align-items: center; justify-content: center;
       font-size: 0.72rem; font-weight: 800; flex-shrink: 0;
     }
-    .sr-step.active .sr-step-num { background: #7c3aed; color: #fff; }
+    .sr-step.active .sr-step-num { background: #2490ef; color: #fff; }
     .sr-step.done   .sr-step-num { background: #10b981; color: #fff; }
     .sr-step-label  { font-size: 0.78rem; line-height: 1.3; }
     .sr-step-divider { flex: 1; height: 2px; background: var(--border); min-width: 20px; }
@@ -365,7 +365,7 @@
     .sr-section-badge {
       display: inline-flex;
       align-items: center;
-      background: #7c3aed; color: #fff;
+      background: #2490ef; color: #fff;
       font-size: 0.72rem; font-weight: 800;
       padding: 0.35rem 0.875rem;
       border-radius: 20px;
@@ -375,24 +375,24 @@
     .sr-section-badge.section-b { background: #dc2626; }
 
     .sr-criteria-card {
-      background: #f5f3ff;
-      border: 1px solid #ddd6fe;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
       border-radius: 10px;
       padding: 1rem 1.25rem;
       margin-bottom: 1.25rem;
     }
     .sr-criteria-title {
-      font-size: 0.73rem; font-weight: 700; color: #5b21b6;
+      font-size: 0.73rem; font-weight: 700; color: #1d4ed8;
       text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.6rem;
     }
     .sr-criteria-list { display: flex; flex-wrap: wrap; gap: 0.5rem; }
     .sr-criteria-pill {
-      background: #fff; border: 1px solid #ddd6fe; color: #5b21b6;
+      background: #fff; border: 1px solid #bfdbfe; color: #1d4ed8;
       font-size: 0.78rem; font-weight: 600; padding: 0.28rem 0.75rem; border-radius: 20px;
     }
 
     .sr-a-prompt-label {
-      font-size: 0.78rem; font-weight: 700; color: #5b21b6;
+      font-size: 0.78rem; font-weight: 700; color: #1d4ed8;
       text-transform: uppercase; letter-spacing: 0.05em;
       margin-bottom: 0.5rem; display: block;
     }
@@ -460,7 +460,7 @@
     .sr-fb-warn  { background: #fef9c3; border-left: 3px solid #f59e0b; }
     .sr-fb-good  { background: #f0fdf4; border-left: 3px solid #10b981; }
     .sr-fb-info  { background: #f0f9ff; border-left: 3px solid #38bdf8; }
-    .sr-section-a-item .label::before { content: 'A  '; font-size: 0.65rem; font-weight: 800; color: #7c3aed; }
+    .sr-section-a-item .label::before { content: 'A  '; font-size: 0.65rem; font-weight: 800; color: #2490ef; }
     .sr-section-b-item .label::before { content: 'B  '; font-size: 0.65rem; font-weight: 800; color: #dc2626; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -559,7 +559,7 @@
      SCREEN: Situation Room — Two-Section Assessment
      ================================================================ -->
 <section id="mgr-screen-situation-room" class="screen">
-  <header class="mgr-screen-header" style="border-bottom-color:#7c3aed">
+  <header class="mgr-screen-header" style="border-bottom-color:#2490ef">
     <button class="btn-back" id="btn-mgr-sr-back">← Back</button>
     <h2>🎯 The Situation Room</h2>
   </header>
@@ -614,7 +614,7 @@
           style="min-height:220px"
           placeholder="Write the EXACT words you would say in this moment — not a description of what you'd do, but the actual spoken words, as if you are in the room right now..."></textarea>
         <div style="margin-top:1.25rem;text-align:right">
-          <button id="btn-sr-submit-a" class="btn-primary" style="background:#7c3aed;padding:0.75rem 1.5rem">
+          <button id="btn-sr-submit-a" class="btn-primary" style="background:#2490ef;padding:0.75rem 1.5rem">
             Submit Section A &amp; Proceed to Section B →
           </button>
         </div>
@@ -678,7 +678,7 @@
       </div>
 
       <div style="text-align:right;margin-top:1.25rem">
-        <button id="btn-sr-submit-b" class="btn-primary" style="background:#7c3aed;padding:0.75rem 1.75rem">
+        <button id="btn-sr-submit-b" class="btn-primary" style="background:#2490ef;padding:0.75rem 1.75rem">
           Submit Full Assessment ✓
         </button>
       </div>
@@ -734,7 +734,7 @@
         <span class="placeholder">Your speech will appear here in real time...</span>
       </div>
       <div class="rec-controls" style="margin-top:1.25rem">
-        <button id="btn-mgr-stop-record" class="btn-danger" style="background:#7c3aed">
+        <button id="btn-mgr-stop-record" class="btn-danger" style="background:#2490ef">
           ⏹ Stop &amp; Submit
         </button>
       </div>
@@ -772,21 +772,21 @@
         </div>
       </div>
 
-      <div id="mgr-audio-live-state" class="mc-mood-bar" style="background:#f5f3ff;color:#5b21b6;border-radius:8px;padding:0.6rem 1rem;margin-bottom:0.75rem">
+      <div id="mgr-audio-live-state" class="mc-mood-bar" style="background:#eff6ff;color:#1d4ed8;border-radius:8px;padding:0.6rem 1rem;margin-bottom:0.75rem">
         🎙️ Connecting…
       </div>
       <div id="mgr-audio-live-thread" class="mc-chat-thread" style="min-height:200px;max-height:380px;overflow-y:auto;padding:1rem;background:#f8fafc;border-radius:10px;border:1px solid var(--border)"></div>
 
       <!-- Manager response area — shown after the customer finishes speaking each question -->
       <div id="mgr-audio-live-rec-area" style="display:none;margin-top:0.75rem">
-        <div style="background:#fff;border:1px solid #ddd6fe;border-radius:10px;padding:1rem">
+        <div style="background:#fff;border:1px solid #bfdbfe;border-radius:10px;padding:1rem">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
-            <span id="mgr-audio-live-turn-label" style="font-size:0.82rem;font-weight:600;color:#7c3aed">🎤 Your turn — speak your response</span>
-            <span id="mgr-audio-live-turn-time" style="font-weight:600;color:#7c3aed;font-size:0.85rem"></span>
+            <span id="mgr-audio-live-turn-label" style="font-size:0.82rem;font-weight:600;color:#2490ef">🎤 Your turn — speak your response</span>
+            <span id="mgr-audio-live-turn-time" style="font-weight:600;color:#2490ef;font-size:0.85rem"></span>
           </div>
           <canvas id="mgr-audio-live-waveform" class="waveform-canvas" width="500" height="50" style="width:100%;border-radius:6px"></canvas>
           <div id="mgr-audio-live-live-transcript" style="font-size:0.85rem;color:var(--text-muted);min-height:2.5rem;padding:0.4rem 0;font-style:italic">Listening...</div>
-          <button id="btn-mgr-audio-live-done-turn" class="btn-primary" style="background:#7c3aed;width:100%;margin-top:0.5rem">
+          <button id="btn-mgr-audio-live-done-turn" class="btn-primary" style="background:#2490ef;width:100%;margin-top:0.5rem">
             ✓ Done Responding — Next Question
           </button>
         </div>
@@ -794,7 +794,7 @@
     </div>
 
     <div style="margin-top:1.25rem">
-      <button id="btn-mgr-audio-live-end" class="btn-primary" style="background:#7c3aed;width:100%;display:none">
+      <button id="btn-mgr-audio-live-end" class="btn-primary" style="background:#2490ef;width:100%;display:none">
         ✓ Submit Assessment
       </button>
       <button id="btn-mgr-audio-live-end-early" class="btn-ghost" style="width:100%;font-size:0.85rem">
@@ -829,14 +829,14 @@
         <div class="step-label" style="margin-bottom:0">🧪 Beta — Gemini Voice AI</div>
         <div class="mc-call-rec-badge"><span class="rec-dot-pulse"></span> Live</div>
       </div>
-      <div id="mgr-audio-gemini-live-state" class="mc-mood-bar" style="background:#f5f3ff;color:#5b21b6;border-radius:8px;padding:0.6rem 1rem;margin-bottom:0.75rem">
+      <div id="mgr-audio-gemini-live-state" class="mc-mood-bar" style="background:#eff6ff;color:#1d4ed8;border-radius:8px;padding:0.6rem 1rem;margin-bottom:0.75rem">
         🎙️ Connecting…
       </div>
       <div id="mgr-audio-gemini-live-thread" class="mc-chat-thread" style="min-height:200px;max-height:380px;overflow-y:auto;padding:1rem;background:#f8fafc;border-radius:10px;border:1px solid var(--border)"></div>
     </div>
 
     <div style="margin-top:1.25rem">
-      <button id="btn-mgr-audio-gemini-live-end" class="btn-primary" style="background:#7c3aed;width:100%">
+      <button id="btn-mgr-audio-gemini-live-end" class="btn-primary" style="background:#2490ef;width:100%">
         ⏹ End Call &amp; Submit
       </button>
       <button id="btn-mgr-audio-gemini-live-cancel" class="btn-ghost" style="margin-top:0.5rem;width:100%;font-size:0.82rem;color:#64748b">
@@ -850,7 +850,7 @@
      SCREEN: Feedback — Conversational AI Assessment
      ================================================================ -->
 <section id="mgr-screen-feedback" class="screen">
-  <header class="mgr-screen-header" style="border-bottom-color:#7c3aed">
+  <header class="mgr-screen-header" style="border-bottom-color:#2490ef">
     <button class="btn-back" id="btn-mgr-fb-back">← Back</button>
     <h2>💬 Feedback Assessment</h2>
   </header>
@@ -861,14 +861,14 @@
     <div class="mgr-fb-scenario" id="mgr-fb-scenario-panel">
       <div class="mgr-fb-sc-header">
         <div>
-          <div class="step-label" style="color:#7c3aed">Context — Who are you meeting with?</div>
+          <div class="step-label" style="color:#2490ef">Context — Who are you meeting with?</div>
           <h3 id="mgr-fb-sc-title" style="margin-top:0.25rem;font-size:1rem"></h3>
         </div>
         <button id="btn-mgr-fb-sc-toggle" class="btn-ghost" style="font-size:0.8rem;padding:0.3rem 0.7rem">Hide ▲</button>
       </div>
       <div id="mgr-fb-sc-body">
         <div id="mgr-fb-sc-text" style="font-size:0.9rem;color:var(--text-muted);white-space:pre-wrap;margin-top:0.5rem"></div>
-        <div style="background:#f5f3ff;border-left:3px solid #7c3aed;padding:0.6rem 0.9rem;border-radius:0 6px 6px 0;margin-top:0.75rem;font-size:0.82rem;color:#5b21b6">
+        <div style="background:#eff6ff;border-left:3px solid #2490ef;padding:0.6rem 0.9rem;border-radius:0 6px 6px 0;margin-top:0.75rem;font-size:0.82rem;color:#1d4ed8">
           🎯 <strong>What's being assessed:</strong> Your feedback structure, empathy, ability to give specific examples, handling pushback, and managing the employee's emotional response.
         </div>
       </div>
@@ -877,7 +877,7 @@
     <!-- Start button (shown before conversation begins) -->
     <div id="mgr-fb-start-wrap" style="text-align:center;padding:1.5rem 0">
       <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:1rem">When you're ready, start the conversation. The employee will speak first.</p>
-      <button id="btn-mgr-fb-start" class="btn-primary" style="background:#7c3aed;font-size:1rem;padding:0.8rem 2rem">
+      <button id="btn-mgr-fb-start" class="btn-primary" style="background:#2490ef;font-size:1rem;padding:0.8rem 2rem">
         🎙 Start Conversation
       </button>
       <button id="btn-mgr-fb-live-voice-start" class="btn-secondary hidden" style="margin-top:0.75rem;width:100%">
@@ -892,7 +892,7 @@
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.85rem;color:var(--text-muted)">
         <span id="mgr-fb-turn-label">Turn 1</span>
-        <span id="mgr-fb-turn-time" style="font-weight:600;color:#7c3aed"></span>
+        <span id="mgr-fb-turn-time" style="font-weight:600;color:#2490ef"></span>
       </div>
     </div>
 
@@ -900,17 +900,17 @@
     <div id="mgr-fb-chat-thread" class="mc-chat-thread" style="display:none;min-height:200px;max-height:380px;overflow-y:auto;margin-bottom:0.75rem;padding:1rem;background:#f8fafc;border-radius:10px;border:1px solid var(--border)"></div>
 
     <!-- Employee thinking status -->
-    <div id="mgr-fb-status" style="display:none;text-align:center;padding:0.75rem;color:#7c3aed;font-style:italic;font-size:0.9rem">
+    <div id="mgr-fb-status" style="display:none;text-align:center;padding:0.75rem;color:#2490ef;font-style:italic;font-size:0.9rem">
       👤 <span id="mgr-fb-emp-name">Employee</span> is thinking...
     </div>
 
     <!-- Manager recording area -->
     <div id="mgr-fb-rec-area" style="display:none">
-      <div style="background:#fff;border:1px solid #ddd6fe;border-radius:10px;padding:1rem;margin-bottom:0.75rem">
-        <div style="font-size:0.82rem;font-weight:600;color:#7c3aed;margin-bottom:0.5rem">🎤 Your turn — speak your response</div>
+      <div style="background:#fff;border:1px solid #bfdbfe;border-radius:10px;padding:1rem;margin-bottom:0.75rem">
+        <div style="font-size:0.82rem;font-weight:600;color:#2490ef;margin-bottom:0.5rem">🎤 Your turn — speak your response</div>
         <canvas id="mgr-fb-waveform" class="waveform-canvas" width="500" height="50" style="width:100%;border-radius:6px"></canvas>
         <div id="mgr-fb-live-transcript" style="font-size:0.85rem;color:var(--text-muted);min-height:2.5rem;padding:0.4rem 0;font-style:italic">Listening...</div>
-        <button id="btn-mgr-fb-done-turn" class="btn-primary" style="background:#7c3aed;width:100%;margin-top:0.5rem">
+        <button id="btn-mgr-fb-done-turn" class="btn-primary" style="background:#2490ef;width:100%;margin-top:0.5rem">
           ✓ Done Speaking — Next
         </button>
       </div>
@@ -921,7 +921,7 @@
       <button id="btn-mgr-fb-end-early" class="btn-ghost" style="display:none;font-size:0.85rem">
         ⏹ End Conversation Early
       </button>
-      <button id="btn-mgr-fb-finish" class="btn-primary" style="background:#7c3aed;display:none">
+      <button id="btn-mgr-fb-finish" class="btn-primary" style="background:#2490ef;display:none">
         ✓ Submit Assessment
       </button>
     </div>
@@ -933,7 +933,7 @@
      SCREEN: Red Pen — Gemini Live real-time voice call (Beta)
      ================================================================ -->
 <section id="mgr-screen-feedback-live" class="screen">
-  <header class="mgr-screen-header" style="border-bottom-color:#7c3aed">
+  <header class="mgr-screen-header" style="border-bottom-color:#2490ef">
     <h2>💬 Feedback — Voice AI (Beta)</h2>
   </header>
 
@@ -941,7 +941,7 @@
     <div class="mgr-fb-scenario" id="mgr-fb-live-scenario-panel">
       <div class="mgr-fb-sc-header">
         <div>
-          <div class="step-label" style="color:#7c3aed">Context — Who are you meeting with?</div>
+          <div class="step-label" style="color:#2490ef">Context — Who are you meeting with?</div>
           <h3 id="mgr-fb-live-sc-title" style="margin-top:0.25rem;font-size:1rem"></h3>
         </div>
       </div>
@@ -953,14 +953,14 @@
         <div class="step-label" style="margin-bottom:0">🧪 Beta — Gemini Voice AI · <span id="mgr-fb-live-emp-name">Employee</span></div>
         <div class="mc-call-rec-badge"><span class="rec-dot-pulse"></span> Live</div>
       </div>
-      <div id="mgr-fb-live-state" class="mc-mood-bar" style="background:#f5f3ff;color:#5b21b6;border-radius:8px;padding:0.6rem 1rem;margin-bottom:0.75rem">
+      <div id="mgr-fb-live-state" class="mc-mood-bar" style="background:#eff6ff;color:#1d4ed8;border-radius:8px;padding:0.6rem 1rem;margin-bottom:0.75rem">
         🎙️ Connecting…
       </div>
       <div id="mgr-fb-live-thread" class="mc-chat-thread" style="min-height:200px;max-height:380px;overflow-y:auto;padding:1rem;background:#f8fafc;border-radius:10px;border:1px solid var(--border)"></div>
     </div>
 
     <div style="margin-top:1.25rem">
-      <button id="btn-mgr-fb-live-end" class="btn-primary" style="background:#7c3aed;width:100%">
+      <button id="btn-mgr-fb-live-end" class="btn-primary" style="background:#2490ef;width:100%">
         ⏹ End Conversation &amp; Submit
       </button>
       <button id="btn-mgr-fb-live-cancel" class="btn-ghost" style="margin-top:0.5rem;width:100%;font-size:0.82rem;color:#64748b">
@@ -974,7 +974,7 @@
      SCREEN: The Mirror Room (EQ) -- verbal conversational AI
      ================================================================ -->
 <section id="mgr-screen-eq" class="screen">
-  <header class="mgr-screen-header" style="border-bottom-color:#7c3aed">
+  <header class="mgr-screen-header" style="border-bottom-color:#2490ef">
     <button class="btn-back" id="btn-mgr-eq-back">← Back</button>
     <h2>🪞 The Mirror Room</h2>
   </header>
@@ -982,15 +982,15 @@
   <div class="mgr-fb-wrap">
 
     <!-- How this assessment works + what's being evaluated -->
-    <div class="step-card" style="margin-bottom:1rem;background:#f5f3ff;border:1px solid #ddd6fe">
-      <div class="step-label" style="color:#7c3aed">How this assessment works</div>
+    <div class="step-card" style="margin-bottom:1rem;background:#eff6ff;border:1px solid #bfdbfe">
+      <div class="step-label" style="color:#2490ef">How this assessment works</div>
       <p style="font-size:0.88rem;color:#3f3f46;margin:0.5rem 0">
         You'll be given one continuous, realistic workday — told across three linked sections (A, B, C), each a fresh situation building on the last. In each section a different AI counterpart speaks first, in character — a colleague, client, or team member reacting to that exact moment. Respond out loud, naturally, the way you actually would; the counterpart reacts specifically to what you say, not to a fixed script. Each section runs 2 exchanges before handing off to the next, 6 exchanges in total across the whole case.
       </p>
       <p style="font-size:0.88rem;color:#3f3f46;margin:0.5rem 0">
         <strong>How it's scored:</strong> your response is judged, not just your words — tone, pacing, and what you notice about your own state matter as much as what you say you'd do. An AI evaluator scores the whole case across five emotional-intelligence competencies (Self-Awareness, Self-Regulation, Motivation, Empathy, Social Skill), and your admin can review and adjust that score afterward.
       </p>
-      <p style="font-size:0.82rem;color:#6d28d9;margin:0.5rem 0 0">
+      <p style="font-size:0.82rem;color:#1d7cd1;margin:0.5rem 0 0">
         🎲 One of two full cases is drawn at random each time, so you won't always get the same one.
       </p>
     </div>
@@ -1014,7 +1014,7 @@
     <div class="mgr-fb-scenario" id="mgr-eq-scenario-panel">
       <div class="mgr-fb-sc-header">
         <div>
-          <div class="step-label" style="color:#7c3aed">Situation</div>
+          <div class="step-label" style="color:#2490ef">Situation</div>
           <h3 id="mgr-eq-sc-title" style="margin-top:0.25rem;font-size:1rem"></h3>
         </div>
         <button id="btn-mgr-eq-sc-toggle" class="btn-ghost" style="font-size:0.8rem;padding:0.3rem 0.7rem">Hide ▲</button>
@@ -1027,7 +1027,7 @@
     <!-- Start button (shown before conversation begins) -->
     <div id="mgr-eq-start-wrap" style="text-align:center;padding:1.5rem 0">
       <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:1rem">When you're ready, start the conversation. <span id="mgr-eq-counterpart-name">Your counterpart</span> will speak first.</p>
-      <button id="btn-mgr-eq-start" class="btn-primary" style="background:#7c3aed;font-size:1rem;padding:0.8rem 2rem">
+      <button id="btn-mgr-eq-start" class="btn-primary" style="background:#2490ef;font-size:1rem;padding:0.8rem 2rem">
         🎙 Start Conversation
       </button>
       <button id="btn-mgr-eq-live-voice-start" class="btn-secondary hidden" style="margin-top:0.75rem;width:100%">
@@ -1042,7 +1042,7 @@
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.85rem;color:var(--text-muted)">
         <span id="mgr-eq-turn-label">Turn 1</span>
-        <span id="mgr-eq-turn-time" style="font-weight:600;color:#7c3aed"></span>
+        <span id="mgr-eq-turn-time" style="font-weight:600;color:#2490ef"></span>
       </div>
     </div>
 
@@ -1050,17 +1050,17 @@
     <div id="mgr-eq-chat-thread" class="mc-chat-thread" style="display:none;min-height:200px;max-height:380px;overflow-y:auto;margin-bottom:0.75rem;padding:1rem;background:#f8fafc;border-radius:10px;border:1px solid var(--border)"></div>
 
     <!-- Counterpart thinking status -->
-    <div id="mgr-eq-status" style="display:none;text-align:center;padding:0.75rem;color:#7c3aed;font-style:italic;font-size:0.9rem">
+    <div id="mgr-eq-status" style="display:none;text-align:center;padding:0.75rem;color:#2490ef;font-style:italic;font-size:0.9rem">
       🪞 Thinking...
     </div>
 
     <!-- Manager recording area -->
     <div id="mgr-eq-rec-area" style="display:none">
-      <div style="background:#fff;border:1px solid #ddd6fe;border-radius:10px;padding:1rem;margin-bottom:0.75rem">
-        <div style="font-size:0.82rem;font-weight:600;color:#7c3aed;margin-bottom:0.5rem">🎤 Your turn — speak your response</div>
+      <div style="background:#fff;border:1px solid #bfdbfe;border-radius:10px;padding:1rem;margin-bottom:0.75rem">
+        <div style="font-size:0.82rem;font-weight:600;color:#2490ef;margin-bottom:0.5rem">🎤 Your turn — speak your response</div>
         <canvas id="mgr-eq-waveform" class="waveform-canvas" width="500" height="50" style="width:100%;border-radius:6px"></canvas>
         <div id="mgr-eq-rec-transcript" style="font-size:0.85rem;color:var(--text-muted);min-height:2.5rem;padding:0.4rem 0;font-style:italic">Listening...</div>
-        <button id="btn-mgr-eq-done-turn" class="btn-primary" style="background:#7c3aed;width:100%;margin-top:0.5rem">
+        <button id="btn-mgr-eq-done-turn" class="btn-primary" style="background:#2490ef;width:100%;margin-top:0.5rem">
           ✓ Done Speaking — Next
         </button>
       </div>
@@ -1071,7 +1071,7 @@
       <button id="btn-mgr-eq-end-early" class="btn-ghost" style="display:none;font-size:0.85rem">
         ⏹ End Conversation Early
       </button>
-      <button id="btn-mgr-eq-finish" class="btn-primary" style="background:#7c3aed;display:none">
+      <button id="btn-mgr-eq-finish" class="btn-primary" style="background:#2490ef;display:none">
         ✓ Submit Assessment
       </button>
     </div>
@@ -1083,7 +1083,7 @@
      SCREEN: The Mirror Room — Gemini Live real-time voice call (Beta)
      ================================================================ -->
 <section id="mgr-screen-eq-live" class="screen">
-  <header class="mgr-screen-header" style="border-bottom-color:#7c3aed">
+  <header class="mgr-screen-header" style="border-bottom-color:#2490ef">
     <h2>🪞 Mirror Room — Voice AI (Beta)</h2>
   </header>
 
@@ -1091,7 +1091,7 @@
     <div class="mgr-fb-scenario" id="mgr-eq-live-scenario-panel">
       <div class="mgr-fb-sc-header">
         <div>
-          <div class="step-label" style="color:#7c3aed">Situation</div>
+          <div class="step-label" style="color:#2490ef">Situation</div>
           <h3 id="mgr-eq-live-sc-title" style="margin-top:0.25rem;font-size:1rem"></h3>
         </div>
       </div>
@@ -1103,14 +1103,14 @@
         <div class="step-label" style="margin-bottom:0">🧪 Beta — Gemini Voice AI · <span id="mgr-eq-live-counterpart-name">Counterpart</span></div>
         <div class="mc-call-rec-badge"><span class="rec-dot-pulse"></span> Live</div>
       </div>
-      <div id="mgr-eq-live-state" class="mc-mood-bar" style="background:#f5f3ff;color:#5b21b6;border-radius:8px;padding:0.6rem 1rem;margin-bottom:0.75rem">
+      <div id="mgr-eq-live-state" class="mc-mood-bar" style="background:#eff6ff;color:#1d4ed8;border-radius:8px;padding:0.6rem 1rem;margin-bottom:0.75rem">
         🎙️ Connecting…
       </div>
       <div id="mgr-eq-live-thread" class="mc-chat-thread" style="min-height:200px;max-height:380px;overflow-y:auto;padding:1rem;background:#f8fafc;border-radius:10px;border:1px solid var(--border)"></div>
     </div>
 
     <div style="margin-top:1.25rem">
-      <button id="btn-mgr-eq-live-end" class="btn-primary" style="background:#7c3aed;width:100%">
+      <button id="btn-mgr-eq-live-end" class="btn-primary" style="background:#2490ef;width:100%">
         ⏹ End Conversation &amp; Submit
       </button>
       <button id="btn-mgr-eq-live-cancel" class="btn-ghost" style="margin-top:0.5rem;width:100%;font-size:0.82rem;color:#64748b">
@@ -1155,7 +1155,7 @@
           placeholder="Write your detailed response here. Use structure, specific examples, and actionable recommendations..."></textarea>
       </div>
       <div style="margin-top:1rem;text-align:right">
-        <button id="btn-mgr-submit-written" class="btn-primary" style="background:#7c3aed">
+        <button id="btn-mgr-submit-written" class="btn-primary" style="background:#2490ef">
           Submit Response ✓
         </button>
       </div>
@@ -1218,7 +1218,7 @@
       </div>
 
       <div style="text-align:right;margin-top:1.25rem;margin-bottom:2rem">
-        <button id="btn-mgr-submit-autopsy" class="btn-primary" style="background:#7c3aed;padding:0.75rem 2rem">
+        <button id="btn-mgr-submit-autopsy" class="btn-primary" style="background:#2490ef;padding:0.75rem 2rem">
           Submit Analysis ✓
         </button>
       </div>
@@ -1245,9 +1245,9 @@
       </div>
 
       <!-- Input 1: Gut Reaction -->
-      <div class="sr-analysis-group errors" style="margin-bottom:1.25rem;border-left-color:#7c3aed">
+      <div class="sr-analysis-group errors" style="margin-bottom:1.25rem;border-left-color:#2490ef">
         <label>
-          <span class="sr-step-circle" style="background:#7c3aed">1</span>
+          <span class="sr-step-circle" style="background:#2490ef">1</span>
           Your Gut Reaction
           <span style="font-weight:400;color:var(--text-muted)"> — What is your immediate, instinctive feeling or trigger in this moment?</span>
         </label>
@@ -1296,7 +1296,7 @@
       </div>
 
       <div style="text-align:right;margin-top:1.5rem;margin-bottom:2rem">
-        <button id="btn-mr-next" class="btn-primary" style="background:#7c3aed;padding:0.75rem 2rem">
+        <button id="btn-mr-next" class="btn-primary" style="background:#2490ef;padding:0.75rem 2rem">
           Next Situation →
         </button>
         <button id="btn-mr-submit" class="btn-primary" style="background:#10b981;padding:0.75rem 2rem;display:none">
@@ -1325,7 +1325,7 @@
     <div id="mgr-mcq-questions"></div>
 
     <div style="text-align:right;margin-top:1rem">
-      <button id="btn-mgr-submit-mcq" class="btn-primary" style="background:#7c3aed">
+      <button id="btn-mgr-submit-mcq" class="btn-primary" style="background:#2490ef">
         Submit Answers ✓
       </button>
     </div>
@@ -1336,7 +1336,7 @@
      SCREEN: Result / Confirmation
      ================================================================ -->
 <section id="mgr-screen-result" class="screen">
-  <header class="mgr-screen-header" style="border-bottom-color:#7c3aed">
+  <header class="mgr-screen-header" style="border-bottom-color:#2490ef">
     <span></span>
     <h2>Assessment Complete</h2>
   </header>
@@ -1357,7 +1357,7 @@
         <span>Your admin will review your submission and may add a final score and written feedback.</span>
       </div>
 
-      <button id="btn-mgr-back-to-modules" class="btn-primary full-width" style="background:#7c3aed;margin-top:1rem">
+      <button id="btn-mgr-back-to-modules" class="btn-primary full-width" style="background:#2490ef;margin-top:1rem">
         ← Back to Modules
       </button>
     </div>
@@ -1368,13 +1368,13 @@
 <div id="toast-container"></div>
 
 <script src="config.js?v=100"></script>
-<script src="js/db.js?v=2026092402"></script>
+<script src="js/db.js?v=2026092404"></script>
 <script src="js/auth.js?v=100"></script>
 <script src="js/recorder.js?v=101"></script>
 <script src="js/speech.js?v=100"></script>
 <script src="js/mgr-eval-criteria.js?v=2026092401"></script>
 <script src="js/gemini-live.js?v=2026092014"></script>
 <script src="js/claude.js?v=2026092401"></script>
-<script src="js/manager-app.js?v=2026092402"></script>
+<script src="js/manager-app.js?v=2026092404"></script>
 </body>
 </html>

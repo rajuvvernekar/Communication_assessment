@@ -718,8 +718,8 @@ Let's get back on track.
     ).join('');
 
     const html = `
-      <details id="${panelId}" style="margin-top:0.75rem;border:1px solid rgba(124,58,237,0.25);border-radius:8px;background:rgba(124,58,237,0.04);padding:0.6rem 0.85rem">
-        <summary style="cursor:pointer;font-weight:700;font-size:0.85rem;color:#5b21b6">📋 How this is evaluated — ${criteria.label}</summary>
+      <details id="${panelId}" style="margin-top:0.75rem;border:1px solid rgba(36,144,239,0.25);border-radius:8px;background:rgba(36,144,239,0.04);padding:0.6rem 0.85rem">
+        <summary style="cursor:pointer;font-weight:700;font-size:0.85rem;color:#1d4ed8">📋 How this is evaluated — ${criteria.label}</summary>
         <div style="margin-top:0.5rem">${rows}</div>
       </details>`;
 

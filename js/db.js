@@ -241,8 +241,21 @@ const DB = (() => {
 
   // ---- Public: initialise Supabase client ----
   let _dbInitialized = false;
-  async function init() {
-    if (_dbInitialized) return;
+  // Every public data method now calls `await init()` itself (see getAll()
+  // below), so on any page that fires several of them at once via
+  // Promise.race-less parallel calls (admin.js's initApp() does exactly
+  // this on every load), init() would otherwise run its full body --
+  // create a NEW Supabase client, ping it, and reseed everything --
+  // concurrently once per caller. _initPromise makes every concurrent
+  // caller await the SAME single in-flight attempt instead.
+  let _initPromise = null;
+  function init() {
+    if (_dbInitialized) return Promise.resolve();
+    if (_initPromise) return _initPromise;
+    _initPromise = _doInit().finally(() => { _initPromise = null; });
+    return _initPromise;
+  }
+  async function _doInit() {
     try {
       if (!CONFIG.SUPABASE_URL || CONFIG.SUPABASE_URL.includes('YOUR_SUPABASE') || !CONFIG.SUPABASE_ANON_KEY || CONFIG.SUPABASE_ANON_KEY.includes('YOUR_SUPABASE')) {
         throw new Error('Supabase placeholder URL — using local storage');
@@ -1213,6 +1226,7 @@ const DB = (() => {
 
   // ---- put: insert or upsert a record ----
   async function put(store, data) {
+    await init(); // see getAll() below for why every public method self-inits
     if (_useLocalStorage) {
       return _localPut(store, data);
     }
@@ -1268,6 +1282,7 @@ const DB = (() => {
 
   // ---- get: fetch a single record by id (or key for settings) ----
   async function get(store, id) {
+    await init();
     if (_useLocalStorage) {
       return _localGet(store, id);
     }
@@ -1282,7 +1297,22 @@ const DB = (() => {
   }
 
   // ---- getAll: fetch all records in a store ----
+  // Every public data method here now starts with `await init()`: init()
+  // itself is idempotent (returns immediately once _dbInitialized is true),
+  // but several admin.js callers (generateAllAgentsReport, loadDashboard,
+  // loadTrainees, loadMgrAssessments, ...) call getAll() directly on
+  // initApp() without ever awaiting DB.init() first, all fired off as
+  // parallel fire-and-forget calls. Only renderTopicsList() happened to
+  // await DB.init() itself, and even that isn't awaited by its caller, so
+  // it never actually blocked the others. On a fresh page load this was
+  // usually masked by other work delaying the race just enough -- but on
+  // refreshing an already-logged-in admin session, initApp() fires
+  // immediately and these hit `_sb.from(...)` while `_sb` is still null
+  // (init() hasn't finished its Supabase connectivity check yet), throwing
+  // "Cannot read properties of null (reading 'from')". Self-initializing
+  // here fixes it at the root for every caller instead of patching each one.
   async function getAll(store) {
+    await init();
     if (_useLocalStorage) {
       return _localGetAll(store);
     }
@@ -1296,6 +1326,7 @@ const DB = (() => {
 
   // ---- patch: partial update (only specified columns) ----
   async function patch(store, id, data) {
+    await init();
     if (_useLocalStorage) {
       _localPatch(store, id, data);
       return;
@@ -1316,6 +1347,7 @@ const DB = (() => {
 
   // ---- del: delete a record by id ----
   async function del(store, id) {
+    await init();
     if (_useLocalStorage) {
       _localDel(store, id);
       return;
@@ -1327,6 +1359,7 @@ const DB = (() => {
 
   // ---- getByIndex: filter records by a field value ----
   async function getByIndex(store, field, value) {
+    await init();
     if (_useLocalStorage) {
       return _localGetByIndex(store, field, value);
     }
