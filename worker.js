@@ -61,6 +61,19 @@ const GEMINI_TTS_MODEL     = 'gemini-3.8-flash-tts';    // native single-shot TT
 const GEMINI_TTS_VOICE     = 'Kore';                    // default prebuilt voice when a caller doesn't ask for a specific one
 const GEMINI_TTS_SAMPLE_RATE = 24000;                   // Gemini TTS's fixed PCM output rate when the response's mimeType doesn't spell one out
 
+// A single function tool, shared by every Live (Beta) roleplay call
+// (Paper Trade, Red Pen, Mirror Room -- see js/gemini-live.js's
+// handleServerMessage and each caller's systemInstruction in
+// js/manager-app.js). Lets the AI end the call itself once it judges the
+// conversation has reached a natural conclusion, instead of only ending on
+// the manager clicking "End Call" or the hard 9-minute cap below.
+const GEMINI_LIVE_TOOLS = [{
+  functionDeclarations: [{
+    name: 'end_call',
+    description: "Call this once you (the character you're roleplaying) feel this conversation has reached a natural, satisfying conclusion -- your concerns have been adequately addressed and there is nothing more productive to say. Always speak your closing line out loud FIRST, then call this function.",
+  }],
+}];
+
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin':  '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -248,6 +261,12 @@ export default {
           bidiGenerateContentSetup: {
             model: GEMINI_LIVE_MODEL,
             generationConfig: { responseModalities: ['AUDIO'] },
+            // Added 2026-09-25: the end_call tool (see GEMINI_LIVE_TOOLS
+            // above) needs to be baked into the token at mint time for the
+            // same reason systemInstruction does -- the comment just below
+            // explains why the Constrained variant ignores config sent only
+            // in the client's own later ws `setup` message.
+            tools: GEMINI_LIVE_TOOLS,
             // Added 2026-09-20: the client (gemini-live.js) now sends the
             // roleplay persona/scenario brief as `system` in the token
             // request body so it can be baked into the token itself. This

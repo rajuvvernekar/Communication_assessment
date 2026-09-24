@@ -1793,6 +1793,7 @@ Let's get back on track.
       speaking:   '🔊 Customer is speaking…',
       error:      '⚠️ Connection problem — try Cancel and use the other call option',
       ended:      '📴 Call ended',
+      'ai-ended': '✅ Customer felt their concerns were addressed — wrapping up and submitting…',
       'time-limit': '⏱️ 9-minute limit reached — wrapping up and submitting…',
     };
 
@@ -1829,20 +1830,31 @@ LANGUAGE: speak ONLY in English for this entire call, no matter what language th
 
     const _roleLockFooter = `\n\nFINAL REMINDER before you speak: you are the CUSTOMER who called in with a specific complaint (see above) -- not the support rep, not an agent, never sympathetic toward "the customer's" loss as if it were someone else's. Speak only in English.`;
 
+    // Changed 2026-09-25: this branch used to hand the model a fixed,
+    // verbatim question script (ask these N questions, in this exact
+    // order, reworded only lightly) -- reliable, but came across as
+    // reading a checklist rather than actually reacting to the manager,
+    // which is exactly what a Beta/alternate mode should be free to try
+    // (the primary turn-based ElevenLabs/Gemini-TTS flow above keeps the
+    // fixed script; only this Live/STS Beta path changes). The escalation
+    // beats are now framed as this customer's underlying CONCERNS to work
+    // through -- still scenario-grounded, not invented -- rather than a
+    // script to recite. The strong role-lock header/footer stays unchanged:
+    // that guards against the model losing track of WHICH SIDE of the call
+    // it's on, an unrelated failure mode from the content-freedom question.
     const systemInstruction = _ptQuestions.length ? `${_roleLockHeader}
 
 BACKGROUND (for your own understanding only — never read this out loud, it is not something you say to the manager): ${_ptParsed.background}
 
-YOUR QUESTIONS, IN ORDER — ask these ${_ptQuestions.length} questions one at a time, in exactly this order. This is a fixed list, not a starting point to improvise from: do not skip any, do not reorder them, do not merge two together, and do not invent extra questions beyond this list.
+YOUR CONCERNS — this is the full list of specific points you're upset or confused about on this call. It's not a script to read verbatim: raise them as natural talking points over the course of the conversation, in whatever order fits how it's actually going, and only once the earlier ones feel addressed. You may combine two closely related points into one if that's how a real person would raise them, and you may skip a point entirely if the manager's answer already fully covered it without you needing to ask.
 ${_ptQuestions.map((q, i) => `${i + 1}. "${q}"`).join('\n')}
 
 HOW TO RUN THIS CALL:
-- The moment the call connects, speak QUESTION 1 immediately as your opening line — no greeting, no small talk, go straight into it. You may reword it slightly into natural spoken language, but it must keep the exact same specific complaint or point.
-- After the manager answers, don't jump straight to reading the next question. First react to what they actually just said — a short, natural, spoken acknowledgment of a few words to one short sentence (for example: "I hear what you're saying, but..." / "Okay, fair enough — let me ask you this..." / "Right, well here's the thing..." / "Alright, so what about this..." / "I understand, but I still want to know..." — vary the phrasing each time, never repeat the same one twice) that shows you actually listened to their answer, THEN ask the next question from the list. You may lightly reword the question itself into natural spoken language, but keep its specific point intact.
-- Repeat that pattern for every remaining question: brief natural acknowledgment of their last answer, then the next question in order.
-- Ask all ${_ptQuestions.length} questions above, in order, one at a time, before the call ends. Do not stop early, and do not ask anything that isn't on this list.
+- The moment the call connects, open with your first, most pressing concern — no greeting, no small talk, go straight into it. Reword it naturally into spoken language; keep its specific complaint intact.
+- After the manager answers, actually react to what they specifically said — agree with a fair point, push back on a weak one, ask a genuine clarifying follow-up if their answer raises a new question in your mind — before moving to your next concern. This should feel like you're actually listening, not waiting for your turn to read the next line.
+- Work through your remaining concerns this way: react to their last answer, then raise the next one that still feels unresolved. You don't have to go in the order listed above if a different order flows more naturally from the conversation.
+- Once you feel your concerns have been genuinely, adequately addressed — not necessarily every single one, if the conversation has clearly resolved the core issue — say a short, natural closing line, then call the end_call function. Don't drag the call out past the point it's actually productive.
 - Speak naturally, the way a real person sounds on a phone call — short, conversational sentences, not a written essay or a script read verbatim.
-- Once the manager has answered your final question, wrap up the call naturally within a line or two — you don't have to explicitly announce the call is ending.
 - Never mention that you are an AI, a script, grading, evaluation criteria, or that this is a training exercise.${_roleLockFooter}` : `${_roleLockHeader}
 
 TOPIC / SITUATION CONTEXT (use this as the subject matter for your questions): ${_currentScenario.scenario}
@@ -1855,7 +1867,7 @@ HOW TO RUN THIS CALL:
 - For every question after the first, build it directly from what the manager just said: pick up on a specific term, number, or claim in their answer and ask them to go deeper on it, clarify it, or explain what it means for you specifically — never ask a generic or scripted question that ignores their actual answer.
 - Speak naturally, the way a real person sounds on a phone call — short, conversational sentences, not a written essay or a script read verbatim.
 - Open the call yourself with your first question as soon as the call connects — do not wait for the manager to speak first.
-- Keep the call to roughly 5-6 minutes of back-and-forth questions and answers, then let it wind down naturally once you feel your questions have genuinely been answered — you don't have to explicitly announce the call is ending.
+- Once you feel your questions have genuinely been answered, say a short, natural closing line, then call the end_call function — don't drag the call out past the point it's actually productive.
 - Never mention that you are an AI, a script, grading, evaluation criteria, or that this is a training exercise.${_roleLockFooter}`;
 
     $('btn-mgr-audio-gemini-live-end').onclick = () => _finishAudioGeminiLiveVoice();
@@ -1872,6 +1884,9 @@ HOW TO RUN THIS CALL:
         if (stateEl) stateEl.textContent = STATE_LABELS[state] || state;
         if (state === 'time-limit') {
           toast('⏱️ Reached the 9-minute call limit — submitting what was covered so far.', '');
+          _finishAudioGeminiLiveVoice();
+        } else if (state === 'ai-ended') {
+          toast('✅ Call wrapped up naturally — submitting.', '');
           _finishAudioGeminiLiveVoice();
         }
       },
@@ -2394,6 +2409,7 @@ HOW TO RUN THIS CALL:
       speaking:   `🔊 ${emp.name} is speaking…`,
       error:      '⚠️ Connection problem — try Cancel and use the normal recorded flow',
       ended:      '📴 Conversation ended',
+      'ai-ended': '✅ Conversation reached a natural close — wrapping up and submitting…',
       'time-limit': '⏱️ 9-minute limit reached — wrapping up and submitting…',
     };
 
@@ -2405,7 +2421,7 @@ HOW TO RUN THIS CONVERSATION:
 - Speak naturally, the way a real person sounds face-to-face — short, conversational sentences, not a written essay.
 - Open the conversation yourself with something like: "${emp.opening}" (adapted naturally to spoken language) as soon as it connects — do not wait for the manager to speak first.
 - React specifically to what the manager actually says: use your default pushback lines (verbatim or adapted) when they judge, threaten, generalize, or argue the rule itself instead of the behaviour; soften and become more receptive when they use calm, specific, evidence-based feedback and propose a concrete plan.
-- Keep the conversation to roughly 4-6 exchanges, then let it wind down naturally once the manager has proposed next steps you can react to (agree, partially agree, or ask a clarifying question) — you don't have to explicitly end the conversation.
+- Once the manager has proposed next steps you're genuinely satisfied with (agreed, partially agreed, or your clarifying question got answered), say a short, natural closing line, then call the end_call function. Don't drag the conversation out past the point it's actually productive.
 - Stay in character as ${emp.name} throughout — never break character, never mention that you are an AI, a script, grading, evaluation criteria, or that this is a training exercise.`;
 
     $('btn-mgr-fb-live-end').onclick = () => _finishFeedbackLiveVoice();
@@ -2422,6 +2438,9 @@ HOW TO RUN THIS CONVERSATION:
         if (stateEl) stateEl.textContent = STATE_LABELS[state] || state;
         if (state === 'time-limit') {
           toast('⏱️ Reached the 9-minute call limit — submitting what was covered so far.', '');
+          _finishFeedbackLiveVoice();
+        } else if (state === 'ai-ended') {
+          toast('✅ Conversation wrapped up naturally — submitting.', '');
           _finishFeedbackLiveVoice();
         }
       },
@@ -3348,6 +3367,7 @@ HOW TO RUN THIS CONVERSATION:
       speaking:   `🔊 ${cp.name} is speaking…`,
       error:      '⚠️ Connection problem — try Cancel and use the normal recorded flow',
       ended:      '📴 Conversation ended',
+      'ai-ended': '✅ Conversation reached a natural close — wrapping up and submitting…',
       'time-limit': '⏱️ 9-minute limit reached — wrapping up and submitting…',
     };
 
@@ -3359,7 +3379,7 @@ HOW TO RUN THIS CONVERSATION:
 - Speak naturally, the way a real person sounds in the moment — short, conversational, not a written essay.
 - Open the conversation yourself with something like: "${cp.opening}" (adapted naturally to spoken language) as soon as it connects — do not wait for the manager to speak first.
 - React specifically to what the manager actually says, following the reactive guidance in your character description above.
-- Keep the conversation to roughly 3-5 exchanges, then let it wind down naturally once the moment has been addressed one way or another — you don't have to explicitly end the conversation.
+- Once the moment has been addressed one way or another and you're genuinely satisfied, say a short, natural closing line, then call the end_call function. Don't drag the conversation out past the point it's actually productive.
 - Stay in character as ${cp.name} throughout — never break character, never mention that you are an AI, a script, grading, evaluation criteria, or that this is a training exercise.`;
 
     $('btn-mgr-eq-live-end').onclick = () => _finishMirrorRoomLiveVoice();
@@ -3376,6 +3396,9 @@ HOW TO RUN THIS CONVERSATION:
         if (stateEl) stateEl.textContent = STATE_LABELS[state] || state;
         if (state === 'time-limit') {
           toast('⏱️ Reached the 9-minute call limit — submitting what was covered so far.', '');
+          _finishMirrorRoomLiveVoice();
+        } else if (state === 'ai-ended') {
+          toast('✅ Conversation wrapped up naturally — submitting.', '');
           _finishMirrorRoomLiveVoice();
         }
       },

@@ -24,13 +24,32 @@
 //  BidiGenerateContent): https://ai.google.dev/api/live
 //  Ephemeral tokens: https://ai.google.dev/gemini-api/docs/live-api/ephemeral-tokens
 //
-//  IMPORTANT — this has not been exercised against the real Gemini Live API
-//  yet (the sandboxed environment this was written in cannot grant a browser
-//  microphone permission at all, so live end-to-end testing has to happen on
-//  a real device). The message shapes below are built directly from Google's
-//  published schema, but Google could tweak field names on their side; if a
-//  call fails, check the browser console first — every inbound/outbound
-//  message is logged there with a `[GeminiLive]` prefix to make that easy.
+//  Confirmed working end-to-end on a real device 2026-09-24/25 (the
+//  sandboxed dev environment this was written in still can't grant a
+//  browser microphone permission at all, so any future changes here still
+//  need a real-device check before trusting them). If a call fails, check
+//  the browser console first — every inbound/outbound message is logged
+//  there with a `[GeminiLive]` prefix to make that easy.
+//
+//  Protocol reference (Google's Live API over WebSocket,
+//  BidiGenerateContent): https://ai.google.dev/api/live
+//  Ephemeral tokens: https://ai.google.dev/gemini-api/docs/live-api/ephemeral-tokens
+//
+//  end_call tool (added 2026-09-25): every caller's systemInstruction (see
+//  each _start*LiveVoice function in js/manager-app.js) tells its roleplay
+//  character to call this function once it judges the conversation has
+//  reached a natural, satisfying conclusion, instead of only ending on the
+//  manager clicking "End Call" or the 9-minute MAX_CALL_MS cap below. The
+//  function is declared both in worker.js's /live-token route (baked into
+//  the ephemeral token, which is what the "Constrained" BidiGenerateContent
+//  variant actually honours) and again in this file's own `setup` message
+//  for consistency — see the comment on GEMINI_LIVE_TOOLS in worker.js.
+//  handleServerMessage below answers every functionCall with a toolResponse
+//  (required, or the session can stall) and, for end_call specifically,
+//  waits for the model's already-queued closing-line audio to finish
+//  playing before surfacing an 'ai-ended' state — this has NOT yet been
+//  exercised against the real API (unlike the rest of this file), since it
+//  landed after the 2026-09-24/25 device test above.
 // ============================================================================
 
 const GeminiLive = (() => {
@@ -321,6 +340,36 @@ const GeminiLive = (() => {
         return;
       }
 
+      // Added 2026-09-25: lets the roleplay character end the call itself
+      // once it judges the conversation has reached a natural conclusion
+      // (see the end_call tool declared in worker.js's /live-token route
+      // and each caller's systemInstruction in js/manager-app.js), instead
+      // of only ending on the manager clicking "End Call" or the 9-minute
+      // cap below. Per Google's Live API reference, this arrives as its own
+      // top-level `toolCall` message, a sibling of `serverContent` above,
+      // not nested inside a turn's parts -- every functionCall in it MUST
+      // get a toolResponse back or the session can stall, even though this
+      // app only ever defines the one function.
+      if (msg.toolCall && Array.isArray(msg.toolCall.functionCalls)) {
+        const calls = msg.toolCall.functionCalls;
+        try {
+          ws.send(JSON.stringify({
+            toolResponse: {
+              functionResponses: calls.map(c => ({ id: c.id, name: c.name, response: { result: 'ok' } })),
+            },
+          }));
+        } catch (e) { _warn('failed to send toolResponse', e); }
+
+        if (calls.some(c => c.name === 'end_call')) {
+          // The model is instructed to speak its closing line before calling
+          // this function -- give that queued audio time to actually finish
+          // playing before ending the call, instead of cutting it off.
+          const remainingMs = playbackCtx ? Math.max(0, (nextPlayTime - playbackCtx.currentTime) * 1000) : 0;
+          setTimeout(() => { if (!stopped) setState('ai-ended'); }, remainingMs + 400);
+        }
+        return;
+      }
+
       const sc = msg.serverContent;
       if (!sc) {
         if (msg.error) _warn('server error message:', msg.error);
@@ -445,6 +494,17 @@ const GeminiLive = (() => {
                 temperature: 0.4,
               },
               systemInstruction: { parts: [{ text: systemInstruction }] },
+              // Sent again here for the same reason systemInstruction is --
+              // worker.js's /live-token comment explains why the ephemeral
+              // token's own baked-in copy (identical tool, see
+              // GEMINI_LIVE_TOOLS there) is what actually governs the
+              // Constrained variant, but this is kept in sync regardless.
+              tools: [{
+                functionDeclarations: [{
+                  name: 'end_call',
+                  description: "Call this once you (the character you're roleplaying) feel this conversation has reached a natural, satisfying conclusion -- your concerns have been adequately addressed and there is nothing more productive to say. Always speak your closing line out loud FIRST, then call this function.",
+                }],
+              }],
               realtimeInputConfig: { automaticActivityDetection: { disabled: false } },
               inputAudioTranscription: {},
               outputAudioTranscription: {},

@@ -1450,6 +1450,7 @@ const App = (() => {
       speaking:     '🔊 Customer is speaking…',
       error:        '⚠️ Connection problem — try Cancel and use the normal recording flow',
       ended:        '📴 Call ended',
+      'ai-ended':   '✅ Call wrapped up naturally — submitting…',
       'time-limit': '⏱️ 9-minute limit reached — wrapping up and submitting…',
     };
 
@@ -1467,7 +1468,7 @@ HOW TO RUN THIS CALL:
 - Open the call yourself with your first question as soon as it connects — do not wait for the agent to speak first.
 - React specifically and adaptively to what the agent actually says: acknowledge and move to the next concept if they're right; push back on the specific wrong or missing part if they're not, and give them one more chance before moving on.
 - Don't spend more than 2 consecutive exchanges pushing on the same concept.
-- You have a HARD MAXIMUM of ${OPS_ADAPTIVE_MAX_TURNS} questions total for this call (there are ${conceptGuide.length || 8} concept areas listed, one more than your question budget — prioritize covering the most important ones well rather than rushing through all of them). Once you've asked your ${OPS_ADAPTIVE_MAX_TURNS}th question and heard the agent's answer, politely wrap up and end the call — do not ask another question after that even if concept areas remain uncovered. The call will also be cut off automatically at 9 minutes if it runs long, whichever limit is reached first.
+- You have a HARD MAXIMUM of ${OPS_ADAPTIVE_MAX_TURNS} questions total for this call (there are ${conceptGuide.length || 8} concept areas listed, one more than your question budget — prioritize covering the most important ones well rather than rushing through all of them). Once you've asked your ${OPS_ADAPTIVE_MAX_TURNS}th question and heard the agent's answer, say a short, natural closing line, then call the end_call function — do not ask another question after that even if concept areas remain uncovered. You may also call end_call earlier than that if you're genuinely satisfied every concept area has been well covered. The call will also be cut off automatically at 9 minutes if it runs long, whichever limit is reached first.
 - Stay strictly conceptual, with NOTHING account-specific: ask only about the RULE or POLICY itself, in the abstract ("what's the maximum, and how does the split have to work if there's more than one?"), never a worked hypothetical with concrete figures ("I have 3 nominees split 40/30/30, is that fine?"). NEVER ask about, or invent, a specific charge, fee, rupee amount, percentage, date, account number, transaction ID, or any other account-specific or personal detail — this call tests understanding of the RULES in general, never a specific account's numbers. Do not invent any figure that isn't already written in the ground-truth rules above — if the rules mention an example figure, you may reference it directly, but never manufacture your own new one.
 - Never mention "concept areas", "answer key", grading, tokens, or that you are an AI.`;
 
@@ -1484,6 +1485,9 @@ HOW TO RUN THIS CALL:
         if (stateEl) stateEl.textContent = STATE_LABELS[state] || state;
         if (state === 'time-limit') {
           toast('⏱️ Reached the 9-minute call limit — submitting what was covered so far.', '');
+          finishLiveVoiceCall();
+        } else if (state === 'ai-ended') {
+          toast('✅ Call wrapped up naturally — submitting.', '');
           finishLiveVoiceCall();
         }
       },
