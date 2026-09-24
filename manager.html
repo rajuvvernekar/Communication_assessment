@@ -5,12 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CommAssess — Manager Portal</title>
   <link rel="stylesheet" href="css/style.css?v=15">
-  <!-- Manager portal uses the same blue/white theme as the trainee portal -->
+  <!-- Manager portal matches the trainee portal's flat "plain" theme exactly
+       (see css/style.css's "Frappe Desk Minimalist Plain Theme Overrides"
+       section) -- flat neutral backgrounds throughout, blue used only for
+       buttons/links/active-hover accents, never for the header, welcome
+       screen, or logo as a background color/gradient. -->
   <style>
     :root {
       --primary: #2490ef;
       --mgr-accent: #60a5fa;
-      --mgr-bg: linear-gradient(140deg, #1a1f2e 0%, #2d3654 60%, #1e3a5f 100%);
+      --mgr-bg: #f4f5f6;
     }
     /* display MUST stay scoped to `#mgr-screen-welcome.active` -- this ID
        selector otherwise beats `.screen { display:none }` /
@@ -29,27 +33,38 @@
       min-height: 100vh;
     }
     #mgr-screen-welcome .auth-logo-block .logo-icon {
-      background: linear-gradient(135deg, #2490ef, #60a5fa);
-      box-shadow: 0 4px 20px rgba(36,144,239,0.4);
+      background: #2490ef;
+      border-radius: 6px;
+      box-shadow: none;
+      color: #fff;
     }
-    #mgr-screen-welcome .auth-field input:focus { border-color: #2490ef; }
+    #mgr-screen-welcome .auth-logo-block h1 { color: #1f2937; font-weight: 700; }
+    #mgr-screen-welcome .auth-logo-block p { color: #6b7280; }
+    #mgr-screen-welcome .auth-card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    #mgr-screen-welcome .auth-field input:focus {
+      border-color: #2490ef;
+      box-shadow: 0 0 0 2px rgba(36,144,239,0.15);
+    }
     .mgr-header {
       position: sticky;
       top: 0;
       height: 56px;
       background: #fff;
-      border-bottom: 2px solid #2490ef;
+      border-bottom: 1px solid #e5e7eb;
       display: flex;
       align-items: center;
       justify-content: space-between;
       padding: 0 1.5rem;
       z-index: 100;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
     }
     .mgr-header .header-logo {
-      font-weight: 800;
+      font-weight: 700;
       font-size: 1.1rem;
-      color: #2490ef;
+      color: #1f2937;
       letter-spacing: -0.5px;
     }
     .mgr-header .header-right {
@@ -61,16 +76,16 @@
     }
     .mgr-header .header-right span { font-weight: 600; color: var(--text); }
     .btn-logout {
-      background: #eff6ff;
-      border: 1px solid #bfdbfe;
+      background: #f1f5f9;
+      border: 1px solid #e5e7eb;
       padding: 0.3rem 0.75rem;
       border-radius: 6px;
       font-size: 0.8rem;
       cursor: pointer;
-      color: #2490ef;
+      color: #374151;
       font-weight: 600;
     }
-    .btn-logout:hover { background: #dbeafe; }
+    .btn-logout:hover { background: #e5e7eb; }
 
     /* Module grid */
     #mgr-screen-modules {
@@ -97,24 +112,25 @@
       text-align: center;
     }
     .mgr-module-card:hover {
-      transform: translateY(-4px);
-      box-shadow: var(--shadow-lg);
+      transform: none;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.08);
       border-color: #2490ef;
     }
     .mgr-module-card h3 { font-size: 0.95rem; font-weight: 700; margin-bottom: 0.4rem; }
     .mgr-module-card p { font-size: 0.8rem; color: var(--text-muted); line-height: 1.5; }
     .mgr-module-card .module-tag {
       display: inline-block;
-      background: #eff6ff;
-      color: #2490ef;
+      background: #f3f4f6;
+      color: #4b5563;
+      border: 1px solid #e5e7eb;
       font-size: 0.7rem;
       padding: 0.2rem 0.5rem;
       border-radius: 4px;
       margin-top: 0.75rem;
-      font-weight: 600;
+      font-weight: 500;
     }
     .mgr-module-card .module-icon {
-      background: #eff6ff;
+      background: #f3f4f6;
     }
 
     /* Shared assessment screen wrapper */
@@ -1368,7 +1384,7 @@
 <div id="toast-container"></div>
 
 <script src="config.js?v=100"></script>
-<script src="js/db.js?v=2026092404"></script>
+<script src="js/db.js?v=2026092405"></script>
 <script src="js/auth.js?v=100"></script>
 <script src="js/recorder.js?v=101"></script>
 <script src="js/speech.js?v=100"></script>
