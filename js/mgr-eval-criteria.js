@@ -74,17 +74,27 @@ const MGR_EVAL_CRITERIA = {
     label: 'The Red Pen',
     format: 'Verbal',
     maxMarks: 50,
+    // Replaced 2026-09-24 (per the manager's source document, "red pen
+    // (2).docx") with the document's own SMART Feedback Checklist as the
+    // 5 scored parameters, instead of the previous generic 5-parameter
+    // rubric. Unlike every other module here, the 5 weights below are
+    // DEFAULTS ONLY -- each of the 6 scenarios in manager-app.js's
+    // SCENARIOS['mgr-feedback'] carries its own `smartWeights` override
+    // (still summing to this same 50 marks) reflecting what that specific
+    // case is actually testing, per the document's instruction that
+    // weightage should vary case to case. evaluateManagerFeedback() in
+    // claude.js applies the per-scenario override when present.
     parameters: [
-      { key: 'structure', label: 'Structure (Opening, Middle, Close)', weight: 10,
-        desc: 'Clear sequence: context set first, specific evidence next, a forward-looking plan last; no jumping straight to criticism' },
-      { key: 'empathyRelationship', label: 'Empathy & Relationship Preservation', weight: 10,
-        desc: 'Acknowledges the employee\'s effort or context before addressing the gap; tone stays respectful even when direct' },
-      { key: 'resilienceUnderPushback', label: 'Resilience Under Pushback', weight: 10,
-        desc: 'Holds the standard without escalating conflict when the employee deflects, minimizes, or gets defensive; redirects calmly to facts' },
-      { key: 'specificityEvidence', label: 'Specificity & Evidence-Based Feedback', weight: 10,
-        desc: 'Cites concrete examples (calls, data, dates) rather than vague generalizations ("you need to do better")' },
-      { key: 'forwardPlanSmart', label: 'Forward Plan & Accountability (SMART)', weight: 10,
-        desc: 'Ends with a specific, measurable, time-bound improvement plan and a clear follow-up checkpoint' },
+      { key: 'specific', label: 'Specific', weight: 10,
+        desc: 'Points to concrete, observable moments or examples (what was said, when) rather than vague statements or general traits' },
+      { key: 'measurable', label: 'Measurable', weight: 10,
+        desc: 'Frames the ask or plan so progress can actually be tracked, not just left as a general reassurance' },
+      { key: 'achievable', label: 'Achievable', weight: 10,
+        desc: 'Agrees on a next step the employee can realistically do, scoped to what is actually in their control right now' },
+      { key: 'relevant', label: 'Relevant', weight: 10,
+        desc: 'Stays focused on what actually matters to this employee\'s specific gap, without drifting into debate or unrelated ground' },
+      { key: 'timeBound', label: 'Time-bound', weight: 10,
+        desc: 'Closes with a clear timeframe or checkpoint for the next step, not left open-ended' },
     ],
   },
   'mgr-eq': {

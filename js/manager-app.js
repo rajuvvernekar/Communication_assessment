@@ -175,6 +175,19 @@ MANAGER: "Sir, that is your right. But please be aware that investigations take 
     'mgr-feedback': [
       { id:'fb1', title:'The High Performer Who Suddenly Disengaged',
         scenario:'Employee: Ananya — a consistent high performer for the last 8 months (QA regularly above 90%, active in meetings, supportive of new team members, often volunteers for extra responsibilities). She moved to your team after a recent restructuring.\n\nSituation: Over the last month her QA score has dropped from 94% to 79%, her productivity has reduced, she rarely participates in discussions, no longer volunteers for activities, seems distracted during meetings, and has become less communicative with peers. When you ask if everything is okay, she simply says: "Yes, I\'m fine. I\'ll manage."',
+        thinkAbout: [
+          'How will you start?',
+          'Will you talk about the numbers first or understand what has changed?',
+          'What questions will you ask?',
+          'How will you avoid assuming that she has become careless?',
+          'How will you create a safe environment for her to speak?',
+          'How will you conclude with an action plan?',
+        ],
+        // SMART weights for this case (sum to the module's 50 marks) --
+        // Specific/Relevant weighted highest: the core test here is opening
+        // on the behaviour change (not the QA number) and staying away from
+        // blame framing, not the follow-up cadence.
+        smartWeights: { specific: 14, measurable: 6, achievable: 8, relevant: 14, timeBound: 8 },
         goodLooksLike: [
           'Opens by naming the change in behaviour/energy, not the QA score, and asks how she\'s doing before referencing any number.',
           'Uses open questions ("What\'s changed for you since the move?") rather than closed ones ("Is everything okay?") that invite a one-word answer.',
@@ -191,6 +204,17 @@ MANAGER: "Sir, that is your right. But please be aware that investigations take 
         ] },
       { id:'fb2', title:'"I Don\'t Think There Is Anything Wrong With My Work"',
         scenario:'Employee: Rahul — two years\' tenure, consistently meets his productivity targets but has received repeated feedback on communication.\n\nSituation: His recent QA feedback flags interrupting customers, not acknowledging customer concerns, a robotic tone, technically correct but poorly structured responses, and missed opportunities to show empathy. You have discussed this with him twice already. In this session he says: "But my numbers are good. Customers are getting the right answers. I don\'t understand why QA keeps giving me feedback."',
+        thinkAbout: [
+          'How will you acknowledge his strengths?',
+          'How will you explain the difference between getting the job done and doing it effectively?',
+          'How will you use examples instead of general statements?',
+          'How will you prevent the conversation from becoming an argument?',
+          'How will you get Rahul to identify the gap himself?',
+        ],
+        // Specific/Relevant weighted highest: Rahul has already dismissed
+        // two vague conversations, so cited examples and staying off the
+        // "QA is unfair" debate are the whole test here.
+        smartWeights: { specific: 16, measurable: 6, achievable: 6, relevant: 16, timeBound: 6 },
         goodLooksLike: [
           'Acknowledges Rahul\'s strength (consistent targets, accurate answers) explicitly and early, before raising the concern.',
           'Uses two or more specific, cited examples (call ID, timestamp, or quoted moment) rather than general statements like "your communication needs work."',
@@ -206,6 +230,17 @@ MANAGER: "Sir, that is your right. But please be aware that investigations take 
         ] },
       { id:'fb3', title:'The Employee Who Is Doing Well but Has a Negative Attitude',
         scenario:'Employee: Vikram — one of the team\'s strongest performers (excellent productivity, consistently high QA, good attendance, positive customer feedback).\n\nSituation: In team meetings he frequently makes negative comments ("This won\'t work," "We\'ve tried this before," "Why are we doing this again?"), discourages new team members from participating, and has started influencing others negatively. When you speak to him, he says: "I\'m only being practical. At least I\'m honest. My performance is good, so I don\'t see the problem."',
+        thinkAbout: [
+          'Can a high performer still have a behavioural gap?',
+          'How will you separate performance from behaviour?',
+          'How will you explain the impact of his behaviour on the team?',
+          'How will you avoid making it personal?',
+          'What expectations will you set going forward?',
+        ],
+        // Specific/Relevant weighted highest: the whole risk in this case
+        // is labelling Vikram ("negative attitude") instead of describing
+        // specific comments and their concrete team impact.
+        smartWeights: { specific: 14, measurable: 6, achievable: 10, relevant: 14, timeBound: 6 },
         goodLooksLike: [
           'Opens by explicitly recognising Vikram\'s strong performance before raising the behavioural concern.',
           'Describes specific comments and moments ("when you said \'we\'ve tried this before\' in Monday\'s planning meeting") rather than a trait label.',
@@ -221,6 +256,19 @@ MANAGER: "Sir, that is your right. But please be aware that investigations take 
         ] },
       { id:'fb4', title:'The Employee Who Keeps Making the Same Mistake',
         scenario:'Employee: Meera — has been making the same process-related error repeatedly despite the process being explained, documentation shared, a coaching session held, and feedback given after previous errors.\n\nSituation: The same mistake has occurred four times in the last month. During the feedback discussion, Meera says: "I\'m sorry. I\'ll be careful next time." — a response you have heard from her several times before.',
+        thinkAbout: [
+          'Is this a knowledge, skill, attitude, or attention issue?',
+          'What probing questions would you ask?',
+          'How will you identify why the mistake is happening?',
+          'How will you avoid simply saying, "Be more careful"?',
+          'What specific corrective action will you agree on?',
+          'How will you measure improvement?',
+        ],
+        // Achievable/Measurable weighted highest: everything already tried
+        // (explaining, documentation, coaching) failed generically -- the
+        // test is diagnosing the real trigger and landing a concrete,
+        // trackable corrective action instead of a fifth vague promise.
+        smartWeights: { specific: 8, measurable: 14, achievable: 14, relevant: 8, timeBound: 6 },
         goodLooksLike: [
           'Asks diagnostic questions before proposing any solution ("Walk me through what\'s happening when the mistake occurs").',
           'Notices the pattern is tied to a trigger — handling multiple issues at once — rather than assuming carelessness or lack of knowledge.',
@@ -236,6 +284,17 @@ MANAGER: "Sir, that is your right. But please be aware that investigations take 
         ] },
       { id:'fb5', title:'The Defensive Employee',
         scenario:'Employee: Arjun — you are giving him feedback after reviewing three of his calls, highlighting that he interrupted customers, missed probing opportunities, became impatient in tone in one interaction, and did not acknowledge the customer\'s frustration.\n\nSituation: Arjun immediately becomes defensive: "But the customer was being unreasonable." Then: "Other agents speak like this too. Why am I being singled out?" And finally: "You only look at my mistakes. Nobody talks about the calls where I did well."',
+        thinkAbout: [
+          'How will you handle defensiveness?',
+          'Will you defend your feedback or explore his perspective?',
+          'How will you acknowledge his point without agreeing with the behaviour?',
+          'How will you bring the conversation back to observable behaviour?',
+          'How will you end the conversation positively?',
+        ],
+        // Relevant weighted highest: the entire test is not getting pulled
+        // into Arjun's deflections (other agents, the unreasonable
+        // customer) and staying on the three specific calls instead.
+        smartWeights: { specific: 12, measurable: 6, achievable: 8, relevant: 16, timeBound: 8 },
         goodLooksLike: [
           'Acknowledges Arjun\'s underlying feeling ("I hear that you feel your good calls aren\'t recognised") without agreeing that the behaviour in question was acceptable.',
           'Does not get drawn into debating whether "other agents do it too" or whether the customer was unreasonable.',
@@ -251,6 +310,19 @@ MANAGER: "Sir, that is your right. But please be aware that investigations take 
         ] },
       { id:'fb6', title:'The Employee Who Has Lost Confidence',
         scenario:'Employee: Priya — recently promoted to handle more complex customer interactions. She performed well initially, but after receiving negative feedback on a few difficult calls, her confidence has dropped.\n\nSituation: She is taking longer to respond, frequently seeks help for routine situations, avoids taking complex calls, her productivity has reduced, and she keeps asking, "Am I doing this correctly?" When you tell her she needs to be more confident, she says: "I\'m trying. But every time I take a difficult call, I feel I\'m going to make another mistake."',
+        thinkAbout: [
+          'Is this a performance problem or a confidence problem?',
+          'How will you rebuild her confidence?',
+          'What positive reinforcement can you provide?',
+          'How will you create small wins?',
+          'What support or practice would you provide?',
+          'How will you measure progress?',
+        ],
+        // Achievable weighted highest: the core skill tested is designing
+        // a concrete graduated-exposure plan rather than generic
+        // encouragement -- Measurable (tracking progress) is the next
+        // biggest piece.
+        smartWeights: { specific: 10, measurable: 10, achievable: 16, relevant: 8, timeBound: 6 },
         goodLooksLike: [
           'Recognises early that this is a confidence issue, not a knowledge or skill gap, and doesn\'t default to more training content.',
           'Avoids generic encouragement ("you just need to be more confident") in favour of a concrete plan.',
@@ -722,6 +794,31 @@ Let's get back on track.
         <summary style="cursor:pointer;font-weight:700;font-size:0.85rem;color:#1d4ed8">📋 How this is evaluated — ${criteria.label}</summary>
         <div style="margin-top:0.5rem">${rows}</div>
       </details>`;
+
+    if (panel) { panel.outerHTML = html; }
+    else { anchor.insertAdjacentHTML('afterend', html); }
+  }
+
+  // Renders the scenario's "Think About" reflection questions (from the
+  // Red Pen source document) directly below the situation text, same
+  // insert-after-anchor pattern as _renderEvalCriteriaPanel above. Only
+  // scenarios that carry a `thinkAbout` array (currently Red Pen's 6
+  // cases) show this panel; anything else removes a stale one if present.
+  function _renderThinkAboutPanel(scenario, afterElId) {
+    const anchor = $(afterElId);
+    if (!anchor) return;
+    const panelId = afterElId + '-think-panel';
+    let panel = $(panelId);
+    const items = (scenario && scenario.thinkAbout) || [];
+    if (!items.length) { if (panel) panel.remove(); return; }
+
+    const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const rows = items.map(q => `<li style="margin-bottom:0.3rem">${esc(q)}</li>`).join('');
+    const html = `
+      <div id="${panelId}" style="margin-top:0.75rem;background:#fffbeb;border-left:3px solid #f59e0b;border-radius:0 8px 8px 0;padding:0.75rem 1rem">
+        <div style="font-weight:700;font-size:0.82rem;color:#92400e;margin-bottom:0.4rem">💭 Think About</div>
+        <ul style="margin:0;padding-left:1.1rem;font-size:0.85rem;color:#78350f;line-height:1.6">${rows}</ul>
+      </div>`;
 
     if (panel) { panel.outerHTML = html; }
     else { anchor.insertAdjacentHTML('afterend', html); }
@@ -2113,7 +2210,12 @@ HOW TO RUN THIS CALL:
     // Populate scenario panel
     $('mgr-fb-sc-title').textContent = _currentScenario.title;
     $('mgr-fb-sc-text').innerHTML  = _formatScenarioHTML(_currentScenario.scenario);
+    // Both helpers insert immediately after mgr-fb-sc-text, so calling
+    // eval-criteria first then Think About second leaves the final order
+    // as situation -> Think About -> how-it's-scored (each new insert
+    // pushes the previous one further down).
     _renderEvalCriteriaPanel('mgr-feedback', 'mgr-fb-sc-text');
+    _renderThinkAboutPanel(_currentScenario, 'mgr-fb-sc-text');
 
     // Reset UI
     $('mgr-fb-chat-thread').innerHTML = '';
@@ -2164,6 +2266,7 @@ HOW TO RUN THIS CALL:
     $('mgr-fb-live-sc-title').textContent = _currentScenario.title;
     $('mgr-fb-live-sc-text').innerHTML  = _formatScenarioHTML(_currentScenario.scenario);
     _renderEvalCriteriaPanel('mgr-feedback', 'mgr-fb-live-sc-text');
+    _renderThinkAboutPanel(_currentScenario, 'mgr-fb-live-sc-text');
     $('mgr-fb-live-thread').innerHTML = '';
     $('btn-mgr-fb-live-end').disabled = false;
 
@@ -2247,7 +2350,8 @@ HOW TO RUN THIS CONVERSATION:
       try {
         const result = await ClaudeEvaluator.evaluateManagerFeedback(
           fullTranscript, _currentScenario.scenario || _currentScenario.title || '',
-          _currentScenario.goodLooksLike || [], _currentScenario.commonPitfalls || []
+          _currentScenario.goodLooksLike || [], _currentScenario.commonPitfalls || [],
+          _currentScenario.smartWeights || null
         );
         aiScores = {
           ...result.scores,
@@ -2505,7 +2609,8 @@ HOW TO RUN THIS CONVERSATION:
       if (typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable() && fullTranscript) {
         const result = await ClaudeEvaluator.evaluateManagerFeedback(
           fullTranscript, _currentScenario.scenario || _currentScenario.title || '',
-          _currentScenario.goodLooksLike || [], _currentScenario.commonPitfalls || []
+          _currentScenario.goodLooksLike || [], _currentScenario.commonPitfalls || [],
+          _currentScenario.smartWeights || null
         );
         aiScores = {
           ...result.scores,
@@ -2722,7 +2827,9 @@ HOW TO RUN THIS CONVERSATION:
     const section = _currentScenario.sections[0];
     const cp = section.counterpart;
 
-    _eq = { sectionIndex: 0, turnInSection: 0, totalTurns: 0, turnsPerSection: 2, maxTotalTurns: 6,
+    // 6 AI turns per section (A/B/C) = 18 total across the case, per the
+    // manager's 2026-09-24 request (was 2 per section / 6 total).
+    _eq = { sectionIndex: 0, turnInSection: 0, totalTurns: 0, turnsPerSection: 6, maxTotalTurns: 18,
             history: [], blobPromise: null,
             turnTimerId: null, turnEnded: false, finishing: false, ttsAudioEl: null };
 

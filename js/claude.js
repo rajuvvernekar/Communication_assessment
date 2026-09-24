@@ -1201,14 +1201,22 @@ Return ONLY a JSON object: {${paramKeysJson},"reasons":{${reasonKeysJson}}}. Kee
   }
 
   // ---- Manager Feedback Evaluation ("The Red Pen") ----
-  // Scores the manager's feedback conversation against the 5 structure/
-  // empathy/resilience/specificity/forward-plan parameters from
-  // MGR_EVAL_CRITERIA['mgr-feedback'] (0-100% of each parameter's weight).
-  async function evaluateManagerFeedback(transcript, scenarioContext, goodLooksLike = [], commonPitfalls = []) {
+  // Scores the manager's feedback conversation against the SMART Feedback
+  // Checklist parameters (Specific/Measurable/Achievable/Relevant/
+  // Time-bound) from MGR_EVAL_CRITERIA['mgr-feedback'] (0-100% of each
+  // parameter's weight). smartWeights, when passed, overrides that
+  // module's default weights with the calling scenario's own -- each of
+  // the 6 Red Pen cases weighs the 5 letters differently, since what a
+  // "good" response looks like isn't evenly split across all five in
+  // every case (see manager-app.js's SCENARIOS['mgr-feedback'] entries).
+  async function evaluateManagerFeedback(transcript, scenarioContext, goodLooksLike = [], commonPitfalls = [], smartWeights = null) {
     if (!isAvailable()) throw new Error('Claude proxy not configured');
 
     const crit = (typeof MGR_EVAL_CRITERIA !== 'undefined') ? MGR_EVAL_CRITERIA['mgr-feedback'] : null;
-    const params = crit ? crit.parameters : [];
+    const baseParams = crit ? crit.parameters : [];
+    const params = smartWeights
+      ? baseParams.map(p => ({ ...p, weight: smartWeights[p.key] != null ? smartWeights[p.key] : p.weight }))
+      : baseParams;
 
     const glItems = (goodLooksLike || []).map((s, i) => `${i + 1}. ${s}`).join('\n');
     const cpItems = (commonPitfalls || []).map((s, i) => `${i + 1}. ${s}`).join('\n');
