@@ -1145,6 +1145,33 @@ const App = (() => {
     }
   }
 
+  // Fetches an ElevenLabs TTS clip, retrying once (after a short delay) on
+  // failure before giving up. speakAiCustomer falls back to the browser's
+  // speechSynthesis (speakBot) when this throws -- and that fallback's
+  // audio has no MediaStream/element to hook Recorder.addAudioSource onto,
+  // so it can never be captured into the saved recording at all (the
+  // trainee still hears it fine; admin ends up with a gap in the recording
+  // instead of just a worse-sounding voice). A retry meaningfully cuts how
+  // often a one-off network/API blip sends a turn down that unrecordable
+  // path; it can't fix a fully exhausted/misconfigured ElevenLabs account.
+  async function _fetchTtsBlob(ttsUrl, body) {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const resp = await fetch(ttsUrl, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify(body),
+        });
+        if (!resp.ok) throw new Error(`ElevenLabs TTS error ${resp.status}`);
+        return await resp.blob();
+      } catch (e) {
+        if (attempt >= 1) throw e;
+        console.warn('ElevenLabs TTS attempt failed, retrying once:', e.message);
+        await new Promise(r => setTimeout(r, 400));
+      }
+    }
+  }
+
   // ── ElevenLabs TTS for AI customer (human-sounding voice) ──
   // Sends text to the /tts route on the Cloudflare Worker proxy, receives
   // audio/mpeg back, and plays it via an HTMLAudioElement stored in
@@ -1157,24 +1184,16 @@ const App = (() => {
     const ttsUrl = proxyUrl.replace(/\/?$/, '/tts');
 
     try {
-      const resp = await fetch(ttsUrl, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          text,
-          model_id: 'eleven_multilingual_v2',  // higher quality, natural pacing
-          voice_settings: {
-            stability:         0.50,  // steady, controlled investor tone
-            similarity_boost:  0.75,
-            style:             0.20,  // natural, not theatrical
-            use_speaker_boost: true,
-          },
-        }),
+      const blob = await _fetchTtsBlob(ttsUrl, {
+        text,
+        model_id: 'eleven_multilingual_v2',  // higher quality, natural pacing
+        voice_settings: {
+          stability:         0.50,  // steady, controlled investor tone
+          similarity_boost:  0.75,
+          style:             0.20,  // natural, not theatrical
+          use_speaker_boost: true,
+        },
       });
-
-      if (!resp.ok) throw new Error(`ElevenLabs TTS error ${resp.status}`);
-
-      const blob     = await resp.blob();
       const audioUrl = URL.createObjectURL(blob);
       const audio    = new Audio(audioUrl);
       _mcBotAudioEl  = audio;

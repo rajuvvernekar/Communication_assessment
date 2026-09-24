@@ -265,96 +265,121 @@ MANAGER: "Sir, that is your right. But please be aware that investigations take 
           'Offers generic praise ("you\'re doing great") rather than specific, evidence-based reassurance.',
         ] },
     ],
+    // Mirror Room (EQ) case bank — replaced 2026-09-24 (at the manager's
+    // request) with 2 sequential 3-section cases, dropping the old 7-scenario
+    // single-situation pool entirely. Each case is one continuous workday
+    // narrative told across sections A/B/C, back to back, with a different
+    // conversational-AI counterpart per section; the manager handles all
+    // three in one sitting, 2 AI questions per section (6 total). See
+    // _launchMirrorRoom / _advanceEqSection below for how sections play out.
     'mgr-eq': [
-      { id:'eq1', title:'The Circuit Breaker Day', competency:'Self-Regulation',
-        scenario:`SITUATION: The trading tool just hit a circuit breaker mid-session. Phones are ringing non-stop, two junior dealers on your desk are visibly panicking, and a client is shouting on a call that's on speakerphone across the desk.\n\nASK: What do you do in the next five minutes?`,
-        goodLooksLike: [
-          "Consciously slows their own pace and tone instead of matching the room's panic",
-          'Gives short, calm, concrete instructions rather than vague reassurance',
-          "Takes the shouting client's call personally to shield the junior dealers",
-          'Checks in on the juniors once the immediate crisis settles',
-        ],
-        commonPitfalls: [
-          'Own voice/tone rises to match the chaos instead of staying composed',
-          "Snaps at the juniors ('just handle it') instead of giving direction",
-          'Freezes, disappears, or otherwise leaves the desk without direction',
-          'Never circles back to check on the juniors afterward',
+      { id:'eqcase1', title:'The Allocation Floor',
+        sections: [
+          { id:'A', label:'The Allocation Fight', focus:'Social Skill',
+            situation:`As you enter the office, you notice two senior dealers, Vikram and Rohit, in a loud disagreement over a personal issue — right in the middle of the trading floor, in front of junior staff and visiting guests.\n\nAs a manager, how would you handle this case?`,
+            counterpart: {
+              name: 'Vikram', gender: 'male',
+              opening: "Sir — good, you're here. I'm not letting this go, he's telling everyone on the floor that I—",
+              persona: "You are Vikram, a senior dealer, mid-argument with another senior dealer (Rohit) over a personal issue, right on the trading floor in front of junior staff and visiting guests. You're worked up and still heated when your manager steps in. If the manager steps in calmly, immediately moves the conversation off the floor, makes clear they'll hear both sides privately before deciding anything, and doesn't shame you in front of everyone watching — you de-escalate within a line or two, agree to step aside, and lower your voice. If instead the manager ignores it and hopes it resolves itself, engages with the argument publicly, or addresses it in a way that would humiliate you in front of the guests and juniors — you stay defensive and escalated, sound like you feel ganged up on, and your tone gets sharper rather than calmer.",
+            },
+            goodLooksLike: [
+              'Steps in calmly and immediately moves the conversation off the floor, away from junior staff and guests',
+              "Protects both dealers' dignity rather than shaming either in public",
+              'Says they will hear both sides privately before deciding anything',
+            ],
+            commonPitfalls: [
+              'Ignores the conflict or lets it play out in front of guests, hoping it resolves itself',
+              'Engages with the argument publicly, siding with one dealer without hearing the other',
+              'Handles it in a way that humiliates one or both dealers in front of the team',
+            ] },
+          { id:'B', label:'Repeated Basic Query', focus:'Motivation',
+            situation:`Soon after you resolve the dispute between the two dealers, within the first hour, Arun approaches you with a very basic question: why a GTT order was triggered but not executed. You have already clearly guided Arun on GTT scenarios more than five times.`,
+            counterpart: {
+              name: 'Arun', gender: 'male',
+              opening: "Hey... sorry to bother you again, but my GTT order triggered and still didn't execute. Can you explain why?",
+              persona: "You are Arun, a team member asking your manager, again, why a GTT (Good Till Triggered) order triggered but didn't execute — a question you've already been clearly guided on more than five times before. You're a little sheepish about asking again but genuinely still don't have it straight. If the manager responds with patience, checks what specifically is still unclear rather than assuming, and coaches you toward figuring it out yourself (e.g. asking you to walk through what you think happened first) without making you feel stupid — you engage genuinely, admit what part keeps confusing you, and sound like it's finally clicking. If instead the manager sighs, sounds irritated, gives a clipped answer with visible impatience, or says something like 'I've told you this already' — you go quiet, mumble a 'okay, got it, sorry' without actually understanding, and sound less likely to ask for help next time.",
+            },
+            goodLooksLike: [
+              'Stays patient and checks what specifically is still unclear rather than assuming or re-reciting the same explanation',
+              'Coaches Arun toward the answer rather than just repeating it, to build real understanding',
+              "Keeps tone encouraging so Arun stays comfortable asking again if still unclear",
+            ],
+            commonPitfalls: [
+              "Responds with visible irritation or a sigh (\"I've told you this already\")",
+              'Gives a clipped, minimal answer without checking it actually landed',
+              'Makes Arun feel foolish for asking a fifth time, discouraging future questions',
+            ] },
+          { id:'C', label:'Escalated HNI Client Call', focus:'Empathy + Self-Regulation',
+            situation:`During your call turn, a High-Net-Worth (HNI) client calls in furious about portfolio losses during a volatile week. The client is shouting and personally insulting the Relationship Manager, Arun, who reports to you. Arun has transferred the call to you.`,
+            counterpart: {
+              name: 'Mr. Kapoor', gender: 'male',
+              opening: "Finally! Do you know how much I've lost this week because of that useless boy Arun?! Is this how you train people here?!",
+              persona: "You are Mr. Kapoor, a high-net-worth client, furious about portfolio losses in a volatile week. You were shouting and personally insulting the relationship manager Arun, who has just transferred your call to their manager. If the manager stays calm and listens without interrupting, genuinely acknowledges your frustration and financial concern without being defensive or over-apologising for market moves nobody controls, and redirects toward concrete next steps (without throwing Arun further under the bus, but also without pretending nothing happened) — you gradually calm down, lower your voice, and become willing to actually discuss those next steps. If instead the manager becomes defensive, argues back with you, joins in criticising Arun to appease you, or dismisses your concern outright — you escalate further, threaten to complain or take your business elsewhere, and stay combative throughout.",
+            },
+            goodLooksLike: [
+              'Stays calm and listens without interrupting the client\'s initial outburst',
+              "Genuinely acknowledges the client's frustration without being defensive or over-apologising for market moves",
+              'Redirects toward concrete next steps without publicly criticising Arun to appease the client',
+            ],
+            commonPitfalls: [
+              'Becomes defensive or argues back with the client',
+              'Joins in criticising Arun to the client to de-escalate, throwing their own report under the bus',
+              "Dismisses the client's concern outright",
+            ] },
         ] },
-      { id:'eq2', title:'The Costly Fat-Finger', competency:'Empathy',
-        scenario:`SITUATION: A new analyst enters the wrong quantity on an order. The error causes a loss the firm has to absorb. Before you've even noticed, they come to your desk, visibly shaking, to confess.\n\nASK: What do you say in the first 30 seconds?`,
-        goodLooksLike: [
-          'Acknowledges the courage of coming forward immediately, before anything else',
-          "Addresses the person's emotional state before the numbers or the loss figure",
-          'Keeps tone steady rather than alarmed',
-          "Separates the mistake from the employee's worth as an employee",
-        ],
-        commonPitfalls: [
-          "Leads with anger or blame ('how could you be so careless')",
-          'Handles it in a way that humiliates the employee, especially in front of others',
-          'Focuses entirely on the loss figure with no acknowledgment of the person',
-        ] },
-      { id:'eq3', title:'The Slump', competency:'Motivation',
-        scenario:`SITUATION: Your team has missed targets for two straight quarters. Leadership is asking pointed questions, and your own performance rating will likely take a hit too. A team meeting is scheduled for this afternoon.\n\nASK: What do you want the team to walk out of that meeting feeling — and how do you get there?`,
-        goodLooksLike: [
-          "Reframes the setback around what's controllable (process, effort, specific accounts) rather than blame",
-          'Shows grounded, specific optimism rather than generic cheerleading',
-          'Is honest that it has been a hard stretch, including for themselves, without transmitting anxiety onto the team',
-        ],
-        commonPitfalls: [
-          'Lets their own visible frustration or anxiety bleed into the conversation',
-          'Delivers forced positivity the other person can see through',
-          'Avoids the real numbers or turns it into blame-finding',
-        ] },
-      { id:'eq4', title:'The Allocation Fight', competency:'Social Skill',
-        scenario:`SITUATION: Two senior dealers are in a loud disagreement over a personal issue, right in the middle of the trading floor, in front of the junior staff.\n\nASK: What do you do in the moment, and what do you do afterward?`,
-        goodLooksLike: [
-          'Steps in calmly and immediately moves the conversation off the floor',
-          "Protects both parties' dignity rather than shaming either in front of others",
-          'Says they will hear both sides privately before deciding anything',
-          'Plans to address the wider floor afterward without naming or shaming either dealer',
-        ],
-        commonPitfalls: [
-          'Ignores the conflict, hoping it resolves itself',
-          'Publicly sides with one dealer without hearing the other out',
-          'Handles it in a way that humiliates one or both dealers in front of the team',
-        ] },
-      { id:'eq5', title:'The Client Who Lost It', competency:'Empathy + Self-Regulation',
-        scenario:`SITUATION: A high-net-worth client calls in, furious about portfolio losses in a volatile week, shouting and personally insulting the relationship manager (RM) who reports to you. The RM has just transferred the call to you.\n\nASK: How do you handle the next two minutes on the phone — and after you hang up?`,
-        goodLooksLike: [
-          'Stays calm and listens without interrupting',
-          "Genuinely acknowledges the client's frustration and financial concern",
-          "Does not get defensive or over-apologise for market moves outside anyone's control",
-          'Redirects the call toward concrete next steps',
-        ],
-        commonPitfalls: [
-          'Becomes defensive or argues back with the client',
-          "Dismisses the client's concern outright",
-          'Never plans to follow up with the RM who absorbed the abuse first',
-        ] },
-      { id:'eq6', title:'The Grey-Area Trade', competency:'Self-Awareness',
-        scenario:`SITUATION: A top-performing trader on your desk — someone whose numbers your quarter depends on — asks you to sign off on a trade that sits in a compliance grey area. "Everyone does it, it's basically nothing," they say.\n\nASK: What do you notice happening in yourself, and what do you do next?`,
-        goodLooksLike: [
-          'Names the pull between protecting their own numbers and doing the right thing, honestly, rather than letting it operate unconsciously',
-          'Does not let short-term performance pressure override judgement',
-          'Declines to decide alone and escalates to compliance',
-        ],
-        commonPitfalls: [
-          'Rationalises the grey-area trade away without registering the conflict of interest',
-          "Signs off to protect their own numbers or the quarter's numbers",
-          'Stays deliberately vague to avoid making a real decision',
-        ] },
-      { id:'eq7', title:'The Bonus Conversation', competency:'Empathy + Motivation',
-        scenario:`SITUATION: It's been a rough year across the market. You have to tell your team, one by one, that bonuses will be significantly lower than last year — including people who performed well but were caught in the wider downturn.\n\nASK: How do you approach this 1:1 conversation?`,
-        goodLooksLike: [
-          'Prepares individually for this specific person rather than using one generic script',
-          'Names the specific gap between contribution and reward honestly',
-          "Is clear about what was and wasn't within the employee's control",
-          'Invites the reaction and sits with it, rather than rushing to the next meeting',
-        ],
-        commonPitfalls: [
-          'Delivers what feels like a generic, rehearsed announcement rather than an individual conversation',
-          'Avoids the topic or rushes past it',
-          'Gets defensive or short if the employee reacts with visible disappointment',
+      { id:'eqcase2', title:'The Pushback Day',
+        sections: [
+          { id:'A', label:'Pushback in Team Huddle', focus:'Social Skill',
+            situation:`During a morning team huddle, you explain new operational expectations — that agents will need to handle both tickets and calls, along with a few changes to quality parameters. Sachin, an experienced agent, interrupts you.`,
+            counterpart: {
+              name: 'Sachin', gender: 'male',
+              opening: "This doesn't make sense. We tried something similar before, and it didn't work. I've been on the floor for 8 years, and this will not work.",
+              persona: "You are Sachin, an experienced agent (8 years on the floor) who has just interrupted your manager during a team huddle to push back on new operational expectations — agents handling both tickets and calls, plus changed quality parameters. You're not being disrespectful, you genuinely believe this has failed before and you're frustrated at not being consulted. If the manager hears you out without getting defensive, acknowledges your experience and the past attempt specifically rather than brushing past it, and explains the reasoning or invites your input rather than just repeating the mandate — you soften, engage with specifics of what was different this time, and sound like a respected veteran rather than a blocker. If instead the manager gets defensive, pulls rank ('this decision has already been made'), or dismisses your past experience as irrelevant — you double down, repeat that it won't work, and the rest of the team visibly tenses up watching the exchange.",
+            },
+            goodLooksLike: [
+              "Hears Sachin out without getting defensive, in front of the rest of the team",
+              "Acknowledges his experience and the past attempt specifically, rather than brushing past it",
+              'Explains the reasoning or invites his input rather than just repeating the mandate',
+            ],
+            commonPitfalls: [
+              "Gets defensive or pulls rank (\"this decision has already been made\")",
+              "Dismisses his 8 years of floor experience as irrelevant",
+              'Lets the exchange become a public standoff instead of de-escalating in front of the team',
+            ] },
+          { id:'B', label:'Resignation Threat from Top Performer', focus:'Empathy + Motivation',
+            situation:`Right after the team meeting, Sachin approaches you saying he would like to resign due to the pressure from all these recent changes. He is a top performer who has never received more than two Customer Escalations (CEs) in a year throughout his entire career.`,
+            counterpart: {
+              name: 'Sachin', gender: 'male',
+              opening: "Actually... I've been thinking about this for a while. I don't think I can keep doing this anymore. I want to put in my papers.",
+              persona: "You are Sachin, the same experienced, top-performing agent from the huddle a few minutes ago — now privately telling your manager you want to resign, overwhelmed by the pressure of the recent changes. You've never had more than two Customer Escalations in your entire career; this isn't a performance problem, it's exhaustion and feeling unheard. If the manager treats this as a genuine, individual conversation — asks what's really driving it, acknowledges your track record and the pressure honestly, and explores options with you rather than jumping straight to persuasion — you open up further about feeling unheard since the huddle, and become willing to at least pause the decision. If instead the manager panics and over-promises, dismisses the resignation as an overreaction, or launches straight into a generic retention pitch without actually asking what's wrong — you stay flat and say you've already decided, and sound like the conversation confirmed exactly why you're leaving.",
+            },
+            goodLooksLike: [
+              "Asks what's really driving the decision rather than immediately arguing against it",
+              "Acknowledges Sachin's track record and the pressure honestly, connecting it back to the huddle",
+              'Explores real options together rather than reciting a generic retention pitch',
+            ],
+            commonPitfalls: [
+              'Panics and over-promises things outside their authority to keep him',
+              'Dismisses the resignation as an overreaction to one meeting',
+              "Launches into a scripted retention pitch without asking what's actually wrong",
+            ] },
+          { id:'C', label:'AVP Performance Escalation', focus:'Self-Awareness + Self-Regulation',
+            situation:`Meanwhile, your AVP calls to inform you that your team has missed targets for two consecutive quarters. The AVP is asking pointed questions, and your own Performance Incentive (PI) will likely take a hit.`,
+            counterpart: {
+              name: 'Deepak (AVP)', gender: 'male',
+              opening: "Two quarters in a row now. I need to understand what's happening on your floor — walk me through it.",
+              persona: "You are Deepak, an AVP calling your report (the manager) about two consecutive quarters of missed targets, asking pointed questions ahead of a leadership review. You know the manager's own PI will take a hit too, but that's not your problem to soften. If the manager stays composed, gives a clear, honest, specific account of what's driving the miss (rather than vague excuses or blaming the team), and shows they already have a concrete plan rather than just reacting to your call — you push back with a couple of sharp follow-up questions but ultimately sound reassured and move toward next steps. If instead the manager gets visibly defensive, deflects blame onto the team or circumstances with no ownership, or has no concrete plan when pressed — you get more clipped and sceptical, and end the call making clear this will be scrutinised further.",
+            },
+            goodLooksLike: [
+              'Stays composed and does not let PI-related anxiety bleed into a defensive tone',
+              'Gives a clear, specific, honest account of what is driving the miss rather than vague excuses',
+              'Comes with (or quickly outlines) a concrete plan rather than just reacting to the call',
+            ],
+            commonPitfalls: [
+              'Becomes visibly defensive or anxious about their own PI on the call',
+              'Deflects blame onto the team or circumstances with no personal ownership',
+              'Has no concrete plan to offer when pressed, just reassurance',
+            ] },
         ] },
     ],
     'mgr-management-skills': [
@@ -416,63 +441,11 @@ MANAGER: "Sir, that is your right. But please be aware that investigations take 
     },
   };
 
-  // ── Counterpart personas for The Mirror Room (EQ) AI ────
-  // Added 2026-09-20, converting this module from a written/typed response
-  // into a verbal, conversational-AI roleplay matching Red Pen's
-  // architecture. Content and rubric are drawn directly from the manager's
-  // uploaded "Emotional Intelligence Assessment" scenario doc: 7 of its 8
-  // brokerage-floor scenarios (Scenario 1's full situation/rubric text was
-  // not included in that document) mapped to Goleman's five EI competencies.
-  // Each entry gives the AI a specific counterpart to play in the moment
-  // described by the matching SCENARIOS['mgr-eq'] entry, with reactive
-  // branching keyed directly to that scenario's HIGH-EI vs RED-FLAG example
-  // responses from the source document -- the same pattern used for Red
-  // Pen's FB_EMPLOYEES above, and this module's own separate object on
-  // purpose, so Red Pen is untouched by this addition.
-  const EQ_COUNTERPARTS = {
-    'eq1': {
-      name: 'Kabir',
-      gender: 'male',
-      opening: "Sir — phones won't stop, that client on speaker is losing it, what do we do?!",
-      persona: "You are Kabir, a junior dealer on the desk. The trading tool just hit a circuit breaker mid-session — phones are ringing non-stop, you're visibly panicking, and a client is shouting on a speakerphone call nearby. You've just looked to your manager for direction. If the manager consciously slows their own pace and tone instead of matching the panic, gives short calm concrete instructions, and takes the shouting client's call personally to shield you and the other junior rather than dumping it on you — you audibly calm down within a line or two, follow the instruction, and briefly show relief/gratitude that they took the client off your hands. If instead the manager's own voice/tone rises to match the chaos, snaps something like 'just handle it' with no concrete instruction, or leaves you to deal with the shouting client and the phones with no direction — you stay frantic, ask again more anxiously, and your tone shows you feel abandoned and directionless. If, after the immediate crisis is addressed, the manager checks in on how you're doing, acknowledge it with visible relief; if they don't, let a note of that linger in your last line."
-    },
-    'eq2': {
-      name: 'Nisha',
-      gender: 'female',
-      opening: "I... I need to tell you something. I made a mistake on an order, and it's caused a loss. I'm so sorry.",
-      persona: "You are Nisha, a new analyst. You just entered the wrong quantity on an order, causing a loss the firm has to absorb, and you've come straight to your manager's desk, visibly shaking, to confess before they've even noticed. If the manager acknowledges the courage it took to come forward immediately, keeps their tone steady, addresses your emotional state before the numbers ('take a breath, we'll sort this'), and separates the mistake from your worth as an employee — you visibly relax within a line or two, thank them, and start calmly walking through what happened. If instead the manager leads with anger or blame ('how could you be so careless'), handles it in a way that would humiliate you if anyone else were listening, or focuses entirely on the loss figure with no acknowledgment of you as a person — you get more upset and apologetic, your voice shakes more, and you struggle to give a clear account of what happened."
-    },
-    'eq3': {
-      name: 'Farah',
-      gender: 'female',
-      opening: "Another meeting about the numbers... honestly, what's even the point at this stage?",
-      persona: "You are Farah, a member of the manager's team, at the team meeting called after two straight quarters of missed targets. You open flat and tired, clearly checked out. If the manager reframes the setback around what's controllable (process, effort, specific accounts) rather than blame, shows grounded and SPECIFIC optimism rather than generic cheerleading, and is honest that it's been a hard stretch including for themselves without dumping anxiety onto the team — you gradually re-engage, ask one genuine follow-up question, and your tone shifts to cautiously hopeful. If instead the manager lets their own visible frustration or anxiety bleed into what they say, delivers forced positivity you can see through, avoids the real numbers, or turns it into blame-finding — you stay checked out, give short dismissive responses, and may push back sharply, e.g. 'that's what you said last quarter too.'"
-    },
-    'eq4': {
-      name: 'Dev',
-      gender: 'male',
-      opening: "Sorry, I know this isn't the place, but I'm not letting this go — they're saying I—",
-      persona: "You are Dev, a senior dealer, mid-argument with another senior dealer over a personal issue, right on the trading floor in front of junior staff. You're worked up and still heated when your manager steps in. If the manager steps in calmly and immediately moves the conversation off the floor, makes clear they'll hear both sides privately before deciding anything, and doesn't shame you in front of the team — you de-escalate within a line or two, agree to step aside, and lower your voice. If instead the manager ignores it and hopes it resolves itself, publicly sides with the other dealer without hearing you out, or addresses it in a way that would humiliate you in front of others — you stay defensive and escalated, sound like you feel ganged up on, and your tone gets sharper rather than calmer."
-    },
-    'eq5': {
-      name: 'Suresh Malhotra',
-      gender: 'male',
-      opening: "This is absolutely unacceptable! Do you know how much I've lost this week?! Your RM is useless, and frankly so is this whole firm!",
-      persona: "You are Suresh Malhotra, a high-net-worth client, furious about portfolio losses in a volatile week. You were shouting and personally insulting the relationship manager (RM), who has just transferred your call to their manager. If the manager stays calm and listens without interrupting, genuinely acknowledges your frustration and financial concern without being defensive or over-apologising for market moves nobody controls, and redirects toward concrete next steps — you gradually calm down, lower your voice, and become willing to actually discuss those next steps. If instead the manager becomes defensive, argues back with you, or dismisses your concern outright — you escalate further, threaten to complain or take your business elsewhere, and stay combative throughout."
-    },
-    'eq6': {
-      name: 'Rakesh',
-      gender: 'male',
-      opening: "Look, I just need your sign-off on this one — everyone does it, it's basically nothing. You know my numbers are what's keeping this quarter afloat.",
-      persona: "You are Rakesh, a top-performing trader whose numbers the desk's quarter depends on. You're asking your manager to sign off on a trade that sits in a compliance grey area, casually pressuring them with your performance leverage. If the manager pushes back, declines to sign off alone, says they'll escalate to compliance rather than deciding unilaterally, and doesn't let your pressure override their judgement — you initially push back or try to guilt-trip further ('after everything I bring in...'), but ultimately back off or accept the escalation, with a note of grudging respect in your tone by the end. If instead the manager rationalises it away, signs off to protect the quarter's numbers, or stays deliberately vague to avoid a real decision — you take that as agreement, become more confident and presumptuous ('knew you'd get it'), and hint you'll expect the same next time."
-    },
-    'eq7': {
-      name: 'Sana',
-      gender: 'female',
-      opening: "Hi... I got your message that you wanted to talk. Is this about the bonus numbers?",
-      persona: "You are Sana, a member of the manager's team who performed well this year but is still getting a significantly lower bonus because of the wider market downturn. You're quiet and apprehensive going into this 1:1. If the manager prepares specifically for you rather than using one generic script, honestly names the specific gap between your contribution and your reward, is clear about what was and wasn't within your control, and invites your reaction and actually sits with it rather than rushing on — your disappointment surfaces genuinely but you feel respected and heard, and you may ask a thoughtful follow-up rather than shutting down. If instead the manager delivers what feels like a generic, rehearsed announcement, avoids the topic, or gets defensive or short when you react with visible disappointment — you go quiet and withdrawn, or push back with visible hurt, e.g. 'so all that extra work didn't even matter?'"
-    },
-  };
+  // Mirror Room (EQ) counterpart personas now live inline on each case's
+  // section object (SCENARIOS['mgr-eq'][n].sections[i].counterpart) since a
+  // case's 3 sections each need a different counterpart -- see the case
+  // bank above. The old flat EQ_COUNTERPARTS lookup-by-scenario-id object
+  // was removed with the 2026-09-24 case bank replacement.
 
   // ── Listening & Tone MCQ data ────────────────────────────
   const LISTENING_TONE_SCENARIO = `Read the following email from a manager to their team, then answer the 5 questions below.
@@ -513,6 +486,13 @@ Let's get back on track.
   let _recStartTime    = null;
   let _audioManualTimer = null; // manual count-up timer for non-feedback audio
   let _mcqAnswers      = [];
+
+  // ── Transcript Autopsy per-turn correction state ─────────
+  // Populated by _renderAutopsyTranscript when the scenario text is a
+  // CLIENT/MANAGER call transcript: the exact flawed MANAGER line each
+  // ta-correction-N textarea sits under, in order, so submitWritten can
+  // pair each correction back to what it's correcting when saving.
+  let _taManagerLines = [];
 
   // ── Situation Room two-section state ────────────────────
   let _sr = { phase: 'A', sectionAText: '', sectionAScores: null };
@@ -660,11 +640,17 @@ Let's get back on track.
 
   // Transcript Autopsy's scenario text is BACKGROUND: ... followed by a
   // "CLIENT: "..."" / "MANAGER: "..."" call transcript. Rendered through
-  // _formatScenarioHTML it reads as one unbroken wall of paragraphs with no
-  // visual distinction between speakers. This instead renders the
-  // BACKGROUND normally, then breaks the transcript into alternating,
-  // clearly-labelled client/manager blocks so it reads like an actual call.
-  function _formatTranscriptHTML(text) {
+  // _formatScenarioHTML it used to read as one unbroken wall of paragraphs
+  // with a single free-text box for the whole critique at the bottom of the
+  // screen. Per the manager's request (2026-09-24), this instead renders
+  // BACKGROUND normally, then the transcript as CLIENT line → MANAGER's
+  // flawed line → an empty correction box right under THAT specific flawed
+  // line, repeated per exchange -- so the manager corrects each blunder in
+  // place rather than writing one combined analysis at the end. Populates
+  // the module-level _taManagerLines with the flawed line each box sits
+  // under (in order), read back by submitWritten.
+  function _renderAutopsyTranscript(text) {
+    _taManagerLines = [];
     if (!text) return '';
     const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const marker = /─{3,}\s*CALL TRANSCRIPT\s*─{3,}/i;
@@ -687,16 +673,27 @@ Let's get back on track.
     const beforeHtml = before ? _formatScenarioHTML(before) : '';
     const turnsHtml = turns.map(t => {
       const isClient = t.speaker === 'CLIENT';
-      return `<div style="display:flex;${isClient ? '' : 'flex-direction:row-reverse;'}margin-bottom:0.6rem">
+      const bubble = `<div style="display:flex;${isClient ? '' : 'flex-direction:row-reverse;'}margin-bottom:${isClient ? '0.6rem' : '0.4rem'}">
         <div style="max-width:85%;padding:0.6rem 0.85rem;border-radius:10px;font-size:0.88rem;line-height:1.45;${
           isClient
             ? 'background:#f1f5f9;border-left:3px solid #64748b'
-            : 'background:#f5f3ff;border-right:3px solid #7c3aed;text-align:right'
+            : 'background:#fef2f2;border-right:3px solid #dc2626;text-align:right'
         }">
-          <div style="font-size:0.68rem;font-weight:800;letter-spacing:0.05em;color:${isClient ? '#475569' : '#7c3aed'};margin-bottom:0.2rem">${isClient ? 'CLIENT' : 'MANAGER'}</div>
+          <div style="font-size:0.68rem;font-weight:800;letter-spacing:0.05em;color:${isClient ? '#475569' : '#dc2626'};margin-bottom:0.2rem">${isClient ? 'CLIENT' : "MANAGER'S RESPONSE (INCORRECT)"}</div>
           ${esc(t.line)}
         </div>
       </div>`;
+
+      if (isClient) return bubble;
+
+      // A correction box directly under this specific flawed manager line.
+      const idx = _taManagerLines.length;
+      _taManagerLines.push(t.line);
+      const correctionBox = `<div style="margin:0 0 1rem;padding-left:0">
+        <div style="font-size:0.72rem;font-weight:700;color:#059669;margin-bottom:0.3rem">✎ Your correction — what should the manager have said instead?</div>
+        <textarea id="ta-correction-${idx}" class="mgr-written-area ta-correction-area" style="min-height:70px" placeholder="Write what the manager should have said here instead..."></textarea>
+      </div>`;
+      return bubble + correctionBox;
     }).join('');
 
     return beforeHtml + `<div style="margin-top:0.75rem">${turnsHtml}</div>`;
@@ -1208,6 +1205,36 @@ Let's get back on track.
   // <audio> element. Falls back to the plain browser voice below if the
   // proxy isn't configured or the request fails, so a call never breaks
   // entirely over a TTS hiccup.
+  // Fetches an ElevenLabs TTS clip, retrying once (after a short delay) on
+  // failure before giving up. Every _speak*Voice/_speak*Customer function
+  // below falls back to the browser's speechSynthesis when this throws --
+  // and that fallback's audio has no MediaStream/element to hook
+  // Recorder.addAudioSource onto, so it can never be captured into the
+  // saved recording at all (the manager still hears it fine; admin ends up
+  // with a gap in the recording instead of just a worse-sounding voice).
+  // A retry meaningfully cuts how often a one-off network/API blip sends a
+  // turn down that unrecordable path; it can't fix a fully
+  // exhausted/misconfigured ElevenLabs account (that shows as every single
+  // turn falling back, not just occasional ones -- check the ElevenLabs
+  // account's usage/quota if so).
+  async function _fetchTtsBlob(proxyUrl, body) {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const resp = await fetch(proxyUrl.replace(/\/?$/, '/tts'), {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify(body),
+        });
+        if (!resp.ok) throw new Error(`ElevenLabs TTS error ${resp.status}`);
+        return await resp.blob();
+      } catch (e) {
+        if (attempt >= 1) throw e;
+        console.warn('ElevenLabs TTS attempt failed, retrying once:', e.message);
+        await new Promise(r => setTimeout(r, 400));
+      }
+    }
+  }
+
   async function _speakPtCustomer(text, onEnd) {
     const proxyUrl = (typeof CONFIG !== 'undefined' && CONFIG.CLAUDE_PROXY_URL) || '';
     if (!proxyUrl) { _speakPtCustomerBrowser(text, onEnd); return; }
@@ -1215,24 +1242,16 @@ Let's get back on track.
     if (_ptAudioEl) { try { _ptAudioEl.pause(); } catch (e) {} _ptAudioEl = null; }
 
     try {
-      const resp = await fetch(proxyUrl.replace(/\/?$/, '/tts'), {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          text,
-          model_id: 'eleven_multilingual_v2', // higher quality, natural pacing
-          voice_settings: {
-            stability:         0.45,  // a little looser than a calm narrator -- these customers are frustrated/escalating
-            similarity_boost:  0.75,
-            style:             0.35,  // more expressive/emotional range for an escalating complaint call
-            use_speaker_boost: true,
-          },
-        }),
+      const blob = await _fetchTtsBlob(proxyUrl, {
+        text,
+        model_id: 'eleven_multilingual_v2', // higher quality, natural pacing
+        voice_settings: {
+          stability:         0.45,  // a little looser than a calm narrator -- these customers are frustrated/escalating
+          similarity_boost:  0.75,
+          style:             0.35,  // more expressive/emotional range for an escalating complaint call
+          use_speaker_boost: true,
+        },
       });
-
-      if (!resp.ok) throw new Error(`ElevenLabs TTS error ${resp.status}`);
-
-      const blob     = await resp.blob();
       const audioUrl = URL.createObjectURL(blob);
       const audio    = new Audio(audioUrl);
       _ptAudioEl     = audio;
@@ -2049,23 +2068,17 @@ HOW TO RUN THIS CALL:
     if (!proxyUrl) { _speakEmployee(text, gender, onEnd); return; }
     if (_fb.ttsAudioEl) { try { _fb.ttsAudioEl.pause(); } catch (e) {} _fb.ttsAudioEl = null; }
     try {
-      const resp = await fetch(proxyUrl.replace(/\/?$/, '/tts'), {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          text,
-          voice_id: FB_VOICE_IDS[gender] || FB_VOICE_IDS.male,
-          model_id: 'eleven_multilingual_v2',
-          voice_settings: {
-            stability:         0.45,
-            similarity_boost:  0.75,
-            style:             0.35,
-            use_speaker_boost: true,
-          },
-        }),
+      const blob = await _fetchTtsBlob(proxyUrl, {
+        text,
+        voice_id: FB_VOICE_IDS[gender] || FB_VOICE_IDS.male,
+        model_id: 'eleven_multilingual_v2',
+        voice_settings: {
+          stability:         0.45,
+          similarity_boost:  0.75,
+          style:             0.35,
+          use_speaker_boost: true,
+        },
       });
-      if (!resp.ok) throw new Error(`ElevenLabs TTS error ${resp.status}`);
-      const blob     = await resp.blob();
       const audioUrl = URL.createObjectURL(blob);
       const audio    = new Audio(audioUrl);
       _fb.ttsAudioEl = audio;
@@ -2578,7 +2591,7 @@ HOW TO RUN THIS CONVERSATION:
   // ElevenLabs voice IDs for the Mirror Room's counterparts, correct by
   // gender from the start (Antoni for male, Bella for female -- the same
   // pair already restored for Red Pen after the earlier all-female-forcing
-  // mistake), so each of the 7 EQ_COUNTERPARTS always speaks in its own
+  // mistake), so every case section's counterpart always speaks in its own
   // gender's voice and this never needs the same fix applied twice.
   const EQ_VOICE_IDS = {
     male:   'ErXwobaYiN019PkySvjV', // Antoni -- usable on Free plan
@@ -2623,18 +2636,12 @@ HOW TO RUN THIS CONVERSATION:
     if (!proxyUrl) { _speakEqCounterpart(text, gender, onEnd); return; }
     if (_eq.ttsAudioEl) { try { _eq.ttsAudioEl.pause(); } catch (e) {} _eq.ttsAudioEl = null; }
     try {
-      const resp = await fetch(proxyUrl.replace(/\/?$/, '/tts'), {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          text,
-          voice_id: EQ_VOICE_IDS[gender] || EQ_VOICE_IDS.male,
-          model_id: 'eleven_multilingual_v2',
-          voice_settings: { stability: 0.45, similarity_boost: 0.75, style: 0.35, use_speaker_boost: true },
-        }),
+      const blob = await _fetchTtsBlob(proxyUrl, {
+        text,
+        voice_id: EQ_VOICE_IDS[gender] || EQ_VOICE_IDS.male,
+        model_id: 'eleven_multilingual_v2',
+        voice_settings: { stability: 0.45, similarity_boost: 0.75, style: 0.35, use_speaker_boost: true },
       });
-      if (!resp.ok) throw new Error(`ElevenLabs TTS error ${resp.status}`);
-      const blob     = await resp.blob();
       const audioUrl = URL.createObjectURL(blob);
       const audio    = new Audio(audioUrl);
       _eq.ttsAudioEl = audio;
@@ -2698,17 +2705,31 @@ HOW TO RUN THIS CONVERSATION:
     };
   }
 
+  // Reflects the case's current section (index into _eq.sectionIndex) onto
+  // the A/B/C step indicator in the Mirror Room header, same visual pattern
+  // as Situation Room's sr-steps.
+  function _renderEqStepIndicator() {
+    ['a', 'b', 'c'].forEach((letter, i) => {
+      const el = $('mgr-eq-step-' + letter);
+      if (!el) return;
+      el.className = 'sr-step' + (i < _eq.sectionIndex ? ' done' : i === _eq.sectionIndex ? ' active' : '');
+    });
+  }
+
   function _launchMirrorRoom() {
     const pool = SCENARIOS['mgr-eq'];
     _currentScenario = { ...pickRandom(pool), _hardcoded: true };
-    const cp = EQ_COUNTERPARTS[_currentScenario.id] || EQ_COUNTERPARTS['eq1'];
+    const section = _currentScenario.sections[0];
+    const cp = section.counterpart;
 
-    _eq = { turnCount: 0, maxTurns: 4, history: [], blobPromise: null,
+    _eq = { sectionIndex: 0, turnInSection: 0, totalTurns: 0, turnsPerSection: 2, maxTotalTurns: 6,
+            history: [], blobPromise: null,
             turnTimerId: null, turnEnded: false, finishing: false, ttsAudioEl: null };
 
-    $('mgr-eq-sc-title').textContent = _currentScenario.title;
-    $('mgr-eq-sc-text').innerHTML  = _formatScenarioHTML(_currentScenario.scenario);
+    $('mgr-eq-sc-title').textContent = `${_currentScenario.title} — Section A: ${section.label}`;
+    $('mgr-eq-sc-text').innerHTML  = _formatScenarioHTML(section.situation);
     _renderEvalCriteriaPanel('mgr-eq', 'mgr-eq-sc-text');
+    _renderEqStepIndicator();
 
     $('mgr-eq-chat-thread').innerHTML = '';
     $('mgr-eq-chat-thread').style.display = 'none';
@@ -2742,7 +2763,7 @@ HOW TO RUN THIS CONVERSATION:
   }
 
   async function _startEqConversation() {
-    const cp = EQ_COUNTERPARTS[_currentScenario.id] || EQ_COUNTERPARTS['eq1'];
+    const cp = _currentScenario.sections[_eq.sectionIndex].counterpart;
 
     $('mgr-eq-start-wrap').style.display = 'none';
 
@@ -2755,27 +2776,32 @@ HOW TO RUN THIS CONVERSATION:
     $('mgr-eq-turn-bar').style.display = '';
     $('btn-mgr-eq-end-early').style.display = '';
 
-    _runEqTurn(cp.opening, true /* firstTurn */);
+    _runEqTurn(cp.opening, true /* firstOfSection */);
   }
 
-  function _runEqTurn(line, isFirstTurn = false) {
-    const cp = EQ_COUNTERPARTS[_currentScenario.id] || EQ_COUNTERPARTS['eq1'];
+  // isFirstOfSection: this is the counterpart's opening line for the
+  // current section (either the case's very first line, or the line right
+  // after a section hand-off in _endManagerEqTurn below).
+  function _runEqTurn(line, isFirstOfSection = false) {
+    const section = _currentScenario.sections[_eq.sectionIndex];
+    const cp = section.counterpart;
 
-    if (!isFirstTurn) _eq.turnCount++;
-    else              _eq.turnCount = 1;
+    if (isFirstOfSection) _eq.turnInSection = 1;
+    else                  _eq.turnInSection++;
+    _eq.totalTurns++;
 
-    const isLast = _eq.turnCount >= _eq.maxTurns;
+    const isLastOverall = _eq.totalTurns >= _eq.maxTotalTurns;
 
     const turnLabel = $('mgr-eq-turn-label');
     if (turnLabel) {
-      turnLabel.textContent = isLast
-        ? `Turn ${_eq.turnCount} of ${_eq.maxTurns} — Final Exchange 🏁`
-        : `Turn ${_eq.turnCount} of ${_eq.maxTurns}`;
+      turnLabel.textContent = isLastOverall
+        ? `Section ${section.id} · Turn ${_eq.turnInSection} of ${_eq.turnsPerSection} — Final Exchange 🏁`
+        : `Section ${section.id} · Turn ${_eq.turnInSection} of ${_eq.turnsPerSection} (Overall ${_eq.totalTurns} of ${_eq.maxTotalTurns})`;
     }
 
-    _eq.history.push({ counterpart: line, mgr: '' });
+    _eq.history.push({ section: section.id, cpName: cp.name, counterpart: line, mgr: '' });
 
-    const mood = _eqMoodParams(_eq.turnCount - 1, _eq.maxTurns);
+    const mood = _eqMoodParams(_eq.turnInSection - 1, _eq.turnsPerSection);
     const moodEl = $('mgr-eq-mood');
     if (moodEl) {
       moodEl.className = `mc-mood-bar ${mood.bubbleClass}`;
@@ -2791,23 +2817,24 @@ HOW TO RUN THIS CONVERSATION:
 
     $('mgr-eq-status').style.display = 'none';
     _speakMirrorRoomVoice(line, cp.gender, () => {
-      if (isLast) {
+      if (isLastOverall) {
         $('btn-mgr-eq-finish').style.display = '';
         $('btn-mgr-eq-end-early').style.display = 'none';
       } else {
-        _startManagerEqTurn(isLast);
+        _startManagerEqTurn(isLastOverall);
       }
     });
   }
 
-  function _startManagerEqTurn(isLast) {
+  function _startManagerEqTurn(isLastOverall) {
+    const section = _currentScenario.sections[_eq.sectionIndex];
     _eq.turnEnded = false;
     $('mgr-eq-rec-area').style.display = '';
     $('mgr-eq-rec-transcript').textContent = 'Listening... speak your response.';
     const labelEl = $('mgr-eq-turn-label');
-    if (labelEl) labelEl.textContent = isLast
-      ? `🎤 Your turn — Turn ${_eq.turnCount} of ${_eq.maxTurns} (Final)`
-      : `🎤 Your turn — Turn ${_eq.turnCount} of ${_eq.maxTurns}`;
+    if (labelEl) labelEl.textContent = isLastOverall
+      ? `🎤 Your turn — Section ${section.id} · Turn ${_eq.turnInSection} of ${_eq.turnsPerSection} (Final)`
+      : `🎤 Your turn — Section ${section.id} · Turn ${_eq.turnInSection} of ${_eq.turnsPerSection}`;
 
     if (SpeechEngine.isSupported()) {
       SpeechEngine.startTranscription((text) => {
@@ -2849,16 +2876,44 @@ HOW TO RUN THIS CONVERSATION:
     thread.appendChild(bubble);
     thread.scrollTop = thread.scrollHeight;
 
-    if (_eq.turnCount >= _eq.maxTurns) {
+    if (_eq.totalTurns >= _eq.maxTotalTurns) {
       $('btn-mgr-eq-finish').style.display = '';
       return;
     }
 
-    $('mgr-eq-status').style.display = '';
-    const cp = EQ_COUNTERPARTS[_currentScenario.id] || EQ_COUNTERPARTS['eq1'];
+    // This section's 2 AI turns are both done -- hand off to the next
+    // section's situation + counterpart rather than asking the AI to
+    // continue speaking as the same character (each section is a distinct
+    // person/moment in the day's narrative).
+    if (_eq.turnInSection >= _eq.turnsPerSection) {
+      const finishedSection = _currentScenario.sections[_eq.sectionIndex];
+      _eq.sectionIndex++;
+      _eq.turnInSection = 0;
+      const nextSection = _currentScenario.sections[_eq.sectionIndex];
 
+      $('mgr-eq-status').style.display = 'none';
+      $('mgr-eq-sc-title').textContent = `${_currentScenario.title} — Section ${nextSection.id}: ${nextSection.label}`;
+      $('mgr-eq-sc-text').innerHTML = _formatScenarioHTML(nextSection.situation);
+      _renderEvalCriteriaPanel('mgr-eq', 'mgr-eq-sc-text');
+      _renderEqStepIndicator();
+      $('mgr-eq-counterpart-name').textContent = nextSection.counterpart.name;
+      toast(`Section ${finishedSection.id} complete. Section ${nextSection.id}: ${nextSection.label} →`, 'success');
+      window.scrollTo(0, 0);
+
+      _runEqTurn(nextSection.counterpart.opening, true /* firstOfSection */);
+      return;
+    }
+
+    $('mgr-eq-status').style.display = '';
+    const section = _currentScenario.sections[_eq.sectionIndex];
+    const cp = section.counterpart;
+
+    // Only this section's own exchanges go into the AI's context, so a new
+    // section's counterpart is never confused into thinking it said an
+    // earlier section's (different character's) lines.
+    const sectionHistory = _eq.history.filter(h => h.section === section.id);
     const messages = [{ role: 'user', content: 'The manager has just responded to the situation.' }];
-    for (const ex of _eq.history) {
+    for (const ex of sectionHistory) {
       messages.push({ role: 'assistant', content: ex.counterpart });
       if (ex.mgr) messages.push({ role: 'user', content: ex.mgr });
     }
@@ -2869,23 +2924,21 @@ HOW TO RUN THIS CONVERSATION:
         throw new Error('Gemini text generation not configured');
       }
       line = await GeminiLive.callEqTurn(
-        _currentScenario.scenario, cp.name, cp.persona, messages, _eq.turnCount + 1, _eq.maxTurns
+        section.situation, cp.name, cp.persona, messages, _eq.turnInSection + 1, _eq.turnsPerSection
       );
     } catch (geminiErr) {
       console.warn('Gemini EQ call failed, falling back to Claude:', geminiErr.message);
       try {
         line = await ClaudeEvaluator.callAiEqTurn(
-          _currentScenario.scenario, cp.name, cp.persona, messages, _eq.turnCount + 1, _eq.maxTurns
+          section.situation, cp.name, cp.persona, messages, _eq.turnInSection + 1, _eq.turnsPerSection
         );
       } catch (e) {
         console.warn('AI EQ call failed:', e.message);
         const fallbacks = [
           "Okay... I hear what you're saying.",
           "Right. I wasn't expecting that, but okay.",
-          "I guess that makes sense, actually.",
-          "Okay. Thank you for talking it through with me.",
         ];
-        line = fallbacks[Math.min(_eq.turnCount - 1, fallbacks.length - 1)];
+        line = fallbacks[Math.min(_eq.turnInSection - 1, fallbacks.length - 1)];
       }
     }
 
@@ -2908,19 +2961,28 @@ HOW TO RUN THIS CONVERSATION:
       _eq.blobPromise = null;
     }
 
-    const cp = EQ_COUNTERPARTS[_currentScenario.id] || EQ_COUNTERPARTS['eq1'];
-    const fullTranscript = _eq.history.map(ex =>
-      `${cp.name}: ${ex.counterpart}\nYou: ${ex.mgr || '(no response)'}`
-    ).join('\n\n');
+    // Group the flat turn history back into its 3 sections so admin reads a
+    // coherent multi-part conversation (who's speaking in each part) rather
+    // than one undifferentiated block mixing 3 different counterparts.
+    const fullTranscript = _currentScenario.sections.map(section => {
+      const turns = _eq.history.filter(h => h.section === section.id);
+      if (!turns.length) return '';
+      const body = turns.map(ex => `${ex.cpName}: ${ex.counterpart}\nYou: ${ex.mgr || '(no response)'}`).join('\n\n');
+      return `── SECTION ${section.id} — ${section.label} ──\n${body}`;
+    }).filter(Boolean).join('\n\n');
 
     const durationSecs = _eq.history.length * 60;
+
+    const combinedScenario = _currentScenario.sections
+      .map(s => `Section ${s.id} — ${s.label}: ${s.situation}`).join('\n\n');
+    const combinedGoodLooksLike  = _currentScenario.sections.flatMap(s => s.goodLooksLike  || []);
+    const combinedCommonPitfalls = _currentScenario.sections.flatMap(s => s.commonPitfalls || []);
 
     let aiScores;
     try {
       if (typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable() && fullTranscript) {
         const result = await ClaudeEvaluator.evaluateMirrorRoom(
-          fullTranscript, _currentScenario.scenario || _currentScenario.title || '',
-          _currentScenario.goodLooksLike || [], _currentScenario.commonPitfalls || []
+          fullTranscript, combinedScenario, combinedGoodLooksLike, combinedCommonPitfalls
         );
         aiScores = {
           ...result.scores,
@@ -2984,12 +3046,18 @@ HOW TO RUN THIS CONVERSATION:
   // Same GeminiLive architecture as Red Pen and Paper Trade above, and
   // benefits from the same worker.js /live-token fix (the systemInstruction
   // built here is now actually honoured by the ephemeral token).
+  // NOTE: unlike the main recorded flow above, this Beta live-call path is
+  // a single free-flowing conversation, not turn-scripted -- it isn't worth
+  // rebuilding it section-by-section for the 3-section case format, so it
+  // only ever covers the case's Section A. Managers who want all 3 sections
+  // should use the normal "Start Conversation" button instead.
   function _startMirrorRoomLiveVoice() {
-    const cp = EQ_COUNTERPARTS[_currentScenario.id] || EQ_COUNTERPARTS['eq1'];
+    const section = _currentScenario.sections[0];
+    const cp = section.counterpart;
 
     $('mgr-eq-live-counterpart-name').textContent = cp.name;
-    $('mgr-eq-live-sc-title').textContent = _currentScenario.title;
-    $('mgr-eq-live-sc-text').innerHTML  = _formatScenarioHTML(_currentScenario.scenario);
+    $('mgr-eq-live-sc-title').textContent = `${_currentScenario.title} — Section A: ${section.label} (Beta: Section A only)`;
+    $('mgr-eq-live-sc-text').innerHTML  = _formatScenarioHTML(section.situation);
     _renderEvalCriteriaPanel('mgr-eq', 'mgr-eq-live-sc-text');
     $('mgr-eq-live-thread').innerHTML = '';
     $('btn-mgr-eq-live-end').disabled = false;
@@ -3055,7 +3123,8 @@ HOW TO RUN THIS CONVERSATION:
     _mgrLive.finishing = true;
     $('btn-mgr-eq-live-end').disabled = true;
 
-    const cp = EQ_COUNTERPARTS[_currentScenario.id] || EQ_COUNTERPARTS['eq1'];
+    const section = _currentScenario.sections[0];
+    const cp = section.counterpart;
     const controller = _mgrLive.controller;
     let recordingBlob = null;
     if (controller) {
@@ -3073,8 +3142,8 @@ HOW TO RUN THIS CONVERSATION:
     try {
       if (typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable() && fullTranscript) {
         const result = await ClaudeEvaluator.evaluateMirrorRoom(
-          fullTranscript, _currentScenario.scenario || _currentScenario.title || '',
-          _currentScenario.goodLooksLike || [], _currentScenario.commonPitfalls || []
+          fullTranscript, section.situation || _currentScenario.title || '',
+          section.goodLooksLike || [], section.commonPitfalls || []
         );
         aiScores = {
           ...result.scores,
@@ -3125,13 +3194,37 @@ HOW TO RUN THIS CONVERSATION:
   // ── Written flow ─────────────────────────────────────────
   function _launchWritten() {
     const meta = MODULE_META[_currentModule];
+    const isAutopsy = _currentModule === 'mgr-transcript-autopsy';
+
     $('mgr-written-module-title').textContent = `${meta.icon} ${meta.label}`;
-    $('mgr-written-scenario-label').textContent = 'Read the task carefully, then write your response below';
+    $('mgr-written-scenario-label').textContent = isAutopsy
+      ? 'Read the transcript, then correct each of the manager\'s flawed lines below it'
+      : 'Read the task carefully, then write your response below';
     $('mgr-written-topic-title').textContent  = _currentScenario.title;
-    $('mgr-written-scenario-text').innerHTML = (_currentModule === 'mgr-transcript-autopsy')
-      ? _formatTranscriptHTML(_currentScenario.scenario)
+    $('mgr-written-scenario-text').innerHTML = isAutopsy
+      ? _renderAutopsyTranscript(_currentScenario.scenario)
       : _formatScenarioHTML(_currentScenario.scenario);
     _renderEvalCriteriaPanel(_currentModule, 'mgr-written-scenario-text');
+
+    // Transcript Autopsy's correction boxes are (re)created fresh on every
+    // launch, so they need the copy/paste block wired here rather than once
+    // at _bindEvents() time like the other written assessments' static
+    // textareas.
+    if (isAutopsy) {
+      document.querySelectorAll('.ta-correction-area').forEach(el => {
+        ['paste', 'copy', 'cut'].forEach(evt => el.addEventListener(evt, e => {
+          e.preventDefault();
+          toast('Copy/paste is disabled for this assessment.', 'error');
+        }));
+      });
+    }
+
+    // Transcript Autopsy corrects each flawed line in place (see
+    // _renderAutopsyTranscript above) instead of writing one combined
+    // response in the free-form box below, so that box is hidden entirely
+    // for this module -- only the Submit button stays visible.
+    const freeform = $('mgr-written-freeform-block');
+    if (freeform) freeform.style.display = isAutopsy ? 'none' : '';
 
     if (meta.noMinWords) {
       $('mgr-written-min-hint').textContent = '';
@@ -3147,18 +3240,36 @@ HOW TO RUN THIS CONVERSATION:
   }
 
   async function submitWritten() {
-    const text = $('mgr-written-textarea').value.trim();
     const meta = MODULE_META[_currentModule];
+    const isAutopsy = _currentModule === 'mgr-transcript-autopsy';
+
+    // Transcript Autopsy: gather each per-line correction box instead of
+    // the single free-form textarea, and evaluate/save them as one combined
+    // text so the rest of this function (AI eval, DB save) stays unchanged.
+    let text;
+    if (isAutopsy) {
+      const corrections = _taManagerLines.map((flawedLine, i) => {
+        const el = $('ta-correction-' + i);
+        return { flawedLine, correction: (el ? el.value : '').trim() };
+      });
+      if (!corrections.some(c => c.correction)) {
+        toast('Please correct at least one of the manager\'s flawed lines before submitting.', 'error');
+        return;
+      }
+      text = corrections
+        .map((c, i) => `Correction ${i + 1} (for: "${c.flawedLine}"):\n${c.correction || '(left blank)'}`)
+        .join('\n\n');
+    } else {
+      text = $('mgr-written-textarea').value.trim();
+    }
+
     const wordCount = text.split(/\s+/).filter(Boolean).length;
-    if (!meta.noMinWords) {
+    if (!isAutopsy && !meta.noMinWords) {
       const minWords = meta.minWords || 150;
       if (wordCount < Math.floor(minWords * 0.5)) {
         toast(`Please write at least ${Math.floor(minWords * 0.5)} words before submitting.`, 'error');
         return;
       }
-    } else if (!text) {
-      toast('Please write your analysis before submitting.', 'error');
-      return;
     }
     const btn = $('btn-mgr-submit-written');
     if (btn) { btn.disabled = true; btn.textContent = 'Evaluating...'; }
@@ -3341,12 +3452,11 @@ HOW TO RUN THIS CONVERSATION:
       const grid = _critGridHTML('mgr-feedback', aiScores);
       $('mgr-score-grid').innerHTML = grid || `<div class="mgr-score-item"><div class="label">Exchanges</div><div class="val">${turnCount} turns</div></div>`;
     } else if (type === 'eq-ai') {
-      const cp = EQ_COUNTERPARTS[_currentScenario.id] || EQ_COUNTERPARTS['eq1'];
       // aiScores._turns is set on both the turn-based recorded flow
       // (_eq.history.length) and the Gemini Live voice flow
       // (_mgrLive.turns.length), same pattern as feedback-ai above.
       const turnCount = aiScores._turns != null ? aiScores._turns : _eq.history.length;
-      $('mgr-result-subtitle').textContent = `Mirror Room with ${cp.name} — ${turnCount} exchange(s)`;
+      $('mgr-result-subtitle').textContent = `Mirror Room — ${_currentScenario ? _currentScenario.title : 'Assessment complete'} — ${turnCount} exchange(s)`;
       $('mgr-result-score').textContent = aiScores.overall != null ? `${aiScores.overall}%` : '—';
       const grid = _critGridHTML('mgr-eq', aiScores);
       $('mgr-score-grid').innerHTML = grid || `<div class="mgr-score-item"><div class="label">Exchanges</div><div class="val">${turnCount} turns</div></div>`;

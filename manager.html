@@ -985,14 +985,29 @@
     <div class="step-card" style="margin-bottom:1rem;background:#f5f3ff;border:1px solid #ddd6fe">
       <div class="step-label" style="color:#7c3aed">How this assessment works</div>
       <p style="font-size:0.88rem;color:#3f3f46;margin:0.5rem 0">
-        You'll be given a realistic, high-pressure workplace situation. When you start, an AI counterpart will speak first, in character — a colleague, client, or team member reacting to that exact moment. Respond out loud, naturally, the way you actually would; the counterpart reacts specifically to what you say, not to a fixed script, for a short back-and-forth (usually 3–4 exchanges) before wrapping up.
+        You'll be given one continuous, realistic workday — told across three linked sections (A, B, C), each a fresh situation building on the last. In each section a different AI counterpart speaks first, in character — a colleague, client, or team member reacting to that exact moment. Respond out loud, naturally, the way you actually would; the counterpart reacts specifically to what you say, not to a fixed script. Each section runs 2 exchanges before handing off to the next, 6 exchanges in total across the whole case.
       </p>
       <p style="font-size:0.88rem;color:#3f3f46;margin:0.5rem 0">
-        <strong>How it's scored:</strong> your response is judged, not just your words — tone, pacing, and what you notice about your own state matter as much as what you say you'd do. An AI evaluator scores the conversation across five emotional-intelligence competencies (Self-Awareness, Self-Regulation, Motivation, Empathy, Social Skill), and your admin can review and adjust that score afterward.
+        <strong>How it's scored:</strong> your response is judged, not just your words — tone, pacing, and what you notice about your own state matter as much as what you say you'd do. An AI evaluator scores the whole case across five emotional-intelligence competencies (Self-Awareness, Self-Regulation, Motivation, Empathy, Social Skill), and your admin can review and adjust that score afterward.
       </p>
       <p style="font-size:0.82rem;color:#6d28d9;margin:0.5rem 0 0">
-        🎲 One situation is drawn at random each time from a pool of real brokerage-floor scenarios — volatile markets, costly errors, compliance grey areas, and hard conversations — so you won't always get the same one.
+        🎲 One of two full cases is drawn at random each time, so you won't always get the same one.
       </p>
+    </div>
+
+    <!-- Section progress (A/B/C) -->
+    <div class="sr-steps" style="margin-bottom:1rem">
+      <div class="sr-step active" id="mgr-eq-step-a">
+        <div class="sr-step-num">A</div>
+      </div>
+      <div class="sr-step-divider"></div>
+      <div class="sr-step" id="mgr-eq-step-b">
+        <div class="sr-step-num">B</div>
+      </div>
+      <div class="sr-step-divider"></div>
+      <div class="sr-step" id="mgr-eq-step-c">
+        <div class="sr-step-num">C</div>
+      </div>
     </div>
 
     <!-- Scenario/context panel (collapsible) -->
@@ -1125,15 +1140,20 @@
 
     <!-- Standard Written Container (EQ / Mgmt Skills Fallback) -->
     <div class="step-card" id="mgr-written-standard-container">
-      <div class="mgr-word-count-bar">
-        <span>Word count:</span>
-        <strong id="mgr-written-word-count">0</strong>
-        <span id="mgr-written-min-hint" style="margin-left:auto;font-size:0.75rem;color:var(--text-muted)"></span>
+      <!-- Free-form block: the single textarea. Hidden for Transcript
+           Autopsy, which instead renders a correction box under each flawed
+           manager line, inline inside mgr-written-scenario-text above. -->
+      <div id="mgr-written-freeform-block">
+        <div class="mgr-word-count-bar">
+          <span>Word count:</span>
+          <strong id="mgr-written-word-count">0</strong>
+          <span id="mgr-written-min-hint" style="margin-left:auto;font-size:0.75rem;color:var(--text-muted)"></span>
+        </div>
+        <textarea
+          id="mgr-written-textarea"
+          class="mgr-written-area"
+          placeholder="Write your detailed response here. Use structure, specific examples, and actionable recommendations..."></textarea>
       </div>
-      <textarea
-        id="mgr-written-textarea"
-        class="mgr-written-area"
-        placeholder="Write your detailed response here. Use structure, specific examples, and actionable recommendations..."></textarea>
       <div style="margin-top:1rem;text-align:right">
         <button id="btn-mgr-submit-written" class="btn-primary" style="background:#7c3aed">
           Submit Response ✓
@@ -1348,13 +1368,13 @@
 <div id="toast-container"></div>
 
 <script src="config.js?v=100"></script>
-<script src="js/db.js?v=2026091905"></script>
+<script src="js/db.js?v=2026092402"></script>
 <script src="js/auth.js?v=100"></script>
 <script src="js/recorder.js?v=101"></script>
 <script src="js/speech.js?v=100"></script>
 <script src="js/mgr-eval-criteria.js?v=2026092401"></script>
 <script src="js/gemini-live.js?v=2026092014"></script>
 <script src="js/claude.js?v=2026092401"></script>
-<script src="js/manager-app.js?v=2026092401"></script>
+<script src="js/manager-app.js?v=2026092402"></script>
 </body>
 </html>
