@@ -1092,18 +1092,16 @@ const DB = (() => {
         { id: "mgr-fb4", module: "mgr-feedback", title: "Chronic SLA Breaches on Client Callbacks", enabled: true, description: "Chronic SLA Breaches on Client Callbacks", scenario: "Employee: Support Team Lead, 3 years tenure, previously a strong performer.\\n\\nSituation: Callback SLA (client escalations to be returned within 4 business hours) has been breached in 40% of cases over the last six weeks, several involving time-sensitive trading issues where delay caused real client financial impact.", checklist: [] },
         { id: "mgr-fb5", module: "mgr-feedback", title: "Trade Executed Without Proper Verbal Confirmation", enabled: true, description: "Trade Executed Without Proper Verbal Confirmation", scenario: "Employee: Dealer, 5 years tenure, high trust and seniority on the floor.\\n\\nSituation: A recorded call shows a large trade executed based on an ambiguous client instruction, without the mandatory verbal reconfirmation of quantity and price before execution — a serious protocol and compliance breach, even though this particular trade did not result in client loss.", checklist: [] },
 
-        // The Mirror Room (mgr-eq) has no DB-backed topics any more -- it
-        // moved entirely to the hardcoded 2-case/3-section structure in
-        // manager-app.js's SCENARIOS['mgr-eq'] (2026-09-24). The 5 old
-        // "Cascade Set" rows below were the previous written-cascade design
-        // and were long stale/disconnected from what managers actually see,
-        // but stayed listed (and editable, with zero real effect) on
-        // admin's Topics -> EQ page since nothing ever removed them.
-        // Deliberately leaving mgr-eq out of this array (while it stays in
-        // REPLACED_MGR_MODULES below) makes the existing stale-title
-        // pruning logic delete every remaining mgr-eq row from the DB on
-        // next load, same self-healing mechanism already used for the
-        // other 4 replaced modules.
+        // ── The Mirror Room (2 cases — The Allocation Floor, The Pushback Day).
+        // Replaced 2026-09-24: the manager's 2 sequential 3-section cases,
+        // same pattern as Situation Room's Part A/B embedding above -- the
+        // live assessment itself is driven by the hardcoded
+        // SCENARIOS['mgr-eq'] in manager-app.js (each section runs its own
+        // conversational-AI counterpart), so these rows exist purely so
+        // admin's Topics -> EQ page shows the real, current content instead
+        // of the old stale "Cascade Set" written-cascade rows they replace.
+        { id: "mgr-eq1", module: "mgr-eq", title: "The Allocation Floor", enabled: true, description: "The Allocation Floor", scenario: "One workday told across 3 linked sections, each with its own conversational-AI counterpart.\\n\\n─── SECTION A — The Allocation Fight (counterpart: Vikram) ───\\n\\nAs you enter the office, you notice two senior dealers, Vikram and Rohit, in a loud disagreement over a personal issue — right in the middle of the trading floor, in front of junior staff and visiting guests.\\n\\nAs a manager, how would you handle this case?\\n\\n─── SECTION B — Repeated Basic Query (counterpart: Arun) ───\\n\\nSoon after you resolve the dispute between the two dealers, within the first hour, Arun approaches you with a very basic question: why a GTT order was triggered but not executed. You have already clearly guided Arun on GTT scenarios more than five times.\\n\\n─── SECTION C — Escalated HNI Client Call (counterpart: Mr. Kapoor) ───\\n\\nDuring your call turn, a High-Net-Worth (HNI) client calls in furious about portfolio losses during a volatile week. The client is shouting and personally insulting the Relationship Manager, Arun, who reports to you. Arun has transferred the call to you.", checklist: [] },
+        { id: "mgr-eq2", module: "mgr-eq", title: "The Pushback Day", enabled: true, description: "The Pushback Day", scenario: "One workday told across 3 linked sections, each with its own conversational-AI counterpart.\\n\\n─── SECTION A — Pushback in Team Huddle (counterpart: Sachin) ───\\n\\nDuring a morning team huddle, you explain new operational expectations — that agents will need to handle both tickets and calls, along with a few changes to quality parameters. Sachin, an experienced agent, interrupts you.\\n\\n─── SECTION B — Resignation Threat from Top Performer (counterpart: Sachin) ───\\n\\nRight after the team meeting, Sachin approaches you saying he would like to resign due to the pressure from all these recent changes. He is a top performer who has never received more than two Customer Escalations (CEs) in a year throughout his entire career.\\n\\n─── SECTION C — AVP Performance Escalation (counterpart: Deepak, AVP) ───\\n\\nMeanwhile, your AVP calls to inform you that your team has missed targets for two consecutive quarters. The AVP is asking pointed questions, and your own Performance Incentive (PI) will likely take a hit.", checklist: [] },
 
         // ── Listening & Tone
         { id: 'mgr-lt1', module: 'mgr-listening-tone', title: 'Listening & Tone — Manager Email Analysis', enabled: true, description: 'Analyse the tone, subtext, and communication quality of a real manager email.', scenario: 'Read the email carefully and answer 5 analytical questions about tone, impact, and what is unsaid.', checklist: [] },
