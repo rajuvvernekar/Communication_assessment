@@ -1033,11 +1033,12 @@ ${paramLines}
 
 Also provide:
 - "whatNotToSay": If they used risky/escalating language, quote the exact phrase and explain why (max 35 words). If clean, say "Response language is clean."
+- "missedPoints": The most important thing they should have said/addressed but didn't (max 30 words). If thorough, say "Nothing significant missed."
 - "strength": Quote one specific strong phrase from their response (under 20 words)
 - "improvement": Single highest-priority improvement (max 25 words)
 
 Return ONLY valid JSON — no markdown, no extra text:
-{${paramKeysJson},"whatNotToSay":"<text>","strength":"<text>","improvement":"<text>"}`;
+{${paramKeysJson},"whatNotToSay":"<text>","missedPoints":"<text>","strength":"<text>","improvement":"<text>"}`;
 
     const resp = await fetch(getProxyUrl(), {
       method: 'POST',
@@ -1052,17 +1053,21 @@ Return ONLY valid JSON — no markdown, no extra text:
     const p = JSON.parse(match[0]);
     const out = {};
     params.forEach(param => { out[param.key] = Math.min(100, Math.max(0, Number(p[param.key]) || 0)); });
-    out.whatNotToSay = p.whatNotToSay || '';
-    out.strength     = p.strength     || '';
-    out.improvement  = p.improvement  || '';
+    out.whatNotToSay  = p.whatNotToSay  || '';
+    out.missedPoints  = p.missedPoints  || '';
+    out.strength      = p.strength      || '';
+    out.improvement   = p.improvement   || '';
     return out;
   }
 
   // ---- Evaluate Situation Room Section B ----
   // Scores the manager's analysis of a flawed response against the 2
   // error-identification/resolution parameters from
-  // MGR_EVAL_CRITERIA['mgr-situation-room'].
-  async function evaluateSituationRoomB(scenarioText, wrongResponseText, errorsText, impactText, rewriteText) {
+  // MGR_EVAL_CRITERIA['mgr-situation-room']. Part B no longer collects a
+  // rewrite (removed 2026-09-24 at the manager's request) -- resolutionClarity
+  // is scored from how clearly the errors/impact analysis itself lays out
+  // what should happen next, not from a separate rewritten script.
+  async function evaluateSituationRoomB(scenarioText, wrongResponseText, errorsText, impactText) {
     if (!isAvailable()) return null;
 
     const crit = (typeof MGR_EVAL_CRITERIA !== 'undefined') ? MGR_EVAL_CRITERIA['mgr-situation-room'] : null;
@@ -1089,18 +1094,14 @@ ERRORS IDENTIFIED:
 WHY EACH ERROR MADE IT WORSE:
 "${impactText}"
 
-THEIR REWRITE:
-"${rewriteText}"
-
 Evaluate on these parameters (0-100 each):
 ${paramLines}
 
 Also provide:
 - "keyMissed": One important error they didn't fully address, or "All key errors were identified" if thorough
-- "rewriteFeedback": One specific improvement to their rewrite, or "Rewrite is strong" if excellent
 
 Return ONLY valid JSON:
-{${paramKeysJson},"keyMissed":"<text>","rewriteFeedback":"<text>"}`;
+{${paramKeysJson},"keyMissed":"<text>"}`;
 
     const resp = await fetch(getProxyUrl(), {
       method: 'POST',
@@ -1115,8 +1116,7 @@ Return ONLY valid JSON:
     const p = JSON.parse(match[0]);
     const out = {};
     params.forEach(param => { out[param.key] = Math.min(100, Math.max(0, Number(p[param.key]) || 0)); });
-    out.keyMissed       = p.keyMissed       || '';
-    out.rewriteFeedback = p.rewriteFeedback || '';
+    out.keyMissed = p.keyMissed || '';
     return out;
   }
 

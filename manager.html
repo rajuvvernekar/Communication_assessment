@@ -12,10 +12,19 @@
       --mgr-accent: #a855f7;
       --mgr-bg: linear-gradient(140deg, #1e1433 0%, #2d1d5e 60%, #1a1f2e 100%);
     }
-    #mgr-screen-welcome {
+    /* display MUST stay scoped to `#mgr-screen-welcome.active` -- this ID
+       selector otherwise beats `.screen { display:none }` /
+       `.screen.active { display:block }` on specificity alone, which means
+       this screen never actually hides after a manager logs in (it keeps
+       rendering, full-height, stacked in front of #mgr-screen-modules) --
+       the exact bug already fixed for the trainee portal's
+       #screen-welcome in css/style.css. */
+    #mgr-screen-welcome.active {
       display: flex;
       align-items: center;
       justify-content: center;
+    }
+    #mgr-screen-welcome {
       background: var(--mgr-bg);
       min-height: 100vh;
     }
@@ -626,7 +635,7 @@
 
       <!-- Instructions -->
       <div class="sr-b-instructions">
-        A manager responded to this situation with the response below. <strong>Your task: Analyse it completely</strong> — every error, every impact, and a full rewrite.
+        A manager responded to this situation with the response below. <strong>Your task: Analyse it completely</strong> — every error, and its impact.
       </div>
 
       <!-- Flawed response -->
@@ -665,23 +674,6 @@
           placeholder="• Error 1 impact: Leading with disappointment triggers defensiveness before the conversation has started. The employee immediately feels blamed rather than heard...&#10;• Error 2 impact: ..."></textarea>
         <div class="mgr-word-count-bar" style="margin-top:0.4rem">
           <span>Word count:</span><strong id="sr-b-impact-wc">0</strong>
-        </div>
-      </div>
-
-      <!-- Analysis field 3: Rewrite -->
-      <div class="sr-analysis-group rewrite">
-        <label>
-          <span class="sr-step-circle" style="background:#10b981">3</span>
-          Rewrite the response correctly
-          <span style="font-weight:400;color:var(--text-muted)"> — what the manager should have actually said</span>
-        </label>
-        <textarea
-          id="sr-b-rewrite"
-          class="mgr-written-area"
-          style="min-height:200px"
-          placeholder="Write the improved version — the exact words a skilled, empathetic manager would say in this situation..."></textarea>
-        <div class="mgr-word-count-bar" style="margin-top:0.4rem">
-          <span>Word count:</span><strong id="sr-b-rewrite-wc">0</strong>
         </div>
       </div>
 
@@ -1360,9 +1352,9 @@
 <script src="js/auth.js?v=100"></script>
 <script src="js/recorder.js?v=101"></script>
 <script src="js/speech.js?v=100"></script>
-<script src="js/mgr-eval-criteria.js?v=2026092015"></script>
+<script src="js/mgr-eval-criteria.js?v=2026092401"></script>
 <script src="js/gemini-live.js?v=2026092014"></script>
-<script src="js/claude.js?v=2026092015"></script>
-<script src="js/manager-app.js?v=2026092013"></script>
+<script src="js/claude.js?v=2026092401"></script>
+<script src="js/manager-app.js?v=2026092401"></script>
 </body>
 </html>

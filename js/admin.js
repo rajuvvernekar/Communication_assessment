@@ -3058,9 +3058,15 @@ window.Admin = (() => {
             '<div style="font-size:0.75rem;font-weight:700;color:#666;margin:0.5rem 0 0.2rem">Errors Identified:</div>' +
             '<div style="white-space:pre-wrap;font-size:0.88rem;background:#fef2f2;padding:0.75rem;border-radius:6px;border-left:3px solid #dc2626;margin-bottom:0.5rem">' + esc(secB.errors || '(none)') + '</div>' +
             '<div style="font-size:0.75rem;font-weight:700;color:#666;margin-bottom:0.2rem">Why Each Error Made It Worse:</div>' +
-            '<div style="white-space:pre-wrap;font-size:0.88rem;background:#fffbeb;padding:0.75rem;border-radius:6px;border-left:3px solid #f59e0b;margin-bottom:0.5rem">' + esc(secB.impact || '(none)') + '</div>' +
-            '<div style="font-size:0.75rem;font-weight:700;color:#666;margin-bottom:0.2rem">Rewrite:</div>' +
-            '<div style="white-space:pre-wrap;font-size:0.88rem;background:#f0fdf4;padding:0.75rem;border-radius:6px;border-left:3px solid #10b981">' + esc(secB.rewrite || '(none)') + '</div>' +
+            '<div style="white-space:pre-wrap;font-size:0.88rem;background:#fffbeb;padding:0.75rem;border-radius:6px;border-left:3px solid #f59e0b' + (secB.rewrite ? ';margin-bottom:0.5rem' : '') + '">' + esc(secB.impact || '(none)') + '</div>' +
+            // Older sessions (before the rewrite field was removed from
+            // Part B) may still have a saved rewrite -- keep showing it for
+            // those so past submissions don't lose data, just don't ask for
+            // one on new submissions.
+            (secB.rewrite
+              ? '<div style="font-size:0.75rem;font-weight:700;color:#666;margin-bottom:0.2rem">Rewrite:</div>' +
+                '<div style="white-space:pre-wrap;font-size:0.88rem;background:#f0fdf4;padding:0.75rem;border-radius:6px;border-left:3px solid #10b981">' + esc(secB.rewrite) + '</div>'
+              : '') +
           '</div>';
       } else {
         transcriptBox.innerHTML = '<div style="color:var(--text-muted);font-style:italic">No response data found.</div>';
@@ -3101,6 +3107,8 @@ window.Admin = (() => {
           // separately from the flat parameter scores above.
           (ai._sectionAFeedback && ai._sectionAFeedback.whatNotToSay && !/clean/i.test(ai._sectionAFeedback.whatNotToSay)
             ? '<div style="margin-top:0.4rem;font-size:0.78rem;color:#92400e;background:#fef9c3;padding:0.4rem 0.6rem;border-radius:4px">⚠ <strong>Risky language (A):</strong> ' + ai._sectionAFeedback.whatNotToSay + '</div>' : '') +
+          (ai._sectionAFeedback && ai._sectionAFeedback.missedPoints && !/nothing significant/i.test(ai._sectionAFeedback.missedPoints)
+            ? '<div style="margin-top:0.3rem;font-size:0.78rem;color:#92400e;background:#fef9c3;padding:0.4rem 0.6rem;border-radius:4px">📝 <strong>Missed error (A):</strong> ' + ai._sectionAFeedback.missedPoints + '</div>' : '') +
           (ai._sectionBFeedback && ai._sectionBFeedback.keyMissed && !/all key/i.test(ai._sectionBFeedback.keyMissed)
             ? '<div style="margin-top:0.3rem;font-size:0.78rem;color:#92400e;background:#fef9c3;padding:0.4rem 0.6rem;border-radius:4px">📝 <strong>Missed error (B):</strong> ' + ai._sectionBFeedback.keyMissed + '</div>' : '') +
           // Per-parameter reasons from the AI evaluator, where present.

@@ -495,7 +495,7 @@ Let's get back on track.
   // ── Module metadata ──────────────────────────────────────
   const MODULE_META = {
     'mgr-situation-room':    { label: 'The Situation Room',    type: 'situation-room', icon: '🎯' },
-    'mgr-transcript-autopsy':{ label: 'Transcript Autopsy',    type: 'written',     icon: '📋', minWords: 150 },
+    'mgr-transcript-autopsy':{ label: 'Transcript Autopsy',    type: 'written',     icon: '📋', noMinWords: true },
     'mgr-mock-call':         { label: 'Mock Call',             type: 'audio',       icon: '📞' },
     'mgr-feedback':          { label: 'Feedback',              type: 'feedback-ai', icon: '💬' },
     'mgr-eq':                { label: 'The Mirror Room',        type: 'eq-ai',       icon: '🪞' },
@@ -656,6 +656,50 @@ Let's get back on track.
       }
       return `<p style="margin:0 0 0.5rem">${esc(para)}</p>`;
     }).join('');
+  }
+
+  // Transcript Autopsy's scenario text is BACKGROUND: ... followed by a
+  // "CLIENT: "..."" / "MANAGER: "..."" call transcript. Rendered through
+  // _formatScenarioHTML it reads as one unbroken wall of paragraphs with no
+  // visual distinction between speakers. This instead renders the
+  // BACKGROUND normally, then breaks the transcript into alternating,
+  // clearly-labelled client/manager blocks so it reads like an actual call.
+  function _formatTranscriptHTML(text) {
+    if (!text) return '';
+    const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const marker = /─{3,}\s*CALL TRANSCRIPT\s*─{3,}/i;
+    const splitIdx = text.search(marker);
+    if (splitIdx === -1) return _formatScenarioHTML(text);
+
+    const before = text.slice(0, splitIdx).trim();
+    const after  = text.slice(splitIdx).replace(marker, '').trim();
+
+    const turnRe = /(CLIENT|MANAGER):\s*/g;
+    const matches = [...after.matchAll(turnRe)];
+    if (matches.length < 2) return _formatScenarioHTML(text);
+
+    const turns = matches.map((m, i) => {
+      const start = m.index + m[0].length;
+      const end   = (i + 1 < matches.length) ? matches[i + 1].index : after.length;
+      return { speaker: m[1], line: after.slice(start, end).trim().replace(/^"|"$/g, '') };
+    }).filter(t => t.line);
+
+    const beforeHtml = before ? _formatScenarioHTML(before) : '';
+    const turnsHtml = turns.map(t => {
+      const isClient = t.speaker === 'CLIENT';
+      return `<div style="display:flex;${isClient ? '' : 'flex-direction:row-reverse;'}margin-bottom:0.6rem">
+        <div style="max-width:85%;padding:0.6rem 0.85rem;border-radius:10px;font-size:0.88rem;line-height:1.45;${
+          isClient
+            ? 'background:#f1f5f9;border-left:3px solid #64748b'
+            : 'background:#f5f3ff;border-right:3px solid #7c3aed;text-align:right'
+        }">
+          <div style="font-size:0.68rem;font-weight:800;letter-spacing:0.05em;color:${isClient ? '#475569' : '#7c3aed'};margin-bottom:0.2rem">${isClient ? 'CLIENT' : 'MANAGER'}</div>
+          ${esc(t.line)}
+        </div>
+      </div>`;
+    }).join('');
+
+    return beforeHtml + `<div style="margin-top:0.75rem">${turnsHtml}</div>`;
   }
 
   function _renderEvalCriteriaPanel(moduleKey, afterElId) {
@@ -1792,7 +1836,7 @@ HOW TO RUN THIS CALL:
 
     _sr.sectionAText = text;
 
-    const _srADefault = { openingToneEmpathy: 60, ownershipAccountability: 60, escalationControl: 60, regulatoryAccuracy: 60, whatNotToSay: '', strength: '', improvement: '' };
+    const _srADefault = { openingToneEmpathy: 60, ownershipAccountability: 60, escalationControl: 60, regulatoryAccuracy: 60, whatNotToSay: '', missedPoints: '', strength: '', improvement: '' };
     try {
       if (typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
         _sr.sectionAScores = await ClaudeEvaluator.evaluateSituationRoomA(
@@ -1821,10 +1865,10 @@ HOW TO RUN THIS CALL:
     if ($('sr-wrong-response-text')) $('sr-wrong-response-text').textContent = _currentScenario.wrongResponse || '';
 
     // Reset Section B fields & word counts
-    ['sr-b-errors', 'sr-b-impact', 'sr-b-rewrite'].forEach(id => {
+    ['sr-b-errors', 'sr-b-impact'].forEach(id => {
       const el = $(id); if (el) el.value = '';
     });
-    ['sr-b-errors-wc', 'sr-b-impact-wc', 'sr-b-rewrite-wc'].forEach(id => {
+    ['sr-b-errors-wc', 'sr-b-impact-wc'].forEach(id => {
       const el = $(id); if (el) el.textContent = '0';
     });
 
@@ -1838,24 +1882,22 @@ HOW TO RUN THIS CALL:
   async function _submitSRSectionB() {
     const errorsText = ($('sr-b-errors').value || '').trim();
     const impactText  = ($('sr-b-impact').value  || '').trim();
-    const rewriteText = ($('sr-b-rewrite').value || '').trim();
 
-    const minWords = (t) => t.split(/\s+/).filter(Boolean).length;
-    if (minWords(errorsText) < 15 || minWords(impactText) < 15 || minWords(rewriteText) < 20) {
-      toast('Please complete all three fields before submitting (min. 15/15/20 words).', 'error');
+    if (!errorsText || !impactText) {
+      toast('Please complete both fields before submitting.', 'error');
       return;
     }
 
     const btn = $('btn-sr-submit-b');
     if (btn) { btn.disabled = true; btn.textContent = 'Evaluating…'; }
 
-    let sectionBScores = { errorIdCritique: 60, resolutionClarity: 60, keyMissed: '', rewriteFeedback: '' };
+    let sectionBScores = { errorIdCritique: 60, resolutionClarity: 60, keyMissed: '' };
     try {
       if (typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
         sectionBScores = await ClaudeEvaluator.evaluateSituationRoomB(
           _currentScenario.scenario,
           _currentScenario.wrongResponse || '',
-          errorsText, impactText, rewriteText
+          errorsText, impactText
         );
       }
     } catch (e) {
@@ -1891,8 +1933,8 @@ HOW TO RUN THIS CALL:
       overall,
       earnedMarks: parseFloat(earnedMarks.toFixed(1)),
       maxMarks,
-      _sectionAFeedback: { whatNotToSay: sa.whatNotToSay, strength: sa.strength, improvement: sa.improvement },
-      _sectionBFeedback: { keyMissed: sb.keyMissed, rewriteFeedback: sb.rewriteFeedback },
+      _sectionAFeedback: { whatNotToSay: sa.whatNotToSay, missedPoints: sa.missedPoints, strength: sa.strength, improvement: sa.improvement },
+      _sectionBFeedback: { keyMissed: sb.keyMissed },
       _method: 'claude-sr',
       _module: 'mgr-situation-room',
       _scenarioId: _currentScenario.id,
@@ -1907,7 +1949,7 @@ HOW TO RUN THIS CALL:
       // two generic-looking text boxes.
       scenario: _currentScenario.scenario,
       sectionA: { prompt: _currentScenario.sectionAPrompt, response: _sr.sectionAText },
-      sectionB: { wrongResponse: _currentScenario.wrongResponse, errors: errorsText, impact: impactText, rewrite: rewriteText },
+      sectionB: { wrongResponse: _currentScenario.wrongResponse, errors: errorsText, impact: impactText },
     });
 
     try {
@@ -3086,11 +3128,17 @@ HOW TO RUN THIS CONVERSATION:
     $('mgr-written-module-title').textContent = `${meta.icon} ${meta.label}`;
     $('mgr-written-scenario-label').textContent = 'Read the task carefully, then write your response below';
     $('mgr-written-topic-title').textContent  = _currentScenario.title;
-    $('mgr-written-scenario-text').innerHTML = _formatScenarioHTML(_currentScenario.scenario);
+    $('mgr-written-scenario-text').innerHTML = (_currentModule === 'mgr-transcript-autopsy')
+      ? _formatTranscriptHTML(_currentScenario.scenario)
+      : _formatScenarioHTML(_currentScenario.scenario);
     _renderEvalCriteriaPanel(_currentModule, 'mgr-written-scenario-text');
 
-    const minWords = meta.minWords || 150;
-    $('mgr-written-min-hint').textContent = `Minimum ${minWords} words`;
+    if (meta.noMinWords) {
+      $('mgr-written-min-hint').textContent = '';
+    } else {
+      const minWords = meta.minWords || 150;
+      $('mgr-written-min-hint').textContent = `Minimum ${minWords} words`;
+    }
 
     const ta = $('mgr-written-textarea');
     ta.value = '';
@@ -3101,10 +3149,15 @@ HOW TO RUN THIS CONVERSATION:
   async function submitWritten() {
     const text = $('mgr-written-textarea').value.trim();
     const meta = MODULE_META[_currentModule];
-    const minWords = meta.minWords || 150;
     const wordCount = text.split(/\s+/).filter(Boolean).length;
-    if (wordCount < Math.floor(minWords * 0.5)) {
-      toast(`Please write at least ${Math.floor(minWords * 0.5)} words before submitting.`, 'error');
+    if (!meta.noMinWords) {
+      const minWords = meta.minWords || 150;
+      if (wordCount < Math.floor(minWords * 0.5)) {
+        toast(`Please write at least ${Math.floor(minWords * 0.5)} words before submitting.`, 'error');
+        return;
+      }
+    } else if (!text) {
+      toast('Please write your analysis before submitting.', 'error');
       return;
     }
     const btn = $('btn-mgr-submit-written');
@@ -3396,7 +3449,7 @@ HOW TO RUN THIS CONVERSATION:
       const w = srATa.value.trim().split(/\s+/).filter(Boolean).length;
       if ($('sr-a-word-count')) $('sr-a-word-count').textContent = w;
     });
-    [['sr-b-errors','sr-b-errors-wc'],['sr-b-impact','sr-b-impact-wc'],['sr-b-rewrite','sr-b-rewrite-wc']]
+    [['sr-b-errors','sr-b-errors-wc'],['sr-b-impact','sr-b-impact-wc']]
       .forEach(([taId, wcId]) => {
         const ta = $(taId);
         if (ta) ta.addEventListener('input', () => {
@@ -3404,6 +3457,24 @@ HOW TO RUN THIS CONVERSATION:
           const wc = $(wcId); if (wc) wc.textContent = w;
         });
       });
+
+    // Disable copy/paste on the written assessments (Situation Room's
+    // Section A/B and the Transcript Autopsy / Management Skills shared
+    // written box) -- managers must type their own answer, not paste one in
+    // from elsewhere, and the scenario/question text shouldn't be copyable
+    // out either.
+    ['sr-a-textarea', 'sr-b-errors', 'sr-b-impact', 'mgr-written-textarea'].forEach(id => {
+      const el = $(id);
+      if (!el) return;
+      ['paste', 'copy', 'cut'].forEach(evt => el.addEventListener(evt, e => {
+        e.preventDefault();
+        toast('Copy/paste is disabled for this assessment.', 'error');
+      }));
+    });
+    ['sr-scenario-text-a', 'mgr-written-scenario-text'].forEach(id => {
+      const el = $(id);
+      if (el) el.addEventListener('copy', e => e.preventDefault());
+    });
 
     // Audio screen (non-feedback)
     // Paper Trade's "Skip Prep & Start Now" button (into the old manual

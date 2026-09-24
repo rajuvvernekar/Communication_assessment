@@ -30,8 +30,8 @@ const MGR_EVAL_CRITERIA = {
         desc: 'No over-promising (refunds, compensation, timelines) beyond what policy and SEBI/exchange regulations allow; correct reference to grievance mechanisms (SCORES, Exchange Investor Grievance, Ombudsman) where relevant' },
       { key: 'errorIdCritique', label: 'Error Identification & Critique Quality (Part B)', weight: 8,
         desc: 'Correctly identifies all planted errors in the flawed response; explains the customer-experience or compliance impact of each, not just labels it "wrong"' },
-      { key: 'resolutionClarity', label: 'Resolution Clarity, Structure & Close', weight: 6,
-        desc: 'Clear next steps with owners and timelines; a close that confirms the customer feels heard and knows what happens next' },
+      { key: 'resolutionClarity', label: 'Resolution Clarity & Structure', weight: 6,
+        desc: 'Their errors/impact analysis clearly lays out what should have happened instead — concrete next steps, owners and timelines — not just what was wrong' },
     ],
   },
   'mgr-transcript-autopsy': {
