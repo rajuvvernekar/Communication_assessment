@@ -3851,6 +3851,12 @@ window.Admin = (() => {
     const addBotLineBtn = $('btn-add-bot-line');
     if (addBotLineBtn) addBotLineBtn.onclick = () => _addBotScriptRow('');
 
+    const addTaTurnBtn = $('btn-add-ta-turn');
+    if (addTaTurnBtn) addTaTurnBtn.onclick = () => _addTaTurnRow('', '');
+
+    const addThinkAboutBtn = $('btn-add-think-about');
+    if (addThinkAboutBtn) addThinkAboutBtn.onclick = () => _addThinkAboutRow('');
+
     const modSelect = $('topic-module');
     if (modSelect) modSelect.onchange = () => _updateTopicModalFieldsForModule(modSelect.value);
   }
@@ -3861,33 +3867,58 @@ window.Admin = (() => {
   // (their data is preserved on save rather than edited here).
   const MCQ_SHAPED_MODULES = new Set(['grammar-assessment', 'listening-assessment', 'stock-market-mcq']);
 
+  // Modules whose `scenario` text has enough internal structure that a
+  // segregated editor (see the parse/build functions above) is worth
+  // showing instead of one flat textarea -- per the manager's 2026-09-24
+  // request. Mock Call and EQ scenarios don't have this kind of repeatable
+  // internal structure (EQ especially -- 3 sections x persona/situation/
+  // goodLooksLike/commonPitfalls each -- so segregating it wouldn't reduce
+  // to a few flat fields without a much bigger editor than the benefit
+  // justifies, since editing it here still has zero effect on the live,
+  // fully-hardcoded assessment either way); they keep the plain textarea.
+  const STRUCTURED_SCENARIO_MODULES = new Set(['mgr-situation-room', 'mgr-transcript-autopsy', 'mgr-feedback']);
+
   function _updateTopicModalFieldsForModule(module) {
     const isMcq = MCQ_SHAPED_MODULES.has(module);
     const mcqGroup        = $('topic-mcq-group');
     const checklistGroup  = $('topic-checklist-group');
     const botScriptGroup  = $('topic-bot-script-group');
     const callerAudioGroup = $('topic-caller-audio-group');
-    if (mcqGroup)         mcqGroup.style.display        = isMcq ? '' : 'none';
-    if (checklistGroup)   checklistGroup.style.display  = isMcq ? 'none' : '';
+    const scenarioGroup   = $('topic-scenario-group');
+    const srGroup         = $('topic-sr-group');
+    const taGroup         = $('topic-ta-group');
+    const fbGroup         = $('topic-fb-group');
+    if (scenarioGroup) scenarioGroup.style.display = STRUCTURED_SCENARIO_MODULES.has(module) ? 'none' : '';
+    if (srGroup) srGroup.style.display = module === 'mgr-situation-room'    ? '' : 'none';
+    if (taGroup) taGroup.style.display = module === 'mgr-transcript-autopsy' ? '' : 'none';
+    if (fbGroup) fbGroup.style.display = module === 'mgr-feedback'          ? '' : 'none';
+    if (mcqGroup) mcqGroup.style.display = isMcq ? '' : 'none';
+    // Checklist is unused/always-empty for these 3 structured modules
+    // (Feedback's reflection questions now live in the dedicated Think
+    // About list above) -- hide it there to avoid a redundant empty field.
+    if (checklistGroup) checklistGroup.style.display = (isMcq || STRUCTURED_SCENARIO_MODULES.has(module)) ? 'none' : '';
     if (botScriptGroup)   botScriptGroup.style.display  = isMcq ? 'none' : '';
     if (callerAudioGroup) callerAudioGroup.style.display = (module === 'mock-call' || module === 'ops-call-assessment') ? '' : 'none';
   }
 
-  // ---- Checklist editor (plain string list — evaluation checklist) ----
-  function _renderChecklistEditor(items) {
-    const container = $('checklist-items');
+  // ---- Generic single-line string-list editor (add/remove rows) --------
+  // Originally hardcoded to the Evaluation Checklist field only; generalized
+  // 2026-09-24 so the same add/remove-row pattern can back the Red Pen
+  // "Think About" question list too, without duplicating this UI logic.
+  function _renderSimpleListEditor(containerId, items, inputClass) {
+    const container = $(containerId);
     if (!container) return;
     container.innerHTML = '';
-    (items || []).forEach(val => _addChecklistRow(val));
+    (items || []).forEach(val => _addSimpleListRow(containerId, val, inputClass));
   }
-  function _addChecklistRow(value) {
-    const container = $('checklist-items');
+  function _addSimpleListRow(containerId, value, inputClass) {
+    const container = $(containerId);
     if (!container) return;
     const row = document.createElement('div');
     row.style.cssText = 'display:flex;gap:0.4rem;margin-bottom:0.4rem;align-items:center';
     const input = document.createElement('input');
     input.type = 'text';
-    input.className = 'checklist-item-input';
+    input.className = inputClass;
     input.style.cssText = 'flex:1';
     input.value = value || '';
     const rmBtn = document.createElement('button');
@@ -3899,10 +3930,148 @@ window.Admin = (() => {
     row.appendChild(rmBtn);
     container.appendChild(row);
   }
-  function _getChecklistValues() {
-    return Array.from(document.querySelectorAll('#checklist-items .checklist-item-input'))
+  function _getSimpleListValues(containerId, inputClass) {
+    return Array.from(document.querySelectorAll(`#${containerId} .${inputClass}`))
       .map(el => el.value.trim())
       .filter(Boolean);
+  }
+
+  // ---- Checklist editor (plain string list — evaluation checklist) ----
+  function _renderChecklistEditor(items) {
+    _renderSimpleListEditor('checklist-items', items, 'checklist-item-input');
+  }
+  function _addChecklistRow(value) {
+    _addSimpleListRow('checklist-items', value, 'checklist-item-input');
+  }
+  function _getChecklistValues() {
+    return _getSimpleListValues('checklist-items', 'checklist-item-input');
+  }
+
+  // ---- Think About editor (Red Pen only — reflection questions list) --
+  function _renderThinkAboutEditor(items) {
+    _renderSimpleListEditor('think-about-items', items, 'think-about-item-input');
+  }
+  function _addThinkAboutRow(value) {
+    _addSimpleListRow('think-about-items', value, 'think-about-item-input');
+  }
+  function _getThinkAboutValues() {
+    return _getSimpleListValues('think-about-items', 'think-about-item-input');
+  }
+
+  // ---- Structured scenario parsing/reconstruction ----------------------
+  // The DB `scenario` field stays a single string (the live app's own
+  // parsers -- _renderAutopsyTranscript, the Situation Room Part A/B split,
+  // etc. -- all expect that one string, unchanged). These just let admin
+  // edit that string through separate labelled fields instead of one big
+  // undifferentiated textarea, parsing it apart on open and reassembling
+  // the exact same format on save.
+
+  // Situation Room: "<situation>\n\nPart A — ...\nPart B — ...\n\n───
+  // THE WRONG RESPONSE (given to the manager to critique) ───\n\n"<text>""
+  const SR_WRONG_MARKER = '─── THE WRONG RESPONSE (given to the manager to critique) ───';
+  function _parseSrScenario(text) {
+    text = text || '';
+    const partAIdx = text.indexOf('\n\nPart A —');
+    const situation = partAIdx !== -1 ? text.slice(0, partAIdx).trim() : text.trim();
+    const wrongIdx = text.indexOf(SR_WRONG_MARKER);
+    const wrongResponse = wrongIdx !== -1
+      ? text.slice(wrongIdx + SR_WRONG_MARKER.length).trim().replace(/^"|"$/g, '')
+      : '';
+    return { situation, wrongResponse };
+  }
+  function _buildSrScenario(situation, wrongResponse) {
+    return `${(situation || '').trim()}\n\nPart A — What Would You Say? Write your full verbal response, opening to close.\nPart B — The Wrong Response: A flawed manager reply to this situation follows below. Identify every error, explain the impact of each, and rewrite the response correctly.\n\n${SR_WRONG_MARKER}\n\n"${(wrongResponse || '').trim()}"`;
+  }
+
+  // Transcript Autopsy: "<background>\n\n─── CALL TRANSCRIPT ───\n\nCLIENT:
+  // "..."\n\nMANAGER: "..."\n\n..." (repeating CLIENT/MANAGER pairs)
+  const TA_TRANSCRIPT_MARKER = /─{3,}\s*CALL TRANSCRIPT\s*─{3,}/i;
+  function _parseTaScenario(text) {
+    text = text || '';
+    const idx = text.search(TA_TRANSCRIPT_MARKER);
+    if (idx === -1) return { background: text.trim(), turns: [] };
+    const background = text.slice(0, idx).trim();
+    const markerMatch = text.match(TA_TRANSCRIPT_MARKER);
+    const after = text.slice(idx + markerMatch[0].length).trim();
+    const turnRe = /(CLIENT|MANAGER):\s*/g;
+    const matches = [...after.matchAll(turnRe)];
+    const lines = matches.map((m, i) => {
+      const start = m.index + m[0].length;
+      const end = (i + 1 < matches.length) ? matches[i + 1].index : after.length;
+      return { speaker: m[1], text: after.slice(start, end).trim().replace(/^"|"$/g, '') };
+    });
+    const turns = [];
+    let pending = null;
+    lines.forEach(l => {
+      if (l.speaker === 'CLIENT') {
+        if (pending) turns.push(pending);
+        pending = { client: l.text, manager: '' };
+      } else {
+        if (!pending) pending = { client: '', manager: '' };
+        pending.manager = l.text;
+      }
+    });
+    if (pending) turns.push(pending);
+    return { background, turns };
+  }
+  function _buildTaScenario(background, turns) {
+    const body = (turns || [])
+      .filter(t => t.client || t.manager)
+      .map(t => `CLIENT: "${(t.client || '').trim()}"\n\nMANAGER: "${(t.manager || '').trim()}"`)
+      .join('\n\n');
+    return `${(background || '').trim()}\n\n─── CALL TRANSCRIPT ─────────────────────────────────────────────\n\n${body}`;
+  }
+
+  // Feedback (Red Pen): "<situation>\n\nThink About:\n- q1\n- q2\n..."
+  const FB_THINK_ABOUT_MARKER = '\n\nThink About:\n';
+  function _parseFbScenario(text) {
+    text = text || '';
+    const idx = text.indexOf(FB_THINK_ABOUT_MARKER);
+    const situation = idx !== -1 ? text.slice(0, idx).trim() : text.trim();
+    const thinkAbout = idx !== -1
+      ? text.slice(idx + FB_THINK_ABOUT_MARKER.length).trim().split('\n').map(l => l.replace(/^-\s*/, '').trim()).filter(Boolean)
+      : [];
+    return { situation, thinkAbout };
+  }
+  function _buildFbScenario(situation, thinkAbout) {
+    const items = (thinkAbout || []).filter(q => q && q.trim()).map(q => `- ${q.trim()}`).join('\n');
+    return `${(situation || '').trim()}${items ? `${FB_THINK_ABOUT_MARKER}${items}` : ''}`;
+  }
+
+  // ---- Transcript Autopsy turn-pair editor (Client + Manager per row) --
+  function _renderTaTurnsEditor(turns) {
+    const container = $('ta-turn-items');
+    if (!container) return;
+    container.innerHTML = '';
+    const list = (turns && turns.length) ? turns : [{ client: '', manager: '' }];
+    list.forEach(t => _addTaTurnRow(t.client, t.manager));
+  }
+  function _addTaTurnRow(client, manager) {
+    const container = $('ta-turn-items');
+    if (!container) return;
+    const row = document.createElement('div');
+    row.className = 'ta-turn-row';
+    row.style.cssText = 'border:1px solid var(--border,#e5e7eb);border-radius:8px;padding:0.6rem;margin-bottom:0.6rem';
+    row.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem">
+        <span style="font-size:0.72rem;font-weight:700;color:#475569;letter-spacing:0.04em">TURN</span>
+        <button type="button" class="btn-ghost small ta-turn-remove">✕</button>
+      </div>
+      <label style="font-size:0.75rem;color:var(--text-muted);display:block;margin-bottom:0.2rem">Client says</label>
+      <textarea class="ta-turn-client" style="min-height:50px;width:100%"></textarea>
+      <label style="font-size:0.75rem;color:var(--text-muted);display:block;margin:0.4rem 0 0.2rem">Manager says</label>
+      <textarea class="ta-turn-manager" style="min-height:50px;width:100%"></textarea>
+    `;
+    row.querySelector('.ta-turn-client').value = client || '';
+    row.querySelector('.ta-turn-manager').value = manager || '';
+    row.querySelector('.ta-turn-remove').onclick = () => row.remove();
+    container.appendChild(row);
+  }
+  function _getTaTurnValues() {
+    return Array.from(document.querySelectorAll('#ta-turn-items .ta-turn-row')).map(row => ({
+      client: row.querySelector('.ta-turn-client').value.trim(),
+      manager: row.querySelector('.ta-turn-manager').value.trim(),
+    })).filter(t => t.client || t.manager);
   }
 
   // ---- Bot script editor (one textarea per customer turn — may contain
@@ -3972,13 +4141,26 @@ window.Admin = (() => {
       if (titleEl) titleEl.textContent = 'Edit Topic';
       const t = await DB.get('topics', topicId);
       if (t) {
-        if (modSelect) modSelect.value = t.module || 'pick-speak';
+        const module = t.module || 'pick-speak';
+        if (modSelect) modSelect.value = module;
         if (inputTitle) inputTitle.value = t.title || '';
         if (inputDesc) inputDesc.value = t.description || '';
         if (inputScen) inputScen.value = t.scenario || '';
         _renderChecklistEditor(t.checklist || []);
         _renderBotScriptEditor(t.botScript || t.bot_script || []);
-        _updateTopicModalFieldsForModule(t.module || 'pick-speak');
+        // Segregated fields (see _updateTopicModalFieldsForModule): parsed
+        // from the same t.scenario string, not a separate stored shape --
+        // so a topic saved before this existed still opens correctly here.
+        const sr = _parseSrScenario(t.scenario);
+        if ($('topic-sr-situation')) $('topic-sr-situation').value = sr.situation;
+        if ($('topic-sr-wrong'))     $('topic-sr-wrong').value     = sr.wrongResponse;
+        const ta = _parseTaScenario(t.scenario);
+        if ($('topic-ta-background')) $('topic-ta-background').value = ta.background;
+        _renderTaTurnsEditor(ta.turns);
+        const fb = _parseFbScenario(t.scenario);
+        if ($('topic-fb-situation')) $('topic-fb-situation').value = fb.situation;
+        _renderThinkAboutEditor(fb.thinkAbout);
+        _updateTopicModalFieldsForModule(module);
       }
     } else {
       if (titleEl) titleEl.textContent = 'New Topic';
@@ -3989,6 +4171,12 @@ window.Admin = (() => {
       if (inputScen) inputScen.value = '';
       _renderChecklistEditor([]);
       _renderBotScriptEditor([]);
+      if ($('topic-sr-situation')) $('topic-sr-situation').value = '';
+      if ($('topic-sr-wrong'))     $('topic-sr-wrong').value = '';
+      if ($('topic-ta-background')) $('topic-ta-background').value = '';
+      _renderTaTurnsEditor([]);
+      if ($('topic-fb-situation')) $('topic-fb-situation').value = '';
+      _renderThinkAboutEditor([]);
       _updateTopicModalFieldsForModule(initialModule);
     }
 
@@ -4004,7 +4192,19 @@ window.Admin = (() => {
     const module = modSelect ? modSelect.value : 'pick-speak';
     const title = inputTitle ? inputTitle.value.trim() : '';
     const description = inputDesc ? inputDesc.value.trim() : '';
-    const scenario = inputScen ? inputScen.value.trim() : '';
+    // Reassemble the segregated fields back into the one scenario string
+    // the live app's own parsers expect, for the 3 modules that get a
+    // structured editor; every other module just uses the plain textarea.
+    let scenario;
+    if (module === 'mgr-situation-room') {
+      scenario = _buildSrScenario($('topic-sr-situation') ? $('topic-sr-situation').value : '', $('topic-sr-wrong') ? $('topic-sr-wrong').value : '');
+    } else if (module === 'mgr-transcript-autopsy') {
+      scenario = _buildTaScenario($('topic-ta-background') ? $('topic-ta-background').value : '', _getTaTurnValues());
+    } else if (module === 'mgr-feedback') {
+      scenario = _buildFbScenario($('topic-fb-situation') ? $('topic-fb-situation').value : '', _getThinkAboutValues());
+    } else {
+      scenario = inputScen ? inputScen.value.trim() : '';
+    }
     const isMcq = MCQ_SHAPED_MODULES.has(module);
 
     if (!title) {

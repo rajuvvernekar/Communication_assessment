@@ -581,10 +581,41 @@
         <label>Description</label>
         <textarea id="topic-description" placeholder="Short description shown to trainee before the task..."></textarea>
       </div>
-      <div class="form-group">
+      <div class="form-group" id="topic-scenario-group">
         <label>Scenario / Context Text</label>
         <textarea id="topic-scenario" placeholder="The actual scenario, situation, or template shown to the trainee..." style="min-height:120px"></textarea>
       </div>
+
+      <!-- Situation Room: Complete Situation + Wrong Response, instead of
+           one field holding both plus the boilerplate Part A/B instructions
+           (reassembled automatically on save). -->
+      <div class="form-group" id="topic-sr-group" style="display:none">
+        <label>Complete Situation (Part A)</label>
+        <textarea id="topic-sr-situation" placeholder="The client's situation — what happened, what they're upset about..." style="min-height:120px"></textarea>
+        <label style="margin-top:0.75rem;display:block">Wrong Response (Part B — given to the manager to critique)</label>
+        <textarea id="topic-sr-wrong" placeholder="The flawed manager reply the manager will analyse and rewrite..." style="min-height:100px"></textarea>
+      </div>
+
+      <!-- Transcript Autopsy: Situation + one Client/Manager pair of fields
+           per turn, instead of every manager response grouped into one box. -->
+      <div class="form-group" id="topic-ta-group" style="display:none">
+        <label>Background / Situation</label>
+        <textarea id="topic-ta-background" placeholder="BACKGROUND: ..." style="min-height:80px"></textarea>
+        <label style="margin-top:0.75rem;display:block">Call Transcript — Client / Manager turns, in order</label>
+        <div id="ta-turn-items"></div>
+        <button id="btn-add-ta-turn" type="button" class="btn-ghost small" style="margin-top:0.5rem">+ Add Turn</button>
+      </div>
+
+      <!-- Red Pen (Feedback): Situation + Think About questions as their
+           own list, instead of embedded at the end of one field. -->
+      <div class="form-group" id="topic-fb-group" style="display:none">
+        <label>Situation</label>
+        <textarea id="topic-fb-situation" placeholder="Employee: ... Situation: ..." style="min-height:120px"></textarea>
+        <label style="margin-top:0.75rem;display:block">Think About — reflection prompts shown to the manager</label>
+        <div id="think-about-items"></div>
+        <button id="btn-add-think-about" type="button" class="btn-ghost small" style="margin-top:0.5rem">+ Add Question</button>
+      </div>
+
       <div class="form-group" id="topic-checklist-group">
         <label>Evaluation Checklist</label>
         <div id="checklist-items"></div>
@@ -805,13 +836,13 @@
 <div id="toast-container"></div>
 
 <script src="config.js?v=2026090902"></script>
-<script src="js/db.js?v=2026092408"></script>
+<script src="js/db.js?v=2026092410"></script>
 <script src="js/db-patch.js?v=2026090902"></script>
 <script src="js/recorder.js?v=2026090902"></script>
 <script src="js/speech.js?v=2026090902"></script>
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <script src="js/mgr-eval-criteria.js?v=2026092407"></script>
 <script src="js/claude.js?v=2026092407"></script>
-<script src="js/admin.js?v=2026092404"></script>
+<script src="js/admin.js?v=2026092409"></script>
 </body>
 </html>

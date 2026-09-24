@@ -559,6 +559,43 @@ Let's get back on track.
   let _audioManualTimer = null; // manual count-up timer for non-feedback audio
   let _mcqAnswers      = [];
 
+  // ── Draft persistence (written assessments only) ─────────
+  // A hard refresh used to wipe the whole in-progress assessment, typed
+  // answers and all. Scoped deliberately to the typed/written modules
+  // (Situation Room, Transcript Autopsy) -- a voice module's actual mic
+  // recording can't survive a refresh no matter what's saved here, so
+  // promising "resume exactly where you left off" there would be
+  // misleading; this only ever restores what CAN genuinely be restored:
+  // which scenario was picked and what's been typed so far.
+  const DRAFT_MODULES = new Set(['mgr-situation-room', 'mgr-transcript-autopsy', 'mgr-management-skills']);
+  const DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000; // ignore/discard a draft older than this
+  let _draftSaveTimer = null;
+
+  function _draftKey(module) {
+    return 'commassess_mgr_draft_' + module;
+  }
+  function _saveDraft(module, data) {
+    if (!DRAFT_MODULES.has(module)) return;
+    clearTimeout(_draftSaveTimer);
+    _draftSaveTimer = setTimeout(() => {
+      try { localStorage.setItem(_draftKey(module), JSON.stringify({ ...data, savedAt: Date.now() })); }
+      catch (e) { /* storage full/unavailable -- draft just won't survive a refresh */ }
+    }, 250); // debounced so every keystroke doesn't hit localStorage directly
+  }
+  function _loadDraft(module) {
+    if (!DRAFT_MODULES.has(module)) return null;
+    try {
+      const raw = localStorage.getItem(_draftKey(module));
+      if (!raw) return null;
+      const draft = JSON.parse(raw);
+      if (!draft || (Date.now() - (draft.savedAt || 0)) > DRAFT_MAX_AGE_MS) return null;
+      return draft;
+    } catch (e) { return null; }
+  }
+  function _clearDraft(module) {
+    try { localStorage.removeItem(_draftKey(module)); } catch (e) {}
+  }
+
   // ── Transcript Autopsy per-turn correction state ─────────
   // Populated by _renderAutopsyTranscript when the scenario text is a
   // CLIENT/MANAGER call transcript: the exact flawed MANAGER line each
@@ -1912,9 +1949,18 @@ HOW TO RUN THIS CALL:
   // ── Situation Room — Two-section assessment ─────────────
 
   function _launchSituationRoom() {
-    const pool = SCENARIOS['mgr-situation-room'];
-    _currentScenario = { ...pickRandom(pool), _hardcoded: true };
-    _sr = { phase: 'A', sectionAText: '', sectionAScores: null };
+    // Resume an in-progress draft (same scenario, same phase, same typed
+    // text) instead of the fresh scenario startModule() just picked, if
+    // one was saved recently (see _loadDraft).
+    const draft = _loadDraft('mgr-situation-room');
+    if (draft && draft.scenario) {
+      _currentScenario = draft.scenario;
+      _sr = { phase: draft.phase || 'A', sectionAText: draft.sectionAText || '', sectionAScores: draft.sectionAScores || null };
+    } else {
+      const pool = SCENARIOS['mgr-situation-room'];
+      _currentScenario = { ...pickRandom(pool), _hardcoded: true };
+      _sr = { phase: 'A', sectionAText: '', sectionAScores: null };
+    }
 
     // Populate Section A UI
     $('sr-topic-title-a').textContent  = _currentScenario.title;
@@ -1922,21 +1968,57 @@ HOW TO RUN THIS CALL:
     $('sr-a-prompt').textContent        = _currentScenario.sectionAPrompt || 'Write your exact verbal response';
     _renderEvalCriteriaPanel('mgr-situation-room', 'sr-scenario-text-a');
 
-    // Reset fields
+    // Section A field: restore typed text if resuming, else clear
     const ta = $('sr-a-textarea');
-    if (ta) ta.value = '';
-    if ($('sr-a-word-count')) $('sr-a-word-count').textContent = '0';
+    const aText = (draft && draft.aText) || '';
+    if (ta) ta.value = aText;
+    if ($('sr-a-word-count')) $('sr-a-word-count').textContent = aText.trim() ? aText.trim().split(/\s+/).filter(Boolean).length : '0';
 
-    // Show Phase A, hide Phase B
-    $('sr-phase-a').style.display = '';
-    $('sr-phase-b').style.display = 'none';
-
-    // Reset step indicators
-    const sa = $('sr-step-a'), sb = $('sr-step-b');
-    if (sa) sa.className = 'sr-step active';
-    if (sb) sb.className = 'sr-step';
+    if (draft && draft.phase === 'B') {
+      // Resume straight into Section B with its own fields restored too --
+      // same population as _transitionToSRSectionB but without resetting
+      // fields to empty or re-showing the "Section A complete" toast.
+      if ($('sr-topic-title-b')) $('sr-topic-title-b').textContent = _currentScenario.title;
+      if ($('sr-wrong-response-text')) $('sr-wrong-response-text').textContent = _currentScenario.wrongResponse || '';
+      const errEl = $('sr-b-errors'), impEl = $('sr-b-impact');
+      const bErrors = draft.bErrors || '', bImpact = draft.bImpact || '';
+      if (errEl) errEl.value = bErrors;
+      if (impEl) impEl.value = bImpact;
+      if ($('sr-b-errors-wc')) $('sr-b-errors-wc').textContent = bErrors.trim() ? bErrors.trim().split(/\s+/).filter(Boolean).length : '0';
+      if ($('sr-b-impact-wc')) $('sr-b-impact-wc').textContent = bImpact.trim() ? bImpact.trim().split(/\s+/).filter(Boolean).length : '0';
+      $('sr-phase-a').style.display = 'none';
+      $('sr-phase-b').style.display = '';
+      const sa = $('sr-step-a'), sb = $('sr-step-b');
+      if (sa) sa.className = 'sr-step done';
+      if (sb) sb.className = 'sr-step active';
+    } else {
+      // Show Phase A, hide Phase B
+      $('sr-phase-a').style.display = '';
+      $('sr-phase-b').style.display = 'none';
+      const sa = $('sr-step-a'), sb = $('sr-step-b');
+      if (sa) sa.className = 'sr-step active';
+      if (sb) sb.className = 'sr-step';
+    }
 
     showScreen('mgr-screen-situation-room');
+    // Persist right away so a refresh before typing anything still resumes
+    // the same scenario instead of re-randomizing.
+    _saveSrDraft();
+  }
+
+  // Gathers Situation Room's current state (scenario, phase, both
+  // sections' typed text) and saves it as this module's draft.
+  function _saveSrDraft() {
+    const aEl = $('sr-a-textarea'), errEl = $('sr-b-errors'), impEl = $('sr-b-impact');
+    _saveDraft('mgr-situation-room', {
+      scenario: _currentScenario,
+      phase: _sr.phase,
+      sectionAText: _sr.sectionAText,
+      sectionAScores: _sr.sectionAScores,
+      aText: aEl ? aEl.value : '',
+      bErrors: errEl ? errEl.value : '',
+      bImpact: impEl ? impEl.value : '',
+    });
   }
 
   async function _submitSRSectionA() {
@@ -1971,6 +2053,8 @@ HOW TO RUN THIS CALL:
   }
 
   function _transitionToSRSectionB() {
+    _sr.phase = 'B';
+
     // Mark steps
     const sa = $('sr-step-a'), sb = $('sr-step-b');
     if (sa) sa.className = 'sr-step done';
@@ -1993,6 +2077,7 @@ HOW TO RUN THIS CALL:
     $('sr-phase-b').style.display = '';
     window.scrollTo(0, 0);
     toast('Section A complete! Now analyse the wrong response in Section B.', 'success');
+    _saveSrDraft();
   }
 
   async function _submitSRSectionB() {
@@ -2087,6 +2172,7 @@ HOW TO RUN THIS CALL:
         submittedAt:  new Date().toISOString(),
         status:       'ai-evaluated',
       });
+      _clearDraft('mgr-situation-room');
       _showResult(aiScores, 'situation-room');
     } catch (e) {
       toast('Error saving session: ' + e.message, 'error');
@@ -2451,15 +2537,17 @@ HOW TO RUN THIS CONVERSATION:
     thread.appendChild(bubble);
     thread.scrollTop = thread.scrollHeight;
 
-    // Speak, then start manager turn (or finish)
+    // Speak, then always let the manager respond -- including to this
+    // final line. This used to skip straight to showing the Finish button
+    // on the last turn without ever starting the manager's mic, cutting
+    // the call off right after the employee's closing line instead of
+    // letting the manager actually answer it and then conclude.
+    // _endManagerFbTurn() below already shows Finish once empTurnCount
+    // reaches maxTurns, which now correctly happens AFTER this response.
     $('mgr-fb-status').style.display = 'none';
     _speakFeedbackEmployee(empLine, emp.gender, () => {
-      if (isLast) {
-        $('btn-mgr-fb-finish').style.display = '';
-        $('btn-mgr-fb-end-early').style.display = 'none';
-      } else {
-        _startManagerFbTurn();
-      }
+      if (isLast) $('btn-mgr-fb-end-early').style.display = 'none';
+      _startManagerFbTurn();
     });
   }
 
@@ -2821,6 +2909,58 @@ HOW TO RUN THIS CONVERSATION:
     });
   }
 
+  // Runs the 45-second break between sections: pauses on a countdown
+  // screen (skippable), then clears the chat thread and starts the next
+  // section's counterpart fresh -- so each section reads as its own
+  // conversation rather than one continuous 18-turn thread.
+  function _startEqSectionBreak(finishedSection, nextSection) {
+    clearInterval(_eq.breakTimerId);
+
+    $('mgr-eq-turn-bar').style.display = 'none';
+    $('mgr-eq-chat-thread').style.display = 'none';
+    $('mgr-eq-rec-area').style.display = 'none';
+
+    const breakEl = $('mgr-eq-section-break');
+    const labelEl = $('mgr-eq-break-label');
+    const countEl = $('mgr-eq-break-count');
+    const nextEl  = $('mgr-eq-break-next');
+    if (labelEl) labelEl.textContent = `Section ${finishedSection.id} complete`;
+    if (nextEl)  nextEl.textContent  = `Take a short breather — Section ${nextSection.id} starts automatically`;
+    if (breakEl) breakEl.style.display = '';
+
+    const BREAK_SECS = 45; // within the requested 30-60s range
+    let remaining = BREAK_SECS;
+    if (countEl) countEl.textContent = remaining;
+
+    const advance = () => {
+      clearInterval(_eq.breakTimerId);
+      if (breakEl) breakEl.style.display = 'none';
+
+      _eq.turnInSection = 0;
+      $('mgr-eq-sc-title').textContent = `${_currentScenario.title} — Section ${nextSection.id}: ${nextSection.label}`;
+      $('mgr-eq-sc-text').innerHTML = _formatScenarioHTML(nextSection.situation);
+      _renderEvalCriteriaPanel('mgr-eq', 'mgr-eq-sc-text');
+      _renderEqStepIndicator();
+      $('mgr-eq-counterpart-name').textContent = nextSection.counterpart.name;
+      // Fresh visual thread for the new section's conversation.
+      $('mgr-eq-chat-thread').innerHTML = '';
+      $('mgr-eq-chat-thread').style.display = '';
+      $('mgr-eq-turn-bar').style.display = '';
+      window.scrollTo(0, 0);
+
+      _runEqTurn(nextSection.counterpart.opening, true /* firstOfSection */);
+    };
+
+    const skipBtn = $('btn-mgr-eq-break-skip');
+    if (skipBtn) skipBtn.onclick = advance;
+
+    _eq.breakTimerId = setInterval(() => {
+      remaining--;
+      if (countEl) countEl.textContent = remaining;
+      if (remaining <= 0) advance();
+    }, 1000);
+  }
+
   function _launchMirrorRoom() {
     const pool = SCENARIOS['mgr-eq'];
     _currentScenario = { ...pickRandom(pool), _hardcoded: true };
@@ -2831,7 +2971,7 @@ HOW TO RUN THIS CONVERSATION:
     // manager's 2026-09-24 request (was 2 per section / 6 total).
     _eq = { sectionIndex: 0, turnInSection: 0, totalTurns: 0, turnsPerSection: 6, maxTotalTurns: 18,
             history: [], blobPromise: null,
-            turnTimerId: null, turnEnded: false, finishing: false, ttsAudioEl: null };
+            turnTimerId: null, breakTimerId: null, turnEnded: false, finishing: false, ttsAudioEl: null };
 
     $('mgr-eq-sc-title').textContent = `${_currentScenario.title} — Section A: ${section.label}`;
     $('mgr-eq-sc-text').innerHTML  = _formatScenarioHTML(section.situation);
@@ -2843,6 +2983,7 @@ HOW TO RUN THIS CONVERSATION:
     $('mgr-eq-turn-bar').style.display = 'none';
     $('mgr-eq-status').style.display = 'none';
     $('mgr-eq-rec-area').style.display = 'none';
+    $('mgr-eq-section-break').style.display = 'none';
     $('btn-mgr-eq-finish').style.display = 'none';
     $('btn-mgr-eq-end-early').style.display = 'none';
     $('mgr-eq-start-wrap').style.display = 'block';
@@ -2988,26 +3129,18 @@ HOW TO RUN THIS CONVERSATION:
       return;
     }
 
-    // This section's 2 AI turns are both done -- hand off to the next
+    // This section's 6 AI turns are all done -- hand off to the next
     // section's situation + counterpart rather than asking the AI to
     // continue speaking as the same character (each section is a distinct
-    // person/moment in the day's narrative).
+    // person/moment in the day's narrative). A timed break (with a fresh
+    // visual chat thread after it) makes each section feel like its own
+    // conversation rather than one continuous one.
     if (_eq.turnInSection >= _eq.turnsPerSection) {
       const finishedSection = _currentScenario.sections[_eq.sectionIndex];
       _eq.sectionIndex++;
       _eq.turnInSection = 0;
       const nextSection = _currentScenario.sections[_eq.sectionIndex];
-
-      $('mgr-eq-status').style.display = 'none';
-      $('mgr-eq-sc-title').textContent = `${_currentScenario.title} — Section ${nextSection.id}: ${nextSection.label}`;
-      $('mgr-eq-sc-text').innerHTML = _formatScenarioHTML(nextSection.situation);
-      _renderEvalCriteriaPanel('mgr-eq', 'mgr-eq-sc-text');
-      _renderEqStepIndicator();
-      $('mgr-eq-counterpart-name').textContent = nextSection.counterpart.name;
-      toast(`Section ${finishedSection.id} complete. Section ${nextSection.id}: ${nextSection.label} →`, 'success');
-      window.scrollTo(0, 0);
-
-      _runEqTurn(nextSection.counterpart.opening, true /* firstOfSection */);
+      _startEqSectionBreak(finishedSection, nextSection);
       return;
     }
 
@@ -3059,6 +3192,7 @@ HOW TO RUN THIS CONVERSATION:
     if (window.speechSynthesis) window.speechSynthesis.cancel();
     if (_eq.ttsAudioEl) { try { _eq.ttsAudioEl.pause(); } catch (e) {} _eq.ttsAudioEl = null; }
     clearInterval(_eq.turnTimerId);
+    clearInterval(_eq.breakTimerId);
     if (SpeechEngine.isSupported()) { try { SpeechEngine.stopTranscription(); } catch(e){} }
 
     Recorder.stop();
@@ -3140,6 +3274,7 @@ HOW TO RUN THIS CONVERSATION:
     if (_eq.finishing) return;
     if (window.speechSynthesis) window.speechSynthesis.cancel();
     clearInterval(_eq.turnTimerId);
+    clearInterval(_eq.breakTimerId);
     if (SpeechEngine.isSupported()) { try { SpeechEngine.stopTranscription(); } catch(e){} }
     if ($('mgr-eq-rec-area').style.display !== 'none' && !_eq.turnEnded) {
       _eq.turnEnded = true;
@@ -3303,6 +3438,12 @@ HOW TO RUN THIS CONVERSATION:
     const meta = MODULE_META[_currentModule];
     const isAutopsy = _currentModule === 'mgr-transcript-autopsy';
 
+    // Resume an in-progress draft for this module -- same scenario, same
+    // typed answers -- instead of the fresh scenario startModule() just
+    // picked, if one was saved recently (see _loadDraft).
+    const draft = _loadDraft(_currentModule);
+    if (draft && draft.scenario) _currentScenario = draft.scenario;
+
     $('mgr-written-module-title').textContent = `${meta.icon} ${meta.label}`;
     $('mgr-written-scenario-label').textContent = isAutopsy
       ? 'Read the transcript, then correct each of the manager\'s flawed lines below it'
@@ -3316,14 +3457,23 @@ HOW TO RUN THIS CONVERSATION:
     // Transcript Autopsy's correction boxes are (re)created fresh on every
     // launch, so they need the copy/paste block wired here rather than once
     // at _bindEvents() time like the other written assessments' static
-    // textareas.
+    // textareas. Same for the draft-saving listener -- these boxes don't
+    // exist yet when _bindEvents() runs once at startup.
     if (isAutopsy) {
       document.querySelectorAll('.ta-correction-area').forEach(el => {
         ['paste', 'copy', 'cut'].forEach(evt => el.addEventListener(evt, e => {
           e.preventDefault();
           toast('Copy/paste is disabled for this assessment.', 'error');
         }));
+        el.addEventListener('input', _saveWrittenDraft);
       });
+      // Restore any previously-typed corrections for this draft's scenario.
+      if (draft && draft.corrections) {
+        draft.corrections.forEach((val, i) => {
+          const el = $('ta-correction-' + i);
+          if (el) el.value = val;
+        });
+      }
     }
 
     // Transcript Autopsy corrects each flawed line in place (see
@@ -3341,9 +3491,34 @@ HOW TO RUN THIS CONVERSATION:
     }
 
     const ta = $('mgr-written-textarea');
-    ta.value = '';
-    $('mgr-written-word-count').textContent = '0';
+    ta.value = (!isAutopsy && draft && draft.text) ? draft.text : '';
+    $('mgr-written-word-count').textContent = ta.value.trim() ? ta.value.trim().split(/\s+/).filter(Boolean).length : '0';
+
+    // Persist the (possibly just-restored, possibly freshly-picked)
+    // scenario right away, so refreshing again before typing anything
+    // still resumes the same scenario instead of re-randomizing.
+    _saveWrittenDraft();
+
     showScreen('mgr-screen-written');
+  }
+
+  // Gathers the current written-screen state (scenario + whatever's typed
+  // so far, in whichever shape this module uses) and saves it as this
+  // module's draft. Bound to every relevant textarea's 'input' event.
+  function _saveWrittenDraft() {
+    if (!DRAFT_MODULES.has(_currentModule)) return;
+    const isAutopsy = _currentModule === 'mgr-transcript-autopsy';
+    const data = { scenario: _currentScenario };
+    if (isAutopsy) {
+      data.corrections = _taManagerLines.map((_, i) => {
+        const el = $('ta-correction-' + i);
+        return el ? el.value : '';
+      });
+    } else {
+      const ta = $('mgr-written-textarea');
+      data.text = ta ? ta.value : '';
+    }
+    _saveDraft(_currentModule, data);
   }
 
   async function submitWritten() {
@@ -3427,6 +3602,7 @@ HOW TO RUN THIS CONVERSATION:
         submittedAt:  new Date().toISOString(),
         status:       'ai-evaluated',
       });
+      _clearDraft(_currentModule);
       _showResult(aiScores, 'written');
     } catch (e) {
       toast('Error saving session: ' + e.message, 'error');
@@ -3665,6 +3841,7 @@ HOW TO RUN THIS CONVERSATION:
     if (srATa) srATa.addEventListener('input', () => {
       const w = srATa.value.trim().split(/\s+/).filter(Boolean).length;
       if ($('sr-a-word-count')) $('sr-a-word-count').textContent = w;
+      _saveSrDraft();
     });
     [['sr-b-errors','sr-b-errors-wc'],['sr-b-impact','sr-b-impact-wc']]
       .forEach(([taId, wcId]) => {
@@ -3672,6 +3849,7 @@ HOW TO RUN THIS CONVERSATION:
         if (ta) ta.addEventListener('input', () => {
           const w = ta.value.trim().split(/\s+/).filter(Boolean).length;
           const wc = $(wcId); if (wc) wc.textContent = w;
+          _saveSrDraft();
         });
       });
 
@@ -3736,6 +3914,7 @@ HOW TO RUN THIS CONVERSATION:
       writtenTA.addEventListener('input', () => {
         const words = writtenTA.value.trim().split(/\s+/).filter(Boolean).length;
         $('mgr-written-word-count').textContent = words;
+        _saveWrittenDraft();
       });
     }
 

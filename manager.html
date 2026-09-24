@@ -1051,6 +1051,15 @@
       </button>
     </div>
 
+    <!-- Between-section break: shown after a section ends, before the next
+         section's fresh conversation thread opens. -->
+    <div id="mgr-eq-section-break" style="display:none;text-align:center;padding:2.5rem 0;background:#fff;border-radius:10px;box-shadow:var(--shadow);margin-bottom:0.75rem">
+      <div style="font-size:0.85rem;font-weight:700;color:#059669;margin-bottom:0.5rem" id="mgr-eq-break-label">Section A complete</div>
+      <div style="font-size:2.5rem;font-weight:900;color:#2490ef;font-variant-numeric:tabular-nums" id="mgr-eq-break-count">45</div>
+      <div style="color:var(--text-muted);font-size:0.85rem;margin-top:0.5rem" id="mgr-eq-break-next">Take a short breather — Section B starts automatically</div>
+      <button id="btn-mgr-eq-break-skip" class="btn-ghost" style="margin-top:1rem;font-size:0.8rem">Skip break →</button>
+    </div>
+
     <!-- Turn indicator bar -->
     <div class="mgr-fb-turn-bar" id="mgr-eq-turn-bar" style="display:none">
       <div class="mc-mood-bar mood-frustrated" id="mgr-eq-mood" style="border-radius:8px;padding:0.5rem 1rem;margin-bottom:0.75rem">
@@ -1384,13 +1393,13 @@
 <div id="toast-container"></div>
 
 <script src="config.js?v=100"></script>
-<script src="js/db.js?v=2026092408"></script>
+<script src="js/db.js?v=2026092410"></script>
 <script src="js/auth.js?v=100"></script>
 <script src="js/recorder.js?v=101"></script>
 <script src="js/speech.js?v=100"></script>
 <script src="js/mgr-eval-criteria.js?v=2026092407"></script>
 <script src="js/gemini-live.js?v=2026092014"></script>
 <script src="js/claude.js?v=2026092407"></script>
-<script src="js/manager-app.js?v=2026092407"></script>
+<script src="js/manager-app.js?v=2026092409"></script>
 </body>
 </html>
