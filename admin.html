@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CommAssess — Admin Portal</title>
-  <link rel="stylesheet" href="css/style.css?v=2026092403">
+  <link rel="stylesheet" href="css/style.css?v=2026092503">
   <!-- Supabase JS SDK (CDN) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
@@ -202,7 +202,7 @@
         <button class="topics-group-card" onclick="Admin.selectTopicsGroup('manager')">
           <div class="topics-group-icon">👔</div>
           <div class="topics-group-title">Manager</div>
-          <div class="topics-group-sub">Situation Room, Transcript Autopsy, Mock Call, Feedback, EQ</div>
+          <div class="topics-group-sub">Situation Room, Transcript Autopsy, Mock Call, Feedback, EQ — plus the NRI Manager section</div>
         </button>
         <button class="topics-group-card" onclick="Admin.selectTopicsGroup('trainee')">
           <div class="topics-group-icon">🎓</div>
@@ -450,6 +450,9 @@
           <option value="mgr-eq">🧠 Emotional Intelligence</option>
           <option value="mgr-listening-tone">🎧 Listening &amp; Tone</option>
           <option value="mgr-management-skills">📊 Management Skills</option>
+          <option value="mgr-nri-situation-room">🌏 NRI Situation Room</option>
+          <option value="mgr-nri-transcript-autopsy">🌏 NRI Transcript Autopsy</option>
+          <option value="mgr-nri-mock-call">🌏 NRI Paper Trade</option>
         </select>
         <select id="mgr-filter-status" class="filter-select" onchange="Admin.renderMgrAssessments()">
           <option value="all">All Status</option>
@@ -571,6 +574,11 @@
             <option value="mgr-listening-tone">🎧 Listening &amp; Tone</option>
             <option value="mgr-management-skills">📊 Management Skills</option>
           </optgroup>
+          <optgroup label="── NRI Manager ──">
+            <option value="mgr-nri-situation-room">🌏 NRI Situation Room</option>
+            <option value="mgr-nri-transcript-autopsy">🌏 NRI Transcript Autopsy</option>
+            <option value="mgr-nri-mock-call">🌏 NRI Paper Trade</option>
+          </optgroup>
         </select>
       </div>
       <div class="form-group">
@@ -614,6 +622,28 @@
         <label style="margin-top:0.75rem;display:block">Think About — reflection prompts shown to the manager</label>
         <div id="think-about-items"></div>
         <button id="btn-add-think-about" type="button" class="btn-ghost small" style="margin-top:0.5rem">+ Add Question</button>
+      </div>
+
+      <!-- Internal Data: the client-context box shown to the manager beside
+           the situation (account specifics, timeline, internal guidelines).
+           One point per line as "Label: value"; stored after a marker at the
+           end of the scenario string (see mgrSplitInternalData). Situation
+           Room, Transcript Autopsy and Paper Trade only. -->
+      <div class="form-group" id="topic-internal-group" style="display:none">
+        <label>Internal Data <span style="font-weight:400;color:var(--text-muted)">— client context the manager sees while responding</span></label>
+        <textarea id="topic-internal-data" placeholder="One point per line, as &quot;Label: value&quot; — e.g.&#10;Account status: Application pending KYC upload&#10;Fee paid: ₹1,000 on 12 Sep 2026&#10;Guideline: Overseas address proof must be in the applicant's own name" style="min-height:130px"></textarea>
+      </div>
+
+      <!-- Trainer demo flag: adds/removes the "[DEMO]" title prefix on save.
+           A demo topic is played only from the Trainer Demo Walkthroughs
+           section of the manager portal, never in a real assessment, and its
+           run is never saved. -->
+      <div class="form-group" id="topic-demo-group" style="display:none">
+        <label style="display:flex;align-items:center;gap:0.5rem;font-weight:600;cursor:pointer">
+          <input type="checkbox" id="topic-demo-flag" />
+          🎓 Trainer demo topic
+          <span style="font-weight:400;color:var(--text-muted)">— walk-through only; never drawn for a real assessment, never saved</span>
+        </label>
       </div>
 
       <div class="form-group" id="topic-checklist-group">
@@ -836,13 +866,13 @@
 <div id="toast-container"></div>
 
 <script src="config.js?v=2026090902"></script>
-<script src="js/db.js?v=2026092410"></script>
+<script src="js/db.js?v=2026092503"></script>
 <script src="js/db-patch.js?v=2026090902"></script>
 <script src="js/recorder.js?v=2026090902"></script>
 <script src="js/speech.js?v=2026090902"></script>
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
-<script src="js/mgr-eval-criteria.js?v=2026092407"></script>
+<script src="js/mgr-eval-criteria.js?v=2026092503"></script>
 <script src="js/claude.js?v=2026092407"></script>
-<script src="js/admin.js?v=2026092409"></script>
+<script src="js/admin.js?v=2026092504"></script>
 </body>
 </html>

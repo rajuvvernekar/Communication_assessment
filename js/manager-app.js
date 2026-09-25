@@ -18,6 +18,13 @@ const MgrApp = (() => {
     'mgr-situation-room': [
       {
         id: 'sr1',
+        internalData: `Client profile: High-net-worth client, 6+ years with the firm, active in F&O, no complaints in the last 12 months
+Order details: Sell order on an open derivatives position placed at 11:42 AM; executed only 27 minutes later at 12:09 PM
+System status: Order-gateway latency alert logged by the tech team between 11:40 AM and 12:10 PM during the exchange-wide volatility spike
+Loss figure: Client states ₹8.4 lakh additional loss; the exact figure must be confirmed from the order log (intended vs actual exit price) before you quote any number
+Evidence available: Order ID, timestamps and the tech incident ticket can be pulled from the OMS; get the ticket before you commit to a cause
+Your authority: Branch managers cannot approve compensation; you can log a formal complaint with a ticket number and escalate to the Head of Operations
+Client rights: The client may escalate to the firm's grievance officer and then to SEBI SCORES; never discourage this`,
         title: 'Order Execution Failure During a Market Crash',
         scenario: `A high-net-worth client placed a large sell order on a volatile derivatives position during a sharp intraday market crash. The order failed to execute due to a system slowdown during peak load. By the time it went through manually, the client had lost ₹8.4 lakh more than if the order had executed on time. The client has called the branch manager directly, furious.\n\nPart A — What Would You Say? Write your full verbal response, opening to close.\nPart B — The Wrong Response: A flawed manager reply to this situation follows below. Identify every error, explain the impact of each, and rewrite the response correctly.`,
         sectionAPrompt: 'Part A — Write the EXACT words you would say to this client, opening to close: the opening (first 60 seconds), the body of the resolution, and the close.',
@@ -25,6 +32,13 @@ const MgrApp = (() => {
       },
       {
         id: 'sr2',
+        internalData: `Client profile: Active for 4 years, 2FA enabled, last password change 9 months ago
+Disputed trades: Three trades executed between 10:12 AM and 10:18 AM on the same day, all placed through the mobile app, on positions that later moved against the client
+Access log: The orders came from a device and IP not seen in the client's previous 90 days of logins; the same session logged in 4 minutes earlier
+Contact details: Registered email and mobile unchanged in the last 12 months; no recent bank-mapping or nominee change requests
+Safeguards you can trigger now: Immediate trading block on the account, forced logout of all sessions, withdrawals held for 24 hours pending review
+Investigation: Only the security team can confirm unauthorised access; you cannot confirm or deny fraud on the call and must not promise a reversal
+Your authority: No compensation or reversal decision at branch level; that rests with compliance after the investigation`,
         title: 'Unauthorized Trade Dispute',
         scenario: `A client discovers three trades in their account they insist they never placed — all executed on the same day the market moved sharply against those positions, resulting in a loss of ₹3.1 lakh. The client suspects either a system glitch attributed the trades wrongly, or unauthorized access. They are alleging fraud.\n\nPart A — What Would You Say? Write your full verbal response, opening to close.\nPart B — The Wrong Response: A flawed manager reply to this situation follows below. Identify every error, explain the impact of each, and rewrite the response correctly.`,
         sectionAPrompt: 'Part A — Write the EXACT words you would say to this client, opening to close: the opening (first 60 seconds), the body of the resolution, and the close.',
@@ -32,6 +46,13 @@ const MgrApp = (() => {
       },
       {
         id: 'sr3',
+        internalData: `Position: Leveraged intraday position; margin utilisation was 96% of available margin after the gap-down opening
+Alert trail: Margin-shortfall SMS and app push sent at 9:21 AM and 9:33 AM; one call attempt logged at 9:36 AM (unanswered); email alerts were not enabled on the account
+Square-off: RMS auto square-off executed at 9:44 AM at the prevailing market price under the published RMS policy
+Loss locked in: ₹5.6 lakh; the client says the position recovered by close, so check the day's price chart before agreeing or disagreeing
+Account note gap: The client told the support desk two weeks ago about upcoming travel, but no note was added to the account
+Policy: Square-off thresholds apply equally to all clients; an executed square-off cannot be reversed; any goodwill gesture needs Head of Risk approval
+What you can do: Walk through the alert trail, add the travel note, offer to enable email and WhatsApp alerts, and log the missing-note gap internally`,
         title: 'RMS Auto Square-Off During Margin Shortfall',
         scenario: `A client's leveraged intraday position was auto-squared-off by the Risk Management System after a sudden margin shortfall triggered by a gap-down opening. The client was travelling and unreachable for the margin call SMS/call. The square-off locked in a loss of ₹5.6 lakh, and the client believes that had it not been squared off, the position would have recovered by market close (it did, in hindsight). The client is irate.\n\nPart A — What Would You Say? Write your full verbal response, opening to close.\nPart B — The Wrong Response: A flawed manager reply to this situation follows below. Identify every error, explain the impact of each, and rewrite the response correctly.`,
         sectionAPrompt: 'Part A — Write the EXACT words you would say to this client, opening to close: the opening (first 60 seconds), the body of the resolution, and the close.',
@@ -39,6 +60,13 @@ const MgrApp = (() => {
       },
       {
         id: 'sr4',
+        internalData: `Account status: Trading and withdrawals frozen for 3 days for overdue periodic KYC re-verification flagged by compliance
+Notices sent: Two email reminders and one SMS in the 30 days before the freeze; no phone call attempt is logged
+Funds: The ₹12 lakh withdrawal request is pending and the funds are intact and safe; they are released once KYC status is updated
+Re-verification: Client must complete the document update and e-sign; with complete documents it typically clears in 1 working day, incomplete documents restart the cycle
+Your authority: You can raise a priority ticket with KYC operations and request a same-day review; you cannot waive the requirement
+Client circumstances: Family medical emergency; the client is distressed about timing and lack of warning, not the requirement itself
+Follow-up: Commit only to a callback time you will keep, and give the ticket number`,
         title: 'KYC Freeze Blocking an Urgent Withdrawal',
         scenario: `A client's trading account and linked funds were frozen for a mandatory periodic KYC re-verification, flagged as overdue by compliance. The client had a ₹12 lakh withdrawal pending to cover a personal emergency (a family medical situation) and only discovered the freeze when the withdrawal failed. The client is distressed and angry, not at the requirement itself but at the timing and lack of warning.\n\nPart A — What Would You Say? Write your full verbal response, opening to close.\nPart B — The Wrong Response: A flawed manager reply to this situation follows below. Identify every error, explain the impact of each, and rewrite the response correctly.`,
         sectionAPrompt: 'Part A — Write the EXACT words you would say to this client, opening to close: the opening (first 60 seconds), the body of the resolution, and the close.',
@@ -46,6 +74,13 @@ const MgrApp = (() => {
       },
       {
         id: 'sr5',
+        internalData: `Incident: Trading app outage of about 40 minutes (10:05 AM to 10:45 AM) affecting a segment of users during a macro announcement; confirmed in the tech incident report
+Client activity: Open leveraged position; three failed exit attempts logged at 10:12, 10:19 and 10:31 AM
+Workaround: The call-and-trade desk stayed available during the outage; the client says no one told them about it
+Communication: The status-page notice went up 25 minutes into the outage; no SMS or push notification was sent to affected users
+Impact figure: Client claims ₹6.7 lakh loss against the price at the first failed attempt; verify from the order log before quoting any figure
+Your authority: No individual compensation can be promised at branch level; log a formal complaint for Head of Operations review
+Public threat: Involve the communications and compliance teams; do not argue with or dare the client`,
         title: 'Trading App Outage During a Volatile Session',
         scenario: `During a session with unusually high volatility around a major macroeconomic announcement, the trading app crashed for approximately 40 minutes for a segment of users, including this client, who was holding an open leveraged position and unable to exit. When the app came back, the position had moved sharply against the client, resulting in a ₹6.7 lakh loss the client believes was entirely avoidable had they been able to exit when they tried. The client is threatening to go public.\n\nPart A — What Would You Say? Write your full verbal response, opening to close.\nPart B — The Wrong Response: A flawed manager reply to this situation follows below. Identify every error, explain the impact of each, and rewrite the response correctly.`,
         sectionAPrompt: 'Part A — Write the EXACT words you would say to this client, opening to close: the opening (first 60 seconds), the body of the resolution, and the close.',
@@ -336,6 +371,28 @@ MANAGER: "Sir, that is your right. But please be aware that investigations take 
           'Skips designing any graduated plan, leaving her to face full complexity again with no scaffolding.',
           'Offers generic praise ("you\'re doing great") rather than specific, evidence-based reassurance.',
         ] },
+      // Trainer demo (2026-09-25): a deliberately low-stakes case so a
+      // walk-through can focus on how the assessment works, not on
+      // difficulty. Never drawn for a real run (see the `demo` filter in
+      // _launchFeedbackAI); a short 3-exchange conversation, not 5.
+      { id:'fbdemo', demo:true, demoTurns:3, title:'[DEMO] Walkthrough — The Repeatedly Late Log-In',
+        scenario:'Employee: Sam — a friendly, well-liked agent with solid QA scores who has logged in 10-15 minutes after shift start on 6 of the last 10 working days. He has not raised a reason.\n\nSituation: You are speaking with Sam privately for the first time about the pattern. This is a trainer walk-through topic: it is intentionally low-stakes so the flow of the assessment, not the difficulty, is the focus.',
+        thinkAbout: [
+          'How will you open without making Sam feel accused?',
+          'What specific pattern (dates, times) will you point to?',
+          'What will you agree with Sam before you end the conversation?',
+        ],
+        smartWeights: { specific: 10, measurable: 10, achievable: 10, relevant: 10, timeBound: 10 },
+        goodLooksLike: [
+          'Opens calmly and states the specific pattern (6 of the last 10 days, 10-15 minutes late) rather than a general complaint.',
+          'Asks what is behind it before proposing a fix.',
+          'Agrees a concrete, time-bound next step and a check-in date.',
+        ],
+        commonPitfalls: [
+          'Opens with "you are always late" or another generalisation.',
+          'Lectures about punctuality without asking why it is happening.',
+          'Ends without any agreed action or follow-up date.',
+        ] },
     ],
     // Mirror Room (EQ) case bank — replaced 2026-09-24 (at the manager's
     // request) with 2 sequential 3-section cases, dropping the old 7-scenario
@@ -453,6 +510,38 @@ MANAGER: "Sir, that is your right. But please be aware that investigations take 
               'Has no concrete plan to offer when pressed, just reassurance',
             ] },
         ] },
+      // Trainer demo (2026-09-25): three short sections, 2 exchanges each,
+      // low-stakes situations -- see the fbdemo note above.
+      { id:'eqdemo', demo:true, demoTurnsPerSection:2, title:'[DEMO] Walkthrough — A Short Workday',
+        sections: [
+          { id:'A', label:'The Missed Handover', focus:'Self-Awareness',
+            situation:`A colleague, Kavya, tells you that a handover note you promised to send yesterday never arrived, and she had to start her shift without it.\n\nAs a manager, how would you handle this?`,
+            counterpart: {
+              name: 'Kavya', gender: 'female',
+              opening: "Hi — sorry to catch you, but the handover note from yesterday never came through and I started my shift blind.",
+              persona: "You are Kavya, a team member, polite but a little put out that a promised handover note never arrived. If your manager owns the miss plainly and says what they will do now, you relax and thank them. If they make excuses or brush it off, you become more curt.",
+            },
+            goodLooksLike: ['Owns the miss plainly without over-explaining', 'Fixes the immediate problem now', 'Says how it will not happen again'],
+            commonPitfalls: ['Makes excuses', 'Brushes the issue off', 'Promises nothing concrete'] },
+          { id:'B', label:'The Stalled Project', focus:'Motivation',
+            situation:`Later that morning, Dev tells you the project he has been working on for two weeks feels pointless now that priorities have changed, and he is losing energy for it.\n\nAs a manager, how would you handle this?`,
+            counterpart: {
+              name: 'Dev', gender: 'male',
+              opening: "Honestly, I'm struggling to care about this project any more — priorities changed and it feels like wasted effort.",
+              persona: "You are Dev, a capable team member whose motivation has dipped because a project you invested in lost priority. You open up if your manager listens and reconnects the work to something that matters; you go quiet if they just say 'it's still important'.",
+            },
+            goodLooksLike: ['Listens before responding', 'Reconnects the work to a real outcome', 'Agrees a small next step'],
+            commonPitfalls: ['Dismisses the feeling', 'Repeats that the project is important without explaining why', 'Offers no next step'] },
+          { id:'C', label:'The Tense Meeting', focus:'Empathy',
+            situation:`Just before lunch, Isha stays back after a team meeting, visibly upset that a colleague spoke over her twice in front of everyone.\n\nAs a manager, how would you handle this?`,
+            counterpart: {
+              name: 'Isha', gender: 'female',
+              opening: "Can I have a minute? I'm still upset about how that meeting went — I was talked over twice.",
+              persona: "You are Isha, a team member who feels embarrassed and unheard after being talked over in a meeting. You soften if your manager acknowledges how it felt before offering solutions; you shut down if they jump straight to advice.",
+            },
+            goodLooksLike: ['Acknowledges the feeling first', 'Asks what she needs', 'Offers a specific follow-up'],
+            commonPitfalls: ['Jumps straight to advice', 'Minimises it ("that happens")', 'Takes the colleague\'s side without hearing her'] },
+        ] },
     ],
     'mgr-management-skills': [
       { id:'ms1', title:'30-60-90 Day Plan',
@@ -511,6 +600,12 @@ MANAGER: "Sir, that is your right. But please be aware that investigations take 
       opening: "Hi... yeah, I know my numbers have slipped a bit lately.",
       persona: "You are Priya. You were recently promoted to handle more complex customer interactions and performed well at first, but after receiving negative feedback on a few difficult calls, your confidence has dropped. You\'re taking longer to respond, frequently asking for help on routine situations, avoiding complex calls, and your productivity has reduced. You keep privately asking yourself 'Am I doing this correctly?' You don\'t need more knowledge training — you need structured practice, reassurance, and gradually increasing exposure to complex situations. Underneath, you\'re scared: you don\'t want to sign up for extra login time or overtime because of the errors, and you\'re worried you\'ll fall in QIP and eventually be asked to leave. Default lines, to use verbatim or adapt: 'I\'m trying. But every time I take a difficult call, I feel I\'m going to make another mistake.' / 'Am I doing this correctly?' / 'Maybe I\'m just not cut out for the complex calls.' If the manager tells you to 'just be more confident' or offers only generic praise ('you\'re doing great') without anything concrete, or assigns more training content, your anxiety doesn\'t really shift and you stay hesitant. If the manager instead recognises this as a confidence issue rather than a skill gap, offers specific reassurance grounded in real examples of your past competence, and proposes a graduated, small-steps plan for building back up to complex calls with a way to track progress, you visibly relax and become willing to try — genuine relief rather than forced positivity."
     },
+    'fbdemo': {
+      name: 'Sam',
+      gender: 'male',
+      opening: "Hi — you wanted a word?",
+      persona: "You are Sam — a friendly, well-liked agent with solid QA scores. You have been logging in 10-15 minutes late for the last couple of weeks because your commute changed after a house move, and you didn't want to make excuses so you never said anything. You are a little embarrassed and cooperative. If your manager asks calmly and specifically, you explain the commute and welcome a practical plan (for example a small shift-time adjustment or a fixed departure time). If your manager is accusatory or generalises ('you're always late'), you become a bit defensive. Keep every reply short and natural.",
+    },
   };
 
   // Mirror Room (EQ) counterpart personas now live inline on each case's
@@ -546,10 +641,24 @@ Let's get back on track.
     'mgr-eq':                { label: 'The Mirror Room',        type: 'eq-ai',       icon: '🪞' },
     'mgr-listening-tone':    { label: 'Listening & Tone',      type: 'mcq',         icon: '🎧' },
     'mgr-management-skills': { label: 'Management Skills',     type: 'written',     icon: '📊', minWords: 200 },
+    // NRI Manager section (2026-09-25): same three assessments with their
+    // own topic banks. Behaviour, rubric and evaluators all come from the
+    // base module (see mgrBaseModule in js/mgr-eval-criteria.js); only the
+    // module key -- and so the topics read and the label saved -- differs.
+    'mgr-nri-situation-room':     { label: 'NRI — The Situation Room', type: 'situation-room', icon: '🎯' },
+    'mgr-nri-transcript-autopsy': { label: 'NRI — Transcript Autopsy', type: 'written',        icon: '📋', noMinWords: true },
+    'mgr-nri-mock-call':          { label: 'NRI — The Paper Trade',    type: 'audio',          icon: '📞' },
   };
+
+  // The base assessment a module key behaves as (NRI keys alias the
+  // regular manager modules; everything else is its own base).
+  const _base = (key) => (typeof mgrBaseModule === 'function' ? mgrBaseModule(key || _currentModule) : (key || _currentModule));
 
   // ── Internal state — general ─────────────────────────────
   let _currentModule   = null;
+  // Trainer walk-through (demo) run: uses the [DEMO] topic, never saves a
+  // submission, never resumes/writes a draft. See startModule(key, {demo}).
+  let _demoMode        = false;
   let _currentScenario = null;
   let _recordingBlob   = null;
   let _recordingPromise = null;
@@ -567,7 +676,7 @@ Let's get back on track.
   // promising "resume exactly where you left off" there would be
   // misleading; this only ever restores what CAN genuinely be restored:
   // which scenario was picked and what's been typed so far.
-  const DRAFT_MODULES = new Set(['mgr-situation-room', 'mgr-transcript-autopsy', 'mgr-management-skills']);
+  const DRAFT_MODULES = new Set(['mgr-situation-room', 'mgr-transcript-autopsy', 'mgr-management-skills', 'mgr-nri-situation-room', 'mgr-nri-transcript-autopsy']);
   const DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000; // ignore/discard a draft older than this
   let _draftSaveTimer = null;
 
@@ -575,7 +684,7 @@ Let's get back on track.
     return 'commassess_mgr_draft_' + module;
   }
   function _saveDraft(module, data) {
-    if (!DRAFT_MODULES.has(module)) return;
+    if (_demoMode || !DRAFT_MODULES.has(module)) return;
     clearTimeout(_draftSaveTimer);
     _draftSaveTimer = setTimeout(() => {
       try { localStorage.setItem(_draftKey(module), JSON.stringify({ ...data, savedAt: Date.now() })); }
@@ -583,7 +692,7 @@ Let's get back on track.
     }, 250); // debounced so every keystroke doesn't hit localStorage directly
   }
   function _loadDraft(module) {
-    if (!DRAFT_MODULES.has(module)) return null;
+    if (_demoMode || !DRAFT_MODULES.has(module)) return null;
     try {
       const raw = localStorage.getItem(_draftKey(module));
       if (!raw) return null;
@@ -861,6 +970,83 @@ Let's get back on track.
     else { anchor.insertAdjacentHTML('afterend', html); }
   }
 
+  // ── Internal Data box (2026-09-25) ───────────────────────
+  // The client-context details a manager would have on their own screen
+  // during a real escalation (account specifics, timeline, internal
+  // guidelines) -- shown next to the situation so the response can be
+  // accurate, not guessed. Comes from the scenario's `internalData` string
+  // (one "Label: value" point per line; see mgrSplitInternalData in
+  // js/mgr-eval-criteria.js). Same anchor + panel-id pattern as the
+  // eval-criteria and Think About panels; `position` lets Transcript
+  // Autopsy put it ABOVE the transcript instead of below the long
+  // correction area.
+  function _renderInternalDataPanel(scenario, anchorId, position = 'afterend') {
+    const anchor = $(anchorId);
+    if (!anchor) return;
+    const panelId = anchorId + '-internal-panel';
+    const existing = $(panelId);
+    const raw = ((scenario && scenario.internalData) || '').trim();
+    if (!raw) { if (existing) existing.remove(); return; }
+
+    const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const rows = raw.split('\n').map(l => l.trim()).filter(Boolean).map(line => {
+      const m = line.match(/^([^:]{2,60}):\s+(.+)$/);
+      return m
+        ? `<div style="display:grid;grid-template-columns:minmax(110px,30%) 1fr;gap:0.7rem;padding:0.45rem 0;border-bottom:1px solid rgba(13,148,136,0.18)">
+             <div style="font-weight:700;font-size:0.8rem;color:#115e59">${esc(m[1])}</div>
+             <div style="font-size:0.85rem;color:#134e4a;line-height:1.5">${esc(m[2])}</div>
+           </div>`
+        : `<div style="padding:0.4rem 0;font-size:0.85rem;color:#134e4a;line-height:1.5;border-bottom:1px solid rgba(13,148,136,0.18)">${esc(line)}</div>`;
+    }).join('');
+
+    const html = `
+      <div id="${panelId}" oncopy="return false" style="margin-top:0.75rem;margin-bottom:0.75rem;border:1px solid rgba(13,148,136,0.35);border-radius:8px;background:#f0fdfa;padding:0.7rem 0.95rem;user-select:none">
+        <div style="font-weight:700;font-size:0.85rem;color:#0f766e;margin-bottom:0.15rem">🗂️ Internal Data</div>
+        <div style="font-size:0.75rem;color:#0f766e;opacity:0.85;margin-bottom:0.35rem">What you can see on the desk for this client — use it to respond accurately.</div>
+        ${rows}
+      </div>`;
+
+    if (existing) { existing.outerHTML = html; }
+    else { anchor.insertAdjacentHTML(position, html); }
+  }
+
+  // Splits the Internal Data section off a scenario object's text (DB rows
+  // and hardcoded scenarios both embed it after a marker in `scenario`) so
+  // every consumer downstream -- transcript parser, Paper Trade question
+  // parser, the AI customer's brief -- keeps seeing only the situation.
+  function _withInternalData(sc) {
+    if (!sc || typeof mgrSplitInternalData !== 'function') return sc;
+    const { text, internalData } = mgrSplitInternalData(sc.scenario);
+    return { ...sc, scenario: text, internalData: sc.internalData || internalData };
+  }
+
+  // Scenario text handed to the AI evaluators: the situation plus the
+  // Internal Data the manager had on screen, so scoring can judge whether
+  // the response used the real facts (a written answer that contradicts the
+  // account data shouldn't score as accurate).
+  function _evalScenarioContext() {
+    const sc = _currentScenario || {};
+    const base = sc.scenario || '';
+    return sc.internalData
+      ? `${base}\n\nINTERNAL DATA the manager had on screen while responding (judge accuracy against it):\n${sc.internalData}`
+      : base;
+  }
+
+  // Every submission save goes through here so a trainer demo run can never
+  // land in the real results.
+  function _putSession(record) {
+    if (_demoMode) {
+      console.log('[Demo] Trainer walk-through -- submission not saved.');
+      return Promise.resolve(null);
+    }
+    return DB.put('sessions', record);
+  }
+
+  function _syncDemoBanner() {
+    const el = $('mgr-demo-banner');
+    if (el) el.style.display = _demoMode ? '' : 'none';
+  }
+
   function fmtTime(secs) {
     const m = Math.floor(secs / 60);
     const s = secs % 60;
@@ -988,6 +1174,8 @@ Let's get back on track.
   }
 
   async function logout() {
+    _demoMode = false;
+    _syncDemoBanner();
     try { await Auth.signOut(); } catch (e) { /* ignore */ }
     $('mgr-app-header').classList.add('hidden');
     $('mgr-auth-name').value = '';
@@ -995,11 +1183,15 @@ Let's get back on track.
   }
 
   // ── Module start ─────────────────────────────────────────
-  async function startModule(moduleKey) {
+  // opts.demo = trainer walk-through: plays the module's [DEMO] topic and
+  // saves nothing (see _putSession / _saveDraft / _loadDraft).
+  async function startModule(moduleKey, opts = {}) {
     const meta = MODULE_META[moduleKey];
     if (!meta) return;
 
     _currentModule   = moduleKey;
+    _demoMode        = !!opts.demo;
+    _syncDemoBanner();
     _recordingBlob   = null;
     _transcript      = '';
     _mcqAnswers      = new Array(LISTENING_QUESTIONS.length).fill(null);
@@ -1021,25 +1213,30 @@ Let's get back on track.
     }
 
     if (meta.type === 'situation-room') {
-      _launchSituationRoom();
+      await _launchSituationRoom();
       return;
     }
 
-    // Try loading from DB topics (admin-managed), fallback to hardcoded
+    // Try loading from DB topics (admin-managed), fallback to hardcoded. A
+    // demo run wants ONLY the [DEMO] topic; a real run must never draw it.
     try {
       const dbTopics = await DB.getByIndex('topics', 'module', moduleKey);
-      const enabled  = dbTopics.filter(t => t.enabled !== false);
+      const enabled  = dbTopics.filter(t => t.enabled !== false && mgrIsDemoTitle(t.title) === _demoMode);
       if (enabled.length > 0) {
         const picked = pickRandom(enabled);
-        _currentScenario = { id: picked.id, title: picked.title, scenario: picked.scenario || picked.description };
+        _currentScenario = _withInternalData({ id: picked.id, title: picked.title, scenario: picked.scenario || picked.description });
       } else {
         throw new Error('no enabled DB topics');
       }
     } catch (e) {
       // Fallback to hardcoded
-      const pool = SCENARIOS[moduleKey];
-      if (!pool || !pool.length) { toast('No scenarios available for this module.', 'error'); return; }
-      _currentScenario = { ...pickRandom(pool), _hardcoded: true };
+      const pool = (SCENARIOS[moduleKey] || []).filter(sc => !!sc.demo === _demoMode);
+      if (!pool.length) {
+        toast(_demoMode ? 'No demo topic is set up for this module yet.' : 'No scenarios available for this module.', 'error');
+        _demoMode = false; _syncDemoBanner();
+        return;
+      }
+      _currentScenario = _withInternalData({ ...pickRandom(pool), _hardcoded: true });
     }
 
     if (meta.type === 'audio')        _launchAudio();
@@ -1063,6 +1260,7 @@ Let's get back on track.
       _ptPrep.questions.length ? _ptPrep.background : _currentScenario.scenario
     );
     _renderEvalCriteriaPanel(_currentModule, 'mgr-audio-scenario-text');
+    _renderInternalDataPanel(_currentScenario, 'mgr-audio-scenario-text');
 
     $('mgr-prep-phase').classList.remove('hidden');
     $('mgr-record-phase').classList.add('hidden');
@@ -1075,7 +1273,7 @@ Let's get back on track.
     // browser speech synthesis, not Gemini Live (see _pt state comment).
     const liveBtn = $('btn-mgr-audio-live-voice-start');
     if (liveBtn) {
-      const showLiveBtn = _currentModule === 'mgr-mock-call' && !!window.speechSynthesis;
+      const showLiveBtn = _base() === 'mgr-mock-call' && !!window.speechSynthesis;
       liveBtn.classList.toggle('hidden', !showLiveBtn);
       liveBtn.onclick = () => _startAudioLiveVoice();
     }
@@ -1087,7 +1285,7 @@ Let's get back on track.
     // path -- the prep countdown still falls through to the ElevenLabs call.
     const geminiLiveBtn = $('btn-mgr-audio-gemini-live-voice-start');
     if (geminiLiveBtn) {
-      const showGeminiLiveBtn = _currentModule === 'mgr-mock-call'
+      const showGeminiLiveBtn = _base() === 'mgr-mock-call'
         && typeof GeminiLive !== 'undefined' && GeminiLive.isAvailable();
       geminiLiveBtn.classList.toggle('hidden', !showGeminiLiveBtn);
       geminiLiveBtn.onclick = () => _startAudioGeminiLiveVoice();
@@ -1130,9 +1328,10 @@ Let's get back on track.
     // exact opening line and escalation quotes -- so they have everything
     // needed to address in one go. Only mgr-mock-call (Paper Trade) uses
     // this recording flow at all, so this is safely scoped to it.
-    if (_currentModule === 'mgr-mock-call') {
+    if (_base() === 'mgr-mock-call') {
       $('mgr-audio-scenario-text').innerHTML = _formatScenarioHTML(_currentScenario.scenario);
       _renderEvalCriteriaPanel(_currentModule, 'mgr-audio-scenario-text');
+      _renderInternalDataPanel(_currentScenario, 'mgr-audio-scenario-text');
     }
 
     Recorder.startWaveform($('mgr-waveform'));
@@ -1209,10 +1408,10 @@ Let's get back on track.
       // the SpeechEngine delivery metrics above are kept as extra fields
       // rather than discarded, in case the admin wants to see both.
       const wordCount = (transcript || '').trim().split(/\s+/).filter(Boolean).length;
-      if (_currentModule === 'mgr-mock-call' && wordCount >= 25 &&
+      if (_base() === 'mgr-mock-call' && wordCount >= 25 &&
           typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
         try {
-          const result = await ClaudeEvaluator.evaluatePaperTrade(transcript, _currentScenario.scenario || '');
+          const result = await ClaudeEvaluator.evaluatePaperTrade(transcript, _evalScenarioContext());
           aiScores = {
             ...aiScores,
             ...result.scores,
@@ -1230,7 +1429,7 @@ Let's get back on track.
       // Guarantee trainees row exists before FK-constrained session insert
       await Auth.ensureTraineeRecord();
 
-      await DB.put('sessions', {
+      await _putSession({
         traineeId:    Auth.getId(),
         traineeName:  Auth.getName(),
         traineeEmail: Auth.getEmail(),
@@ -1487,6 +1686,7 @@ Let's get back on track.
       _ptParsed.questions.length ? _ptParsed.background : _currentScenario.scenario
     );
     _renderEvalCriteriaPanel(_currentModule, 'mgr-audio-live-scenario-text');
+    _renderInternalDataPanel(_currentScenario, 'mgr-audio-live-scenario-text');
     $('mgr-audio-live-thread').innerHTML = '';
 
     _pt = { questions, background: _ptParsed.background, turnIndex: 0, maxTurns: questions.length,
@@ -1713,7 +1913,7 @@ Let's get back on track.
 
     if (wordCount >= 15 && typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
       try {
-        const result = await ClaudeEvaluator.evaluatePaperTrade(fullTranscript, _currentScenario.scenario || '');
+        const result = await ClaudeEvaluator.evaluatePaperTrade(fullTranscript, _evalScenarioContext());
         aiScores = {
           ...aiScores,
           ...result.scores,
@@ -1734,7 +1934,7 @@ Let's get back on track.
 
     try {
       await Auth.ensureTraineeRecord();
-      await DB.put('sessions', {
+      await _putSession({
         traineeId:    Auth.getId(),
         traineeName:  Auth.getName(),
         traineeEmail: Auth.getEmail(),
@@ -1781,6 +1981,7 @@ Let's get back on track.
       _ptQuestions.length ? _ptParsed.background : _currentScenario.scenario
     );
     _renderEvalCriteriaPanel(_currentModule, 'mgr-audio-gemini-live-scenario-text');
+    _renderInternalDataPanel(_currentScenario, 'mgr-audio-gemini-live-scenario-text');
     $('mgr-audio-gemini-live-thread').innerHTML = '';
     $('btn-mgr-audio-gemini-live-end').disabled = false;
 
@@ -1941,7 +2142,7 @@ HOW TO RUN THIS CALL:
 
     if (wordCount >= 25 && typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
       try {
-        const result = await ClaudeEvaluator.evaluatePaperTrade(fullTranscript, _currentScenario.scenario || '');
+        const result = await ClaudeEvaluator.evaluatePaperTrade(fullTranscript, _evalScenarioContext());
         aiScores = {
           ...aiScores,
           ...result.scores,
@@ -1961,7 +2162,7 @@ HOW TO RUN THIS CALL:
 
     try {
       await Auth.ensureTraineeRecord();
-      await DB.put('sessions', {
+      await _putSession({
         traineeId:    Auth.getId(),
         traineeName:  Auth.getName(),
         traineeEmail: Auth.getEmail(),
@@ -1986,17 +2187,55 @@ HOW TO RUN THIS CALL:
 
   // ── Situation Room — Two-section assessment ─────────────
 
-  function _launchSituationRoom() {
+  // Regular Situation Room draws from the hardcoded SCENARIOS pool exactly
+  // as before. The NRI variant and any trainer demo are DB-backed instead,
+  // so the admin's NRI Manager / [DEMO] topics are the ones actually played.
+  const SR_WRONG_MARKER = '─── THE WRONG RESPONSE (given to the manager to critique) ───';
+  const SR_A_PROMPT = 'Part A — Write the EXACT words you would say to this client, opening to close: the opening (first 60 seconds), the body of the resolution, and the close.';
+
+  function _srScenarioFromRow(row) {
+    const { text, internalData } = mgrSplitInternalData(row.scenario || row.description || '');
+    const wIdx = text.indexOf(SR_WRONG_MARKER);
+    return {
+      id: row.id,
+      title: row.title,
+      scenario: (wIdx === -1 ? text : text.slice(0, wIdx)).trim(),
+      sectionAPrompt: SR_A_PROMPT,
+      wrongResponse: wIdx === -1 ? '' : text.slice(wIdx + SR_WRONG_MARKER.length).trim().replace(/^"|"$/g, ''),
+      internalData,
+    };
+  }
+
+  async function _pickSrScenario() {
+    const useDb = _currentModule !== 'mgr-situation-room' || _demoMode;
+    if (!useDb) {
+      const pool = SCENARIOS['mgr-situation-room'].filter(sc => !sc.demo);
+      return _withInternalData({ ...pickRandom(pool), _hardcoded: true });
+    }
+    try {
+      const rows = await DB.getByIndex('topics', 'module', _currentModule);
+      const enabled = rows.filter(t => t.enabled !== false && mgrIsDemoTitle(t.title) === _demoMode);
+      if (enabled.length) return _srScenarioFromRow(pickRandom(enabled));
+    } catch (e) {
+      console.warn('Situation Room topics could not be loaded:', e.message || e);
+    }
+    toast(_demoMode ? 'No demo topic is set up for the Situation Room yet.' : 'No Situation Room topics available.', 'error');
+    _demoMode = false; _syncDemoBanner();
+    return null;
+  }
+
+  async function _launchSituationRoom() {
     // Resume an in-progress draft (same scenario, same phase, same typed
     // text) instead of the fresh scenario startModule() just picked, if
     // one was saved recently (see _loadDraft).
-    const draft = _loadDraft('mgr-situation-room');
+    const draft = _loadDraft(_currentModule);
     if (draft && draft.scenario) {
       _currentScenario = draft.scenario;
       _sr = { phase: draft.phase || 'A', sectionAText: draft.sectionAText || '', sectionAScores: draft.sectionAScores || null };
     } else {
-      const pool = SCENARIOS['mgr-situation-room'];
-      _currentScenario = { ...pickRandom(pool), _hardcoded: true };
+      const picked = await _pickSrScenario();
+      if (!picked) return;
+      _currentScenario = picked;
       _sr = { phase: 'A', sectionAText: '', sectionAScores: null };
     }
 
@@ -2005,6 +2244,8 @@ HOW TO RUN THIS CALL:
     $('sr-scenario-text-a').innerHTML = _formatScenarioHTML(_currentScenario.scenario);
     $('sr-a-prompt').textContent        = _currentScenario.sectionAPrompt || 'Write your exact verbal response';
     _renderEvalCriteriaPanel('mgr-situation-room', 'sr-scenario-text-a');
+    _renderInternalDataPanel(_currentScenario, 'sr-scenario-text-a');
+    _renderInternalDataPanel(_currentScenario, 'sr-internal-b-anchor');
 
     // Section A field: restore typed text if resuming, else clear
     const ta = $('sr-a-textarea');
@@ -2048,7 +2289,7 @@ HOW TO RUN THIS CALL:
   // sections' typed text) and saves it as this module's draft.
   function _saveSrDraft() {
     const aEl = $('sr-a-textarea'), errEl = $('sr-b-errors'), impEl = $('sr-b-impact');
-    _saveDraft('mgr-situation-room', {
+    _saveDraft(_currentModule, {
       scenario: _currentScenario,
       phase: _sr.phase,
       sectionAText: _sr.sectionAText,
@@ -2076,7 +2317,7 @@ HOW TO RUN THIS CALL:
     try {
       if (typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
         _sr.sectionAScores = await ClaudeEvaluator.evaluateSituationRoomA(
-          _currentScenario.scenario, text
+          _evalScenarioContext(), text
         );
       } else {
         _sr.sectionAScores = _srADefault;
@@ -2134,7 +2375,7 @@ HOW TO RUN THIS CALL:
     try {
       if (typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
         sectionBScores = await ClaudeEvaluator.evaluateSituationRoomB(
-          _currentScenario.scenario,
+          _evalScenarioContext(),
           _currentScenario.wrongResponse || '',
           errorsText, impactText
         );
@@ -2187,6 +2428,7 @@ HOW TO RUN THIS CALL:
       // Section B as visibly distinct, scenario-grounded content instead of
       // two generic-looking text boxes.
       scenario: _currentScenario.scenario,
+      internalData: _currentScenario.internalData || '',
       sectionA: { prompt: _currentScenario.sectionAPrompt, response: _sr.sectionAText },
       sectionB: { wrongResponse: _currentScenario.wrongResponse, errors: errorsText, impact: impactText },
     });
@@ -2195,11 +2437,11 @@ HOW TO RUN THIS CALL:
       // Guarantee trainees row exists before FK-constrained session insert
       await Auth.ensureTraineeRecord();
 
-      await DB.put('sessions', {
+      await _putSession({
         traineeId:    Auth.getId(),
         traineeName:  Auth.getName(),
         traineeEmail: Auth.getEmail(),
-        module:       'mgr-situation-room',
+        module:       _currentModule,
         topicId:      null,
         topicTitle:   _currentScenario.title,
         transcript:   '',
@@ -2210,7 +2452,7 @@ HOW TO RUN THIS CALL:
         submittedAt:  new Date().toISOString(),
         status:       'ai-evaluated',
       });
-      _clearDraft('mgr-situation-room');
+      _clearDraft(_currentModule);
       _showResult(aiScores, 'situation-room');
     } catch (e) {
       toast('Error saving session: ' + e.message, 'error');
@@ -2329,12 +2571,12 @@ HOW TO RUN THIS CALL:
   }
 
   function _launchFeedbackAI() {
-    const pool = SCENARIOS['mgr-feedback'];
-    _currentScenario = { ...pickRandom(pool), _hardcoded: true };
+    const pool = SCENARIOS['mgr-feedback'].filter(sc => !!sc.demo === _demoMode);
+    _currentScenario = { ...pickRandom(pool.length ? pool : SCENARIOS['mgr-feedback'].filter(sc => !sc.demo)), _hardcoded: true };
     const emp = FB_EMPLOYEES[_currentScenario.id] || FB_EMPLOYEES['fb1'];
 
-    // Reset state
-    _fb = { empTurnCount: 0, maxTurns: 5, history: [], blobPromise: null,
+    // Reset state (a trainer demo runs a shorter exchange -- demoTurns)
+    _fb = { empTurnCount: 0, maxTurns: _currentScenario.demoTurns || 5, history: [], blobPromise: null,
             turnTimerId: null, turnEnded: false, finishing: false, ttsAudioEl: null };
 
     // Populate scenario panel
@@ -2507,7 +2749,7 @@ HOW TO RUN THIS CONVERSATION:
 
     try {
       await Auth.ensureTraineeRecord();
-      await DB.put('sessions', {
+      await _putSession({
         traineeId:    Auth.getId(),
         traineeName:  Auth.getName(),
         traineeEmail: Auth.getEmail(),
@@ -2772,7 +3014,7 @@ HOW TO RUN THIS CONVERSATION:
       // Guarantee trainees row exists before FK-constrained session insert
       await Auth.ensureTraineeRecord();
 
-      await DB.put('sessions', {
+      await _putSession({
         traineeId:    Auth.getId(),
         traineeName:  Auth.getName(),
         traineeEmail: Auth.getEmail(),
@@ -2982,7 +3224,7 @@ HOW TO RUN THIS CONVERSATION:
     if (nextEl)  nextEl.textContent  = `Take a short breather — Section ${nextSection.id} starts automatically`;
     if (breakEl) breakEl.style.display = '';
 
-    const BREAK_SECS = 45; // within the requested 30-60s range
+    const BREAK_SECS = _demoMode ? 8 : 45; // 45s = within the requested 30-60s range; a trainer demo just needs a visible pause
     let remaining = BREAK_SECS;
     if (countEl) countEl.textContent = remaining;
 
@@ -3016,14 +3258,16 @@ HOW TO RUN THIS CONVERSATION:
   }
 
   function _launchMirrorRoom() {
-    const pool = SCENARIOS['mgr-eq'];
-    _currentScenario = { ...pickRandom(pool), _hardcoded: true };
+    const pool = SCENARIOS['mgr-eq'].filter(sc => !!sc.demo === _demoMode);
+    _currentScenario = { ...pickRandom(pool.length ? pool : SCENARIOS['mgr-eq'].filter(sc => !sc.demo)), _hardcoded: true };
     const section = _currentScenario.sections[0];
     const cp = section.counterpart;
 
     // 6 AI turns per section (A/B/C) = 18 total across the case, per the
     // manager's 2026-09-24 request (was 2 per section / 6 total).
-    _eq = { sectionIndex: 0, turnInSection: 0, totalTurns: 0, turnsPerSection: 6, maxTotalTurns: 18,
+    _eq = { sectionIndex: 0, turnInSection: 0, totalTurns: 0,
+            turnsPerSection: _currentScenario.demoTurnsPerSection || 6,
+            maxTotalTurns: (_currentScenario.demoTurnsPerSection || 6) * _currentScenario.sections.length,
             history: [], blobPromise: null,
             turnTimerId: null, breakTimerId: null, turnEnded: false, finishing: false, ttsAudioEl: null };
 
@@ -3301,7 +3545,7 @@ HOW TO RUN THIS CONVERSATION:
 
     try {
       await Auth.ensureTraineeRecord();
-      await DB.put('sessions', {
+      await _putSession({
         traineeId:    Auth.getId(),
         traineeName:  Auth.getName(),
         traineeEmail: Auth.getEmail(),
@@ -3468,7 +3712,7 @@ HOW TO RUN THIS CONVERSATION:
 
     try {
       await Auth.ensureTraineeRecord();
-      await DB.put('sessions', {
+      await _putSession({
         traineeId:    Auth.getId(),
         traineeName:  Auth.getName(),
         traineeEmail: Auth.getEmail(),
@@ -3494,7 +3738,7 @@ HOW TO RUN THIS CONVERSATION:
   // ── Written flow ─────────────────────────────────────────
   function _launchWritten() {
     const meta = MODULE_META[_currentModule];
-    const isAutopsy = _currentModule === 'mgr-transcript-autopsy';
+    const isAutopsy = _base() === 'mgr-transcript-autopsy';
 
     // Resume an in-progress draft for this module -- same scenario, same
     // typed answers -- instead of the fresh scenario startModule() just
@@ -3511,6 +3755,9 @@ HOW TO RUN THIS CONVERSATION:
       ? _renderAutopsyTranscript(_currentScenario.scenario)
       : _formatScenarioHTML(_currentScenario.scenario);
     _renderEvalCriteriaPanel(_currentModule, 'mgr-written-scenario-text');
+    // Above the transcript (not below): the correction boxes sit inside the
+    // transcript, so a panel underneath would be a long scroll away.
+    _renderInternalDataPanel(_currentScenario, 'mgr-written-scenario-text', 'beforebegin');
 
     // Transcript Autopsy's correction boxes are (re)created fresh on every
     // launch, so they need the copy/paste block wired here rather than once
@@ -3565,7 +3812,7 @@ HOW TO RUN THIS CONVERSATION:
   // module's draft. Bound to every relevant textarea's 'input' event.
   function _saveWrittenDraft() {
     if (!DRAFT_MODULES.has(_currentModule)) return;
-    const isAutopsy = _currentModule === 'mgr-transcript-autopsy';
+    const isAutopsy = _base() === 'mgr-transcript-autopsy';
     const data = { scenario: _currentScenario };
     if (isAutopsy) {
       data.corrections = _taManagerLines.map((_, i) => {
@@ -3581,7 +3828,7 @@ HOW TO RUN THIS CONVERSATION:
 
   async function submitWritten() {
     const meta = MODULE_META[_currentModule];
-    const isAutopsy = _currentModule === 'mgr-transcript-autopsy';
+    const isAutopsy = _base() === 'mgr-transcript-autopsy';
 
     // Transcript Autopsy: gather each per-line correction box instead of
     // the single free-form textarea, and evaluate/save them as one combined
@@ -3618,7 +3865,7 @@ HOW TO RUN THIS CONVERSATION:
     try {
       if (typeof ClaudeEvaluator !== 'undefined' && ClaudeEvaluator.isAvailable()) {
         const result = await ClaudeEvaluator.evaluateManagerAssessment(
-          _currentModule, text, _currentScenario.scenario || ''
+          _currentModule, text, _evalScenarioContext()
         );
         aiScores = {
           ...result.scores,
@@ -3645,7 +3892,7 @@ HOW TO RUN THIS CONVERSATION:
       // Guarantee trainees row exists before FK-constrained session insert
       await Auth.ensureTraineeRecord();
 
-      await DB.put('sessions', {
+      await _putSession({
         traineeId:    Auth.getId(),
         traineeName:  Auth.getName(),
         traineeEmail: Auth.getEmail(),
@@ -3713,7 +3960,7 @@ HOW TO RUN THIS CONVERSATION:
       // Guarantee trainees row exists before FK-constrained session insert
       await Auth.ensureTraineeRecord();
 
-      await DB.put('sessions', {
+      await _putSession({
         traineeId: Auth.getId(), traineeName: Auth.getName(), traineeEmail: Auth.getEmail(),
         module: _currentModule,
         topicId: (_currentScenario._hardcoded ? null : (_currentScenario.id || null)),
@@ -3840,6 +4087,8 @@ HOW TO RUN THIS CONVERSATION:
 
   // ── Back navigation ──────────────────────────────────────
   function backToModules() {
+    _demoMode = false;
+    _syncDemoBanner();
     _clearPrepTimer();
     if (_audioManualTimer) { clearInterval(_audioManualTimer); _audioManualTimer = null; }
     // Cancel feedback AI if running
@@ -3884,6 +4133,14 @@ HOW TO RUN THIS CONVERSATION:
     // Module cards
     document.querySelectorAll('.mgr-module-card[data-module]').forEach(card => {
       card.addEventListener('click', () => startModule(card.dataset.module));
+    });
+
+    // Trainer demo walk-throughs: one button per assessment, plays that
+    // module's [DEMO] topic and saves nothing.
+    document.querySelectorAll('[data-demo-module]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        startModule(btn.dataset.demoModule, { demo: true });
+      });
     });
 
     // Situation Room screen

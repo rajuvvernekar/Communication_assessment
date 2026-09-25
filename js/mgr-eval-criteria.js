@@ -135,7 +135,59 @@ const MGR_EVAL_SCORING_NOTES = [
   'For The Transcript Autopsy, score Error Identification against the calibration notes provided under each transcript, giving partial credit for errors found without full reasoning, and full credit only when both the error and its impact are captured.',
 ];
 
+// ---- NRI Manager modules (2026-09-25) ----
+// The NRI team gets its own copy of three assessments -- Situation Room,
+// Transcript Autopsy and Paper Trade -- with their own topic banks, but the
+// SAME assessment model (same screens, same rubric, same AI evaluators). So
+// each NRI module key is just an alias of its base module: code that needs
+// the behaviour asks mgrBaseModule(key), and the rubric object is shared by
+// reference so nothing here can drift from the base assessment's scoring.
+const MGR_MODULE_BASE = {
+  'mgr-nri-situation-room':     'mgr-situation-room',
+  'mgr-nri-transcript-autopsy': 'mgr-transcript-autopsy',
+  'mgr-nri-mock-call':          'mgr-mock-call',
+};
+function mgrBaseModule(key) { return MGR_MODULE_BASE[key] || key; }
+Object.keys(MGR_MODULE_BASE).forEach(k => { MGR_EVAL_CRITERIA[k] = MGR_EVAL_CRITERIA[MGR_MODULE_BASE[k]]; });
+
+// ---- Internal Data box (2026-09-25) ----
+// Client-context details a manager would have in front of them on a real
+// escalation (account specifics, timeline, internal guidelines). Stored
+// inside the topic's single `scenario` string after this marker, because the
+// topics table has no spare column for it and adding one needs a Supabase
+// migration -- same embedding trick as the Situation Room "wrong response"
+// and Red Pen "Think About" sections. One point per line, "Label: value".
+const MGR_INTERNAL_DATA_MARKER = '─── INTERNAL DATA ───';
+function mgrSplitInternalData(text) {
+  text = text || '';
+  const idx = text.indexOf(MGR_INTERNAL_DATA_MARKER);
+  if (idx === -1) return { text: text.trim(), internalData: '' };
+  return {
+    text: text.slice(0, idx).trim(),
+    internalData: text.slice(idx + MGR_INTERNAL_DATA_MARKER.length).trim(),
+  };
+}
+function mgrJoinInternalData(text, internalData) {
+  const t = (text || '').trim();
+  const d = (internalData || '').trim();
+  return d ? `${t}\n\n${MGR_INTERNAL_DATA_MARKER}\n${d}` : t;
+}
+
+// ---- Trainer demo topics (2026-09-25) ----
+// One walk-through topic per assessment, played by trainers (never picked
+// for a real assessment, never saved as a submission). Marked by a title
+// prefix for the same reason as Internal Data: no spare topics column.
+const MGR_DEMO_PREFIX = '[DEMO]';
+function mgrIsDemoTitle(title) { return /^\s*\[demo\]/i.test(title || ''); }
+
 if (typeof window !== 'undefined') {
   window.MGR_EVAL_CRITERIA = MGR_EVAL_CRITERIA;
   window.MGR_EVAL_SCORING_NOTES = MGR_EVAL_SCORING_NOTES;
+  window.MGR_MODULE_BASE = MGR_MODULE_BASE;
+  window.mgrBaseModule = mgrBaseModule;
+  window.MGR_INTERNAL_DATA_MARKER = MGR_INTERNAL_DATA_MARKER;
+  window.mgrSplitInternalData = mgrSplitInternalData;
+  window.mgrJoinInternalData = mgrJoinInternalData;
+  window.MGR_DEMO_PREFIX = MGR_DEMO_PREFIX;
+  window.mgrIsDemoTitle = mgrIsDemoTitle;
 }

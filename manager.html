@@ -483,6 +483,12 @@
 </head>
 <body>
 
+<!-- Trainer demo banner: shown only while a [DEMO] walk-through is running
+     (see MgrApp.startModule's demo option); nothing played under it is saved. -->
+<div id="mgr-demo-banner" style="display:none;background:#f59e0b;color:#1f2937;text-align:center;font-weight:700;font-size:0.82rem;padding:0.4rem 1rem;letter-spacing:0.02em">
+  🎓 TRAINER DEMO — walk-through only. Nothing you do here is saved or scored for real.
+</div>
+
 <!-- ================================================================
      MANAGER HEADER (shown after login)
      ================================================================ -->
@@ -569,6 +575,53 @@
     </div>
 
   </div>
+
+  <!-- NRI Manager: the same three assessments, with the NRI team's own
+       topic banks (module keys mgr-nri-*; behaviour aliases the base
+       module -- see mgrBaseModule in js/mgr-eval-criteria.js). -->
+  <div class="mgr-modules-header" style="margin-top:3rem">
+    <h2>NRI Manager</h2>
+    <p>Assessments for the NRI team</p>
+  </div>
+  <div class="mgr-modules-grid">
+
+    <div class="mgr-module-card" data-module="mgr-nri-situation-room">
+      <div class="module-icon">🎯</div>
+      <h3>NRI — The Situation Room</h3>
+      <p>Section A: Write your exact verbal response. Section B: Diagnose and rewrite a flawed manager response.</p>
+      <span class="module-tag">Written · 2 Sections · 50 Marks</span>
+    </div>
+
+    <div class="mgr-module-card" data-module="mgr-nri-transcript-autopsy">
+      <div class="module-icon">📋</div>
+      <h3>NRI — Transcript Autopsy</h3>
+      <p>Analyze an NRI support call transcript. Correct each flawed manager line using the Internal Data provided.</p>
+      <span class="module-tag">Written · 50 Marks</span>
+    </div>
+
+    <div class="mgr-module-card" data-module="mgr-nri-mock-call">
+      <div class="module-icon">📞</div>
+      <h3>NRI — The Paper Trade</h3>
+      <p>Read an NRI escalation scenario, take 5 minutes to prepare, and handle a live mock call in real time.</p>
+      <span class="module-tag">Audio · 5 min prep · 50 Marks</span>
+    </div>
+
+  </div>
+
+  <!-- Trainer demo walk-throughs: one sample topic per assessment, for
+       trainers to play through with managers before the real assessment.
+       Nothing played here is saved or scored (see _putSession). -->
+  <div class="mgr-modules-header" style="margin-top:3rem">
+    <h2>Trainer Demo Walkthroughs</h2>
+    <p>For trainers: play a sample assessment with managers before they take the real one. Nothing here is saved or scored.</p>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:0.6rem;justify-content:center">
+    <button type="button" class="btn-ghost" data-demo-module="mgr-situation-room">▶ Demo: Situation Room</button>
+    <button type="button" class="btn-ghost" data-demo-module="mgr-transcript-autopsy">▶ Demo: Transcript Autopsy</button>
+    <button type="button" class="btn-ghost" data-demo-module="mgr-mock-call">▶ Demo: Paper Trade</button>
+    <button type="button" class="btn-ghost" data-demo-module="mgr-feedback">▶ Demo: Red Pen</button>
+    <button type="button" class="btn-ghost" data-demo-module="mgr-eq">▶ Demo: Mirror Room</button>
+  </div>
 </section>
 
 <!-- ================================================================
@@ -648,6 +701,9 @@
         <span class="sr-reminder-label">Scenario:</span>
         <span id="sr-topic-title-b" style="font-weight:600"></span>
       </div>
+
+      <!-- Internal Data box mount (filled by _renderInternalDataPanel) -->
+      <div id="sr-internal-b-anchor"></div>
 
       <!-- Instructions -->
       <div class="sr-b-instructions">
@@ -1393,13 +1449,13 @@
 <div id="toast-container"></div>
 
 <script src="config.js?v=100"></script>
-<script src="js/db.js?v=2026092410"></script>
+<script src="js/db.js?v=2026092503"></script>
 <script src="js/auth.js?v=100"></script>
 <script src="js/recorder.js?v=101"></script>
 <script src="js/speech.js?v=100"></script>
-<script src="js/mgr-eval-criteria.js?v=2026092407"></script>
+<script src="js/mgr-eval-criteria.js?v=2026092503"></script>
 <script src="js/gemini-live.js?v=2026092502"></script>
 <script src="js/claude.js?v=2026092407"></script>
-<script src="js/manager-app.js?v=2026092412"></script>
+<script src="js/manager-app.js?v=2026092503"></script>
 </body>
 </html>

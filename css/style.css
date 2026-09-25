@@ -1307,6 +1307,16 @@ body {
 .badge-rp { background: var(--rp-color); }
 .badge-gd { background: var(--gd-color); }
 .badge-wc { background: var(--wc-color); }
+/* Manager-module badges (added 2026-09-25): these classes were referenced by
+   admin.js's MODULE_BADGE_CLASS but never defined, so the Situation Room /
+   Transcript Autopsy / Feedback / EQ badges rendered white text on nothing. */
+.badge-sr  { background: #2490ef; }
+.badge-ta  { background: #0d9488; }
+.badge-fb  { background: #dc2626; }
+.badge-eq  { background: #7c3aed; }
+.badge-lt  { background: #db2777; }
+.badge-ms  { background: #475569; }
+.badge-smq { background: #059669; }
 
 /* Table toolbar */
 .table-toolbar { margin-bottom: 1rem; }

@@ -582,6 +582,14 @@ window.Admin = (() => {
       { module: 'mgr-feedback',           label: '💬 Feedback' },
       { module: 'mgr-eq',                 label: '🧠 EQ' },
     ],
+    // Shown under the Manager group as its own titled section (see
+    // selectTopicsGroup): the NRI team's three assessments, same model as
+    // the regular ones but with their own topic banks.
+    nriManager: [
+      { module: 'mgr-nri-situation-room',     label: '🎯 NRI Situation Room' },
+      { module: 'mgr-nri-transcript-autopsy', label: '📋 NRI Transcript Autopsy' },
+      { module: 'mgr-nri-mock-call',          label: '📞 NRI Paper Trade' },
+    ],
     trainee: [
       { module: 'pick-speak-stock',        label: '📈 P&S Stock' },
       { module: 'pick-speak-general',      label: '💬 P&S General' },
@@ -651,7 +659,10 @@ window.Admin = (() => {
     'mgr-feedback':          'Feedback',
     'mgr-eq':                'EQ',
     'mgr-listening-tone':    'Listening & Tone',
-    'mgr-management-skills': 'Mgmt Skills'
+    'mgr-management-skills': 'Mgmt Skills',
+    'mgr-nri-situation-room':     'NRI Situation Room',
+    'mgr-nri-transcript-autopsy': 'NRI Transcript Autopsy',
+    'mgr-nri-mock-call':          'NRI Paper Trade'
   };
 
   const MODULE_COLORS = {
@@ -687,7 +698,10 @@ window.Admin = (() => {
     'mgr-feedback':          'badge-fb',
     'mgr-eq':                'badge-eq',
     'mgr-listening-tone':    'badge-lt',
-    'mgr-management-skills': 'badge-ms'
+    'mgr-management-skills': 'badge-ms',
+    'mgr-nri-situation-room':     'badge-sr',
+    'mgr-nri-transcript-autopsy': 'badge-ta',
+    'mgr-nri-mock-call':          'badge-mc'
   };
 
   // ---- Score Bands (scores are out of 100) ----
@@ -2941,6 +2955,9 @@ window.Admin = (() => {
       'mgr-eq':                 '🧠 Emotional Intelligence',
       'mgr-listening-tone':     '🎧 Listening & Tone',
       'mgr-management-skills':  '📊 Management Skills',
+      'mgr-nri-situation-room':     '🌏 NRI Situation Room',
+      'mgr-nri-transcript-autopsy': '🌏 NRI Transcript Autopsy',
+      'mgr-nri-mock-call':          '🌏 NRI Paper Trade',
     };
 
     // Sort newest first
@@ -3149,7 +3166,8 @@ window.Admin = (() => {
     modal.querySelector('#mgr-modal-topic').textContent   = session.topicTitle  || '—';
 
     const isMcq     = session.module === 'mgr-listening-tone';
-    const isSR      = session.module === 'mgr-situation-room';
+    const modBase   = _baseMod(session.module);
+    const isSR      = modBase === 'mgr-situation-room';
     // 'mgr-eq' (The Mirror Room) removed from this list 2026-09-20: it
     // moved from a typed response (writtenText) to a conversational-AI
     // transcript (session.transcript), same shape as Feedback/Red Pen --
@@ -3157,10 +3175,10 @@ window.Admin = (() => {
     // always saved empty for this module. It now falls through to the
     // generic transcript branch at the bottom of this if/else, same as
     // Feedback.
-    const isWritten = ['mgr-transcript-autopsy','mgr-management-skills'].includes(session.module);
+    const isWritten = ['mgr-transcript-autopsy','mgr-management-skills'].includes(modBase);
     const isFeedback = session.module === 'mgr-feedback';
     const isEq       = session.module === 'mgr-eq';
-    const isAudio    = session.module === 'mgr-mock-call';
+    const isAudio    = modBase === 'mgr-mock-call';
 
     // Recording playback — Mock Call, Feedback (Red Pen), and now Mirror
     // Room all capture a voice recording (see manager-app.js _submitAudio /
@@ -3200,8 +3218,15 @@ window.Admin = (() => {
               '<div style="white-space:pre-wrap;font-size:0.85rem;background:#f8fafc;padding:0.75rem;border-radius:6px;border-left:3px solid #64748b">' + esc(srData.scenario) + '</div>' +
             '</div>'
           : '';
+        const internalHTML = srData.internalData
+          ? '<div style="margin-bottom:1rem">' +
+              '<div style="font-size:0.72rem;font-weight:800;letter-spacing:0.06em;color:#0f766e;margin-bottom:0.4rem">INTERNAL DATA (shown to the manager)</div>' +
+              '<div style="white-space:pre-wrap;font-size:0.82rem;background:#f0fdfa;padding:0.75rem;border-radius:6px;border-left:3px solid #0d9488">' + esc(srData.internalData) + '</div>' +
+            '</div>'
+          : '';
         transcriptBox.innerHTML =
           situationHTML +
+          internalHTML +
           '<div style="margin-bottom:1rem">' +
             '<div style="font-size:0.72rem;font-weight:800;letter-spacing:0.06em;color:#7c3aed;margin-bottom:0.4rem">SECTION A — WHAT WOULD YOU SAY?</div>' +
             '<div style="font-size:0.8rem;color:#666;margin-bottom:0.3rem"><em>Prompt: ' + esc(secA.prompt) + '</em></div>' +
@@ -3770,7 +3795,7 @@ window.Admin = (() => {
           <div class="topic-card ${!isEnabled ? 'disabled' : ''}" style="background:#fff;border:1px solid var(--border-color,#e2e8f0);border-radius:8px;padding:1rem;display:flex;flex-direction:column;justify-content:space-between">
             <div>
               <div class="topic-card-header" style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;margin-bottom:0.6rem">
-                ${moduleBadge(t.module || 'pick-speak')}
+                <span style="display:flex;align-items:center;gap:0.35rem">${moduleBadge(t.module || 'pick-speak')}${(typeof mgrIsDemoTitle === 'function' && mgrIsDemoTitle(t.title)) ? '<span style="font-size:0.68rem;font-weight:800;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:4px;padding:0.1rem 0.4rem">🎓 DEMO</span>' : ''}</span>
                 <button class="btn-small ${isEnabled ? 'primary' : 'ghost'}" style="font-size:0.75rem;padding:0.2rem 0.5rem" onclick="Admin.toggleTopicEnabled('${t.id}')">
                   ${isEnabled ? '✅ Enabled' : '⏸ Disabled'}
                 </button>
@@ -3804,10 +3829,18 @@ window.Admin = (() => {
     if (chooser) chooser.style.display = 'none';
     if (tabsEl) {
       const tabs = TOPICS_GROUP_TABS[group] || [];
+      const tabBtn = t => `<button class="tab-btn" data-module="${t.module}" onclick="Admin.selectTopicsModule('${t.module}')">${t.label}</button>`;
       tabsEl.style.display = '';
       tabsEl.innerHTML =
         `<button class="tab-btn" onclick="Admin.backToTopicsGroups()">← Back</button>` +
-        tabs.map(t => `<button class="tab-btn" data-module="${t.module}" onclick="Admin.selectTopicsModule('${t.module}')">${t.label}</button>`).join('');
+        tabs.map(tabBtn).join('') +
+        // Manager -> its own titled "NRI Manager" section holding the NRI
+        // team's three assessments (own row under a heading).
+        (group === 'manager'
+          ? `<div style="flex-basis:100%;height:0"></div>` +
+            `<div style="flex-basis:100%;font-size:0.78rem;font-weight:800;letter-spacing:0.06em;color:#0f766e;margin:0.6rem 0 0.1rem">NRI MANAGER</div>` +
+            (TOPICS_GROUP_TABS.nriManager || []).map(tabBtn).join('')
+          : '');
     }
     renderTopicsList();
   }
@@ -3878,7 +3911,18 @@ window.Admin = (() => {
   // fully-hardcoded assessment either way); they keep the plain textarea.
   const STRUCTURED_SCENARIO_MODULES = new Set(['mgr-situation-room', 'mgr-transcript-autopsy', 'mgr-feedback']);
 
-  function _updateTopicModalFieldsForModule(module) {
+  // NRI module keys behave as their base assessment (see mgrBaseModule in
+  // js/mgr-eval-criteria.js), so every "which editor / which layout" check
+  // below asks for the base key.
+  const _baseMod = (m) => (typeof mgrBaseModule === 'function' ? mgrBaseModule(m) : m);
+  // Modules whose topics carry an Internal Data section (client-context
+  // box shown to the manager): Situation Room, Transcript Autopsy, Paper
+  // Trade -- regular and NRI.
+  const INTERNAL_DATA_MODULES = new Set(['mgr-situation-room', 'mgr-transcript-autopsy', 'mgr-mock-call']);
+  const _isDemoCapable = (m) => /^mgr-/.test(m) && !['mgr-listening-tone', 'mgr-management-skills'].includes(m);
+
+  function _updateTopicModalFieldsForModule(rawModule) {
+    const module = _baseMod(rawModule);
     const isMcq = MCQ_SHAPED_MODULES.has(module);
     const mcqGroup        = $('topic-mcq-group');
     const checklistGroup  = $('topic-checklist-group');
@@ -3892,6 +3936,10 @@ window.Admin = (() => {
     if (srGroup) srGroup.style.display = module === 'mgr-situation-room'    ? '' : 'none';
     if (taGroup) taGroup.style.display = module === 'mgr-transcript-autopsy' ? '' : 'none';
     if (fbGroup) fbGroup.style.display = module === 'mgr-feedback'          ? '' : 'none';
+    const internalGroup = $('topic-internal-group');
+    if (internalGroup) internalGroup.style.display = INTERNAL_DATA_MODULES.has(module) ? '' : 'none';
+    const demoGroup = $('topic-demo-group');
+    if (demoGroup) demoGroup.style.display = _isDemoCapable(rawModule) ? '' : 'none';
     if (mcqGroup) mcqGroup.style.display = isMcq ? '' : 'none';
     // Checklist is unused/always-empty for these 3 structured modules
     // (Feedback's reflection questions now live in the dedicated Think
@@ -4145,19 +4193,28 @@ window.Admin = (() => {
         if (modSelect) modSelect.value = module;
         if (inputTitle) inputTitle.value = t.title || '';
         if (inputDesc) inputDesc.value = t.description || '';
-        if (inputScen) inputScen.value = t.scenario || '';
+        // Internal Data lives after a marker at the end of the same
+        // scenario string; split it off first so the situation / transcript
+        // / wrong-response parsers below only see the situation text.
+        const split = (typeof mgrSplitInternalData === 'function')
+          ? mgrSplitInternalData(t.scenario)
+          : { text: t.scenario || '', internalData: '' };
+        const scenText = split.text;
+        if ($('topic-internal-data')) $('topic-internal-data').value = split.internalData;
+        if ($('topic-demo-flag')) $('topic-demo-flag').checked = (typeof mgrIsDemoTitle === 'function') && mgrIsDemoTitle(t.title);
+        if (inputScen) inputScen.value = scenText;
         _renderChecklistEditor(t.checklist || []);
         _renderBotScriptEditor(t.botScript || t.bot_script || []);
         // Segregated fields (see _updateTopicModalFieldsForModule): parsed
         // from the same t.scenario string, not a separate stored shape --
         // so a topic saved before this existed still opens correctly here.
-        const sr = _parseSrScenario(t.scenario);
+        const sr = _parseSrScenario(scenText);
         if ($('topic-sr-situation')) $('topic-sr-situation').value = sr.situation;
         if ($('topic-sr-wrong'))     $('topic-sr-wrong').value     = sr.wrongResponse;
-        const ta = _parseTaScenario(t.scenario);
+        const ta = _parseTaScenario(scenText);
         if ($('topic-ta-background')) $('topic-ta-background').value = ta.background;
         _renderTaTurnsEditor(ta.turns);
-        const fb = _parseFbScenario(t.scenario);
+        const fb = _parseFbScenario(scenText);
         if ($('topic-fb-situation')) $('topic-fb-situation').value = fb.situation;
         _renderThinkAboutEditor(fb.thinkAbout);
         _updateTopicModalFieldsForModule(module);
@@ -4177,6 +4234,8 @@ window.Admin = (() => {
       _renderTaTurnsEditor([]);
       if ($('topic-fb-situation')) $('topic-fb-situation').value = '';
       _renderThinkAboutEditor([]);
+      if ($('topic-internal-data')) $('topic-internal-data').value = '';
+      if ($('topic-demo-flag')) $('topic-demo-flag').checked = false;
       _updateTopicModalFieldsForModule(initialModule);
     }
 
@@ -4190,20 +4249,34 @@ window.Admin = (() => {
     const inputScen = $('topic-scenario');
 
     const module = modSelect ? modSelect.value : 'pick-speak';
-    const title = inputTitle ? inputTitle.value.trim() : '';
+    const baseModule = _baseMod(module);
+    let title = inputTitle ? inputTitle.value.trim() : '';
+    // Trainer demo flag: marked by a "[DEMO]" title prefix (no spare topics
+    // column to hold a flag). Checked -> ensure the prefix; unchecked ->
+    // strip it, so the checkbox and the title can never disagree.
+    if (_isDemoCapable(module) && typeof mgrIsDemoTitle === 'function') {
+      const wantDemo = !!($('topic-demo-flag') && $('topic-demo-flag').checked);
+      const stripped = title.replace(/^\s*\[demo\]\s*/i, '');
+      title = wantDemo ? `${MGR_DEMO_PREFIX} ${stripped}` : stripped;
+    }
     const description = inputDesc ? inputDesc.value.trim() : '';
     // Reassemble the segregated fields back into the one scenario string
     // the live app's own parsers expect, for the 3 modules that get a
     // structured editor; every other module just uses the plain textarea.
     let scenario;
-    if (module === 'mgr-situation-room') {
+    if (baseModule === 'mgr-situation-room') {
       scenario = _buildSrScenario($('topic-sr-situation') ? $('topic-sr-situation').value : '', $('topic-sr-wrong') ? $('topic-sr-wrong').value : '');
-    } else if (module === 'mgr-transcript-autopsy') {
+    } else if (baseModule === 'mgr-transcript-autopsy') {
       scenario = _buildTaScenario($('topic-ta-background') ? $('topic-ta-background').value : '', _getTaTurnValues());
-    } else if (module === 'mgr-feedback') {
+    } else if (baseModule === 'mgr-feedback') {
       scenario = _buildFbScenario($('topic-fb-situation') ? $('topic-fb-situation').value : '', _getThinkAboutValues());
     } else {
       scenario = inputScen ? inputScen.value.trim() : '';
+    }
+    // Re-attach the Internal Data section after the marker (Situation Room,
+    // Transcript Autopsy and Paper Trade only).
+    if (INTERNAL_DATA_MODULES.has(baseModule) && typeof mgrJoinInternalData === 'function') {
+      scenario = mgrJoinInternalData(scenario, $('topic-internal-data') ? $('topic-internal-data').value : '');
     }
     const isMcq = MCQ_SHAPED_MODULES.has(module);
 
@@ -4222,7 +4295,13 @@ window.Admin = (() => {
       const existing = _editTopicId ? await DB.get('topics', _editTopicId) : null;
 
       const topic = {
-        id: _editTopicId || ('topic_' + Date.now()),
+        // A NEW topic sends no id at all: Supabase's topics.id is a uuid
+        // column that generates its own, and the old made-up
+        // 'topic_<timestamp>' id was rejected ("invalid input syntax for
+        // type uuid"), so + New Topic failed for every module. Editing
+        // still sends the real id; the local-storage fallback also
+        // generates one when it's missing.
+        ...(_editTopicId ? { id: _editTopicId } : {}),
         module,
         title,
         description,
