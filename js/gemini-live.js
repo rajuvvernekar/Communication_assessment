@@ -47,9 +47,11 @@
 //  handleServerMessage below answers every functionCall with a toolResponse
 //  (required, or the session can stall) and, for end_call specifically,
 //  waits for the model's already-queued closing-line audio to finish
-//  playing before surfacing an 'ai-ended' state — this has NOT yet been
-//  exercised against the real API (unlike the rest of this file), since it
-//  landed after the 2026-09-24/25 device test above.
+//  playing before surfacing an 'ai-ended' state. Live-tested 2026-09-25 in a
+//  real Chrome tab: the toolCall/toolResponse shapes are correct and
+//  'ai-ended' fires. That test also showed the model calling end_call
+//  eagerly (right after its opening line, before the person had spoken), so
+//  end_call is now refused until MIN_TURNS_BEFORE_END spoken turns.
 // ============================================================================
 
 const GeminiLive = (() => {
@@ -67,6 +69,10 @@ const GeminiLive = (() => {
   // ungraceful mid-sentence drop right around the 10-minute mark, every call
   // is proactively wrapped up a little earlier, at 9 minutes.
   const MAX_CALL_MS = 9 * 60 * 1000;
+
+  // end_call is ignored until the person on the call has spoken this many
+  // times -- see the guard in handleServerMessage.
+  const MIN_TURNS_BEFORE_END = 3;
 
   // Candidate MediaRecorder mime types for the local call recording, best
   // first. Not every browser supports every type (notably Safari doesn't do
@@ -213,9 +219,11 @@ const GeminiLive = (() => {
 
     let curBotText = '';
     let curTraineeText = '';
+    let traineeTurnCount = 0; // completed spoken turns from the person on the call, for the end_call guard below
 
     function setState(s) { if (onStateChange && !stopped) onStateChange(s); }
     function emitTurn(role, text) {
+      if (role === 'trainee' && text && text.trim()) traineeTurnCount++;
       if (text && text.trim() && onTurn && !stopped) onTurn({ role, text: text.trim() });
     }
 
@@ -352,15 +360,26 @@ const GeminiLive = (() => {
       // app only ever defines the one function.
       if (msg.toolCall && Array.isArray(msg.toolCall.functionCalls)) {
         const calls = msg.toolCall.functionCalls;
+        // Live test 2026-09-25: the model called end_call right after its
+        // opening line, before the person had said anything. Refuse until
+        // they've spoken at least MIN_TURNS_BEFORE_END times, and tell the
+        // model so it keeps the conversation going instead.
+        const tooEarly = traineeTurnCount < MIN_TURNS_BEFORE_END;
         try {
           ws.send(JSON.stringify({
             toolResponse: {
-              functionResponses: calls.map(c => ({ id: c.id, name: c.name, response: { result: 'ok' } })),
+              functionResponses: calls.map(c => ({
+                id: c.id,
+                name: c.name,
+                response: (c.name === 'end_call' && tooEarly)
+                  ? { result: 'not_allowed_yet', note: 'The other person has not had enough chance to respond yet. Do not end the call. Continue the conversation and react to what they say next.' }
+                  : { result: 'ok' },
+              })),
             },
           }));
         } catch (e) { _warn('failed to send toolResponse', e); }
 
-        if (calls.some(c => c.name === 'end_call')) {
+        if (!tooEarly && calls.some(c => c.name === 'end_call')) {
           // The model is instructed to speak its closing line before calling
           // this function -- give that queued audio time to actually finish
           // playing before ending the call, instead of cutting it off.
