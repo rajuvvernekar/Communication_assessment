@@ -18,13 +18,12 @@ const MgrApp = (() => {
     'mgr-situation-room': [
       {
         id: 'sr1',
-        internalData: `Client profile: High-net-worth client, 6+ years with the firm, active in F&O, no complaints in the last 12 months
-Order details: Sell order on an open derivatives position placed at 11:42 AM; executed only 27 minutes later at 12:09 PM
-System status: Order-gateway latency alert logged by the tech team between 11:40 AM and 12:10 PM during the exchange-wide volatility spike
-Loss figure: Client states ₹8.4 lakh additional loss; the exact figure must be confirmed from the order log (intended vs actual exit price) before you quote any number
-Evidence available: Order ID, timestamps and the tech incident ticket can be pulled from the OMS; get the ticket before you commit to a cause
-Your authority: Branch managers cannot approve compensation; you can log a formal complaint with a ticket number and escalate to the Head of Operations
-Client rights: The client may escalate to the firm's grievance officer and then to SEBI SCORES; never discourage this`,
+        internalData: `Case details: High-net-worth client; sell order on a volatile derivatives position during a sharp intraday crash; the order did not execute at the time and went through later, manually
+Loss claimed: ₹8.4 lakh more than an on-time execution (the client's figure); confirm intended vs actual exit price from the order book before quoting any number
+Zerodha guidance on delays: Zerodha's support article says that when broker or exchange capacity limits are reached during high-volume periods (it describes market opening), orders join a queue and can take up to a few seconds; a delay of many minutes needs a technical check, not an explanation from memory
+What you can do: Create a ticket for the technical query and give the client the ticket number
+Compensation: Not covered in Zerodha's published support articles, so do not promise or rule it out on the call
+Escalation matrix (Mon-Fri, 10 AM to 5 PM): Customer Care, then Head of Customer Care, then Head of Compliance, then CEO; externally the client can use SEBI SCORES and then SEBI's Smart ODR`,
         title: 'Order Execution Failure During a Market Crash',
         scenario: `A high-net-worth client placed a large sell order on a volatile derivatives position during a sharp intraday market crash. The order failed to execute due to a system slowdown during peak load. By the time it went through manually, the client had lost ₹8.4 lakh more than if the order had executed on time. The client has called the branch manager directly, furious.\n\nPart A — What Would You Say? Write your full verbal response, opening to close.\nPart B — The Wrong Response: A flawed manager reply to this situation follows below. Identify every error, explain the impact of each, and rewrite the response correctly.`,
         sectionAPrompt: 'Part A — Write the EXACT words you would say to this client, opening to close: the opening (first 60 seconds), the body of the resolution, and the close.',
@@ -32,13 +31,14 @@ Client rights: The client may escalate to the firm's grievance officer and then 
       },
       {
         id: 'sr2',
-        internalData: `Client profile: Active for 4 years, 2FA enabled, last password change 9 months ago
-Disputed trades: Three trades executed between 10:12 AM and 10:18 AM on the same day, all placed through the mobile app, on positions that later moved against the client
-Access log: The orders came from a device and IP not seen in the client's previous 90 days of logins; the same session logged in 4 minutes earlier
-Contact details: Registered email and mobile unchanged in the last 12 months; no recent bank-mapping or nominee change requests
-Safeguards you can trigger now: Immediate trading block on the account, forced logout of all sessions, withdrawals held for 24 hours pending review
-Investigation: Only the security team can confirm unauthorised access; you cannot confirm or deny fraud on the call and must not promise a reversal
-Your authority: No compensation or reversal decision at branch level; that rests with compliance after the investigation`,
+        internalData: `Case details: Three trades the client says they never placed, all on the same day, ₹3.1 lakh loss; the client suspects a system glitch or unauthorised access
+First steps Zerodha advises: Reset the password and disable segments with the Kill Switch, then block the account by calling 080 4680 1166 (8:30 AM to 5 PM, Monday to Friday) from the registered mobile, emailing from the registered email ID, or creating a ticket
+After blocking: The client cannot log in to Kite; to unblock they create a ticket and then update their KYC details
+Formal reporting: Zerodha's article on unauthorised trades says to file a complaint on the cybercrime portal, file an FIR at the nearest police station, then create a ticket attaching the complaint report
+Illiquid contracts: If the loss is from an illiquid contract or stock, the client must ask the police to contact the exchange to withhold the payout the same day, before settlement
+What to check: Order source, timestamps and login sessions for the three trades; you cannot confirm or deny fraud on the call
+Reversal and compensation: Not to be promised on the call; the outcome follows the investigation
+Escalation matrix (Mon-Fri, 10 AM to 5 PM): Customer Care, then Head of Customer Care, then Head of Compliance, then CEO; externally the client can use SEBI SCORES and then SEBI's Smart ODR`,
         title: 'Unauthorized Trade Dispute',
         scenario: `A client discovers three trades in their account they insist they never placed — all executed on the same day the market moved sharply against those positions, resulting in a loss of ₹3.1 lakh. The client suspects either a system glitch attributed the trades wrongly, or unauthorized access. They are alleging fraud.\n\nPart A — What Would You Say? Write your full verbal response, opening to close.\nPart B — The Wrong Response: A flawed manager reply to this situation follows below. Identify every error, explain the impact of each, and rewrite the response correctly.`,
         sectionAPrompt: 'Part A — Write the EXACT words you would say to this client, opening to close: the opening (first 60 seconds), the body of the resolution, and the close.',
@@ -46,13 +46,14 @@ Your authority: No compensation or reversal decision at branch level; that rests
       },
       {
         id: 'sr3',
-        internalData: `Position: Leveraged intraday position; margin utilisation was 96% of available margin after the gap-down opening
-Alert trail: Margin-shortfall SMS and app push sent at 9:21 AM and 9:33 AM; one call attempt logged at 9:36 AM (unanswered); email alerts were not enabled on the account
-Square-off: RMS auto square-off executed at 9:44 AM at the prevailing market price under the published RMS policy
-Loss locked in: ₹5.6 lakh; the client says the position recovered by close, so check the day's price chart before agreeing or disagreeing
-Account note gap: The client told the support desk two weeks ago about upcoming travel, but no note was added to the account
-Policy: Square-off thresholds apply equally to all clients; an executed square-off cannot be reversed; any goodwill gesture needs Head of Risk approval
-What you can do: Walk through the alert trail, add the travel note, offer to enable email and WhatsApp alerts, and log the missing-note gap internally`,
+        internalData: `Case details: Leveraged intraday position; a gap-down opening caused a sudden margin shortfall; the client was travelling and did not see the alerts; the square-off locked in ₹5.6 lakh loss
+Alerts Zerodha sends: A margin call by SMS and email when required margin is not maintained, and a provisional margin shortfall email and voice message; check what was sent to the client's registered contact details, and when
+Zerodha's policy: The client is responsible for squaring off all open positions; Zerodha may square off positions but is under no obligation to, and the selection and sequence are at its sole discretion
+Loss trigger: If MTM losses exceed 50% of the funds in the account, positions may be squared off
+Intraday positions: Zerodha auto squares off intraday positions around 3:20 PM if the client has not closed them
+Charge: ₹50 + 18% GST per order squared off by Zerodha
+Recovery claim: The client says the position recovered by close; check the price chart for the day before agreeing or disagreeing
+Goodwill: Not covered in Zerodha's published policy; if the client asks for it, take a complaint through the escalation matrix`,
         title: 'RMS Auto Square-Off During Margin Shortfall',
         scenario: `A client's leveraged intraday position was auto-squared-off by the Risk Management System after a sudden margin shortfall triggered by a gap-down opening. The client was travelling and unreachable for the margin call SMS/call. The square-off locked in a loss of ₹5.6 lakh, and the client believes that had it not been squared off, the position would have recovered by market close (it did, in hindsight). The client is irate.\n\nPart A — What Would You Say? Write your full verbal response, opening to close.\nPart B — The Wrong Response: A flawed manager reply to this situation follows below. Identify every error, explain the impact of each, and rewrite the response correctly.`,
         sectionAPrompt: 'Part A — Write the EXACT words you would say to this client, opening to close: the opening (first 60 seconds), the body of the resolution, and the close.',
@@ -60,13 +61,13 @@ What you can do: Walk through the alert trail, add the travel note, offer to ena
       },
       {
         id: 'sr4',
-        internalData: `Account status: Trading and withdrawals frozen for 3 days for overdue periodic KYC re-verification flagged by compliance
-Notices sent: Two email reminders and one SMS in the 30 days before the freeze; no phone call attempt is logged
-Funds: The ₹12 lakh withdrawal request is pending and the funds are intact and safe; they are released once KYC status is updated
-Re-verification: Client must complete the document update and e-sign; with complete documents it typically clears in 1 working day, incomplete documents restart the cycle
-Your authority: You can raise a priority ticket with KYC operations and request a same-day review; you cannot waive the requirement
-Client circumstances: Family medical emergency; the client is distressed about timing and lack of warning, not the requirement itself
-Follow-up: Commit only to a callback time you will keep, and give the ticket number`,
+        internalData: `Case details: Trading account and linked funds frozen for an overdue periodic KYC re-verification; a ₹12 lakh withdrawal is pending for a family medical emergency; the client found out only when the withdrawal failed
+Why Zerodha freezes for KYC: An account can be frozen for incomplete KYC (any of six mandatory details missing: name, PAN, mobile number, email ID, address, income details) or KYC that needs re-verification
+How to lift it: Complete Re-KYC at account.zerodha.com with those six details; Zerodha's articles give no fixed time for unfreezing, so do not promise one
+Notices: Confirm from the communication log what was sent to the client and when before you respond to the "no warning" complaint
+Withdrawals once active: A regular request placed before the weekday cut-off (10 PM without a commodity segment, 11:59 PM with one) typically credits within 24 hours; same-day credit needs a request before 5 PM and no trading that day
+Instant withdrawal: Available 9 AM to 4 PM, ₹100 to ₹2,00,000 per day, no charges, subject to eligibility, once the account is active
+Your authority: You cannot waive the KYC requirement; create a ticket and give the ticket number, and commit only to a callback time you will keep`,
         title: 'KYC Freeze Blocking an Urgent Withdrawal',
         scenario: `A client's trading account and linked funds were frozen for a mandatory periodic KYC re-verification, flagged as overdue by compliance. The client had a ₹12 lakh withdrawal pending to cover a personal emergency (a family medical situation) and only discovered the freeze when the withdrawal failed. The client is distressed and angry, not at the requirement itself but at the timing and lack of warning.\n\nPart A — What Would You Say? Write your full verbal response, opening to close.\nPart B — The Wrong Response: A flawed manager reply to this situation follows below. Identify every error, explain the impact of each, and rewrite the response correctly.`,
         sectionAPrompt: 'Part A — Write the EXACT words you would say to this client, opening to close: the opening (first 60 seconds), the body of the resolution, and the close.',
@@ -74,13 +75,13 @@ Follow-up: Commit only to a callback time you will keep, and give the ticket num
       },
       {
         id: 'sr5',
-        internalData: `Incident: Trading app outage of about 40 minutes (10:05 AM to 10:45 AM) affecting a segment of users during a macro announcement; confirmed in the tech incident report
-Client activity: Open leveraged position; three failed exit attempts logged at 10:12, 10:19 and 10:31 AM
-Workaround: The call-and-trade desk stayed available during the outage; the client says no one told them about it
-Communication: The status-page notice went up 25 minutes into the outage; no SMS or push notification was sent to affected users
-Impact figure: Client claims ₹6.7 lakh loss against the price at the first failed attempt; verify from the order log before quoting any figure
-Your authority: No individual compensation can be promised at branch level; log a formal complaint for Head of Operations review
-Public threat: Involve the communications and compliance teams; do not argue with or dare the client`,
+        internalData: `Case details: App outage of about 40 minutes during a volatile session around a macro announcement; the client held an open leveraged position and could not exit; the client says the loss was ₹6.7 lakh and avoidable
+Order attempts: Check the client's order book and rejection logs for the exit attempts before quoting any time or figure
+Alternative during an outage: Orders can be placed, modified or cancelled by calling Zerodha (Call & Trade), charged at ₹50 + 18% GST per order
+Incident notices: Zerodha publishes delays and incidents as bulletins on its market intelligence page (for example "Delay in order processing on Kite"); check whether one was posted for this incident and when
+Compensation: Not covered in Zerodha's published support articles, so do not promise or rule it out on the call
+Public threat: Do not argue with or dare the client; log the complaint and give the ticket number
+Escalation matrix (Mon-Fri, 10 AM to 5 PM): Customer Care, then Head of Customer Care, then Head of Compliance, then CEO; externally the client can use SEBI SCORES and then SEBI's Smart ODR`,
         title: 'Trading App Outage During a Volatile Session',
         scenario: `During a session with unusually high volatility around a major macroeconomic announcement, the trading app crashed for approximately 40 minutes for a segment of users, including this client, who was holding an open leveraged position and unable to exit. When the app came back, the position had moved sharply against the client, resulting in a ₹6.7 lakh loss the client believes was entirely avoidable had they been able to exit when they tried. The client is threatening to go public.\n\nPart A — What Would You Say? Write your full verbal response, opening to close.\nPart B — The Wrong Response: A flawed manager reply to this situation follows below. Identify every error, explain the impact of each, and rewrite the response correctly.`,
         sectionAPrompt: 'Part A — Write the EXACT words you would say to this client, opening to close: the opening (first 60 seconds), the body of the resolution, and the close.',
