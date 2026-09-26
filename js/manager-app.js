@@ -18,73 +18,61 @@ const MgrApp = (() => {
     'mgr-situation-room': [
       {
         id: 'sr1',
-        internalData: `Case details: High-net-worth client; sell order on a volatile derivatives position during a sharp intraday crash; the order did not execute at the time and went through later, manually
-Loss claimed: ₹8.4 lakh more than an on-time execution (the client's figure); confirm intended vs actual exit price from the order book before quoting any number
-Zerodha guidance on delays: Zerodha's support article says that when broker or exchange capacity limits are reached during high-volume periods (it describes market opening), orders join a queue and can take up to a few seconds; a delay of many minutes needs a technical check, not an explanation from memory
-What you can do: Create a ticket for the technical query and give the client the ticket number
-Compensation: Not covered in Zerodha's published support articles, so do not promise or rule it out on the call
-Escalation matrix (Mon-Fri, 10 AM to 5 PM): Customer Care, then Head of Customer Care, then Head of Compliance, then CEO; externally the client can use SEBI SCORES and then SEBI's Smart ODR`,
+        internalData: `Client profile: High-net-worth client, active in F&O, no complaints in the last 12 months
+Order log: Sell order placed at 11:42 AM and not executed; placed again manually and executed at 12:09 PM
+System log: Order-processing latency flagged between 11:40 AM and 12:10 PM
+Client's claim: ₹8.4 lakh more loss than an on-time exit (not yet checked against the order book)
+Open tickets: None`,
         title: 'Order Execution Failure During a Market Crash',
         scenario: `A high-net-worth client placed a large sell order on a volatile derivatives position during a sharp intraday market crash. The order failed to execute due to a system slowdown during peak load. By the time it went through manually, the client had lost ₹8.4 lakh more than if the order had executed on time. The client has called the branch manager directly, furious.\n\nPart A — What Would You Say? Write your full verbal response, opening to close.\nPart B — The Wrong Response: A flawed manager reply to this situation follows below. Identify every error, explain the impact of each, and rewrite the response correctly.`,
-        sectionAPrompt: 'Part A — Write the EXACT words you would say to this client, opening to close: the opening (first 60 seconds), the body of the resolution, and the close.',
+        sectionAPrompt: 'Write the EXACT words you would say to this client at this moment, opening to close.',
         wrongResponse: `"Sir, I understand markets crashed today, these things happen during high volatility, it's not really something we could have controlled. Our system did process your order, just with some delay because of the load — that's normal during a crash like this. I can see you're upset about the ₹8.4 lakh, but honestly, if the market hadn't moved against you in that window it wouldn't even be an issue, so it's really just bad timing. I can log a technical complaint if you want, but I can't promise anything will come of it since the system did technically work, just slower than usual."`,
       },
       {
         id: 'sr2',
-        internalData: `Case details: Three trades the client says they never placed, all on the same day, ₹3.1 lakh loss; the client suspects a system glitch or unauthorised access
-First steps Zerodha advises: Reset the password and disable segments with the Kill Switch, then block the account by calling 080 4680 1166 (8:30 AM to 5 PM, Monday to Friday) from the registered mobile, emailing from the registered email ID, or creating a ticket
-After blocking: The client cannot log in to Kite; to unblock they create a ticket and then update their KYC details
-Formal reporting: Zerodha's article on unauthorised trades says to file a complaint on the cybercrime portal, file an FIR at the nearest police station, then create a ticket attaching the complaint report
-Illiquid contracts: If the loss is from an illiquid contract or stock, the client must ask the police to contact the exchange to withhold the payout the same day, before settlement
-What to check: Order source, timestamps and login sessions for the three trades; you cannot confirm or deny fraud on the call
-Reversal and compensation: Not to be promised on the call; the outcome follows the investigation
-Escalation matrix (Mon-Fri, 10 AM to 5 PM): Customer Care, then Head of Customer Care, then Head of Compliance, then CEO; externally the client can use SEBI SCORES and then SEBI's Smart ODR`,
+        internalData: `Account: Active for 4 years; registered mobile and email unchanged in the last 12 months; password last changed 9 months ago
+Disputed orders: 3 orders between 10:12 AM and 10:18 AM, all placed from the mobile app and all executed
+Login log: The session came from a device and IP not seen in the last 90 days and logged in 4 minutes before the first order
+Loss: ₹3.1 lakh; the positions moved against the client later that day
+Open tickets: None`,
         title: 'Unauthorized Trade Dispute',
         scenario: `A client discovers three trades in their account they insist they never placed — all executed on the same day the market moved sharply against those positions, resulting in a loss of ₹3.1 lakh. The client suspects either a system glitch attributed the trades wrongly, or unauthorized access. They are alleging fraud.\n\nPart A — What Would You Say? Write your full verbal response, opening to close.\nPart B — The Wrong Response: A flawed manager reply to this situation follows below. Identify every error, explain the impact of each, and rewrite the response correctly.`,
-        sectionAPrompt: 'Part A — Write the EXACT words you would say to this client, opening to close: the opening (first 60 seconds), the body of the resolution, and the close.',
+        sectionAPrompt: 'Write the EXACT words you would say to this client at this moment, opening to close.',
         wrongResponse: `"Ma'am, I can see three trades on your account, so somebody must have placed them — our systems don't just execute trades on their own. Are you sure nobody else has access to your login, maybe a family member? I'm not saying you're lying, but fraud is a serious word and without clear proof of unauthorized access there's not much we can do on our end beyond noting it down. I'll flag this to our security team, though these investigations usually take a few weeks and don't always come back with a clear answer."`,
       },
       {
         id: 'sr3',
-        internalData: `Case details: Leveraged intraday position; a gap-down opening caused a sudden margin shortfall; the client was travelling and did not see the alerts; the square-off locked in ₹5.6 lakh loss
-Alerts Zerodha sends: A margin call by SMS and email when required margin is not maintained, and a provisional margin shortfall email and voice message; check what was sent to the client's registered contact details, and when
-Zerodha's policy: The client is responsible for squaring off all open positions; Zerodha may square off positions but is under no obligation to, and the selection and sequence are at its sole discretion
-Loss trigger: If MTM losses exceed 50% of the funds in the account, positions may be squared off
-Intraday positions: Zerodha auto squares off intraday positions around 3:20 PM if the client has not closed them
-Charge: ₹50 + 18% GST per order squared off by Zerodha
-Recovery claim: The client says the position recovered by close; check the price chart for the day before agreeing or disagreeing
-Goodwill: Not covered in Zerodha's published policy; if the client asks for it, take a complaint through the escalation matrix`,
+        internalData: `Position: Leveraged intraday position; margin utilisation 96% after the gap-down open
+Alert log: Margin-call SMS and email sent at 9:21 AM and 9:33 AM
+Square-off: Executed at 9:44 AM at market price; loss ₹5.6 lakh
+End-of-day price: Above the square-off price
+Account note: The client told the support desk two weeks ago about upcoming travel; no note was added to the account`,
         title: 'RMS Auto Square-Off During Margin Shortfall',
         scenario: `A client's leveraged intraday position was auto-squared-off by the Risk Management System after a sudden margin shortfall triggered by a gap-down opening. The client was travelling and unreachable for the margin call SMS/call. The square-off locked in a loss of ₹5.6 lakh, and the client believes that had it not been squared off, the position would have recovered by market close (it did, in hindsight). The client is irate.\n\nPart A — What Would You Say? Write your full verbal response, opening to close.\nPart B — The Wrong Response: A flawed manager reply to this situation follows below. Identify every error, explain the impact of each, and rewrite the response correctly.`,
-        sectionAPrompt: 'Part A — Write the EXACT words you would say to this client, opening to close: the opening (first 60 seconds), the body of the resolution, and the close.',
+        sectionAPrompt: 'Write the EXACT words you would say to this client at this moment, opening to close.',
         wrongResponse: `"Sir, the square-off is completely standard procedure when there's a margin shortfall, we sent the required alerts as per policy, so from our side everything was done correctly. I understand the market recovered afterward, but honestly that's just how trading works sometimes — you can't blame the system for a call that in hindsight didn't need to be made, we can't predict the market any better than you can. If you're travelling, that's really something you need to plan around when you're holding leveraged positions, we can't be responsible for that."`,
       },
       {
         id: 'sr4',
-        internalData: `Case details: Trading account and linked funds frozen for an overdue periodic KYC re-verification; a ₹12 lakh withdrawal is pending for a family medical emergency; the client found out only when the withdrawal failed
-Why Zerodha freezes for KYC: An account can be frozen for incomplete KYC (any of six mandatory details missing: name, PAN, mobile number, email ID, address, income details) or KYC that needs re-verification
-How to lift it: Complete Re-KYC at account.zerodha.com with those six details; Zerodha's articles give no fixed time for unfreezing, so do not promise one
-Notices: Confirm from the communication log what was sent to the client and when before you respond to the "no warning" complaint
-Withdrawals once active: A regular request placed before the weekday cut-off (10 PM without a commodity segment, 11:59 PM with one) typically credits within 24 hours; same-day credit needs a request before 5 PM and no trading that day
-Instant withdrawal: Available 9 AM to 4 PM, ₹100 to ₹2,00,000 per day, no charges, subject to eligibility, once the account is active
-Your authority: You cannot waive the KYC requirement; create a ticket and give the ticket number, and commit only to a callback time you will keep`,
+        internalData: `Account status: Trading and withdrawals frozen for 3 days; KYC flagged for re-verification (income details missing)
+Reminders sent: 2 emails and 1 SMS in the 30 days before the freeze; no phone call
+Pending request: ₹12 lakh withdrawal requested 3 days ago, not processed
+Open tickets: None`,
         title: 'KYC Freeze Blocking an Urgent Withdrawal',
         scenario: `A client's trading account and linked funds were frozen for a mandatory periodic KYC re-verification, flagged as overdue by compliance. The client had a ₹12 lakh withdrawal pending to cover a personal emergency (a family medical situation) and only discovered the freeze when the withdrawal failed. The client is distressed and angry, not at the requirement itself but at the timing and lack of warning.\n\nPart A — What Would You Say? Write your full verbal response, opening to close.\nPart B — The Wrong Response: A flawed manager reply to this situation follows below. Identify every error, explain the impact of each, and rewrite the response correctly.`,
-        sectionAPrompt: 'Part A — Write the EXACT words you would say to this client, opening to close: the opening (first 60 seconds), the body of the resolution, and the close.',
+        sectionAPrompt: 'Write the EXACT words you would say to this client at this moment, opening to close.',
         wrongResponse: `"Sir, KYC re-verification is a regulatory requirement, it's not something we can waive, and we did send a notice about it. I understand there's a medical emergency, but the process still has to be followed properly — I can't make exceptions just because the timing is bad for you. Once you complete the re-verification the freeze will lift, so I'd suggest doing that as soon as possible so we can move forward. Is there anything else I can help with?"`,
       },
       {
         id: 'sr5',
-        internalData: `Case details: App outage of about 40 minutes during a volatile session around a macro announcement; the client held an open leveraged position and could not exit; the client says the loss was ₹6.7 lakh and avoidable
-Order attempts: Check the client's order book and rejection logs for the exit attempts before quoting any time or figure
-Alternative during an outage: Orders can be placed, modified or cancelled by calling Zerodha (Call & Trade), charged at ₹50 + 18% GST per order
-Incident notices: Zerodha publishes delays and incidents as bulletins on its market intelligence page (for example "Delay in order processing on Kite"); check whether one was posted for this incident and when
-Compensation: Not covered in Zerodha's published support articles, so do not promise or rule it out on the call
-Public threat: Do not argue with or dare the client; log the complaint and give the ticket number
-Escalation matrix (Mon-Fri, 10 AM to 5 PM): Customer Care, then Head of Customer Care, then Head of Compliance, then CEO; externally the client can use SEBI SCORES and then SEBI's Smart ODR`,
+        internalData: `Incident: App outage from 10:05 AM to 10:45 AM (about 40 minutes) per the tech incident report
+Client activity: Open leveraged position; exit attempts at 10:12, 10:19 and 10:31 AM all failed
+Notice: Bulletin about the outage posted at 10:30 AM; no SMS or push notification sent
+Loss: The client claims ₹6.7 lakh against the price at the first failed attempt (not verified)
+Call & Trade: No call from the client during the outage`,
         title: 'Trading App Outage During a Volatile Session',
         scenario: `During a session with unusually high volatility around a major macroeconomic announcement, the trading app crashed for approximately 40 minutes for a segment of users, including this client, who was holding an open leveraged position and unable to exit. When the app came back, the position had moved sharply against the client, resulting in a ₹6.7 lakh loss the client believes was entirely avoidable had they been able to exit when they tried. The client is threatening to go public.\n\nPart A — What Would You Say? Write your full verbal response, opening to close.\nPart B — The Wrong Response: A flawed manager reply to this situation follows below. Identify every error, explain the impact of each, and rewrite the response correctly.`,
-        sectionAPrompt: 'Part A — Write the EXACT words you would say to this client, opening to close: the opening (first 60 seconds), the body of the resolution, and the close.',
+        sectionAPrompt: 'Write the EXACT words you would say to this client at this moment, opening to close.',
         wrongResponse: `"I hear you, outages happen sometimes with high traffic during volatile sessions, it's an unfortunate coincidence that it happened while you had an open position. Technically the loss happened because of how the market moved, not directly because of the outage, so I'm not sure compensation is really justified here. Go ahead and post about it if you feel you need to — we stand by our system uptime record overall, this was a one-off. I can log a technical ticket, but I wouldn't expect much beyond an apology from that."`,
       },
     ],
@@ -2192,7 +2180,7 @@ HOW TO RUN THIS CALL:
   // as before. The NRI variant and any trainer demo are DB-backed instead,
   // so the admin's NRI Manager / [DEMO] topics are the ones actually played.
   const SR_WRONG_MARKER = '─── THE WRONG RESPONSE (given to the manager to critique) ───';
-  const SR_A_PROMPT = 'Part A — Write the EXACT words you would say to this client, opening to close: the opening (first 60 seconds), the body of the resolution, and the close.';
+  const SR_A_PROMPT = 'Write the EXACT words you would say to this client at this moment, opening to close.';
 
   function _srScenarioFromRow(row) {
     const { text, internalData } = mgrSplitInternalData(row.scenario || row.description || '');
