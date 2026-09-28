@@ -3080,12 +3080,102 @@ window.Admin = (() => {
     }
   }
 
+  // Excel cells are capped at 32,767 characters -- a long Mirror Room
+  // 3-section transcript or Situation Room response could theoretically
+  // get close. Truncate defensively so a write never silently corrupts
+  // the workbook.
+  function _excelSafe(text) {
+    const s = String(text || '');
+    return s.length > 32000 ? s.slice(0, 32000) + '\n…[truncated for Excel]' : s;
+  }
+
+  // The written response / spoken transcript for a manager session,
+  // formatted for a spreadsheet cell. Situation Room's writtenText is a
+  // JSON blob (see _submitSRSectionB in manager-app.js), not plain text,
+  // so it's parsed into labelled sections the same way the admin review
+  // modal renders it; every other module already saves either plain text
+  // (Transcript Autopsy's per-line corrections, Management Skills) or a
+  // readable "Speaker: line" transcript (Paper Trade, Red Pen, Mirror
+  // Room), so those are used as-is.
+  function _mgrResponseText(s) {
+    const base = (typeof mgrBaseModule === 'function') ? mgrBaseModule(s.module) : s.module;
+    if (base === 'mgr-situation-room') {
+      try {
+        const d = JSON.parse(s.writtenText || '{}');
+        const sa = d.sectionA || {};
+        const sb = d.sectionB || {};
+        const parts = [];
+        if (sa.response) parts.push('SECTION A — WHAT WOULD YOU SAY:\n' + sa.response);
+        if (sb.wrongResponse) parts.push('SECTION B — WRONG RESPONSE GIVEN:\n' + sb.wrongResponse);
+        if (sb.errors) parts.push('SECTION B — ERRORS IDENTIFIED:\n' + sb.errors);
+        if (sb.impact) parts.push('SECTION B — IMPACT:\n' + sb.impact);
+        if (sb.rewrite) parts.push('SECTION B — REWRITE:\n' + sb.rewrite);
+        if (parts.length) return parts.join('\n\n');
+      } catch (e) { /* fall through to the raw text below */ }
+    }
+    return s.writtenText || s.transcript || '';
+  }
+
+  // The AI's per-parameter reasoning for a manager session, as a readable
+  // "Label (score%): reason" block per line -- this is the closest thing
+  // managers have to the trainee side's aiScores._summary, which is never
+  // set for mgr-* sessions (generateCoachingSummary only handles trainee
+  // modules). Situation Room stores its narrative feedback differently
+  // (_sectionAFeedback / _sectionBFeedback, no _reasons at all -- see
+  // evaluateSituationRoomA/B in claude.js), so it gets its own branch,
+  // matching the admin review modal's rendering (openMgrScoreModal) and
+  // its "hide near-empty AI text" filter for whatNotToSay/missedPoints/
+  // keyMissed. Every other rubric module reads MGR_EVAL_CRITERIA[module]
+  // for the parameter labels; mgrBaseModule's NRI aliases resolve fine
+  // since MGR_EVAL_CRITERIA copies the base rubric onto each NRI key too.
+  // A module with no rubric entry (mgr-management-skills, or a session
+  // scored by a fallback whose keys don't match the rubric, e.g. Red
+  // Pen's local SMART-less fallback) just dumps whatever _reasons exist.
+  function _mgrCoachingSummary(s) {
+    const aiScores = s.aiScores || {};
+    const base = (typeof mgrBaseModule === 'function') ? mgrBaseModule(s.module) : s.module;
+
+    if (base === 'mgr-situation-room') {
+      const sa = aiScores._sectionAFeedback || {};
+      const sb = aiScores._sectionBFeedback || {};
+      const isNearEmpty = v => !v || /clean|nothing significant|all key/i.test(v);
+      const lines = [];
+      if (!isNearEmpty(sa.whatNotToSay)) lines.push('What not to say: ' + sa.whatNotToSay);
+      if (!isNearEmpty(sa.missedPoints)) lines.push('Missed points: ' + sa.missedPoints);
+      if (sa.strength) lines.push('Strength: ' + sa.strength);
+      if (sa.improvement) lines.push('Improvement: ' + sa.improvement);
+      if (!isNearEmpty(sb.keyMissed)) lines.push('Section B — key missed: ' + sb.keyMissed);
+      return lines.join('\n');
+    }
+
+    const reasons = aiScores._reasons || {};
+    const crit = (typeof MGR_EVAL_CRITERIA !== 'undefined') ? MGR_EVAL_CRITERIA[s.module] : null;
+    if (crit) {
+      return crit.parameters
+        .map(p => {
+          const pct = aiScores[p.key];
+          const reason = reasons[p.key];
+          if (pct == null && !reason) return null;
+          return `${p.label}${pct != null ? ` (${pct}%)` : ''}: ${reason || ''}`.trim();
+        })
+        .filter(Boolean).join('\n');
+    }
+    return Object.keys(reasons).map(k => `${k}: ${reasons[k]}`).join('\n');
+  }
+
   // Manager Assessments tab had no Export Excel / Download recordings
   // options -- every other assessment-like section already has them, this
   // one just never got them. Mirrors exportAssessmentsExcel() /
   // downloadAllRecordings() above: reads whatever's currently filtered/
   // rendered in the tab (module + status filters), not every session ever
   // recorded. (added 2026-09-20)
+  //
+  // Extended 2026-09-28: the export had only score summary columns -- no
+  // written response/transcript and no AI coaching narrative, so an admin
+  // downloading it to review offline got numbers with no context. Added
+  // the Response/Transcript and AI Coaching Summary columns above, plus
+  // Admin Comment (present on the trainee export's exportAssessmentsExcel
+  // but missing here).
   function exportMgrAssessmentsExcel() {
     const sessions = _currentFilteredMgrSessions || [];
     if (!sessions.length) { toast('No manager assessments in the current view to export.', 'error'); return; }
@@ -3095,19 +3185,22 @@ window.Admin = (() => {
       const aiScore    = s.aiScores    && s.aiScores.overall    != null ? s.aiScores.overall    : null;
       const adminScore = s.adminScores && s.adminScores.overall != null ? s.adminScores.overall : null;
       return {
-        'Manager':       s.traineeName || '',
-        'Module':        s.module || '',
-        'Topic':         s.topicTitle || '',
-        'Date':          formatDate(s.submittedAt).split(' ')[0],
-        'Status':        s.adminScores ? 'Scored' : (s.status || ''),
-        'AI Score':      aiScore    != null ? aiScore    : '',
-        'Admin Score':   adminScore != null ? adminScore : '',
-        'Has Recording': s.recordingUrl ? 'Yes' : 'No',
+        'Manager':              s.traineeName || '',
+        'Module':               s.module || '',
+        'Topic':                s.topicTitle || '',
+        'Date':                 formatDate(s.submittedAt).split(' ')[0],
+        'Status':               s.adminScores ? 'Scored' : (s.status || ''),
+        'AI Score':             aiScore    != null ? aiScore    : '',
+        'Admin Score':          adminScore != null ? adminScore : '',
+        'Response / Transcript': _excelSafe(_mgrResponseText(s)),
+        'AI Coaching Summary':  _excelSafe(_mgrCoachingSummary(s)),
+        'Admin Comment':        s.adminComment || '',
+        'Has Recording':        s.recordingUrl ? 'Yes' : 'No',
       };
     });
 
     const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [{ wch: 20 }, { wch: 22 }, { wch: 30 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 12 }];
+    ws['!cols'] = [{ wch: 20 }, { wch: 22 }, { wch: 30 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 60 }, { wch: 60 }, { wch: 30 }, { wch: 12 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Manager Assessments');
     const filename = `manager_assessments_${new Date().toISOString().slice(0, 10)}.xlsx`;
