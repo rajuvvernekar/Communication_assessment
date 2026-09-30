@@ -1192,12 +1192,12 @@ Let's get back on track.
     }
 
     if (meta.type === 'feedback-ai') {
-      _launchFeedbackAI();
+      await _launchFeedbackAI();
       return;
     }
 
     if (meta.type === 'eq-ai') {
-      _launchMirrorRoom();
+      await _launchMirrorRoom();
       return;
     }
 
@@ -2174,11 +2174,36 @@ HOW TO RUN THIS CALL:
     }
   }
 
+  // Bug fix (2026-09-30): Situation Room, Red Pen and Mirror Room's live
+  // scenarios are hardcoded in this file (see the SCENARIOS constant near
+  // the top) -- the DB `topics` rows for these 3 modules exist only so
+  // admin's Topics page has something to list/edit for reference. That
+  // meant toggling a topic's Enabled switch in admin had NO effect on
+  // what a manager actually got for these 3 modules: reported as "I
+  // disabled Pushback Day in Mirror Room and managers still get it".
+  // This bridges the DB topics' `enabled` flag onto the hardcoded pool by
+  // matching on title (title is already the shared key used elsewhere,
+  // e.g. _refreshOpsScriptIfStale in db.js) -- every _launch*/_pick*
+  // function for these 3 modules below now excludes a disabled title
+  // before picking. Fails open (returns no disabled titles) on any DB
+  // error, so a Supabase hiccup never blocks a manager from taking the
+  // assessment.
+  async function _disabledHardcodedTitles(module) {
+    try {
+      const rows = await DB.getByIndex('topics', 'module', module);
+      return new Set(rows.filter(t => t.enabled === false).map(t => t.title));
+    } catch (e) {
+      console.warn(`Could not check enabled/disabled topics for ${module}:`, e.message || e);
+      return new Set();
+    }
+  }
+
   // ── Situation Room — Two-section assessment ─────────────
 
-  // Regular Situation Room draws from the hardcoded SCENARIOS pool exactly
-  // as before. The NRI variant and any trainer demo are DB-backed instead,
-  // so the admin's NRI Manager / [DEMO] topics are the ones actually played.
+  // Regular Situation Room draws from the hardcoded SCENARIOS pool (minus
+  // any title admin has disabled -- see _disabledHardcodedTitles above).
+  // The NRI variant and any trainer demo are fully DB-backed instead, so
+  // the admin's NRI Manager / [DEMO] topics are the ones actually played.
   const SR_WRONG_MARKER = '─── THE WRONG RESPONSE (given to the manager to critique) ───';
   const SR_A_PROMPT = 'Write the EXACT words you would say to this client at this moment, opening to close.';
 
@@ -2198,7 +2223,9 @@ HOW TO RUN THIS CALL:
   async function _pickSrScenario() {
     const useDb = _currentModule !== 'mgr-situation-room' || _demoMode;
     if (!useDb) {
-      const pool = SCENARIOS['mgr-situation-room'].filter(sc => !sc.demo);
+      const disabled = await _disabledHardcodedTitles('mgr-situation-room');
+      const pool = SCENARIOS['mgr-situation-room'].filter(sc => !sc.demo && !disabled.has(sc.title));
+      if (!pool.length) { toast('No Situation Room topics available.', 'error'); return null; }
       return _withInternalData({ ...pickRandom(pool), _hardcoded: true });
     }
     try {
@@ -2559,9 +2586,15 @@ HOW TO RUN THIS CALL:
     }
   }
 
-  function _launchFeedbackAI() {
-    const pool = SCENARIOS['mgr-feedback'].filter(sc => !!sc.demo === _demoMode);
-    _currentScenario = { ...pickRandom(pool.length ? pool : SCENARIOS['mgr-feedback'].filter(sc => !sc.demo)), _hardcoded: true };
+  async function _launchFeedbackAI() {
+    const disabled = await _disabledHardcodedTitles('mgr-feedback');
+    const pool = SCENARIOS['mgr-feedback'].filter(sc => !!sc.demo === _demoMode && !disabled.has(sc.title));
+    if (!pool.length) {
+      toast(_demoMode ? 'No demo topic is set up for Feedback yet.' : 'No Feedback topics available.', 'error');
+      _demoMode = false; _syncDemoBanner();
+      return;
+    }
+    _currentScenario = { ...pickRandom(pool), _hardcoded: true };
     const emp = FB_EMPLOYEES[_currentScenario.id] || FB_EMPLOYEES['fb1'];
 
     // Reset state (a trainer demo runs a shorter exchange -- demoTurns)
@@ -3255,9 +3288,15 @@ HOW TO RUN THIS CONVERSATION:
     }, 1000);
   }
 
-  function _launchMirrorRoom() {
-    const pool = SCENARIOS['mgr-eq'].filter(sc => !!sc.demo === _demoMode);
-    _currentScenario = { ...pickRandom(pool.length ? pool : SCENARIOS['mgr-eq'].filter(sc => !sc.demo)), _hardcoded: true };
+  async function _launchMirrorRoom() {
+    const disabled = await _disabledHardcodedTitles('mgr-eq');
+    const pool = SCENARIOS['mgr-eq'].filter(sc => !!sc.demo === _demoMode && !disabled.has(sc.title));
+    if (!pool.length) {
+      toast(_demoMode ? 'No demo topic is set up for Mirror Room yet.' : 'No Mirror Room topics available.', 'error');
+      _demoMode = false; _syncDemoBanner();
+      return;
+    }
+    _currentScenario = { ...pickRandom(pool), _hardcoded: true };
     const section = _currentScenario.sections[0];
     const cp = section.counterpart;
 
