@@ -3205,6 +3205,19 @@ HOW TO RUN THIS CONVERSATION:
     $('mgr-eq-chat-thread').style.display = 'none';
     $('mgr-eq-rec-area').style.display = 'none';
 
+    // Bug fix (2026-09-30): this used to stay on the JUST-FINISHED section's
+    // situation text for the entire break and only swap to the next
+    // section's query once the countdown reached zero (or was skipped), so
+    // the manager had no way to read ahead during the breather. Update the
+    // situation box, step indicator and counterpart name to the next
+    // section immediately -- the break screen below still gates the actual
+    // conversation (chat thread/turn bar) until the countdown ends.
+    $('mgr-eq-sc-title').textContent = `${_currentScenario.title} — Section ${nextSection.id}: ${nextSection.label}`;
+    $('mgr-eq-sc-text').innerHTML = _formatScenarioHTML(nextSection.situation);
+    _renderEvalCriteriaPanel('mgr-eq', 'mgr-eq-sc-text');
+    _renderEqStepIndicator();
+    $('mgr-eq-counterpart-name').textContent = nextSection.counterpart.name;
+
     const breakEl = $('mgr-eq-section-break');
     const labelEl = $('mgr-eq-break-label');
     const countEl = $('mgr-eq-break-count');
@@ -3221,13 +3234,9 @@ HOW TO RUN THIS CONVERSATION:
       clearInterval(_eq.breakTimerId);
       if (breakEl) breakEl.style.display = 'none';
 
-      _eq.turnInSection = 0;
-      $('mgr-eq-sc-title').textContent = `${_currentScenario.title} — Section ${nextSection.id}: ${nextSection.label}`;
-      $('mgr-eq-sc-text').innerHTML = _formatScenarioHTML(nextSection.situation);
-      _renderEvalCriteriaPanel('mgr-eq', 'mgr-eq-sc-text');
-      _renderEqStepIndicator();
-      $('mgr-eq-counterpart-name').textContent = nextSection.counterpart.name;
-      // Fresh visual thread for the new section's conversation.
+      // Fresh visual thread for the new section's conversation. (Situation
+      // box, step indicator and counterpart name were already updated above
+      // when the break started.)
       $('mgr-eq-chat-thread').innerHTML = '';
       $('mgr-eq-chat-thread').style.display = '';
       $('mgr-eq-turn-bar').style.display = '';
@@ -3352,12 +3361,15 @@ HOW TO RUN THIS CONVERSATION:
 
     $('mgr-eq-status').style.display = 'none';
     _speakMirrorRoomVoice(line, cp.gender, () => {
-      if (isLastOverall) {
-        $('btn-mgr-eq-finish').style.display = '';
-        $('btn-mgr-eq-end-early').style.display = 'none';
-      } else {
-        _startManagerEqTurn(isLastOverall);
-      }
+      // Bug fix (2026-09-30): this used to skip _startManagerEqTurn entirely
+      // on the final overall turn, jumping straight to showing "Finish" --
+      // so the manager's mic/transcription for their LAST response was never
+      // started and that answer was never captured. Same bug class already
+      // fixed in Red Pen's _runEmployeeTurn. Always start the manager's turn;
+      // _endManagerEqTurn's own maxTotalTurns check shows Finish only AFTER
+      // they actually answer.
+      if (isLastOverall) $('btn-mgr-eq-end-early').style.display = 'none';
+      _startManagerEqTurn(isLastOverall);
     });
   }
 
