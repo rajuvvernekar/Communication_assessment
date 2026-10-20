@@ -944,6 +944,10 @@ window.Admin = (() => {
         if (section === 'dashboard') {
           try { loadDashboard(); } catch (_) {}
         }
+        // Reports tab: refresh the list of managers whose results email + PPT are published.
+        if (section === 'reports') {
+          try { loadMgrResultsList(); } catch (_) {}
+        }
       };
     });
 
@@ -958,6 +962,7 @@ window.Admin = (() => {
     }
     try { loadTrainees(); } catch (_) {}
     try { loadDashboard(); } catch (_) {}
+    try { loadMgrResultsList(); } catch (_) {}
     try { if (typeof generateAllAgentsReport === 'function') generateAllAgentsReport(); } catch (_) {}
     try { if (typeof loadAiAuditScores === 'function') loadAiAuditScores(); } catch (_) {}
     try { if (typeof loadComm360Report === 'function') loadComm360Report(); } catch (_) {}
@@ -5435,9 +5440,170 @@ window.Admin = (() => {
     }
   }
 
+  // ============================================================
+  //  Manager results: ready-to-send email + PPT download
+  //  (Managers Communicate 360). Per-manager data lives in the
+  //  settings table under the key 'mgrReport:<slug>' (JSON);
+  //  the email wording is the template below. Added 2026-10-20.
+  // ============================================================
+  const MGR_EMAIL_SUBJECT = 'Managers Communicate 360: your results and one-week plan';
+  const _mgrReports = {};          // slug -> report object
+  let _mgrReportCurrent = null;
+
+  function _mgrFmt1(n) {
+    const v = Number(n);
+    return Number.isFinite(v) ? (Math.round(v * 10) / 10).toFixed(1) : '—';
+  }
+  function _mgrEsc(t) {
+    return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function buildMgrResultsEmail(r) {
+    const first = r.firstName || String(r.name || '').split(/\s+/)[0] || 'there';
+    const scores = (r.assessments || []).map(a => `${a.name} ${_mgrFmt1(a.score)}`).join(', ');
+    const bullets = list => (list || []).map(x => `• ${x}`).join('\n');
+    return [
+      `Hi ${first},`,
+      '',
+      'We really appreciate your participation in Managers Communicate 360. You took part in and completed all the activities we conducted. Please find your detailed scores in the attached PPT. A short summary is given below.',
+      '',
+      `YOUR RESULT: ${_mgrFmt1(r.total)} / 100`,
+      '',
+      `• Assessments: ${_mgrFmt1(r.assessmentMarks)} / 60 (${scores}; each out of 100)`,
+      `• Presentation round: ${_mgrFmt1(r.presentationMarks)} / 40`,
+      '',
+      'WHAT YOU DID WELL',
+      '',
+      bullets(r.strengths),
+      '',
+      'WHAT TO WORK ON',
+      '',
+      bullets(r.workOn),
+      '',
+      'We have also put together a simple one-week plan and suggested a few books and videos to help you build your managerial and leadership skills.',
+      '',
+      'If you have any feedback on the activities, or any training you need, please feel free to reach out to us.',
+      '',
+      'Regards,',
+      'Training and Development team'
+    ].join('\n');
+  }
+
+  async function loadMgrResultsList() {
+    const sel = $('mgr-results-select');
+    if (!sel) return;
+    let rows = [];
+    try {
+      // The settings table has no created_at column, which DB.getAll() orders by, so query it directly.
+      const sb = (typeof DB.getClient === 'function' && !(DB.isLocalStorage && DB.isLocalStorage())) ? DB.getClient() : null;
+      if (sb) {
+        const { data, error } = await sb.from('settings').select('key,value').like('key', 'mgrReport:%');
+        if (error) throw error;
+        rows = data || [];
+      } else {
+        rows = await DB.getAll('settings');
+      }
+    } catch (e) { console.warn('Manager results: could not load', e); }
+    const reports = [];
+    for (const row of rows || []) {
+      if (!row || typeof row.key !== 'string' || row.key.indexOf('mgrReport:') !== 0) continue;
+      try {
+        const r = JSON.parse(row.value);
+        if (r && r.slug && r.name) { _mgrReports[r.slug] = r; reports.push(r); }
+      } catch (_) { /* skip a malformed row */ }
+    }
+    reports.sort((a, b) => a.name.localeCompare(b.name));
+    const keep = sel.value;
+    sel.innerHTML = '<option value="">— Choose a manager —</option>' +
+      reports.map(r => `<option value="${_mgrEsc(r.slug)}">${_mgrEsc(r.name)}</option>`).join('');
+    if (keep && _mgrReports[keep]) sel.value = keep;
+    const empty = $('mgr-results-empty');
+    if (empty) empty.classList.toggle('hidden', reports.length > 0);
+    if (!sel.value) { const c = $('mgr-results-content'); if (c) c.classList.add('hidden'); }
+  }
+
+  function selectMgrResult(slug) {
+    const content = $('mgr-results-content');
+    const r = _mgrReports[slug];
+    _mgrReportCurrent = r || null;
+    if (!r) { if (content) content.classList.add('hidden'); return; }
+    const chip = (label, val) => `<span style="background:var(--surface-2,#eef4f5);border-radius:999px;padding:0.3rem 0.8rem;font-size:0.85rem"><strong>${_mgrEsc(val)}</strong> ${_mgrEsc(label)}</span>`;
+    $('mgr-results-summary').innerHTML =
+      chip('total', `${_mgrFmt1(r.total)} / 100`) + chip('assessments', `${_mgrFmt1(r.assessmentMarks)} / 60`) + chip('presentation', `${_mgrFmt1(r.presentationMarks)} / 40`);
+    $('mgr-results-subject').value = MGR_EMAIL_SUBJECT;
+    $('mgr-results-body').value = buildMgrResultsEmail(r);
+    $('mgr-results-status').textContent = '';
+    const dl = $('btn-download-mgr-ppt');
+    if (dl) dl.disabled = !r.pptUrl;
+    content.classList.remove('hidden');
+  }
+
+  async function _mgrCopyText(text) {
+    try {
+      if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); return true; }
+    } catch (_) { /* fall through to the legacy path */ }
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      return ok;
+    } catch (_) { return false; }
+  }
+
+  async function copyMgrEmail() {
+    const ta = $('mgr-results-body');
+    if (!ta || !ta.value.trim()) return;
+    const ok = await _mgrCopyText(ta.value);
+    $('mgr-results-status').textContent = ok ? 'Email copied. Paste it into your email and attach the PPT.' : 'Could not copy. Select the text and press Ctrl+C.';
+    toast(ok ? 'Email copied to clipboard' : 'Copy failed. Select the text and copy it manually', ok ? 'success' : 'error');
+  }
+
+  async function copyMgrSubject() {
+    const el = $('mgr-results-subject');
+    if (!el || !el.value) return;
+    const ok = await _mgrCopyText(el.value);
+    toast(ok ? 'Subject copied to clipboard' : 'Copy failed', ok ? 'success' : 'error');
+  }
+
+  function resetMgrEmail() {
+    if (!_mgrReportCurrent) return;
+    $('mgr-results-body').value = buildMgrResultsEmail(_mgrReportCurrent);
+    $('mgr-results-status').textContent = 'Email reset to the template.';
+  }
+
+  async function downloadMgrPpt() {
+    const r = _mgrReportCurrent;
+    if (!r || !r.pptUrl) { toast('No PPT is available for this manager yet', 'error'); return; }
+    const status = $('mgr-results-status');
+    if (status) status.textContent = 'Preparing download…';
+    try {
+      const res = await fetch(r.pptUrl);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = r.pptFile || `${r.name} - Managers Communicate 360.pptx`;
+      document.body.appendChild(a); a.click();
+      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+      if (status) status.textContent = 'PPT downloaded.';
+    } catch (e) {
+      console.warn('PPT download via fetch failed, opening the link instead:', e);
+      window.open(r.pptUrl, '_blank');
+      if (status) status.textContent = '';
+    }
+  }
+
   // ---- Public API (called from inline onclick) ----
   return {
     init,
+    selectMgrResult,
+    copyMgrEmail,
+    copyMgrSubject,
+    resetMgrEmail,
+    downloadMgrPpt,
     doLogin,
     forceReSeed,
     openTopicModal,
