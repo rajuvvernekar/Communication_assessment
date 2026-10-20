@@ -356,15 +356,16 @@
             <input type="text" id="mgr-results-subject" readonly style="flex:1;padding:0.5rem 0.75rem;border:1px solid var(--border);border-radius:6px;font-size:0.9rem" />
             <button type="button" class="btn-ghost" onclick="Admin.copyMgrSubject()" style="white-space:nowrap">Copy subject</button>
           </div>
-          <label for="mgr-results-body" style="font-size:0.8rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em">Email</label>
-          <textarea id="mgr-results-body" rows="22" style="display:block;width:100%;margin:0.3rem 0 0.9rem;padding:0.75rem;border:1px solid var(--border);border-radius:6px;font-size:0.9rem;line-height:1.5;font-family:inherit;resize:vertical"></textarea>
+          <label style="font-size:0.8rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em">Email preview (you can edit the text before copying)</label>
+          <div id="mgr-results-preview" contenteditable="true" spellcheck="false" style="margin:0.3rem 0 0.9rem;border:1px solid var(--border);border-radius:8px;overflow:auto;max-height:640px;background:#fff"></div>
           <div style="display:flex;gap:0.6rem;flex-wrap:wrap;align-items:center">
             <button type="button" id="btn-copy-mgr-email" class="btn-primary" onclick="Admin.copyMgrEmail()">Copy email</button>
+            <button type="button" id="btn-copy-mgr-plain" class="btn-ghost" onclick="Admin.copyMgrPlain()" title="Plain text version, for mail apps that drop formatting">Copy plain text</button>
             <button type="button" id="btn-download-mgr-ppt" class="btn-ghost" onclick="Admin.downloadMgrPpt()">Download PPT</button>
             <button type="button" class="btn-ghost" onclick="Admin.resetMgrEmail()" title="Discard edits and rebuild the email from the template">Reset email</button>
             <span id="mgr-results-status" style="font-size:0.85rem;color:var(--text-muted)"></span>
           </div>
-          <p style="margin:0.75rem 0 0;font-size:0.8rem;color:var(--text-muted)">Attach the PPT to the email before sending. You can edit the email text above before copying.</p>
+          <p style="margin:0.75rem 0 0;font-size:0.8rem;color:var(--text-muted)">Copy email keeps the colours and layout when pasted into Gmail or Outlook. Attach the PPT before sending. Copy plain text uses the standard wording (your edits are not included).</p>
         </div>
       </div>
 
@@ -903,6 +904,6 @@
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <script src="js/mgr-eval-criteria.js?v=2026092503"></script>
 <script src="js/claude.js?v=2026092407"></script>
-<script src="js/admin.js?v=2026102002"></script>
+<script src="js/admin.js?v=2026102101"></script>
 </body>
 </html>

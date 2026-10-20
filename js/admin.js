@@ -5444,49 +5444,88 @@ window.Admin = (() => {
   //  Manager results: ready-to-send email + PPT download
   //  (Managers Communicate 360). Per-manager data lives in the
   //  settings table under the key 'mgrReport:<slug>' (JSON);
-  //  the email wording is the template below. Added 2026-10-20.
+  //  the email wording and layout are the template below.
+  //  Copy email puts BOTH formatted HTML and plain text on the
+  //  clipboard, so it keeps its design in Gmail / Outlook.
   // ============================================================
-  const MGR_EMAIL_SUBJECT = 'Managers Communicate 360: your results and one-week plan';
   const _mgrReports = {};          // slug -> report object
   let _mgrReportCurrent = null;
 
-  function _mgrFmt1(n) {
-    const v = Number(n);
-    return Number.isFinite(v) ? (Math.round(v * 10) / 10).toFixed(1) : '—';
-  }
-  function _mgrEsc(t) {
-    return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  }
+  const mgrFirstName = r => r.firstName || String(r.name || '').split(/\s+/)[0] || 'there';
+  const mgrEmailSubject = r => 'Your Managers Communicate 360 scorecard is here, ' + mgrFirstName(r);
+  const mgrF1 = n => { const v = Number(n); return Number.isFinite(v) ? (Math.round(v * 10) / 10).toFixed(1) : '—'; };
+  const mgrEscH = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const mgrBand = s => (s >= 60 ? '#3E9B6B' : s >= 40 ? '#F2A33A' : '#C8553D');
+  const mgrBlocks = s => { const n = Math.max(0, Math.min(10, Math.round(Number(s) / 10))); return '█'.repeat(n) + '░'.repeat(10 - n); };
 
-  function buildMgrResultsEmail(r) {
-    const first = r.firstName || String(r.name || '').split(/\s+/)[0] || 'there';
-    const scores = (r.assessments || []).map(a => `${a.name} ${_mgrFmt1(a.score)}`).join(', ');
-    const bullets = list => (list || []).map(x => `• ${x}`).join('\n');
+  function mgrEmailText(r) {
+    const first = mgrFirstName(r);
+    const li = arr => (arr || []).map(x => '• ' + x).join('\n');
+    const bars = (r.assessments || []).map(a => mgrBlocks(a.score) + '  ' + a.name + ' ' + mgrF1(a.score)).join('\n');
+    const b1 = r.books && r.books[0], v1 = r.videos && r.videos[0];
+    const boost = [
+      'We have put together a simple one-week plan, plus 3 books and 3 videos picked from your own scores.',
+      b1 ? 'Start with (book): ' + b1 : '',
+      v1 ? 'Watch first (video): ' + v1 : '',
+      'Even 30 minutes a day adds up.'
+    ].filter(Boolean).join('\n');
     return [
-      `Hi ${first},`,
+      'Hi ' + first + ',',
       '',
-      'We really appreciate your participation in Managers Communicate 360. You took part in and completed all the activities we conducted. Please find your detailed scores in the attached PPT. A short summary is given below.',
+      'Thank you for being part of Managers Communicate 360. You took part in every activity, from the five assessments to the presentation round, and that takes real commitment. Your detailed scorecard is attached as a PPT. Here is the quick version.',
       '',
-      `YOUR RESULT: ${_mgrFmt1(r.total)} / 100`,
+      'YOUR SCORECARD: ' + mgrF1(r.total) + ' / 100',
+      '• Assessments: ' + mgrF1(r.assessmentMarks) + ' / 60',
+      '• Presentation round: ' + mgrF1(r.presentationMarks) + ' / 40',
       '',
-      `• Assessments: ${_mgrFmt1(r.assessmentMarks)} / 60 (${scores}; each out of 100)`,
-      `• Presentation round: ${_mgrFmt1(r.presentationMarks)} / 40`,
+      'Assessment scores (each out of 100)',
+      bars,
       '',
       'WHAT YOU DID WELL',
+      li(r.strengths),
       '',
-      bullets(r.strengths),
+      'WHERE TO GROW NEXT',
+      li(r.workOn),
       '',
-      'WHAT TO WORK ON',
+      'YOUR 7-DAY BOOST',
+      boost,
       '',
-      bullets(r.workOn),
+      'We would love to hear from you. Share any feedback on the activities, or the training you need, by replying to this email.',
       '',
-      'We have also put together a simple one-week plan and suggested a few books and videos to help you build your managerial and leadership skills.',
-      '',
-      'If you have any feedback on the activities, or any training you need, please feel free to reach out to us.',
-      '',
-      'Regards,',
+      'Cheers,',
       'Training and Development team'
     ].join('\n');
+  }
+
+  function mgrEmailHtml(r) {
+    const first = mgrEscH(mgrFirstName(r));
+    const ff = 'font-family:Arial,Helvetica,sans-serif;';
+    const bar = s => {
+      const p = Math.max(2, Math.min(100, Math.round(Number(s))));
+      return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#E3ECEE;border-radius:6px"><tr><td width="' + p + '%" style="background:' + mgrBand(s) + ';height:10px;border-radius:6px;font-size:0;line-height:0">&nbsp;</td><td style="font-size:0;line-height:0">&nbsp;</td></tr></table>';
+    };
+    const list = (color, arr) => (arr || []).map(x => '<tr><td valign="top" style="padding:0 8px 8px 0;font-size:20px;line-height:1;color:' + color + ';font-weight:bold">&bull;</td><td style="padding:0 0 8px;font-size:14px;line-height:1.45;color:#1B2A3A">' + mgrEscH(x) + '</td></tr>').join('');
+    const rows = (r.assessments || []).map(a => '<tr><td style="padding:6px 0;font-size:14px;color:#1B2A3A;width:150px">' + mgrEscH(a.name) + '</td><td style="padding:6px 12px">' + bar(a.score) + '</td><td style="padding:6px 0;font-size:14px;font-weight:bold;color:' + mgrBand(a.score) + ';text-align:right;width:46px">' + mgrF1(a.score) + '</td></tr>').join('');
+    const b1 = r.books && r.books[0], v1 = r.videos && r.videos[0];
+    const pick = (label, t) => t ? '<tr><td style="padding:3px 0;font-size:14px;color:#1B2A3A"><span style="color:#5B6770">' + label + '</span> <strong>' + mgrEscH(t) + '</strong></td></tr>' : '';
+    const card = (label, big, small, bg, fg, sub) => '<td width="33%" valign="top" style="padding:0 5px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:' + bg + ';border-radius:10px"><tr><td style="padding:14px 14px 12px"><div style="font-size:11px;letter-spacing:1.5px;color:' + sub + '">' + label + '</div><div style="font-size:28px;font-weight:bold;color:' + fg + ';margin-top:4px">' + big + '<span style="font-size:14px;font-weight:normal;color:' + sub + '"> ' + small + '</span></div></td></tr></table></td>';
+    return '<div style="background:#F1F5F6;padding:24px 8px;' + ff + 'color:#1B2A3A"><table role="presentation" align="center" width="620" cellpadding="0" cellspacing="0" style="width:620px;max-width:100%;background:#FFFFFF;border-radius:14px;border-collapse:separate">'
+      + '<tr><td style="background:#0B6E75;border-radius:14px 14px 0 0;padding:30px 32px"><div style="font-size:12px;letter-spacing:2.5px;color:#BFE3E5;' + ff + '">MANAGERS COMMUNICATE 360</div><div style="font-size:27px;line-height:1.25;font-weight:bold;color:#FFFFFF;margin-top:8px;' + ff + '">Your leadership scorecard is here, ' + first + '</div></td></tr>'
+      + '<tr><td style="padding:26px 32px 6px;font-size:15px;line-height:1.6;' + ff + '">Hi ' + first + ',<br><br>Thank you for being part of <strong>Managers Communicate 360</strong>. You took part in every activity, from the five assessments to the presentation round, and that takes real commitment. Your detailed scorecard is attached as a PPT. Here is the quick version.</td></tr>'
+      + '<tr><td style="padding:14px 27px 6px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>' + card('TOTAL', mgrF1(r.total), '/ 100', '#1B2A3A', '#FFFFFF', '#9FC5C9') + card('ASSESSMENTS', mgrF1(r.assessmentMarks), '/ 60', '#E8F2F3', '#0B6E75', '#5B6770') + card('PRESENTATION', mgrF1(r.presentationMarks), '/ 40', '#FFF3DC', '#B7791F', '#8A6A2F') + '</tr></table></td></tr>'
+      + '<tr><td style="padding:18px 32px 4px;' + ff + '"><div style="font-size:12px;letter-spacing:2px;color:#5B6770;margin-bottom:6px">YOUR FIVE ASSESSMENTS (OUT OF 100)</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0">' + rows + '</table></td></tr>'
+      + '<tr><td style="padding:18px 27px 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+      + '<td width="50%" valign="top" style="padding:0 5px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#EAF6EE;border-radius:10px"><tr><td style="padding:16px 16px 8px;' + ff + '"><div style="font-size:13px;font-weight:bold;letter-spacing:1px;color:#2E7D50;margin-bottom:10px">WHAT YOU DID WELL</div><table role="presentation" cellpadding="0" cellspacing="0">' + list('#2E7D50', r.strengths) + '</table></td></tr></table></td>'
+      + '<td width="50%" valign="top" style="padding:0 5px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#FFF1E8;border-radius:10px"><tr><td style="padding:16px 16px 8px;' + ff + '"><div style="font-size:13px;font-weight:bold;letter-spacing:1px;color:#B3541E;margin-bottom:10px">WHERE TO GROW NEXT</div><table role="presentation" cellpadding="0" cellspacing="0">' + list('#B3541E', r.workOn) + '</table></td></tr></table></td>'
+      + '</tr></table></td></tr>'
+      + '<tr><td style="padding:18px 32px 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0B6E75;border-radius:10px"><tr><td style="padding:18px 20px;' + ff + 'color:#FFFFFF"><div style="font-size:13px;font-weight:bold;letter-spacing:1.5px">YOUR 7-DAY BOOST</div><div style="font-size:14px;line-height:1.55;margin-top:8px;color:#E4F3F4">We have put together a simple one-week plan, plus <strong>3 books and 3 videos</strong> picked from your own scores. Even 30 minutes a day adds up.</div><table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:10px;background:#FFFFFF;border-radius:8px;width:100%"><tr><td style="padding:10px 14px"><table role="presentation" cellpadding="0" cellspacing="0">' + pick('Start with (book):', b1) + pick('Watch first (video):', v1) + '</table></td></tr></table></td></tr></table></td></tr>'
+      + '<tr><td style="padding:20px 32px 26px;font-size:14.5px;line-height:1.6;' + ff + '"><strong>We would love to hear from you.</strong> Share any feedback on the activities, or the training you need, by simply replying to this email.<br><br>Cheers,<br><strong>Training and Development team</strong></td></tr>'
+      + '<tr><td style="background:#F7FAFA;border-radius:0 0 14px 14px;padding:12px 32px;font-size:11px;color:#8A9AA0;' + ff + '">Managers Communicate 360 · Training and Development</td></tr>'
+      + '</table></div>';
+  }
+
+  function _mgrEsc(t) {
+    return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
   async function loadMgrResultsList() {
@@ -5514,12 +5553,19 @@ window.Admin = (() => {
     }
     reports.sort((a, b) => a.name.localeCompare(b.name));
     const keep = sel.value;
-    sel.innerHTML = '<option value="">— Choose a manager —</option>' +
+    sel.innerHTML = '<option value="">\u2014 Choose a manager \u2014</option>' +
       reports.map(r => `<option value="${_mgrEsc(r.slug)}">${_mgrEsc(r.name)}</option>`).join('');
     if (keep && _mgrReports[keep]) sel.value = keep;
     const empty = $('mgr-results-empty');
     if (empty) empty.classList.toggle('hidden', reports.length > 0);
     if (!sel.value) { const c = $('mgr-results-content'); if (c) c.classList.add('hidden'); }
+  }
+
+  function _mgrRenderEmail() {
+    const r = _mgrReportCurrent;
+    if (!r) return;
+    $('mgr-results-subject').value = mgrEmailSubject(r);
+    $('mgr-results-preview').innerHTML = mgrEmailHtml(r);
   }
 
   function selectMgrResult(slug) {
@@ -5529,9 +5575,8 @@ window.Admin = (() => {
     if (!r) { if (content) content.classList.add('hidden'); return; }
     const chip = (label, val) => `<span style="background:var(--surface-2,#eef4f5);border-radius:999px;padding:0.3rem 0.8rem;font-size:0.85rem"><strong>${_mgrEsc(val)}</strong> ${_mgrEsc(label)}</span>`;
     $('mgr-results-summary').innerHTML =
-      chip('total', `${_mgrFmt1(r.total)} / 100`) + chip('assessments', `${_mgrFmt1(r.assessmentMarks)} / 60`) + chip('presentation', `${_mgrFmt1(r.presentationMarks)} / 40`);
-    $('mgr-results-subject').value = MGR_EMAIL_SUBJECT;
-    $('mgr-results-body').value = buildMgrResultsEmail(r);
+      chip('total', `${mgrF1(r.total)} / 100`) + chip('assessments', `${mgrF1(r.assessmentMarks)} / 60`) + chip('presentation', `${mgrF1(r.presentationMarks)} / 40`);
+    _mgrRenderEmail();
     $('mgr-results-status').textContent = '';
     const dl = $('btn-download-mgr-ppt');
     if (dl) dl.disabled = !r.pptUrl;
@@ -5553,12 +5598,37 @@ window.Admin = (() => {
     } catch (_) { return false; }
   }
 
+  // Copy the formatted email (HTML + plain text) so it keeps its design when pasted into Gmail / Outlook.
   async function copyMgrEmail() {
-    const ta = $('mgr-results-body');
-    if (!ta || !ta.value.trim()) return;
-    const ok = await _mgrCopyText(ta.value);
-    $('mgr-results-status').textContent = ok ? 'Email copied. Paste it into your email and attach the PPT.' : 'Could not copy. Select the text and press Ctrl+C.';
+    const el = $('mgr-results-preview');
+    if (!el || !el.innerText.trim()) return;
+    const html = el.innerHTML, text = el.innerText;
+    let ok = false;
+    try {
+      if (navigator.clipboard && window.ClipboardItem && window.isSecureContext) {
+        await navigator.clipboard.write([new ClipboardItem({
+          'text/html': new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([text], { type: 'text/plain' })
+        })]);
+        ok = true;
+      }
+    } catch (_) { ok = false; }
+    if (!ok) {   // legacy path: select the preview and copy it as rich content
+      try {
+        const range = document.createRange(); range.selectNodeContents(el);
+        const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+        ok = document.execCommand('copy'); sel.removeAllRanges();
+      } catch (_) { ok = false; }
+    }
+    $('mgr-results-status').textContent = ok ? 'Email copied with its formatting. Paste it into your email and attach the PPT.' : 'Could not copy. Select the email text and press Ctrl+C.';
     toast(ok ? 'Email copied to clipboard' : 'Copy failed. Select the text and copy it manually', ok ? 'success' : 'error');
+  }
+
+  async function copyMgrPlain() {
+    if (!_mgrReportCurrent) return;
+    const ok = await _mgrCopyText(mgrEmailText(_mgrReportCurrent));
+    $('mgr-results-status').textContent = ok ? 'Plain-text email copied.' : 'Could not copy.';
+    toast(ok ? 'Plain-text email copied' : 'Copy failed', ok ? 'success' : 'error');
   }
 
   async function copyMgrSubject() {
@@ -5570,7 +5640,7 @@ window.Admin = (() => {
 
   function resetMgrEmail() {
     if (!_mgrReportCurrent) return;
-    $('mgr-results-body').value = buildMgrResultsEmail(_mgrReportCurrent);
+    _mgrRenderEmail();
     $('mgr-results-status').textContent = 'Email reset to the template.';
   }
 
@@ -5578,7 +5648,7 @@ window.Admin = (() => {
     const r = _mgrReportCurrent;
     if (!r || !r.pptUrl) { toast('No PPT is available for this manager yet', 'error'); return; }
     const status = $('mgr-results-status');
-    if (status) status.textContent = 'Preparing download…';
+    if (status) status.textContent = 'Preparing download\u2026';
     try {
       const res = await fetch(r.pptUrl);
       if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -5601,6 +5671,7 @@ window.Admin = (() => {
     init,
     selectMgrResult,
     copyMgrEmail,
+    copyMgrPlain,
     copyMgrSubject,
     resetMgrEmail,
     downloadMgrPpt,
