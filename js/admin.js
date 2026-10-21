@@ -5460,7 +5460,7 @@ window.Admin = (() => {
 
   function mgrEmailText(r) {
     const first = mgrFirstName(r);
-    const li = arr => (arr || []).map(x => '• ' + x).join('\n');
+    const li = (arr, why) => (arr || []).map((x, i) => '• ' + x + (why && why[i] ? '\n   ' + why[i] : '')).join('\n');
     const bars = (r.assessments || []).map(a => mgrBlocks(a.score) + '  ' + a.name + ' ' + mgrF1(a.score)).join('\n');
     const b1 = r.books && r.books[0], v1 = r.videos && r.videos[0];
     const boost = [
@@ -5482,10 +5482,10 @@ window.Admin = (() => {
       bars,
       '',
       'WHAT YOU DID WELL',
-      li(r.strengths),
+      li(r.strengths, r.strengthsWhy),
       '',
       'WHERE TO GROW NEXT',
-      li(r.workOn),
+      li(r.workOn, r.workOnWhy),
       '',
       'YOUR 7-DAY BOOST',
       boost,
@@ -5504,7 +5504,7 @@ window.Admin = (() => {
       const p = Math.max(2, Math.min(100, Math.round(Number(s))));
       return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#E3ECEE;border-radius:6px"><tr><td width="' + p + '%" style="background:' + mgrBand(s) + ';height:10px;border-radius:6px;font-size:0;line-height:0">&nbsp;</td><td style="font-size:0;line-height:0">&nbsp;</td></tr></table>';
     };
-    const list = (color, arr) => (arr || []).map(x => '<tr><td valign="top" style="padding:0 8px 8px 0;font-size:20px;line-height:1;color:' + color + ';font-weight:bold">&bull;</td><td style="padding:0 0 8px;font-size:14px;line-height:1.45;color:#1B2A3A">' + mgrEscH(x) + '</td></tr>').join('');
+    const list = (color, arr, why) => (arr || []).map((x, i) => '<tr><td valign="top" style="padding:0 8px 8px 0;font-size:20px;line-height:1;color:' + color + ';font-weight:bold">&bull;</td><td style="padding:0 0 8px;font-size:14px;line-height:1.45;color:#1B2A3A">' + mgrEscH(x) + (why && why[i] ? '<div style="font-size:12px;line-height:1.4;color:#5B6770;margin-top:2px">' + mgrEscH(why[i]) + '</div>' : '') + '</td></tr>').join('');
     const rows = (r.assessments || []).map(a => '<tr><td style="padding:6px 0;font-size:14px;color:#1B2A3A;width:150px">' + mgrEscH(a.name) + '</td><td style="padding:6px 12px">' + bar(a.score) + '</td><td style="padding:6px 0;font-size:14px;font-weight:bold;color:' + mgrBand(a.score) + ';text-align:right;width:46px">' + mgrF1(a.score) + '</td></tr>').join('');
     const b1 = r.books && r.books[0], v1 = r.videos && r.videos[0];
     const pick = (label, t) => t ? '<tr><td style="padding:3px 0;font-size:14px;color:#1B2A3A"><span style="color:#5B6770">' + label + '</span> <strong>' + mgrEscH(t) + '</strong></td></tr>' : '';
@@ -5515,8 +5515,8 @@ window.Admin = (() => {
       + '<tr><td style="padding:14px 27px 6px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>' + card('TOTAL', mgrF1(r.total), '/ 100', '#1B2A3A', '#FFFFFF', '#9FC5C9') + card('ASSESSMENTS', mgrF1(r.assessmentMarks), '/ 60', '#E8F2F3', '#0B6E75', '#5B6770') + card('PRESENTATION', mgrF1(r.presentationMarks), '/ 40', '#FFF3DC', '#B7791F', '#8A6A2F') + '</tr></table></td></tr>'
       + '<tr><td style="padding:18px 32px 4px;' + ff + '"><div style="font-size:12px;letter-spacing:2px;color:#5B6770;margin-bottom:6px">YOUR FIVE ASSESSMENTS (OUT OF 100)</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0">' + rows + '</table></td></tr>'
       + '<tr><td style="padding:18px 27px 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
-      + '<td width="50%" valign="top" style="padding:0 5px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#EAF6EE;border-radius:10px"><tr><td style="padding:16px 16px 8px;' + ff + '"><div style="font-size:13px;font-weight:bold;letter-spacing:1px;color:#2E7D50;margin-bottom:10px">WHAT YOU DID WELL</div><table role="presentation" cellpadding="0" cellspacing="0">' + list('#2E7D50', r.strengths) + '</table></td></tr></table></td>'
-      + '<td width="50%" valign="top" style="padding:0 5px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#FFF1E8;border-radius:10px"><tr><td style="padding:16px 16px 8px;' + ff + '"><div style="font-size:13px;font-weight:bold;letter-spacing:1px;color:#B3541E;margin-bottom:10px">WHERE TO GROW NEXT</div><table role="presentation" cellpadding="0" cellspacing="0">' + list('#B3541E', r.workOn) + '</table></td></tr></table></td>'
+      + '<td width="50%" valign="top" style="padding:0 5px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#EAF6EE;border-radius:10px"><tr><td style="padding:16px 16px 8px;' + ff + '"><div style="font-size:13px;font-weight:bold;letter-spacing:1px;color:#2E7D50;margin-bottom:10px">WHAT YOU DID WELL</div><table role="presentation" cellpadding="0" cellspacing="0">' + list('#2E7D50', r.strengths, r.strengthsWhy) + '</table></td></tr></table></td>'
+      + '<td width="50%" valign="top" style="padding:0 5px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#FFF1E8;border-radius:10px"><tr><td style="padding:16px 16px 8px;' + ff + '"><div style="font-size:13px;font-weight:bold;letter-spacing:1px;color:#B3541E;margin-bottom:10px">WHERE TO GROW NEXT</div><table role="presentation" cellpadding="0" cellspacing="0">' + list('#B3541E', r.workOn, r.workOnWhy) + '</table></td></tr></table></td>'
       + '</tr></table></td></tr>'
       + '<tr><td style="padding:18px 32px 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0B6E75;border-radius:10px"><tr><td style="padding:18px 20px;' + ff + 'color:#FFFFFF"><div style="font-size:13px;font-weight:bold;letter-spacing:1.5px">YOUR 7-DAY BOOST</div><div style="font-size:14px;line-height:1.55;margin-top:8px;color:#E4F3F4">We have put together a simple one-week plan, plus <strong>3 books and 3 videos</strong> picked from your own scores. Even 30 minutes a day adds up.</div><table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:10px;background:#FFFFFF;border-radius:8px;width:100%"><tr><td style="padding:10px 14px"><table role="presentation" cellpadding="0" cellspacing="0">' + pick('Start with (book):', b1) + pick('Watch first (video):', v1) + '</table></td></tr></table></td></tr></table></td></tr>'
       + '<tr><td style="padding:20px 32px 26px;font-size:14.5px;line-height:1.6;' + ff + '"><strong>We would love to hear from you.</strong> Share any feedback on the activities, or the training you need, by simply replying to this email.<br><br>Cheers,<br><strong>Training and Development team</strong></td></tr>'
