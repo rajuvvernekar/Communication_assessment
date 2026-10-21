@@ -5552,10 +5552,11 @@ window.Admin = (() => {
       } catch (_) { /* skip a malformed row */ }
     }
     reports.sort((a, b) => a.name.localeCompare(b.name));
+    await _loadMgrLiveScores();
     const keep = sel.value;
     sel.innerHTML = '<option value="">\u2014 Choose a manager \u2014</option>' +
       reports.map(r => `<option value="${_mgrEsc(r.slug)}">${_mgrEsc(r.name)}</option>`).join('');
-    if (keep && _mgrReports[keep]) sel.value = keep;
+    if (keep && _mgrReports[keep]) { sel.value = keep; selectMgrResult(keep); }
     const empty = $('mgr-results-empty');
     if (empty) empty.classList.toggle('hidden', reports.length > 0);
     if (!sel.value) { const c = $('mgr-results-content'); if (c) c.classList.add('hidden'); }
@@ -5568,14 +5569,72 @@ window.Admin = (() => {
     $('mgr-results-preview').innerHTML = mgrEmailHtml(r);
   }
 
+  // Live assessment scores for the manager reports. Admin's score is the default and the AI score is used only
+  // when admin has not scored that assessment, so a change on the scoring screens shows up here without
+  // rebuilding anything. The presentation marks and the text come from the published report.
+  const _MGR_FIVE = ['mgr-situation-room', 'mgr-transcript-autopsy', 'mgr-mock-call', 'mgr-feedback', 'mgr-eq'];
+  const _MGR_BASE = { 'mgr-nri-situation-room': 'mgr-situation-room', 'mgr-nri-transcript-autopsy': 'mgr-transcript-autopsy', 'mgr-nri-mock-call': 'mgr-mock-call' };
+  let _mgrLive = null;   // lower-cased trainee name -> module -> [{t, ai, adm}]
+
+  async function _loadMgrLiveScores() {
+    _mgrLive = null;
+    try {
+      const sb = (typeof DB.getClient === 'function' && !(DB.isLocalStorage && DB.isLocalStorage())) ? DB.getClient() : null;
+      if (!sb) return;
+      const { data, error } = await sb.from('sessions')
+        .select('trainee_name,module,submitted_at,ai:ai_scores->overall,adm:admin_scores->overall')
+        .like('module', 'mgr-%').limit(2000);
+      if (error) throw error;
+      const live = {};
+      for (const s of data || []) {
+        const mod = _MGR_BASE[s.module] || s.module;
+        if (_MGR_FIVE.indexOf(mod) < 0) continue;
+        const k = String(s.trainee_name || '').trim().toLowerCase();
+        ((live[k] = live[k] || {})[mod] = live[k][mod] || []).push({ t: s.submitted_at || '', ai: Number(s.ai), adm: s.adm == null ? null : Number(s.adm) });
+      }
+      _mgrLive = live;
+    } catch (e) { console.warn('Manager results: could not load live scores, using the published numbers', e); }
+  }
+
+  // Returns the report with its assessment scores, assessment marks and total refreshed from the live sessions.
+  function _mgrWithLiveScores(r) {
+    if (!_mgrLive || !Array.isArray(r.dbNames) || !r.assessments || r.assessments.length !== _MGR_FIVE.length) return r;
+    const names = r.dbNames.map(n => String(n).trim().toLowerCase());
+    let used = 0;
+    const assessments = r.assessments.map((a, i) => {
+      const ss = [];
+      names.forEach(n => ((_mgrLive[n] || {})[_MGR_FIVE[i]] || []).forEach(s => ss.push(s)));
+      if (!ss.length) return a;
+      ss.sort((x, y) => String(x.t).localeCompare(String(y.t)));
+      const adm = ss.filter(s => Number.isFinite(s.adm));
+      const pick = (adm.length ? adm : ss)[(adm.length ? adm : ss).length - 1];
+      const useAdmin = Number.isFinite(pick.adm);
+      const score = useAdmin ? pick.adm : pick.ai;
+      if (!Number.isFinite(score)) return a;
+      used++;
+      return { name: a.name, score: Math.round(score * 10) / 10, source: useAdmin ? 'admin' : 'ai' };
+    });
+    if (!used) return r;
+    const assessmentMarks = assessments.reduce((t, a) => t + Number(a.score) * 12 / 100, 0);
+    return Object.assign({}, r, { assessments, assessmentMarks, total: assessmentMarks + Number(r.presentationMarks || 0), _live: true });
+  }
+
   function selectMgrResult(slug) {
     const content = $('mgr-results-content');
-    const r = _mgrReports[slug];
+    const published = _mgrReports[slug];
+    const r = published ? _mgrWithLiveScores(published) : null;
     _mgrReportCurrent = r || null;
     if (!r) { if (content) content.classList.add('hidden'); return; }
     const chip = (label, val) => `<span style="background:var(--surface-2,#eef4f5);border-radius:999px;padding:0.3rem 0.8rem;font-size:0.85rem"><strong>${_mgrEsc(val)}</strong> ${_mgrEsc(label)}</span>`;
-    $('mgr-results-summary').innerHTML =
-      chip('total', `${mgrF1(r.total)} / 100`) + chip('assessments', `${mgrF1(r.assessmentMarks)} / 60`) + chip('presentation', `${mgrF1(r.presentationMarks)} / 40`);
+    const srcLabel = s => (s === 'admin' ? 'admin score' : 'AI score');
+    const note = (text, color) => `<div style="flex-basis:100%;font-size:0.8rem;color:${color}">${text}</div>`;
+    let html = chip('total', `${mgrF1(r.total)} / 100`) + chip('assessments', `${mgrF1(r.assessmentMarks)} / 60`) + chip('presentation', `${mgrF1(r.presentationMarks)} / 40`);
+    html += note('Score used for each assessment (admin score first, AI score only if admin has not scored it): ' +
+      r.assessments.map(a => `${_mgrEsc(a.name)} ${mgrF1(a.score)} (${srcLabel(a.source)})`).join(', '), 'var(--text-muted)');
+    if (published && r._live && Math.abs(Number(r.total) - Number(published.total)) >= 0.05) {
+      html += note(`Scores have changed since the PPT was built. The email above uses the current scores (${mgrF1(r.total)}); the PPT still shows ${mgrF1(published.total)} until it is rebuilt.`, '#B3541E');
+    }
+    $('mgr-results-summary').innerHTML = html;
     _mgrRenderEmail();
     $('mgr-results-status').textContent = '';
     const dl = $('btn-download-mgr-ppt');
