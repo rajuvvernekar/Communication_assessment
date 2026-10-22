@@ -77,6 +77,10 @@
         <span class="nav-icon">📑</span>
         <span>Comm360 Master Report</span>
       </a>
+      <a href="#" class="nav-item" data-section="mgr-master">
+        <span class="nav-icon">📊</span>
+        <span>Comm360 Manager Master</span>
+      </a>
       <a href="#" class="nav-item" data-section="settings">
         <span class="nav-icon">⚙️</span>
         <span>Settings</span>
@@ -454,6 +458,36 @@
         </table>
       </div>
       <div id="comm360-count" style="margin-top:0.5rem;font-size:0.8rem;color:var(--text-muted)"></div>
+    </section>
+
+    <!-- ==================== COMM360 MANAGER MASTER ==================== -->
+    <section id="admin-mgr-master" class="admin-section">
+      <div class="section-header">
+        <div>
+          <h1>Comm360 Manager Master</h1>
+          <p>Managers Communicate 360: every assessment score, the presentation round and the total out of 100</p>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:1rem;padding:0.9rem 1.1rem;font-size:0.85rem;line-height:1.55">
+        <strong>How the 100 marks are made up:</strong>
+        five assessments at <strong>12% each = 60</strong> (Situation Room, Transcript Autopsy, Paper Trade, Red Pen, Mirror Room)
+        + presentation round <strong>40%</strong>.
+        Each assessment uses the <strong>admin score</strong> where it has been entered, otherwise the <strong>AI score</strong>.
+        The presentation is the average of the judges' scores out of 50, so every judge carries an equal share of the 40 marks.
+      </div>
+      <div class="table-toolbar" style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-bottom:1rem">
+        <input type="text" id="mgr-master-search" placeholder="Search by manager name"
+          oninput="Admin.searchMgrMaster(this.value)"
+          style="flex:1;min-width:180px;padding:0.5rem 0.75rem;border:1px solid var(--border);border-radius:6px;font-size:0.875rem" />
+        <button id="btn-mgr-master-excel" class="btn-primary" style="font-size:0.82rem;padding:0.45rem 1rem;white-space:nowrap" onclick="Admin.downloadMgrMasterExcel()">⬇ Download Excel</button>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden;overflow-x:auto">
+        <table class="data-table" id="mgr-master-table">
+          <thead id="mgr-master-thead"></thead>
+          <tbody id="mgr-master-tbody"><tr><td class="empty-state">Loading…</td></tr></tbody>
+        </table>
+      </div>
+      <div id="mgr-master-count" style="margin-top:0.5rem;font-size:0.8rem;color:var(--text-muted)"></div>
     </section>
 
     <!-- ==================== MANAGER ASSESSMENTS ==================== -->
@@ -904,6 +938,6 @@
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <script src="js/mgr-eval-criteria.js?v=2026092503"></script>
 <script src="js/claude.js?v=2026092407"></script>
-<script src="js/admin.js?v=2026102103"></script>
+<script src="js/admin.js?v=2026102201"></script>
 </body>
 </html>

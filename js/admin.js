@@ -948,6 +948,10 @@ window.Admin = (() => {
         if (section === 'reports') {
           try { loadMgrResultsList(); } catch (_) {}
         }
+        // Manager master sheet: rebuild from the latest scores every time it is opened.
+        if (section === 'mgr-master') {
+          try { loadMgrMaster(); } catch (_) {}
+        }
       };
     });
 
@@ -5725,10 +5729,138 @@ window.Admin = (() => {
     }
   }
 
+  // ---- Comm360 Manager Master: all five assessments + presentation, out of 100 ----
+  const _MASTER_JUDGES = ['Freeda', 'Renu', 'Anish', 'Kalpesh', 'Shashi', 'Kazi'];
+  const _MASTER_ACT = ['Situation Room', 'Transcript Autopsy', 'Paper Trade', 'Red Pen', 'Mirror Room'];
+  let _mgrMasterRows = [];
+
+  function _mgrMasterBuild() {
+    const rows = Object.keys(_mgrReports).map(k => _mgrReports[k]).sort((a, b) => a.name.localeCompare(b.name)).map(pub => {
+      const r = _mgrWithLiveScores(pub);
+      const js = pub.judgeScores || {};
+      const scores = _MASTER_JUDGES.map(j => (js[j] === undefined || js[j] === null || js[j] === '' || !Number.isFinite(Number(js[j]))) ? null : Number(js[j]));
+      const given = scores.filter(v => v !== null);
+      const avg50 = given.length ? given.reduce((t, v) => t + v, 0) / given.length : null;
+      // every judge carries an equal share of the 40 presentation marks
+      const presMarks = avg50 !== null ? avg50 / 50 * 40 : Number(pub.presentationMarks || 0);
+      const ass = _MASTER_ACT.map((n, i) => {
+        const a = (r.assessments || [])[i] || {};
+        return { score: Number(a.score), source: a.source === 'admin' ? 'Admin' : 'AI' };
+      });
+      const marks = ass.map(a => Number.isFinite(a.score) ? a.score * 12 / 100 : 0);
+      const aTotal = marks.reduce((t, v) => t + v, 0);
+      return { name: pub.name, avp: pub.avp || '', ass, marks, aTotal, scores, nJudges: given.length, avg50, presMarks, total: aTotal + presMarks };
+    });
+    const order = rows.slice().sort((a, b) => b.total - a.total);
+    rows.forEach(r => { r.rank = order.indexOf(r) + 1; });
+    return rows;
+  }
+
+  function _mgrMasterRender() {
+    const q = (($('mgr-master-search') || {}).value || '').trim().toLowerCase();
+    const rows = _mgrMasterRows.filter(r => !q || r.name.toLowerCase().indexOf(q) >= 0);
+    const th = (t, sub) => `<th style="text-align:right;white-space:nowrap">${t}${sub ? `<div style="font-weight:400;font-size:0.72rem;color:var(--text-muted)">${sub}</div>` : ''}</th>`;
+    $('mgr-master-thead').innerHTML = '<tr><th style="width:42px;text-align:center">#</th><th>Manager</th>' +
+      _MASTER_ACT.map(n => th(n + ' /100', 'weightage 12% (12 marks)')).join('') +
+      th('Assessments /60', '5 x 12%') + th('Presentation avg /50', 'judges: equal share') + th('Presentation /40', 'weightage 40%') + th('Total /100', '') + th('Rank', '') + '</tr>';
+    const f = v => (v === null || v === undefined || !Number.isFinite(v)) ? '—' : mgrF1(v);
+    $('mgr-master-tbody').innerHTML = rows.length ? rows.map((r, i) =>
+      `<tr><td style="text-align:center">${i + 1}</td><td style="white-space:nowrap"><strong>${_mgrEsc(r.name)}</strong></td>` +
+      r.ass.map((a, k) => `<td style="text-align:right">${f(a.score)} <span style="font-size:0.7rem;color:var(--text-muted)">(${a.source})</span><div style="font-size:0.72rem;color:var(--text-muted)">${f(r.marks[k])} / 12</div></td>`).join('') +
+      `<td style="text-align:right">${f(r.aTotal)}</td><td style="text-align:right">${f(r.avg50)}<div style="font-size:0.72rem;color:var(--text-muted)">${r.nJudges} judge${r.nJudges === 1 ? '' : 's'}</div></td><td style="text-align:right">${f(r.presMarks)}</td><td style="text-align:right"><strong>${f(r.total)}</strong></td><td style="text-align:right">${r.rank}</td></tr>`
+    ).join('') : '<tr><td colspan="11" class="empty-state">No manager results are published yet.</td></tr>';
+    const c = $('mgr-master-count'); if (c) c.textContent = `${rows.length} manager${rows.length === 1 ? '' : 's'}`;
+  }
+
+  async function loadMgrMaster() {
+    await loadMgrResultsList();
+    _mgrMasterRows = _mgrMasterBuild();
+    _mgrMasterRender();
+  }
+
+  function searchMgrMaster() { _mgrMasterRender(); }
+
+  function downloadMgrMasterExcel() {
+    if (!_mgrMasterRows.length) { toast('No manager results to export yet.', 'error'); return; }
+    if (typeof XLSX === 'undefined') { toast('Excel library not loaded. Try refreshing the page.', 'error'); return; }
+    const rows = _mgrMasterRows;
+    const L = i => (i < 26 ? String.fromCharCode(65 + i) : 'A' + String.fromCharCode(65 + i - 26));
+    const FIRST = 7;                       // first data row (Excel row number)
+    const last = FIRST + rows.length - 1;
+    const aoa = [];
+    aoa.push(['Comm360 Manager Master Sheet: Managers Communicate 360']);
+    aoa.push(['Total /100 = five assessments at 12% each (60) + presentation round 40%. Assessment score = admin score where entered, otherwise AI score. Presentation = average of the judges’ scores out of 50 (every judge carries an equal share), converted to 40.']);
+    aoa.push(['Generated on ' + new Date().toLocaleString('en-IN')]);
+    const grp = ['', '', ''];
+    const wt = ['', '', ''];
+    const hd = ['#', 'Manager', 'AVP'];
+    const mx = ['', 'Maximum', ''];
+    _MASTER_ACT.forEach(n => { grp.push(n, ''); wt.push('Weightage 12%', '(12 marks)'); hd.push('Score /100', 'Marks /12'); mx.push(100, 12); });
+    grp.push('Assessments'); wt.push('Weightage 60%'); hd.push('Assessments /60'); mx.push(60);
+    grp.push('Presentation round: judge scores (each out of 50)', '', '', '', '', '', '', '', '');
+    wt.push('Weightage 40%', '', '', '', '', '', '', '', '');
+    _MASTER_JUDGES.forEach(j => { hd.push(j + ' /50'); mx.push(50); });
+    hd.push('No. of judges', 'Presentation avg /50', 'Presentation /40'); mx.push('', 50, 40);
+    grp.push('Overall', '', ''); wt.push('Weightage 100%', '', '');
+    hd.push('TOTAL /100', 'Rank', 'Score source (SR, TA, PT, RP, MR)'); mx.push(100, '', '');
+    aoa.push(grp, wt, hd, mx);
+    // aoa[3]=group row (Excel row 4), aoa[4]=weightage (5), aoa[5]=headers (6), aoa[6]=maximum (7) -> data starts at row 8
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const dataStart = aoa.length + 1;      // Excel row number of the first manager
+    const dataEnd = dataStart + rows.length - 1;
+    const put = (addr, v, f) => { ws[addr] = f ? { t: 'n', v: v, f: f } : (typeof v === 'number' ? { t: 'n', v } : { t: 's', v: String(v) }); };
+    rows.forEach((r, i) => {
+      const n = dataStart + i;
+      put('A' + n, i + 1); put('B' + n, r.name); put('C' + n, r.avp || '');
+      r.ass.forEach((a, k) => {
+        const sc = L(3 + k * 2), mk = L(4 + k * 2);
+        if (Number.isFinite(a.score)) put(sc + n, Math.round(a.score * 10) / 10);
+        put(mk + n, Math.round(r.marks[k] * 100) / 100, `ROUND(${sc}${n}*12/100,2)`);
+      });
+      put('N' + n, Math.round(r.aTotal * 100) / 100, `ROUND(E${n}+G${n}+I${n}+K${n}+M${n},2)`);
+      r.scores.forEach((v, k) => { if (v !== null) put(L(14 + k) + n, v); });
+      put('U' + n, r.nJudges, `COUNT(O${n}:T${n})`);
+      if (r.avg50 !== null) put('V' + n, Math.round(r.avg50 * 100) / 100, `IF(U${n}>0,ROUND(AVERAGE(O${n}:T${n}),2),"")`);
+      put('W' + n, Math.round(r.presMarks * 100) / 100, `IF(U${n}>0,ROUND(V${n}/50*40,2),0)`);
+      put('X' + n, Math.round(r.total * 100) / 100, `ROUND(N${n}+W${n},2)`);
+      put('Y' + n, r.rank, `RANK(X${n},X$${dataStart}:X$${dataEnd})`);
+      put('Z' + n, r.ass.map(a => a.source).join(', '));
+    });
+    ws['!ref'] = `A1:Z${dataEnd}`;
+    const merges = [];
+    for (let k = 0; k < 5; k++) { merges.push({ s: { r: 3, c: 3 + k * 2 }, e: { r: 3, c: 4 + k * 2 } }); merges.push({ s: { r: 4, c: 3 + k * 2 }, e: { r: 4, c: 4 + k * 2 } }); }
+    merges.push({ s: { r: 3, c: 14 }, e: { r: 3, c: 22 } }, { s: { r: 4, c: 14 }, e: { r: 4, c: 22 } }, { s: { r: 3, c: 23 }, e: { r: 3, c: 25 } }, { s: { r: 4, c: 23 }, e: { r: 4, c: 25 } });
+    ws['!merges'] = merges;
+    ws['!cols'] = [{ wch: 5 }, { wch: 24 }, { wch: 14 }].concat(Array(10).fill({ wch: 11 })).concat([{ wch: 14 }], Array(6).fill({ wch: 11 }), [{ wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 7 }, { wch: 30 }]);
+    const info = [
+      ['Component', 'Weightage', 'Marks', 'How it is scored'],
+      ['Situation Room', '12%', 12, 'Score out of 100 x 12 / 100'],
+      ['Transcript Autopsy', '12%', 12, 'Score out of 100 x 12 / 100'],
+      ['Paper Trade (Mock Call)', '12%', 12, 'Score out of 100 x 12 / 100'],
+      ['Red Pen (Feedback)', '12%', 12, 'Score out of 100 x 12 / 100'],
+      ['Mirror Room (EQ)', '12%', 12, 'Score out of 100 x 12 / 100'],
+      ['Assessments total', '60%', 60, 'Sum of the five assessments'],
+      ['Presentation round', '40%', 40, 'Average of the judges’ scores out of 50, divided by 50, times 40. Each judge carries an equal share: with 4 judges each is worth 10 marks, with 3 judges 13.33, with 2 judges 20.'],
+      ['TOTAL', '100%', 100, 'Assessments (60) + presentation (40)'],
+      [],
+      ['Assessment score source', '', '', 'Admin score where the admin has scored the assessment, otherwise the AI score.']
+    ];
+    const ws2 = XLSX.utils.aoa_to_sheet(info);
+    ws2['!cols'] = [{ wch: 26 }, { wch: 12 }, { wch: 8 }, { wch: 100 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Manager Master');
+    XLSX.utils.book_append_sheet(wb, ws2, 'Weightage');
+    const filename = `comm360_manager_master_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    XLSX.writeFile(wb, filename);
+    toast(`Exported ${rows.length} manager(s) to ${filename}`, 'success');
+  }
+
   // ---- Public API (called from inline onclick) ----
   return {
     init,
     selectMgrResult,
+    downloadMgrMasterExcel,
+    searchMgrMaster,
     copyMgrEmail,
     copyMgrPlain,
     copyMgrSubject,
