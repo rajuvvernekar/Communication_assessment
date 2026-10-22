@@ -5468,7 +5468,7 @@ window.Admin = (() => {
     const bars = (r.assessments || []).map(a => mgrBlocks(a.score) + '  ' + a.name + ' ' + mgrF1(a.score)).join('\n');
     const b1 = r.books && r.books[0], v1 = r.videos && r.videos[0];
     const boost = [
-      'We have put together a simple one-week plan, plus 3 books and 3 videos picked from your own scores.',
+      'We have picked 3 books and 3 videos from your own scores. They are in your PPT.',
       b1 ? 'Start with (book): ' + b1 : '',
       v1 ? 'Watch first (video): ' + v1 : '',
       'Even 30 minutes a day adds up.'
@@ -5491,7 +5491,7 @@ window.Admin = (() => {
       'WHERE TO GROW NEXT',
       li(r.workOn, r.workOnWhy),
       '',
-      'YOUR 7-DAY BOOST',
+      'BOOKS AND VIDEOS FOR YOU',
       boost,
       '',
       'We would love to hear from you. Share any feedback on the activities, or the training you need, by replying to this email.',
@@ -5522,7 +5522,7 @@ window.Admin = (() => {
       + '<td width="50%" valign="top" style="padding:0 5px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#EAF6EE;border-radius:10px"><tr><td style="padding:16px 16px 8px;' + ff + '"><div style="font-size:13px;font-weight:bold;letter-spacing:1px;color:#2E7D50;margin-bottom:10px">WHAT YOU DID WELL</div><table role="presentation" cellpadding="0" cellspacing="0">' + list('#2E7D50', r.strengths, r.strengthsWhy) + '</table></td></tr></table></td>'
       + '<td width="50%" valign="top" style="padding:0 5px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#FFF1E8;border-radius:10px"><tr><td style="padding:16px 16px 8px;' + ff + '"><div style="font-size:13px;font-weight:bold;letter-spacing:1px;color:#B3541E;margin-bottom:10px">WHERE TO GROW NEXT</div><table role="presentation" cellpadding="0" cellspacing="0">' + list('#B3541E', r.workOn, r.workOnWhy) + '</table></td></tr></table></td>'
       + '</tr></table></td></tr>'
-      + '<tr><td style="padding:18px 32px 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0B6E75;border-radius:10px"><tr><td style="padding:18px 20px;' + ff + 'color:#FFFFFF"><div style="font-size:13px;font-weight:bold;letter-spacing:1.5px">YOUR 7-DAY BOOST</div><div style="font-size:14px;line-height:1.55;margin-top:8px;color:#E4F3F4">We have put together a simple one-week plan, plus <strong>3 books and 3 videos</strong> picked from your own scores. Even 30 minutes a day adds up.</div><table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:10px;background:#FFFFFF;border-radius:8px;width:100%"><tr><td style="padding:10px 14px"><table role="presentation" cellpadding="0" cellspacing="0">' + pick('Start with (book):', b1) + pick('Watch first (video):', v1) + '</table></td></tr></table></td></tr></table></td></tr>'
+      + '<tr><td style="padding:18px 32px 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0B6E75;border-radius:10px"><tr><td style="padding:18px 20px;' + ff + 'color:#FFFFFF"><div style="font-size:13px;font-weight:bold;letter-spacing:1.5px">BOOKS AND VIDEOS FOR YOU</div><div style="font-size:14px;line-height:1.55;margin-top:8px;color:#E4F3F4">We have picked <strong>3 books and 3 videos</strong> from your own scores. They are in your PPT. Even 30 minutes a day adds up.</div><table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:10px;background:#FFFFFF;border-radius:8px;width:100%"><tr><td style="padding:10px 14px"><table role="presentation" cellpadding="0" cellspacing="0">' + pick('Start with (book):', b1) + pick('Watch first (video):', v1) + '</table></td></tr></table></td></tr></table></td></tr>'
       + '<tr><td style="padding:20px 32px 26px;font-size:14.5px;line-height:1.6;' + ff + '"><strong>We would love to hear from you.</strong> Share any feedback on the activities, or the training you need, by simply replying to this email.<br><br>Cheers,<br><strong>Training and Development team</strong></td></tr>'
       + '<tr><td style="background:#F7FAFA;border-radius:0 0 14px 14px;padding:12px 32px;font-size:11px;color:#8A9AA0;' + ff + '">Managers Communicate 360 · Training and Development</td></tr>'
       + '</table></div>';
