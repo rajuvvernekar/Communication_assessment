@@ -5494,8 +5494,6 @@ window.Admin = (() => {
       'READ. WATCH. GROW.',
       boost,
       '',
-      'Leadership is a continuous learning journey. No one gets everything right the first time. Think of these marks as a map rather than a medal: practise, learn, and grow.',
-      '',
       'We would love to hear from you. If you have any feedback on the activities, or a training requirement for the team or individual, please fill in this Google form: ' + MGR_FORM_URL,
       '',
       'Cheers,',
@@ -5525,7 +5523,7 @@ window.Admin = (() => {
       + '<td width="50%" valign="top" style="padding:0 5px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#FFF1E8;border-radius:10px"><tr><td style="padding:16px 16px 8px;' + ff + '"><div style="font-size:13px;font-weight:bold;letter-spacing:1px;color:#B3541E;margin-bottom:10px">WHERE TO GROW NEXT</div><table role="presentation" cellpadding="0" cellspacing="0">' + list('#B3541E', r.workOn, r.workOnWhy) + '</table></td></tr></table></td>'
       + '</tr></table></td></tr>'
       + '<tr><td style="padding:18px 32px 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0B6E75;border-radius:10px"><tr><td style="padding:18px 20px;' + ff + 'color:#FFFFFF"><div style="font-size:13px;font-weight:bold;letter-spacing:1.5px">READ. WATCH. GROW.</div><div style="font-size:14px;line-height:1.55;margin-top:8px;color:#E4F3F4">A little reading, a little watching and a lot of practice: your <strong>3 books and 3 videos</strong> are in your PPT, ready when you are.</div><table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:10px;background:#FFFFFF;border-radius:8px;width:100%"><tr><td style="padding:10px 14px"><table role="presentation" cellpadding="0" cellspacing="0">' + pick('Your first read:', b1) + pick('Your first watch:', v1) + '</table></td></tr></table></td></tr></table></td></tr>'
-      + '<tr><td style="padding:20px 32px 26px;font-size:14.5px;line-height:1.6;' + ff + '"><em style="color:#0B6E75">Leadership is a continuous learning journey. No one gets everything right the first time. Think of these marks as a map rather than a medal: practise, learn, and grow.</em><br><br><strong>We would love to hear from you.</strong> If you have any feedback on the activities, or a training requirement for the team or individual, please fill in <a href="' + mgrEscH(MGR_FORM_URL) + '" style="color:#0B6E75;font-weight:bold">this Google form</a>.<br><br>Cheers,<br><strong>Training and Development team</strong></td></tr>'
+      + '<tr><td style="padding:20px 32px 26px;font-size:14.5px;line-height:1.6;' + ff + '"><strong>We would love to hear from you.</strong> If you have any feedback on the activities, or a training requirement for the team or individual, please fill in <a href="' + mgrEscH(MGR_FORM_URL) + '" style="color:#0B6E75;font-weight:bold">this Google form</a>.<br><br>Cheers,<br><strong>Training and Development team</strong></td></tr>'
       + '<tr><td style="background:#F7FAFA;border-radius:0 0 14px 14px;padding:12px 32px;font-size:11px;color:#8A9AA0;' + ff + '">Managers Communicate 360 · Training and Development</td></tr>'
       + '</table></div>';
   }
