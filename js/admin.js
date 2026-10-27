@@ -946,7 +946,7 @@ window.Admin = (() => {
         }
         // Reports tab: refresh the list of managers whose results email + PPT are published.
         if (section === 'reports') {
-          try { loadMgrResultsList(); } catch (_) {}
+          try { loadMgrResultsList().then(loadAvpList); } catch (_) {}
         }
         // Manager master sheet: rebuild from the latest scores every time it is opened.
         if (section === 'mgr-master') {
@@ -5855,10 +5855,188 @@ window.Admin = (() => {
     toast(`Exported ${rows.length} manager(s) to ${filename}`, 'success');
   }
 
+  // ============================================================
+  //  AVP team reports (Reports tab): one email + PPT per AVP.
+  //  Settings row 'avpReport:<slug>' holds the AVP, the members'
+  //  report names and the PPT link. Scores are rebuilt live from
+  //  the manager reports, so the email always shows current totals.
+  // ============================================================
+  const _avpReports = {};
+  let _avpCurrent = null;
+  const AVP_PAL = {
+    anish:  { dark: '#0B3B40', mid: '#0B6E75', accent: '#F2A33A', soft: '#E8F2F3' },
+    kiran:  { dark: '#2B2F6B', mid: '#4650B0', accent: '#F2735B', soft: '#ECEDF9' },
+    renuka: { dark: '#4A1F46', mid: '#8A3E7E', accent: '#2FB5A8', soft: '#F5EAF3' },
+    kazi:   { dark: '#1F3D2B', mid: '#2F7D57', accent: '#E8B04B', soft: '#E8F4EC' }
+  };
+  const avpEmailSubject = t => t.first + ', your team’s Managers Communicate 360 scorecard is here';
+  function avpEmailText(t) {
+    const ms = t.managers;
+    return [
+      'Hi ' + t.first + ',', '',
+      'Thank you for supporting your managers through Managers Communicate 360. Here is a quick look at how your team of ' + t.n + ' managers did. The full team report is attached as a PPT.', '',
+      'YOUR TEAM AT A GLANCE',
+      '• Team average: ' + mgrF1(t.teamTotal) + ' / 100',
+      '• Assessments: ' + mgrF1(t.teamAssess) + ' / 60',
+      '• Presentation round: ' + mgrF1(t.teamPres) + ' / 40', '',
+      (ms.length > 5 ? 'TOP 5 MANAGERS (total out of 100)' : 'YOUR TEAM, RANKED (total out of 100)'),
+      ms.slice(0, 5).map(m => m.rank + '. ' + m.name + '  ' + mgrF1(m.total)).join('\n'), '',
+      'We would love to hear from you. If you have any feedback on the activities, or a training requirement for the team or individual, please fill in this Google form: ' + MGR_FORM_URL, '',
+      'Cheers,', 'Training and Development team'
+    ].join('\n');
+  }
+
+
+  function avpEmailHtml(t) {
+    const P = AVP_PAL[t.slug] || AVP_PAL.anish, ms = t.managers, ff = 'font-family:Arial,Helvetica,sans-serif;';
+    const card = (label, big, small, bg, fg, sub) => '<td width="33%" valign="top" style="padding:0 5px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:' + bg + ';border-radius:10px"><tr><td style="padding:14px 14px 12px"><div style="font-size:11px;letter-spacing:1.5px;color:' + sub + '">' + label + '</div><div style="font-size:28px;font-weight:bold;color:' + fg + ';margin-top:4px">' + big + '<span style="font-size:14px;font-weight:normal;color:' + sub + '"> ' + small + '</span></div></td></tr></table></td>';
+    const seg = (w, c) => '<td width="' + Math.max(0, Math.min(100, w)).toFixed(1) + '%" style="background:' + c + ';height:10px;font-size:0;line-height:0">&nbsp;</td>';
+    const rank = ms.slice(0, 5).map(m => {
+      const rest = 100 - m.assess - m.pres;
+      return '<tr><td style="padding:5px 0;font-size:13px;color:#1B2A3A;width:190px"><span style="color:#8A9AA0">' + m.rank + '.</span> ' + (m.rank <= 3 ? '<strong>' + mgrEscH(m.name) + '</strong>' : mgrEscH(m.name)) + '</td><td style="padding:5px 10px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#E3ECEE;border-radius:5px"><tr>' + seg(m.assess, P.mid) + seg(m.pres, P.accent) + '<td style="font-size:0;line-height:0">&nbsp;</td></tr></table></td><td style="padding:5px 0;font-size:14px;font-weight:bold;color:' + P.dark + ';text-align:right;width:44px">' + mgrF1(m.total) + '</td></tr>';
+    }).join('');
+    return '<div style="background:#F1F5F6;padding:24px 8px;' + ff + 'color:#1B2A3A"><table role="presentation" align="center" width="620" cellpadding="0" cellspacing="0" style="width:620px;max-width:100%;background:#FFFFFF;border-radius:14px;border-collapse:separate">'
+      + '<tr><td style="background:' + P.mid + ';border-radius:14px 14px 0 0;padding:30px 32px"><div style="font-size:12px;letter-spacing:2.5px;color:#FFFFFF;opacity:0.85;' + ff + '">MANAGERS COMMUNICATE 360  |  TEAM REPORT</div><div style="font-size:27px;line-height:1.25;font-weight:bold;color:#FFFFFF;margin-top:8px;' + ff + '">Your team’s scorecard is here, ' + mgrEscH(t.first) + '</div></td></tr>'
+      + '<tr><td style="padding:26px 32px 6px;font-size:15px;line-height:1.6;' + ff + '">Hi ' + mgrEscH(t.first) + ',<br><br>Thank you for supporting your managers through <strong>Managers Communicate 360</strong>. Here is a quick look at how your team of ' + t.n + ' managers did. The full team report is attached as a PPT.</td></tr>'
+      + '<tr><td style="padding:14px 27px 6px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>' + card('TEAM AVERAGE', mgrF1(t.teamTotal), '/ 100', P.dark, '#FFFFFF', P.accent) + card('ASSESSMENTS', mgrF1(t.teamAssess), '/ 60', P.soft, P.mid, '#5B6770') + card('PRESENTATION', mgrF1(t.teamPres), '/ 40', '#FFF3DC', '#B7791F', '#8A6A2F') + '</tr></table></td></tr>'
+      + '<tr><td style="padding:18px 32px 4px;' + ff + '"><div style="font-size:12px;letter-spacing:2px;color:#5B6770;margin-bottom:6px">' + (ms.length > 5 ? 'TOP 5 MANAGERS (TOTAL OUT OF 100)' : 'YOUR TEAM, RANKED (TOTAL OUT OF 100)') + '</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0">' + rank + '</table><div style="font-size:11px;color:#5B6770;margin-top:6px"><span style="color:' + P.mid + '">&#9632;</span> Assessments (60) &nbsp;&nbsp;<span style="color:' + P.accent + '">&#9632;</span> Presentation (40)</div></td></tr>'
+      + '<tr><td style="padding:20px 32px 26px;font-size:14.5px;line-height:1.6;' + ff + '"><strong>We would love to hear from you.</strong> If you have any feedback on the activities, or a training requirement for the team or individual, please fill in <a href="' + mgrEscH(MGR_FORM_URL) + '" style="color:' + P.mid + ';font-weight:bold">this Google form</a>.<br><br>Cheers,<br><strong>Training and Development team</strong></td></tr>'
+      + '<tr><td style="background:#F7FAFA;border-radius:0 0 14px 14px;padding:12px 32px;font-size:11px;color:#8A9AA0;' + ff + '">Managers Communicate 360 · Training and Development</td></tr>'
+      + '</table></div>';
+  }
+
+  function _avpTeam(rec) {
+    const byName = {};
+    _mgrMasterBuild().forEach(r => { byName[r.name] = r; });
+    const ms = (rec.members || []).map(n => byName[n]).filter(Boolean)
+      .map(r => ({ name: r.name, total: r.total, assess: r.aTotal, pres: r.presMarks }))
+      .sort((a, b) => b.total - a.total);
+    ms.forEach((m, i) => { m.rank = i + 1; });
+    const avg = k => ms.length ? ms.reduce((t, m) => t + m[k], 0) / ms.length : 0;
+    return { slug: rec.slug, avp: rec.avp, first: rec.first || String(rec.avp).split(/\s+/)[0], n: ms.length, managers: ms,
+      teamTotal: avg('total'), teamAssess: avg('assess'), teamPres: avg('pres') };
+  }
+
+  async function loadAvpList() {
+    const sel = $('avp-results-select');
+    if (!sel) return;
+    let rows = [];
+    try {
+      const sb = (typeof DB.getClient === 'function' && !(DB.isLocalStorage && DB.isLocalStorage())) ? DB.getClient() : null;
+      if (sb) {
+        const { data, error } = await sb.from('settings').select('key,value').like('key', 'avpReport:%');
+        if (error) throw error;
+        rows = data || [];
+      }
+    } catch (e) { console.warn('AVP reports: could not load', e); }
+    const list = [];
+    for (const row of rows) {
+      try { const r = JSON.parse(row.value); if (r && r.slug && r.avp) { _avpReports[r.slug] = r; list.push(r); } } catch (_) { /* skip a malformed row */ }
+    }
+    list.sort((a, b) => a.avp.localeCompare(b.avp));
+    const keep = sel.value;
+    sel.innerHTML = '<option value="">— Choose an AVP —</option>' + list.map(r => `<option value="${_mgrEsc(r.slug)}">${_mgrEsc(r.avp)}</option>`).join('');
+    if (keep && _avpReports[keep]) { sel.value = keep; selectAvp(keep); }
+    const empty = $('avp-results-empty'); if (empty) empty.classList.toggle('hidden', list.length > 0);
+    if (!sel.value) { const c = $('avp-results-content'); if (c) c.classList.add('hidden'); }
+  }
+
+  function _avpRender() {
+    if (!_avpCurrent) return;
+    $('avp-results-subject').value = avpEmailSubject(_avpCurrent);
+    $('avp-results-preview').innerHTML = avpEmailHtml(_avpCurrent);
+  }
+
+  function selectAvp(slug) {
+    const rec = _avpReports[slug], content = $('avp-results-content');
+    if (!rec) { _avpCurrent = null; if (content) content.classList.add('hidden'); return; }
+    const t = _avpTeam(rec); _avpCurrent = t;
+    const chip = (label, val) => `<span style="background:var(--surface-2,#eef4f5);border-radius:999px;padding:0.3rem 0.8rem;font-size:0.85rem"><strong>${_mgrEsc(val)}</strong> ${_mgrEsc(label)}</span>`;
+    let html = chip('team average', `${mgrF1(t.teamTotal)} / 100`) + chip('managers', String(t.n)) + chip('assessments', `${mgrF1(t.teamAssess)} / 60`) + chip('presentation', `${mgrF1(t.teamPres)} / 40`);
+    if (rec.snapshotTotal !== undefined && Math.abs(Number(rec.snapshotTotal) - t.teamTotal) >= 0.05) {
+      html += `<div style="flex-basis:100%;font-size:0.8rem;color:#B3541E">Scores have changed since the team PPT was built. The email above uses the current numbers (team average ${mgrF1(t.teamTotal)}); the PPT shows ${mgrF1(rec.snapshotTotal)} until it is rebuilt.</div>`;
+    }
+    $('avp-results-summary').innerHTML = html;
+    _avpRender();
+    $('avp-results-status').textContent = '';
+    const dl = $('btn-download-avp-ppt'); if (dl) dl.disabled = !rec.pptUrl;
+    content.classList.remove('hidden');
+  }
+
+  async function copyAvpEmail() {
+    const el = $('avp-results-preview');
+    if (!el || !el.innerText.trim()) return;
+    const html = el.innerHTML, text = el.innerText;
+    let ok = false;
+    try {
+      if (navigator.clipboard && window.ClipboardItem && window.isSecureContext) {
+        await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([text], { type: 'text/plain' }) })]);
+        ok = true;
+      }
+    } catch (_) { ok = false; }
+    if (!ok) {
+      try {
+        const range = document.createRange(); range.selectNodeContents(el);
+        const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+        ok = document.execCommand('copy'); sel.removeAllRanges();
+      } catch (_) { ok = false; }
+    }
+    $('avp-results-status').textContent = ok ? 'Email copied with its formatting. Paste it into your email and attach the PPT.' : 'Could not copy. Select the email text and press Ctrl+C.';
+    toast(ok ? 'Email copied to clipboard' : 'Copy failed. Select the text and copy it manually', ok ? 'success' : 'error');
+  }
+
+  async function copyAvpPlain() {
+    if (!_avpCurrent) return;
+    const ok = await _mgrCopyText(avpEmailText(_avpCurrent));
+    $('avp-results-status').textContent = ok ? 'Plain-text email copied.' : 'Could not copy.';
+    toast(ok ? 'Plain-text email copied' : 'Copy failed', ok ? 'success' : 'error');
+  }
+
+  async function copyAvpSubject() {
+    const v = ($('avp-results-subject') || {}).value;
+    if (!v) return;
+    const ok = await _mgrCopyText(v);
+    toast(ok ? 'Subject copied' : 'Copy failed', ok ? 'success' : 'error');
+  }
+
+  function resetAvpEmail() {
+    if (!_avpCurrent) return;
+    _avpRender();
+    $('avp-results-status').textContent = 'Email reset to the template.';
+  }
+
+  async function downloadAvpPpt() {
+    const rec = _avpCurrent ? _avpReports[_avpCurrent.slug] : null;
+    if (!rec || !rec.pptUrl) { toast('No PPT is available for this AVP yet', 'error'); return; }
+    const status = $('avp-results-status');
+    if (status) status.textContent = 'Preparing download…';
+    try {
+      const res = await fetch(rec.pptUrl);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = rec.pptFile || `${rec.avp} - Team Report.pptx`;
+      document.body.appendChild(a); a.click();
+      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+      if (status) status.textContent = 'PPT downloaded.';
+    } catch (e) {
+      console.warn('AVP PPT download via fetch failed, opening the link instead:', e);
+      window.open(rec.pptUrl, '_blank');
+      if (status) status.textContent = '';
+    }
+  }
+
   // ---- Public API (called from inline onclick) ----
   return {
     init,
     selectMgrResult,
+    selectAvp,
+    copyAvpEmail,
+    copyAvpPlain,
+    copyAvpSubject,
+    resetAvpEmail,
+    downloadAvpPpt,
     downloadMgrMasterExcel,
     searchMgrMaster,
     copyMgrEmail,
